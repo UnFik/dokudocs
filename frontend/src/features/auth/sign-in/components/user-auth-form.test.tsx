@@ -12,6 +12,17 @@ const FORM_MESSAGES = {
 const navigate = vi.fn()
 const setUserMock = vi.fn()
 const setAccessTokenMock = vi.fn()
+const postMock = vi.fn()
+
+const loginResponse = {
+  accessToken: 'api-access-token',
+  user: {
+    accountNo: 'ACC001',
+    email: 'admin@example.com',
+    role: ['admin'],
+    exp: 1_760_000_000,
+  },
+}
 
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: () => ({
@@ -44,9 +55,10 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
-vi.mock('@/lib/utils', async (orig) => ({
-  ...(await orig()),
-  sleep: vi.fn(() => Promise.resolve()),
+vi.mock('@/lib/api-client', () => ({
+  apiClient: {
+    post: postMock,
+  },
 }))
 
 describe('UserAuthForm', () => {
@@ -59,6 +71,7 @@ describe('UserAuthForm', () => {
 
     beforeEach(async () => {
       vi.clearAllMocks()
+      postMock.mockResolvedValue({ data: loginResponse })
       screen = await render(<UserAuthForm />)
       emailInput = screen.getByRole('textbox', { name: /^Email$/i })
       passwordInput = screen.getByLabelText(/^Password$/i)
@@ -85,22 +98,19 @@ describe('UserAuthForm', () => {
     })
 
     it('authenticates and navigates to default route on success', async () => {
-      await userEvent.fill(emailInput, 'a@b.com')
-      await userEvent.fill(passwordInput, '1234567')
+      await userEvent.fill(emailInput, 'admin@example.com')
+      await userEvent.fill(passwordInput, 'password123')
 
       await userEvent.click(signInButton)
+      expect(postMock).toHaveBeenCalledWith('/api/v1/auth/login', {
+        email: 'admin@example.com',
+        password: 'password123',
+      })
 
       await vi.waitFor(() => expect(setUserMock).toHaveBeenCalledOnce())
-      expect(setUserMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          email: 'a@b.com',
-          accountNo: expect.any(String),
-          role: expect.any(Array),
-          exp: expect.any(Number),
-        })
-      )
+      expect(setUserMock).toHaveBeenCalledWith(loginResponse.user)
       expect(setAccessTokenMock).toHaveBeenCalledOnce()
-      expect(setAccessTokenMock).toHaveBeenCalledWith('mock-access-token')
+      expect(setAccessTokenMock).toHaveBeenCalledWith('api-access-token')
 
       await vi.waitFor(() =>
         expect(navigate).toHaveBeenCalledWith({ to: '/', replace: true })
@@ -110,13 +120,17 @@ describe('UserAuthForm', () => {
 
   it('navigates to redirectTo when provided', async () => {
     vi.clearAllMocks()
+    postMock.mockResolvedValue({ data: loginResponse })
 
     const { getByRole, getByLabelText } = await render(
       <UserAuthForm redirectTo='/settings' />
     )
 
-    await userEvent.fill(getByRole('textbox', { name: /Email/i }), 'a@b.com')
-    await userEvent.fill(getByLabelText('Password'), '1234567')
+    await userEvent.fill(
+      getByRole('textbox', { name: /Email/i }),
+      'admin@example.com'
+    )
+    await userEvent.fill(getByLabelText('Password'), 'password123')
 
     await userEvent.click(getByRole('button', { name: /Sign in/i }))
 

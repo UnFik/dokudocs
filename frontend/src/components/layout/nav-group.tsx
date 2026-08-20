@@ -38,7 +38,7 @@ export function NavGroup({ title, items }: NavGroupProps) {
   const href = useLocation({ select: (location) => location.href })
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>{title}</SidebarGroupLabel>
+      {title ? <SidebarGroupLabel>{title}</SidebarGroupLabel> : null}
       <SidebarMenu>
         {items.map((item) => {
           const key = `${item.title}-${item.url}`
@@ -175,9 +175,9 @@ function SidebarMenuCollapsedDropdown({
 
 function checkIsActive(href: string, item: NavItem, mainNav = false) {
   return (
-    href === item.url || // /endpint?search=param
-    href.split('?')[0] === item.url || // endpoint
-    !!item?.items?.filter((i) => i.url === href).length || // if child nav is active
+    href === item.url ||
+    href.split('?')[0] === item.url ||
+    !!item?.items?.filter((i) => i.url === href).length ||
     (mainNav &&
       href.split('/')[1] !== '' &&
       href.split('/')[1] === item?.url?.split('/')[1])

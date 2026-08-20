@@ -7,7 +7,8 @@ import { Loader2, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { IconFacebook, IconGithub } from '@/assets/brand-icons'
 import { useAuthStore } from '@/stores/auth-store'
-import { sleep, cn } from '@/lib/utils'
+import { apiClient } from '@/lib/api-client'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -29,6 +30,16 @@ const formSchema = z.object({
     .min(1, 'Please enter your password.')
     .min(7, 'Password must be at least 7 characters long.'),
 })
+
+type LoginResponse = {
+  accessToken: string
+  user: {
+    accountNo: string
+    email: string
+    role: string[]
+    exp: number
+  }
+}
 
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLFormElement> {
   redirectTo?: string
@@ -54,30 +65,23 @@ export function UserAuthForm({
   function onSubmit(data: z.infer<typeof formSchema>) {
     setIsLoading(true)
 
-    toast.promise(sleep(2000), {
+    toast.promise(apiClient.post<LoginResponse>('/api/v1/auth/login', data), {
       loading: 'Signing in...',
-      success: () => {
+      success: ({ data: response }) => {
         setIsLoading(false)
 
-        // Mock successful authentication with expiry computed at success time
-        const mockUser = {
-          accountNo: 'ACC001',
-          email: data.email,
-          role: ['user'],
-          exp: Date.now() + 24 * 60 * 60 * 1000, // 24 hours from now
-        }
+        auth.setUser(response.user)
+        auth.setAccessToken(response.accessToken)
 
-        // Set user and access token
-        auth.setUser(mockUser)
-        auth.setAccessToken('mock-access-token')
-
-        // Redirect to the stored location or default to dashboard
         const targetPath = redirectTo || '/'
         navigate({ to: targetPath, replace: true })
 
-        return `Welcome back, ${data.email}!`
+        return `Welcome back, ${response.user.email}!`
       },
-      error: 'Error',
+      error: () => {
+        setIsLoading(false)
+        return 'Error'
+      },
     })
   }
 

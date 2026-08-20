@@ -7,10 +7,16 @@
 - Many screens are feature-sliced dashboard pages such as dashboard, apps, chats, tasks, users, and settings. Some areas use static or mock-style data sources; inspect feature-local `data/**` before assuming backend integration exists.
 - Goal when editing: keep route files thin, keep feature UI inside `src/features/**`, keep shared primitives reusable.
 
-## Commands
+## Commands & Package Management
 
-- Use `bun`; `bun.lock` is lockfile. CI installs with `bun install --frozen-lockfile`.
-- CI uses Node 20, then runs `bun run lint`, `bun run format:check`, `bun run test:browser:install`, `bun run test`, and `bun run build` in that order.
+- **CRITICAL**: ALWAYS use `bun` for everything (package installations, adding dependencies, removing packages, running scripts, and development). NEVER use `npm`, `yarn`, or `pnpm`.
+- Package installation & dependency management:
+  - `bun install` (or `bun install --frozen-lockfile` for CI)
+  - `bun add <package-name>` (to add new dependencies)
+  - `bun add -d <package-name>` (to add dev dependencies)
+  - `bun remove <package-name>` (to remove dependencies)
+- `bun.lock` is the single source of truth lockfile.
+- CI uses Node 20 with bun, running `bun run lint`, `bun run format:check`, `bun run test:browser:install`, `bun run test`, and `bun run build` in that order.
 - Local scripts:
   - `bun run dev`
   - `bun run build`
@@ -98,6 +104,7 @@
 
 ## Conventions
 
+- Form Handling: ALWAYS use `react-hook-form` (or TanStack Form) with `zod` schema validation (`zodResolver`) and `@/components/ui/form`. NEVER use standalone `useState` for form input fields.
 - Prettier uses no semicolons, single quotes including JSX, 2-space indent, LF endings, sorted imports, and Tailwind class sorting.
 - Import ordering is defined in `.prettierrc`; run `bun run format` rather than hand-sorting big import changes.
 - ESLint forbids `console` by default, duplicate imports, and non-type imports for TypeScript types.

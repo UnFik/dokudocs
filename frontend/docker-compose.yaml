@@ -1,0 +1,15 @@
+services:
+  frontend:
+    build:
+      context: .
+      target: dev
+    container_name: dokudocs-frontend
+    working_dir: /app
+    env_file:
+      - .env.example
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: bun run dev --host

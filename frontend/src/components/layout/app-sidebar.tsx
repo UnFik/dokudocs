@@ -1,36 +1,37 @@
+import { Fragment } from 'react'
 import { useLayout } from '@/context/layout-provider'
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  SidebarSeparator,
 } from '@/components/ui/sidebar'
-// import { AppTitle } from './app-title'
 import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
 import { NavUser } from './nav-user'
-import { TeamSwitcher } from './team-switcher'
+import { SidebarSearch } from './sidebar-search'
+import { StarredNavGroup } from './starred-nav-group'
 
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
   return (
     <Sidebar collapsible={collapsible} variant={variant}>
-      <SidebarHeader>
-        <TeamSwitcher teams={sidebarData.teams} />
-
-        {/* Replace <TeamSwitch /> with the following <AppTitle />
-         /* if you want to use the normal app title instead of TeamSwitch dropdown */}
-        {/* <AppTitle /> */}
-      </SidebarHeader>
-      <SidebarContent>
-        {sidebarData.navGroups.map((props) => (
-          <NavGroup key={props.title} {...props} />
-        ))}
-      </SidebarContent>
-      <SidebarFooter>
+      <SidebarHeader className='gap-2 pb-2'>
         <NavUser user={sidebarData.user} />
-      </SidebarFooter>
+        <SidebarSearch />
+      </SidebarHeader>
+      <SidebarSeparator className='mx-0' />
+      <SidebarContent className='gap-0 py-1'>
+        {sidebarData.navGroups.map((props, index) => (
+          <Fragment key={props.title || index}>
+            {index > 0 && <SidebarSeparator className='mx-2 my-1' />}
+            <NavGroup {...props} />
+          </Fragment>
+        ))}
+        <SidebarSeparator className='mx-2 my-1' />
+        <StarredNavGroup />
+      </SidebarContent>
       <SidebarRail />
     </Sidebar>
   )
