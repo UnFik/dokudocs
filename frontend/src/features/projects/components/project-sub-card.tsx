@@ -27,10 +27,17 @@ export function ProjectSubCard({ document }: ProjectSubCardProps) {
     <Link
       to='/docs/$docId'
       params={{ docId: document.id }}
-      className='group/sub relative flex h-24 flex-col overflow-hidden rounded-lg border border-border/70 bg-background transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-xs'
+      className='group/sub relative flex h-24 flex-col overflow-hidden rounded-lg border border-border/70 bg-background transform-gpu transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-xs will-change-transform'
     >
       <div className='relative flex-1 w-full border-b border-border/40 overflow-hidden bg-muted/20 min-h-0'>
-        <DocThumbnailPreview type={document.type} className='h-full w-full' />
+        <DocThumbnailPreview
+          docId={document.id}
+          type={document.type}
+          content={document.content}
+          thumbnail={document.thumbnail || document.thumbnailPreview}
+          thumbnailDark={document.thumbnailDark || document.thumbnailPreviewDark}
+          className='h-full w-full'
+        />
         <div
           className={`absolute top-1.5 left-1.5 flex size-5 items-center justify-center rounded border backdrop-blur-xs ${badgeStyle}`}
         >

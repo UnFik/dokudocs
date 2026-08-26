@@ -111,3 +111,32 @@
 .animate-jiggle-alt {
   animation: jiggle-alt 0.26s ease-in-out infinite;
 }
+
+.monaco-error-lens-error-line {
+  background-color: rgba(239, 68, 68, 0.08) !important;
+}
+
+.monaco-error-lens-warning-line {
+  background-color: rgba(234, 179, 8, 0.08) !important;
+}
+
+.monaco-error-lens-error-msg {
+  color: #ef4444 !important;
+  font-size: 11px !important;
+  opacity: 0.85;
+  font-style: italic;
+  margin-left: 16px;
+  pointer-events: none;
+  font-family: inherit;
+}
+
+.monaco-error-lens-warning-msg {
+  color: #eab308 !important;
+  font-size: 11px !important;
+  opacity: 0.85;
+  font-style: italic;
+  margin-left: 16px;
+  pointer-events: none;
+  font-family: inherit;
+}
+

@@ -1,19 +1,48 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Copy,
+  Database,
+  FileSpreadsheet,
   Key,
   Layers,
   Link2,
   RotateCcw,
+  Search,
   Sparkles,
+  Table2,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { toast } from 'sonner'
 
-interface DbmlVisualCanvasProps {
+export interface DbmlVisualCanvasProps {
   docId?: string
   content: string
+  onNavigateToSource?: (tableName: string, columnName?: string) => void
+}
+
+export interface ParsedRecordSet {
+  tableName: string
+  columns: string[]
+  rows: string[][]
 }
 
 interface TableColumn {
@@ -50,12 +79,12 @@ interface ParsedTableGroup {
   tables: string[]
 }
 
-interface ParsedRelation {
+export interface ParsedRelation {
   fromTable: string
   fromColumn: string
   toTable: string
   toColumn: string
-  relType: '>' | '<' | '-'
+  relType: string
   raw: string
 }
 
@@ -418,21 +447,72 @@ function calculateTableHeight(table: ParsedTable): number {
   return height
 }
 
-export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
+export function DbmlVisualCanvas({
+  docId,
+  content,
+  onNavigateToSource,
+}: DbmlVisualCanvasProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 60, y: 60 })
+  const canvasLayerRef = useRef<HTMLDivElement>(null)
+  const zoomBadgeRef = useRef<HTMLSpanElement>(null)
 
-  const zoomRef = useRef(zoom)
-  const panRef = useRef(pan)
+  const [viewingRecordsTable, setViewingRecordsTable] =
+    useState<ParsedRecordSet | null>(null)
+  const [recordSearchQuery, setRecordSearchQuery] = useState('')
+
+  const initialPan = useMemo(() => {
+    if (docId) {
+      try {
+        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (parsed.pan && typeof parsed.pan.x === 'number') {
+            return parsed.pan
+          }
+        }
+      } catch (e) {}
+    }
+    return { x: 60, y: 60 }
+  }, [docId])
+
+  const initialZoom = useMemo(() => {
+    if (docId) {
+      try {
+        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          if (typeof parsed.zoom === 'number') {
+            return parsed.zoom
+          }
+        }
+      } catch (e) {}
+    }
+    return 1
+  }, [docId])
+
+  const zoomRef = useRef<number>(initialZoom)
+  const panRef = useRef<{ x: number; y: number }>(initialPan)
+  const wheelRafRef = useRef<number | null>(null)
+  const mouseMoveRafRef = useRef<number | null>(null)
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const applyCanvasTransform = useCallback(
+    (currentPan: { x: number; y: number }, currentZoom: number) => {
+      if (canvasLayerRef.current) {
+        canvasLayerRef.current.style.transform = `translate3d(${currentPan.x}px, ${currentPan.y}px, 0) scale(${currentZoom})`
+      }
+      if (zoomBadgeRef.current) {
+        zoomBadgeRef.current.textContent = `${Math.round(currentZoom * 100)}%`
+      }
+    },
+    []
+  )
 
   useEffect(() => {
-    zoomRef.current = zoom
-  }, [zoom])
-
-  useEffect(() => {
-    panRef.current = pan
-  }, [pan])
+    zoomRef.current = initialZoom
+    panRef.current = initialPan
+    applyCanvasTransform(initialPan, initialZoom)
+  }, [initialPan, initialZoom, applyCanvasTransform])
 
   const [tablePositions, setTablePositions] = useState<Record<string, TablePosition>>(() => {
     if (docId) {
@@ -513,46 +593,61 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const { parsedTables, parsedRelations, parsedTableGroups } = useMemo(() => {
-    const cleanContent = stripDbmlComments(content)
-    if (!cleanContent.trim()) {
-      return { parsedTables: [], parsedRelations: [], parsedTableGroups: [] }
-    }
+  const filteredRows = useMemo(() => {
+    if (!viewingRecordsTable) return []
+    if (!recordSearchQuery.trim()) return viewingRecordsTable.rows
+    const query = recordSearchQuery.toLowerCase()
+    return viewingRecordsTable.rows.filter((row) =>
+      row.some((cell) => cell.toLowerCase().includes(query))
+    )
+  }, [viewingRecordsTable, recordSearchQuery])
+
+  const { parsedTables, parsedRelations, parsedTableGroups, parsedRecords } =
+    useMemo(() => {
+      const cleanContent = stripDbmlComments(content)
+      if (!cleanContent.trim()) {
+        return {
+          parsedTables: [],
+          parsedRelations: [],
+          parsedTableGroups: [],
+          parsedRecords: {},
+        }
+      }
 
     const relations: ParsedRelation[] = []
 
     const standaloneRefRegex =
-      /Ref\s*(?:[\w]+)?\s*:\s*([\w]+)\.([\w]+)\s*([><-])\s*([\w]+)\.([\w]+)/gi
+      /Ref\s*(?:[\w.-]+)?\s*:\s*([\w."]+)\.([\w."]+)\s*([><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/gi
     let refMatch: RegExpExecArray | null
     while ((refMatch = standaloneRefRegex.exec(cleanContent)) !== null) {
       relations.push({
-        fromTable: refMatch[1],
-        fromColumn: refMatch[2],
-        toTable: refMatch[4],
-        toColumn: refMatch[5],
-        relType: refMatch[3] as '>' | '<' | '-',
+        fromTable: refMatch[1].replace(/["']/g, '').trim(),
+        fromColumn: refMatch[2].replace(/["']/g, '').trim(),
+        toTable: refMatch[4].replace(/["']/g, '').trim(),
+        toColumn: refMatch[5].replace(/["']/g, '').trim(),
+        relType: refMatch[3].trim(),
         raw: refMatch[0],
       })
     }
 
-    const refBlockRegex = /Ref\s*(?:[\w]+)?\s*\{([^}]+)\}/gi
+    const refBlockRegex = /Ref\s*(?:[\w.-]+)?\s*\{([^}]+)\}/gi
     let blockMatch: RegExpExecArray | null
     while ((blockMatch = refBlockRegex.exec(cleanContent)) !== null) {
       const blockContent = blockMatch[1]
       const lineRefs = blockContent.split('\n')
       lineRefs.forEach((line) => {
         const trimmed = line.trim()
-        if (!trimmed) return
+        if (!trimmed || trimmed.startsWith('//')) return
         const lineMatch = trimmed.match(
-          /([\w]+)\.([\w]+)\s*([><-])\s*([\w]+)\.([\w]+)/
+          /([\w."]+)\.([\w."]+)\s*([><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/
         )
         if (lineMatch) {
           relations.push({
-            fromTable: lineMatch[1],
-            fromColumn: lineMatch[2],
-            toTable: lineMatch[4],
-            toColumn: lineMatch[5],
-            relType: lineMatch[3] as '>' | '<' | '-',
+            fromTable: lineMatch[1].replace(/["']/g, '').trim(),
+            fromColumn: lineMatch[2].replace(/["']/g, '').trim(),
+            toTable: lineMatch[4].replace(/["']/g, '').trim(),
+            toColumn: lineMatch[5].replace(/["']/g, '').trim(),
+            relType: lineMatch[3].trim(),
             raw: lineMatch[0],
           })
         }
@@ -589,12 +684,12 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
 
     const tables: ParsedTable[] = []
     const tableRegex =
-      /Table\s+(\w+)(?:\s+as\s+(\w+))?\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}/gi
+      /Table\s+([\w."]+)(?:\s+as\s+([\w."]+))?\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}/gi
 
     let match: RegExpExecArray | null
     while ((match = tableRegex.exec(cleanContent)) !== null) {
-      const tableName = match[1]
-      const alias = match[2]
+      const tableName = match[1].replace(/["']/g, '').trim()
+      const alias = match[2]?.replace(/["']/g, '').trim()
       const tableOpts = match[3] || ''
       const body = match[4]
 
@@ -619,7 +714,7 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
 
           const compMatch = trimmed.match(/^\(([^)]+)\)(.*)$/)
           if (compMatch) {
-            const cols = compMatch[1].split(',').map((c) => c.trim())
+            const cols = compMatch[1].split(',').map((c) => c.replace(/["']/g, '').trim())
             const opts = compMatch[2] || ''
             const nameMatch = opts.match(/name:\s*['"]?([\w]+)['"]?/i)
             indexes.push({
@@ -629,9 +724,9 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
               isPk: /pk/i.test(opts),
             })
           } else {
-            const singleMatch = trimmed.match(/^(\w+)(.*)$/)
+            const singleMatch = trimmed.match(/^([\w."]+)(.*)$/)
             if (singleMatch) {
-              const col = singleMatch[1]
+              const col = singleMatch[1].replace(/["']/g, '').trim()
               const opts = singleMatch[2] || ''
               const nameMatch = opts.match(/name:\s*['"]?([\w]+)['"]?/i)
               indexes.push({
@@ -658,9 +753,9 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
         )
           return
 
-        const colMatch = trimmed.match(/^(\w+)\s+([\w()]+)(.*)$/)
+        const colMatch = trimmed.match(/^([\w."]+)\s+([\w()]+)(.*)$/)
         if (colMatch) {
-          const colName = colMatch[1]
+          const colName = colMatch[1].replace(/["']/g, '').trim()
           const colType = colMatch[2]
           const colOpts = colMatch[3] || ''
 
@@ -668,29 +763,35 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
           let fkTarget: TableColumn['fkTarget'] = undefined
 
           const inlineRefMatch = colOpts.match(
-            /ref:\s*([><-])\s*([\w]+)\.([\w]+)/i
+            /ref:\s*([><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/i
           )
           if (inlineRefMatch) {
+            const toTable = inlineRefMatch[2].replace(/["']/g, '').trim()
+            const toColumn = inlineRefMatch[3].replace(/["']/g, '').trim()
+            const relType = inlineRefMatch[1].trim()
             isFk = true
             fkTarget = {
-              table: inlineRefMatch[2],
-              column: inlineRefMatch[3],
-              relType: inlineRefMatch[1],
+              table: toTable,
+              column: toColumn,
+              relType,
             }
             relations.push({
               fromTable: tableName,
               fromColumn: colName,
-              toTable: inlineRefMatch[2],
-              toColumn: inlineRefMatch[3],
-              relType: inlineRefMatch[1] as '>' | '<' | '-',
+              toTable,
+              toColumn,
+              relType,
               raw: `[${inlineRefMatch[0]}]`,
             })
           }
 
           const standaloneRel = relations.find(
             (r) =>
-              r.fromTable.toLowerCase() === tableName.toLowerCase() &&
-              r.fromColumn.toLowerCase() === colName.toLowerCase()
+              (r.fromTable.toLowerCase() === tableName.toLowerCase() &&
+                r.fromColumn.toLowerCase() === colName.toLowerCase()) ||
+              (r.toTable.toLowerCase() === tableName.toLowerCase() &&
+                r.toColumn.toLowerCase() === colName.toLowerCase() &&
+                (r.relType === '<' || r.relType === '<?' || r.relType === '?<'))
           )
           if (standaloneRel) {
             isFk = true
@@ -715,10 +816,59 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
       tables.push({ name: tableName, alias, headerColor, columns, indexes })
     }
 
+    const parsedRecords: Record<string, ParsedRecordSet> = {}
+    const recordsRegex = /Records?\s+([\w."]+)\s*\(([^)]+)\)\s*\{([^}]+)\}/gi
+    let recordMatch: RegExpExecArray | null
+    while ((recordMatch = recordsRegex.exec(cleanContent)) !== null) {
+      const rawTableName = recordMatch[1].replace(/["']/g, '').trim()
+      const rawCols = recordMatch[2]
+        .split(',')
+        .map((c) => c.replace(/["']/g, '').trim())
+        .filter(Boolean)
+      const body = recordMatch[3]
+      const rows: string[][] = []
+
+      const lines = body.split('\n')
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('//')) continue
+
+        const rowValues: string[] = []
+        const cellRegex =
+          /\s*(?:'([^'\\]*(?:\\.[^'\\]*)*)'|"([^"\\]*(?:\\.[^"\\]*)*)"|([^,]+?))\s*(?:,|$)/g
+        let cellMatch: RegExpExecArray | null
+        while ((cellMatch = cellRegex.exec(trimmed)) !== null) {
+          const val =
+            cellMatch[1] !== undefined
+              ? cellMatch[1]
+              : cellMatch[2] !== undefined
+              ? cellMatch[2]
+              : cellMatch[3]
+          if (val !== undefined) {
+            rowValues.push(val.trim())
+          }
+          if (cellRegex.lastIndex >= trimmed.length) break
+        }
+
+        if (rowValues.length > 0) {
+          rows.push(rowValues)
+        }
+      }
+
+      if (rawCols.length > 0 && rows.length > 0) {
+        parsedRecords[rawTableName.toLowerCase()] = {
+          tableName: rawTableName,
+          columns: rawCols,
+          rows,
+        }
+      }
+    }
+
     return {
       parsedTables: tables,
       parsedRelations: relations,
       parsedTableGroups: tableGroups,
+      parsedRecords,
     }
   }, [content])
 
@@ -869,8 +1019,8 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
       const currentPan = panRef.current
 
       if (e.ctrlKey || e.metaKey) {
-        const zoomDelta = -e.deltaY * 0.003
-        const newZoom = Math.min(Math.max(currentZoom + zoomDelta, 0.2), 3)
+        const zoomFactor = Math.exp(-e.deltaY * 0.0025)
+        const newZoom = Math.min(Math.max(currentZoom * zoomFactor, 0.2), 3)
 
         const worldX = (mouseX - currentPan.x) / currentZoom
         const worldY = (mouseY - currentPan.y) / currentZoom
@@ -880,22 +1030,54 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
 
         zoomRef.current = newZoom
         panRef.current = { x: newPanX, y: newPanY }
-
-        setZoom(newZoom)
-        setPan({ x: newPanX, y: newPanY })
       } else {
         const newPanX = currentPan.x - e.deltaX
         const newPanY = currentPan.y - e.deltaY
         panRef.current = { x: newPanX, y: newPanY }
-        setPan({ x: newPanX, y: newPanY })
       }
+
+      if (wheelRafRef.current === null) {
+        wheelRafRef.current = requestAnimationFrame(() => {
+          applyCanvasTransform(panRef.current, zoomRef.current)
+          wheelRafRef.current = null
+        })
+      }
+
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current)
+      }
+      idleTimerRef.current = setTimeout(() => {
+        if (docId) {
+          try {
+            const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+            const parsed = saved ? JSON.parse(saved) : {}
+            localStorage.setItem(
+              `dokudocs_dbml_layout_${docId}`,
+              JSON.stringify({
+                ...parsed,
+                zoom: zoomRef.current,
+                pan: panRef.current,
+              })
+            )
+          } catch (err) {}
+        }
+        idleTimerRef.current = null
+      }, 150)
     }
 
     viewport.addEventListener('wheel', handleWheel, { passive: false })
     return () => {
       viewport.removeEventListener('wheel', handleWheel)
+      if (wheelRafRef.current !== null) {
+        cancelAnimationFrame(wheelRafRef.current)
+        wheelRafRef.current = null
+      }
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current)
+        idleTimerRef.current = null
+      }
     }
-  }, [])
+  }, [applyCanvasTransform, docId])
 
   const getCanvasCoords = useCallback((clientX: number, clientY: number) => {
     const viewport = viewportRef.current
@@ -955,26 +1137,33 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
           i === jIdx ? { ...j, x: newX, y: newY, axis } : { ...j }
         )
 
-        setEdgeJoints((prev) => ({
-          ...prev,
-          [draggingJoint.relKey]: nextJoints,
-        }))
+        if (mouseMoveRafRef.current === null) {
+          mouseMoveRafRef.current = requestAnimationFrame(() => {
+            setEdgeJoints((prev) => ({
+              ...prev,
+              [draggingJoint.relKey]: nextJoints,
+            }))
+            mouseMoveRafRef.current = null
+          })
+        }
       } else if (draggingTable) {
         const dx = (e.clientX - draggingTable.startX) / zoomRef.current
         const dy = (e.clientY - draggingTable.startY) / zoomRef.current
         if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
           draggingTable.hasMoved = true
         }
-        setTablePositions((prev) => {
-          const next = {
-            ...prev,
-            [draggingTable.id]: {
-              x: draggingTable.origX + dx,
-              y: draggingTable.origY + dy,
-            },
-          }
-          return next
-        })
+        if (mouseMoveRafRef.current === null) {
+          mouseMoveRafRef.current = requestAnimationFrame(() => {
+            setTablePositions((prev) => ({
+              ...prev,
+              [draggingTable.id]: {
+                x: draggingTable.origX + dx,
+                y: draggingTable.origY + dy,
+              },
+            }))
+            mouseMoveRafRef.current = null
+          })
+        }
       } else if (canvasPanning) {
         const dx = e.clientX - canvasPanning.startX
         const dy = e.clientY - canvasPanning.startY
@@ -983,11 +1172,34 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
           y: canvasPanning.origPanY + dy,
         }
         panRef.current = nextPan
-        setPan(nextPan)
+        if (mouseMoveRafRef.current === null) {
+          mouseMoveRafRef.current = requestAnimationFrame(() => {
+            applyCanvasTransform(panRef.current, zoomRef.current)
+            mouseMoveRafRef.current = null
+          })
+        }
       }
     }
 
     const handleWindowMouseUp = () => {
+      if (mouseMoveRafRef.current !== null) {
+        cancelAnimationFrame(mouseMoveRafRef.current)
+        mouseMoveRafRef.current = null
+      }
+      if (canvasPanning && docId) {
+        try {
+          const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+          const parsed = saved ? JSON.parse(saved) : {}
+          localStorage.setItem(
+            `dokudocs_dbml_layout_${docId}`,
+            JSON.stringify({
+              ...parsed,
+              zoom: zoomRef.current,
+              pan: panRef.current,
+            })
+          )
+        } catch (e) {}
+      }
       if (draggingJoint && draggingJoint.hasMoved && docId) {
         setEdgeJoints((current) => {
           try {
@@ -1035,6 +1247,10 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
     return () => {
       window.removeEventListener('mousemove', handleWindowMouseMove)
       window.removeEventListener('mouseup', handleWindowMouseUp)
+      if (mouseMoveRafRef.current !== null) {
+        cancelAnimationFrame(mouseMoveRafRef.current)
+        mouseMoveRafRef.current = null
+      }
     }
   }, [draggingTable, canvasPanning, draggingJoint, docId])
 
@@ -1235,7 +1451,7 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
       .filter(Boolean)
   }, [parsedTableGroups, parsedTables, tablePositions])
 
-  const relationLines = useMemo(() => {
+  const relationGeometries = useMemo(() => {
     return parsedRelations
       .map((rel) => {
         const fromTable = parsedTables.find(
@@ -1306,32 +1522,6 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
 
         const pathData = generateRoundedOrthogonalPathFromPoints(cleaned, 8)
 
-        const isHovered =
-          hoveredRelation === relKey ||
-          hoveredTable === fromTable.name ||
-          hoveredTable === toTable.name ||
-          (hoveredField?.table.toLowerCase() === fromTable.name.toLowerCase() &&
-            hoveredField?.column.toLowerCase() ===
-              rel.fromColumn.toLowerCase()) ||
-          (hoveredField?.table.toLowerCase() === toTable.name.toLowerCase() &&
-            hoveredField?.column.toLowerCase() === rel.toColumn.toLowerCase())
-
-        const isSelected =
-          selectedRelation === relKey ||
-          selectedTable === fromTable.name ||
-          selectedTable === toTable.name ||
-          (selectedField?.table.toLowerCase() === fromTable.name.toLowerCase() &&
-            selectedField?.column.toLowerCase() ===
-              rel.fromColumn.toLowerCase()) ||
-          (selectedField?.table.toLowerCase() === toTable.name.toLowerCase() &&
-            selectedField?.column.toLowerCase() === rel.toColumn.toLowerCase())
-
-        const isActive = isHovered || isSelected
-
-        const isDirectlyActive =
-          selectedRelation === relKey ||
-          draggingJoint?.relKey === relKey
-
         return {
           id: relKey,
           path: pathData,
@@ -1348,32 +1538,80 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
           toTable: rel.toTable,
           toColumn: rel.toColumn,
           relType: rel.relType,
-          isHovered,
-          isSelected,
-          isActive,
-          isDirectlyActive,
         }
       })
       .filter(Boolean)
+  }, [parsedRelations, parsedTables, tablePositions, edgeJoints])
+
+  const relationLines = useMemo(() => {
+    return relationGeometries.map((geo) => {
+      if (!geo) return null
+      const relKey = geo.id
+      const fromTableLower = geo.fromTable.toLowerCase()
+      const toTableLower = geo.toTable.toLowerCase()
+      const fromColLower = geo.fromColumn.toLowerCase()
+      const toColLower = geo.toColumn.toLowerCase()
+
+      const isHovered =
+        hoveredRelation === relKey ||
+        hoveredTable?.toLowerCase() === fromTableLower ||
+        hoveredTable?.toLowerCase() === toTableLower ||
+        (hoveredField?.table.toLowerCase() === fromTableLower &&
+          hoveredField?.column.toLowerCase() === fromColLower) ||
+        (hoveredField?.table.toLowerCase() === toTableLower &&
+          hoveredField?.column.toLowerCase() === toColLower)
+
+      const isSelected =
+        selectedRelation === relKey ||
+        selectedTable?.toLowerCase() === fromTableLower ||
+        selectedTable?.toLowerCase() === toTableLower ||
+        (selectedField?.table.toLowerCase() === fromTableLower &&
+          selectedField?.column.toLowerCase() === fromColLower) ||
+        (selectedField?.table.toLowerCase() === toTableLower &&
+          selectedField?.column.toLowerCase() === toColLower)
+
+      const isActive = isHovered || isSelected
+
+      const isDirectlyActive =
+        selectedRelation === relKey || draggingJoint?.relKey === relKey
+
+      return {
+        ...geo,
+        isHovered,
+        isSelected,
+        isActive,
+        isDirectlyActive,
+      }
+    })
   }, [
-    parsedRelations,
-    parsedTables,
-    tablePositions,
-    edgeJoints,
-    draggingJoint?.relKey,
+    relationGeometries,
     hoveredRelation,
     hoveredTable,
     hoveredField,
     selectedRelation,
     selectedTable,
     selectedField,
+    draggingJoint?.relKey,
   ])
 
   const handleResetView = () => {
     zoomRef.current = 1
     panRef.current = { x: 60, y: 60 }
-    setZoom(1)
-    setPan({ x: 60, y: 60 })
+    applyCanvasTransform(panRef.current, zoomRef.current)
+    if (docId) {
+      try {
+        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+        const parsed = saved ? JSON.parse(saved) : {}
+        localStorage.setItem(
+          `dokudocs_dbml_layout_${docId}`,
+          JSON.stringify({
+            ...parsed,
+            zoom: 1,
+            pan: { x: 60, y: 60 },
+          })
+        )
+      } catch (e) {}
+    }
   }
 
   const handleZoomIn = () => {
@@ -1395,8 +1633,21 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
 
     zoomRef.current = newZoom
     panRef.current = { x: newPanX, y: newPanY }
-    setZoom(newZoom)
-    setPan({ x: newPanX, y: newPanY })
+    applyCanvasTransform(panRef.current, zoomRef.current)
+    if (docId) {
+      try {
+        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+        const parsed = saved ? JSON.parse(saved) : {}
+        localStorage.setItem(
+          `dokudocs_dbml_layout_${docId}`,
+          JSON.stringify({
+            ...parsed,
+            zoom: newZoom,
+            pan: { x: newPanX, y: newPanY },
+          })
+        )
+      } catch (e) {}
+    }
   }
 
   const handleZoomOut = () => {
@@ -1418,8 +1669,21 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
 
     zoomRef.current = newZoom
     panRef.current = { x: newPanX, y: newPanY }
-    setZoom(newZoom)
-    setPan({ x: newPanX, y: newPanY })
+    applyCanvasTransform(panRef.current, zoomRef.current)
+    if (docId) {
+      try {
+        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+        const parsed = saved ? JSON.parse(saved) : {}
+        localStorage.setItem(
+          `dokudocs_dbml_layout_${docId}`,
+          JSON.stringify({
+            ...parsed,
+            zoom: newZoom,
+            pan: { x: newPanX, y: newPanY },
+          })
+        )
+      } catch (e) {}
+    }
   }
 
   return (
@@ -1473,8 +1737,11 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
         >
           <ZoomIn className='size-3.5' />
         </Button>
-        <span className='px-1 font-mono text-[10px] font-semibold text-muted-foreground min-w-10 text-center'>
-          {Math.round(zoom * 100)}%
+        <span
+          ref={zoomBadgeRef}
+          className='px-1 font-mono text-[10px] font-semibold text-muted-foreground min-w-10 text-center'
+        >
+          {Math.round(zoomRef.current * 100)}%
         </span>
         <Button
           variant='ghost'
@@ -1515,10 +1782,12 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
           </div>
         ) : (
           <div
+            ref={canvasLayerRef}
             className='absolute inset-0 size-full overflow-visible'
             style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transform: `translate3d(${panRef.current.x}px, ${panRef.current.y}px, 0) scale(${zoomRef.current})`,
               transformOrigin: '0 0',
+              willChange: 'transform',
             }}
           >
             {renderedGroups.map((grp) => {
@@ -1558,16 +1827,6 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
               className='pointer-events-none absolute inset-0 size-full overflow-visible z-20'
               xmlns='http://www.w3.org/2000/svg'
             >
-              <defs>
-                <filter id='dbmlGlow' x='-20%' y='-20%' width='140%' height='140%'>
-                  <feGaussianBlur stdDeviation='1.5' result='blur' />
-                  <feMerge>
-                    <feMergeNode in='blur' />
-                    <feMergeNode in='SourceGraphic' />
-                  </feMerge>
-                </filter>
-              </defs>
-
               {relationLines.map((line) => {
                 if (!line) return null
 
@@ -1610,7 +1869,7 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                       setSelectedField(null)
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className={`pointer-events-auto transition-all duration-150 ${lineCursorClass}`}
+                    className={`pointer-events-auto ${lineCursorClass}`}
                   >
                     <path
                       d={line.path}
@@ -1636,16 +1895,27 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                     />
 
                     {line.isActive && (
-                      <path
-                        d={line.path}
-                        fill='none'
-                        stroke='#10b981'
-                        strokeWidth={1.75}
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        className='dbml-dotted-active pointer-events-none'
-                        filter='url(#dbmlGlow)'
-                      />
+                      <>
+                        <path
+                          d={line.path}
+                          fill='none'
+                          stroke='#10b981'
+                          strokeOpacity={0.25}
+                          strokeWidth={4.5}
+                          strokeLinecap='round'
+                          strokeLinejoin='round'
+                          className='pointer-events-none'
+                        />
+                        <path
+                          d={line.path}
+                          fill='none'
+                          stroke='#10b981'
+                          strokeWidth={1.75}
+                          strokeLinecap='round'
+                          strokeLinejoin='round'
+                          className='dbml-dotted-active pointer-events-none'
+                        />
+                      </>
                     )}
 
                     <text
@@ -1658,7 +1928,12 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                           : 'fill-muted-foreground/80'
                       }`}
                     >
-                      {line.relType === '>' ? 'N' : '1'}
+                      {line.relType === '>' ||
+                      line.relType === '?>' ||
+                      line.relType === '>?' ||
+                      line.relType === '<>'
+                        ? 'N'
+                        : '1'}
                     </text>
 
                     <text
@@ -1671,7 +1946,12 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                           : 'fill-muted-foreground/80'
                       }`}
                     >
-                      1
+                      {line.relType === '<' ||
+                      line.relType === '<?' ||
+                      line.relType === '?<' ||
+                      line.relType === '<>'
+                        ? 'N'
+                        : '1'}
                     </text>
 
                     {line.isDirectlyActive &&
@@ -1740,7 +2020,7 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                               fill={isThisJointDragging ? '#34d399' : '#10b981'}
                               stroke='#09090b'
                               strokeWidth={1.5}
-                              className='transition-all hover:scale-125 pointer-events-none'
+                              className='pointer-events-none'
                             />
                             <circle
                               cx={joint.x}
@@ -1800,7 +2080,7 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                         <button
                           type='button'
                           onClick={(e) => handleResetEdgeJoints(e, line.id)}
-                          className='flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/95 hover:bg-destructive hover:text-destructive-foreground text-foreground border border-border shadow-lg text-[10px] font-semibold transition-all duration-150 backdrop-blur-md cursor-pointer select-none'
+                          className='flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/95 hover:bg-destructive hover:text-destructive-foreground text-foreground border border-border shadow-lg text-[10px] font-semibold transition-colors duration-150 backdrop-blur-md cursor-pointer select-none'
                           title='Reset joints to default effective edge'
                         >
                           <RotateCcw className='h-3 w-3 shrink-0' />
@@ -1817,6 +2097,7 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
               const pos = tablePositions[table.name] || { x: 60, y: 60 }
               const isSelected = selectedTable === table.name
               const isHovered = hoveredTable === table.name
+              const recordSet = parsedRecords[table.name.toLowerCase()]
 
               return (
                 <div
@@ -1840,7 +2121,7 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                   onMouseDown={(e) => handleMouseDownTable(table.name, e)}
                   onMouseEnter={() => setHoveredTable(table.name)}
                   onMouseLeave={() => setHoveredTable(null)}
-                  className={`z-30 flex flex-col rounded-xl border bg-card shadow-sm transition-all cursor-grab active:cursor-grabbing ${
+                  className={`group/table z-30 flex flex-col rounded-xl border bg-card shadow-sm cursor-grab active:cursor-grabbing transition-[border-color,box-shadow] duration-150 ${
                     isSelected
                       ? 'border-emerald-500 ring-1 ring-emerald-500/30 shadow-md'
                       : isHovered
@@ -1854,7 +2135,10 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                         ? { backgroundColor: table.headerColor }
                         : undefined
                     }
-                    className={`flex items-center justify-between border-b px-3 py-2.5 transition-colors rounded-t-[11px] ${
+                    onClick={() => {
+                      onNavigateToSource?.(table.name)
+                    }}
+                    className={`flex items-center justify-between border-b px-3 py-2.5 transition-colors rounded-t-[11px] cursor-pointer ${
                       table.headerColor
                         ? 'border-black/15 text-white'
                         : 'border-border/80 bg-muted/60 text-foreground'
@@ -1880,16 +2164,37 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                         </span>
                       )}
                     </div>
-                    <Badge
-                      variant='outline'
-                      className={`text-[10px] font-mono px-1.5 py-0 shrink-0 ${
-                        table.headerColor
-                          ? 'bg-black/25 text-white border-white/25 shadow-xs'
-                          : 'bg-background/80'
-                      }`}
-                    >
-                      {table.columns.length} cols
-                    </Badge>
+                    <div className='flex items-center gap-1 shrink-0'>
+                      {recordSet && (
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setViewingRecordsTable(recordSet)
+                            setRecordSearchQuery('')
+                          }}
+                          className={`size-5 rounded p-0 opacity-0 group-hover/table:opacity-100 transition-opacity ${
+                            table.headerColor
+                              ? 'text-white hover:bg-black/25 hover:text-white'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                          }`}
+                          title={`View Records (${recordSet.rows.length} rows)`}
+                        >
+                          <Database className='size-3' />
+                        </Button>
+                      )}
+                      <Badge
+                        variant='outline'
+                        className={`text-[10px] font-mono px-1.5 py-0 shrink-0 ${
+                          table.headerColor
+                            ? 'bg-black/25 text-white border-white/25 shadow-xs'
+                            : 'bg-background/80'
+                        }`}
+                      >
+                        {table.columns.length} cols
+                      </Badge>
+                    </div>
                   </div>
 
                   <div
@@ -1923,21 +2228,6 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                       const isFieldActive =
                         isFieldSelected || isFieldHovered || isFieldRelated
 
-                      const hasRelation =
-                        col.isFk ||
-                        col.isPk ||
-                        parsedRelations.some(
-                          (r) =>
-                            (r.fromTable.toLowerCase() ===
-                              table.name.toLowerCase() &&
-                              r.fromColumn.toLowerCase() ===
-                                col.name.toLowerCase()) ||
-                            (r.toTable.toLowerCase() ===
-                              table.name.toLowerCase() &&
-                              r.toColumn.toLowerCase() ===
-                                col.name.toLowerCase())
-                        )
-
                       return (
                         <div
                           key={col.name}
@@ -1950,6 +2240,7 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                             })
                             setSelectedTable(table.name)
                             setSelectedRelation(null)
+                            onNavigateToSource?.(table.name, col.name)
                           }}
                           onMouseEnter={(e) => {
                             e.stopPropagation()
@@ -1962,34 +2253,12 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                             e.stopPropagation()
                             setHoveredField(null)
                           }}
-                          className={`group relative flex items-center justify-between px-2.5 text-xs transition-colors rounded ${
+                          className={`group relative flex items-center justify-between px-2.5 text-xs transition-colors rounded cursor-pointer ${
                             isFieldActive
                               ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-medium'
                               : 'hover:bg-muted/40 text-foreground'
                           }`}
                         >
-                          <div
-                            className={`absolute -left-[5px] top-1/2 -translate-y-1/2 size-2.5 rounded-full border-2 transition-all ${
-                              isFieldActive
-                                ? 'bg-emerald-500 border-background shadow-xs shadow-emerald-500 scale-110 ring-2 ring-emerald-500/30'
-                                : hasRelation
-                                ? 'bg-muted-foreground/40 border-card group-hover:bg-emerald-400 group-hover:scale-110'
-                                : 'opacity-0 group-hover:opacity-100 bg-muted-foreground/30 border-card'
-                            }`}
-                            title={`Joint socket: ${table.name}.${col.name}`}
-                          />
-
-                          <div
-                            className={`absolute -right-[5px] top-1/2 -translate-y-1/2 size-2.5 rounded-full border-2 transition-all ${
-                              isFieldActive
-                                ? 'bg-emerald-500 border-background shadow-xs shadow-emerald-500 scale-110 ring-2 ring-emerald-500/30'
-                                : hasRelation
-                                ? 'bg-muted-foreground/40 border-card group-hover:bg-emerald-400 group-hover:scale-110'
-                                : 'opacity-0 group-hover:opacity-100 bg-muted-foreground/30 border-card'
-                            }`}
-                            title={`Joint socket: ${table.name}.${col.name}`}
-                          />
-
                           <div className='flex items-center gap-2 min-w-0 flex-1'>
                             {col.isPk ? (
                               <Key className='size-3.5 shrink-0 text-amber-500' />
@@ -2019,14 +2288,8 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
                             {col.isFk && (
                               <span
                                 className='flex items-center gap-0.5 rounded bg-blue-500/15 px-1.5 py-0.2 text-[9px] font-bold text-blue-600 dark:text-blue-400'
-                                title={
-                                  col.fkTarget
-                                    ? `References ${col.fkTarget.table}.${col.fkTarget.column}`
-                                    : 'Foreign Key'
-                                }
                               >
-                                <Link2 className='size-2.5' />
-                                <span>FK</span>
+                                FK
                               </span>
                             )}
                             {col.isUnique && !col.isPk && (
@@ -2080,6 +2343,132 @@ export function DbmlVisualCanvas({ docId, content }: DbmlVisualCanvasProps) {
           </div>
         )}
       </div>
+
+      <Dialog
+        open={viewingRecordsTable !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingRecordsTable(null)
+            setRecordSearchQuery('')
+          }
+        }}
+      >
+        <DialogContent className='sm:max-w-2xl max-h-[85vh] flex flex-col p-6 gap-4'>
+          <DialogHeader className='flex flex-row items-center justify-between gap-4 pb-2 border-b border-border/60 shrink-0'>
+            <div>
+              <DialogTitle className='text-base font-bold flex items-center gap-2 font-mono'>
+                <Database className='size-4 text-emerald-500' />
+                <span>{viewingRecordsTable?.tableName}</span>
+                <Badge variant='outline' className='text-[10px] font-mono'>
+                  {viewingRecordsTable?.rows.length} records
+                </Badge>
+              </DialogTitle>
+              <DialogDescription className='text-xs text-muted-foreground mt-0.5'>
+                Mock dataset defined in DBML Records block
+              </DialogDescription>
+            </div>
+
+            <div className='flex items-center gap-1.5'>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => {
+                  if (!viewingRecordsTable) return
+                  const recordsObj = viewingRecordsTable.rows.map((row) => {
+                    const obj: Record<string, string> = {}
+                    viewingRecordsTable.columns.forEach((col, idx) => {
+                      obj[col] = row[idx] ?? ''
+                    })
+                    return obj
+                  })
+                  navigator.clipboard.writeText(JSON.stringify(recordsObj, null, 2))
+                  toast.success('Records copied as JSON')
+                }}
+                className='h-7 gap-1.5 px-2 text-xs font-medium'
+                title='Copy as JSON'
+              >
+                <Copy className='size-3' />
+                <span>Copy JSON</span>
+              </Button>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => {
+                  if (!viewingRecordsTable) return
+                  const csvLines = [
+                    viewingRecordsTable.columns.join(','),
+                    ...viewingRecordsTable.rows.map((row) =>
+                      row
+                        .map((val) => {
+                          if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+                            return `"${val.replace(/"/g, '""')}"`
+                          }
+                          return val
+                        })
+                        .join(',')
+                    ),
+                  ].join('\n')
+                  navigator.clipboard.writeText(csvLines)
+                  toast.success('Records copied as CSV')
+                }}
+                className='h-7 gap-1.5 px-2 text-xs font-medium'
+                title='Copy as CSV'
+              >
+                <FileSpreadsheet className='size-3' />
+                <span>Copy CSV</span>
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className='relative shrink-0'>
+            <Search className='absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground' />
+            <Input
+              placeholder='Search in records...'
+              value={recordSearchQuery}
+              onChange={(e) => setRecordSearchQuery(e.target.value)}
+              className='h-8 pl-8 text-xs bg-muted/20'
+            />
+          </div>
+
+          <div className='flex-1 overflow-auto rounded-lg border border-border/80 min-h-0 bg-card'>
+            {filteredRows.length > 0 ? (
+              <Table>
+                <TableHeader className='bg-muted/50 sticky top-0 z-10'>
+                  <TableRow>
+                    <TableHead className='w-12 text-[11px] font-mono text-center font-bold'>
+                      #
+                    </TableHead>
+                    {viewingRecordsTable?.columns.map((col) => (
+                      <TableHead key={col} className='text-[11px] font-mono font-bold'>
+                        {col}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRows.map((row, rowIdx) => (
+                    <TableRow key={rowIdx} className='hover:bg-muted/30 transition-colors'>
+                      <TableCell className='text-[11px] font-mono text-center text-muted-foreground'>
+                        {rowIdx + 1}
+                      </TableCell>
+                      {row.map((cellVal, cellIdx) => (
+                        <TableCell key={cellIdx} className='text-xs font-mono py-2'>
+                          {cellVal}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className='flex flex-col items-center justify-center p-8 text-center text-muted-foreground text-xs'>
+                <Table2 className='size-8 opacity-40 mb-2' />
+                <span>No records match your search filter</span>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

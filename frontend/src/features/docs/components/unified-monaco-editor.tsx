@@ -1,0 +1,1028 @@
+import {
+  ReactNode,
+  useCallback,
+  useRef,
+  useState,
+} from 'react'
+import * as monaco from 'monaco-editor'
+import {
+  ChevronsUpDown,
+  Code2,
+  Columns2,
+  Copy,
+  Eye,
+  HelpCircle,
+  Redo2,
+  RefreshCw,
+  Search,
+  Undo2,
+  Zap,
+  ZapOff,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { runDiagnostics } from '../lib/monaco-diagnostics'
+import { setupMonaco } from '../lib/monaco-setup'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { useTheme } from '@/context/theme-provider'
+import { useAuthStore } from '@/stores/auth-store'
+import {
+  EditorViewMode,
+  useEditorPreferenceStore,
+} from '@/stores/editor-preference-store'
+
+export type ViewMode = EditorViewMode
+
+export interface PreviewSlotProps {
+  scrollRef: React.RefObject<HTMLDivElement | null>
+  onScroll: (e: React.UIEvent<HTMLDivElement>) => void
+  navigateToSource?: (tableName: string, columnName?: string) => void
+}
+
+export interface UnifiedMonacoEditorProps {
+  docId?: string
+  content: string
+  onChange: (newContent: string) => void
+  language: 'markdown' | 'dbml' | 'mermaid'
+  previewTitle?: string
+  previewIcon?: ReactNode
+  previewContent: ReactNode | ((props: PreviewSlotProps) => ReactNode)
+  customToolbarActions?: ReactNode
+  previewToolbarActions?: ReactNode
+  badgeLabel?: string
+  badgeColorClass?: string
+  showLiveRenderToggle?: boolean
+  showSyncScrollToggle?: boolean
+}
+
+export function UnifiedMonacoEditor({
+  content,
+  onChange,
+  language,
+  previewTitle,
+  previewIcon,
+  previewContent,
+  customToolbarActions,
+  previewToolbarActions,
+  badgeLabel,
+  badgeColorClass,
+  showLiveRenderToggle = true,
+  showSyncScrollToggle = false,
+}: UnifiedMonacoEditorProps) {
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
+
+  const { auth } = useAuthStore()
+  const userId = auth.user?.accountNo || auth.user?.email || 'guest'
+
+  const userPreference = useEditorPreferenceStore(
+    (state) => state.preferencesByUser[userId]
+  )
+  const setStoreViewMode = useEditorPreferenceStore((state) => state.setViewMode)
+  const setStoreSplitPercent = useEditorPreferenceStore(
+    (state) => state.setSplitPercent
+  )
+  const setStoreIsLiveRenderActive = useEditorPreferenceStore(
+    (state) => state.setIsLiveRenderActive
+  )
+  const setStoreSyncScroll = useEditorPreferenceStore(
+    (state) => state.setSyncScroll
+  )
+
+  const viewMode: EditorViewMode = userPreference?.viewMode ?? 'split'
+  const splitPercent: number = userPreference?.splitPercent ?? 50
+  const isLiveRenderActive: boolean = showLiveRenderToggle
+    ? userPreference?.isLiveRenderActive ?? true
+    : true
+  const syncScroll: boolean = userPreference?.syncScroll ?? true
+
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const splitContainerRef = useRef<HTMLDivElement | null>(null)
+  const previewScrollRef = useRef<HTMLDivElement | null>(null)
+  const isUpdatingFromPropRef = useRef(false)
+  const isSyncingScrollRef = useRef(false)
+  const lastEmittedValueRef = useRef(content)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const decorationsCollectionRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
+  const diagDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [isResizing, setIsResizing] = useState<boolean>(false)
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState<boolean>(false)
+  const [hasPendingChanges, setHasPendingChanges] = useState<boolean>(false)
+  const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 })
+  const [stats, setStats] = useState(() => ({
+    lines: content ? content.split('\n').length : 1,
+    words: content ? content.trim().split(/\s+/).filter(Boolean).length : 0,
+  }))
+
+  const flushChange = useCallback(
+    (value: string) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
+      lastEmittedValueRef.current = value
+      setHasPendingChanges(false)
+      onChange(value)
+    },
+    [onChange]
+  )
+
+  const triggerManualSync = useCallback(() => {
+    if (!editorRef.current) return
+    const val = editorRef.current.getValue()
+    flushChange(val)
+    toast.success('Preview synchronized')
+  }, [flushChange])
+
+  const updateErrorLens = useCallback((editor: monaco.editor.IStandaloneCodeEditor) => {
+    const model = editor.getModel()
+    if (!model) return
+
+    const markers = monaco.editor.getModelMarkers({ resource: model.uri })
+    const newDecorations: monaco.editor.IModelDeltaDecoration[] = markers.map((marker) => {
+      const isError = marker.severity === monaco.MarkerSeverity.Error
+      const icon = isError ? '● ' : '▲ '
+      const firstLine = marker.message.split('\n')[0].trim()
+      return {
+        range: new monaco.Range(
+          marker.startLineNumber,
+          marker.startColumn,
+          marker.startLineNumber,
+          marker.startColumn
+        ),
+        options: {
+          isWholeLine: true,
+          className: isError
+            ? 'monaco-error-lens-error-line'
+            : 'monaco-error-lens-warning-line',
+          after: {
+            content: `   ${icon}${firstLine}`,
+            inlineClassName: isError
+              ? 'monaco-error-lens-error-msg'
+              : 'monaco-error-lens-warning-msg',
+          },
+        },
+      }
+    })
+
+    if (decorationsCollectionRef.current) {
+      decorationsCollectionRef.current.set(newDecorations)
+    } else {
+      decorationsCollectionRef.current = editor.createDecorationsCollection(newDecorations)
+    }
+  }, [])
+
+  const scheduleDiagnostics = useCallback(
+    (editor: monaco.editor.IStandaloneCodeEditor, lang: string) => {
+      if (diagDebounceTimerRef.current) {
+        clearTimeout(diagDebounceTimerRef.current)
+      }
+      diagDebounceTimerRef.current = setTimeout(async () => {
+        const model = editor.getModel()
+        if (!model) return
+        await runDiagnostics(model, lang, monaco)
+        updateErrorLens(editor)
+      }, 200)
+    },
+    [updateErrorLens]
+  )
+
+  const containerRefCallback = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+        }
+        if (diagDebounceTimerRef.current) {
+          clearTimeout(diagDebounceTimerRef.current)
+          diagDebounceTimerRef.current = null
+        }
+        decorationsCollectionRef.current = null
+        editorRef.current?.dispose()
+        editorRef.current = null
+        return
+      }
+
+      setupMonaco()
+
+      const editor = monaco.editor.create(element, {
+        value: content,
+        language: language,
+        theme: isDark ? 'dokudocs-dark' : 'dokudocs-light',
+        minimap: { enabled: false },
+        fontSize: 13,
+        lineHeight: 20,
+        fontFamily:
+          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        lineNumbers: 'on',
+        lineNumbersMinChars: 3,
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        tabSize: 2,
+        wordWrap: 'on',
+        padding: { top: 8, bottom: 8 },
+        renderLineHighlight: 'all',
+        smoothScrolling: true,
+        cursorBlinking: 'smooth',
+        cursorSmoothCaretAnimation: 'on',
+        copyWithSyntaxHighlighting: false,
+        maxTokenizationLineLength: 50000,
+        glyphMargin: true,
+        lightbulb: { enabled: monaco.editor.ShowLightbulbIconMode.On },
+        autoClosingBrackets: 'always',
+        autoClosingQuotes: 'always',
+        autoClosingDelete: 'always',
+        autoClosingOvertype: 'always',
+        autoClosingComments: 'always',
+        autoSurround: 'languageDefined',
+        bracketPairColorization: { enabled: true },
+        matchBrackets: 'always',
+      })
+
+      editorRef.current = editor
+      lastEmittedValueRef.current = content
+
+      scheduleDiagnostics(editor, language)
+
+      monaco.editor.onDidChangeMarkers(() => {
+        if (editorRef.current) {
+          updateErrorLens(editorRef.current)
+        }
+      })
+
+      editor.onDidChangeModelContent(() => {
+        if (isUpdatingFromPropRef.current) return
+        const val = editor.getValue()
+        const model = editor.getModel()
+        const lines = model ? model.getLineCount() : 1
+
+        setStats((prev) => ({
+          lines,
+          words: prev.words,
+        }))
+
+        scheduleDiagnostics(editor, language)
+
+        if (isLiveRenderActive) {
+          if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current)
+          }
+          debounceTimerRef.current = setTimeout(() => {
+            lastEmittedValueRef.current = val
+            setHasPendingChanges(false)
+            onChange(val)
+          }, 300)
+        } else {
+          setHasPendingChanges(true)
+        }
+      })
+
+      editor.onDidBlurEditorText(() => {
+        const val = editor.getValue()
+        if (val !== lastEmittedValueRef.current) {
+          flushChange(val)
+        }
+      })
+
+      editor.onDidChangeCursorPosition((e) => {
+        setCursorPos({
+          line: e.position.lineNumber,
+          col: e.position.column,
+        })
+      })
+
+      editor.onDidScrollChange(() => {
+        if (!showSyncScrollToggle || !syncScroll || isSyncingScrollRef.current) return
+        const previewElem = previewScrollRef.current
+        if (!previewElem) return
+        const layout = editor.getLayoutInfo()
+        const maxEditorScroll = editor.getScrollHeight() - layout.height
+        if (maxEditorScroll <= 0) return
+        const ratio = editor.getScrollTop() / maxEditorScroll
+        const maxPreviewScroll = previewElem.scrollHeight - previewElem.clientHeight
+        if (maxPreviewScroll <= 0) return
+        isSyncingScrollRef.current = true
+        previewElem.scrollTop = ratio * maxPreviewScroll
+        requestAnimationFrame(() => {
+          isSyncingScrollRef.current = false
+        })
+      })
+
+      editor.addCommand(
+        monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+        () => {
+          const val = editor.getValue()
+          flushChange(val)
+          toast.success('Preview synchronized')
+        }
+      )
+
+      if (language === 'markdown') {
+        editor.addCommand(
+          monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB,
+          () => {
+            const selection = editor.getSelection()
+            if (!selection) return
+            const model = editor.getModel()
+            if (!model) return
+            const selectedText = model.getValueInRange(selection)
+            if (selectedText.length > 0) {
+              const isBold =
+                selectedText.startsWith('**') &&
+                selectedText.endsWith('**') &&
+                selectedText.length >= 4
+              if (isBold) {
+                const unwrapped = selectedText.slice(2, -2)
+                editor.executeEdits('smart-bold', [
+                  { range: selection, text: unwrapped },
+                ])
+                editor.setSelection(
+                  new monaco.Range(
+                    selection.startLineNumber,
+                    selection.startColumn,
+                    selection.endLineNumber,
+                    selection.startLineNumber === selection.endLineNumber
+                      ? selection.endColumn - 4
+                      : selection.endColumn
+                  )
+                )
+              } else {
+                editor.executeEdits('smart-bold', [
+                  { range: selection, text: `**${selectedText}**` },
+                ])
+                editor.setSelection(
+                  new monaco.Range(
+                    selection.startLineNumber,
+                    selection.startColumn + 2,
+                    selection.endLineNumber,
+                    selection.startLineNumber === selection.endLineNumber
+                      ? selection.endColumn + 2
+                      : selection.endColumn
+                  )
+                )
+              }
+            } else {
+              editor.executeEdits('smart-bold', [
+                { range: selection, text: '****' },
+              ])
+              editor.setPosition({
+                lineNumber: selection.startLineNumber,
+                column: selection.startColumn + 2,
+              })
+            }
+          }
+        )
+
+        editor.addCommand(
+          monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI,
+          () => {
+            const selection = editor.getSelection()
+            if (!selection) return
+            const model = editor.getModel()
+            if (!model) return
+            const selectedText = model.getValueInRange(selection)
+            if (selectedText.length > 0) {
+              const isItalic =
+                (selectedText.startsWith('*') &&
+                  selectedText.endsWith('*') &&
+                  selectedText.length >= 2 &&
+                  !selectedText.startsWith('**')) ||
+                (selectedText.startsWith('_') &&
+                  selectedText.endsWith('_') &&
+                  selectedText.length >= 2)
+              if (isItalic) {
+                const unwrapped = selectedText.slice(1, -1)
+                editor.executeEdits('smart-italic', [
+                  { range: selection, text: unwrapped },
+                ])
+                editor.setSelection(
+                  new monaco.Range(
+                    selection.startLineNumber,
+                    selection.startColumn,
+                    selection.endLineNumber,
+                    selection.startLineNumber === selection.endLineNumber
+                      ? selection.endColumn - 2
+                      : selection.endColumn
+                  )
+                )
+              } else {
+                editor.executeEdits('smart-italic', [
+                  { range: selection, text: `*${selectedText}*` },
+                ])
+                editor.setSelection(
+                  new monaco.Range(
+                    selection.startLineNumber,
+                    selection.startColumn + 1,
+                    selection.endLineNumber,
+                    selection.startLineNumber === selection.endLineNumber
+                      ? selection.endColumn + 1
+                      : selection.endColumn
+                  )
+                )
+              }
+            } else {
+              editor.executeEdits('smart-italic', [
+                { range: selection, text: '**' },
+              ])
+              editor.setPosition({
+                lineNumber: selection.startLineNumber,
+                column: selection.startColumn + 1,
+              })
+            }
+          }
+        )
+
+        editor.addCommand(
+          monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK,
+          () => {
+            const selection = editor.getSelection()
+            if (!selection) return
+            const model = editor.getModel()
+            if (!model) return
+            const selectedText = model.getValueInRange(selection)
+            if (selectedText.length > 0) {
+              editor.executeEdits('smart-link', [
+                { range: selection, text: `[${selectedText}](url)` },
+              ])
+            } else {
+              editor.executeEdits('smart-link', [
+                { range: selection, text: '[](url)' },
+              ])
+              editor.setPosition({
+                lineNumber: selection.startLineNumber,
+                column: selection.startColumn + 1,
+              })
+            }
+          }
+        )
+      }
+    },
+    [
+      language,
+      isLiveRenderActive,
+      syncScroll,
+      showSyncScrollToggle,
+      flushChange,
+      onChange,
+      scheduleDiagnostics,
+      updateErrorLens,
+    ]
+  )
+
+  if (editorRef.current) {
+    const themeName = isDark ? 'dokudocs-dark' : 'dokudocs-light'
+    monaco.editor.setTheme(themeName)
+
+    if (content !== lastEmittedValueRef.current) {
+      isUpdatingFromPropRef.current = true
+      const editor = editorRef.current
+      const model = editor.getModel()
+      if (model && model.getValue() !== content) {
+        editor.executeEdits('external-update', [
+          {
+            range: model.getFullModelRange(),
+            text: content,
+          },
+        ])
+        scheduleDiagnostics(editor, language)
+      }
+      lastEmittedValueRef.current = content
+      isUpdatingFromPropRef.current = false
+    }
+  }
+
+  const handleUndo = () => {
+    editorRef.current?.trigger('toolbar', 'undo', null)
+    editorRef.current?.focus()
+  }
+
+  const handleRedo = () => {
+    editorRef.current?.trigger('toolbar', 'redo', null)
+    editorRef.current?.focus()
+  }
+
+  const handleSearch = () => {
+    editorRef.current?.getAction('actions.find')?.run()
+  }
+
+  const handleCopyCode = () => {
+    const text = editorRef.current?.getValue() ?? content
+    navigator.clipboard.writeText(text)
+    toast.success('Code copied to clipboard')
+  }
+
+  const toggleLiveRender = () => {
+    const next = !isLiveRenderActive
+    setStoreIsLiveRenderActive(userId, next)
+    if (next && editorRef.current) {
+      const val = editorRef.current.getValue()
+      flushChange(val)
+    }
+    toast.info(
+      next
+        ? 'Live render enabled'
+        : 'Live render paused (Press Sync or Ctrl+Enter to update preview)'
+    )
+  }
+
+  const toggleSyncScroll = () => {
+    const next = !syncScroll
+    setStoreSyncScroll(userId, next)
+    toast.info(next ? 'Sync scroll enabled' : 'Sync scroll disabled')
+  }
+
+  const handlePreviewScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (!showSyncScrollToggle || !syncScroll || !editorRef.current || isSyncingScrollRef.current) return
+    const previewElem = e.currentTarget
+    const maxPreviewScroll = previewElem.scrollHeight - previewElem.clientHeight
+    if (maxPreviewScroll <= 0) return
+    const ratio = previewElem.scrollTop / maxPreviewScroll
+    const editor = editorRef.current
+    const layout = editor.getLayoutInfo()
+    const maxEditorScroll = editor.getScrollHeight() - layout.height
+    if (maxEditorScroll <= 0) return
+    isSyncingScrollRef.current = true
+    editor.setScrollTop(ratio * maxEditorScroll)
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false
+    })
+  }
+
+  const navigateToSource = useCallback(
+    (targetOrTable: string, columnOrHeader?: string) => {
+      const editor = editorRef.current
+      if (!editor) return
+
+      const model = editor.getModel()
+      if (!model) return
+
+      const lines = model.getLinesContent()
+      let targetLine = -1
+
+      if (columnOrHeader !== undefined) {
+        let inTargetTable = false
+        const tableRegex = new RegExp(
+          `^\\s*Table\\s+["']?${targetOrTable}["']?\\b`,
+          'i'
+        )
+        const colRegex = columnOrHeader
+          ? new RegExp(`^\\s*["']?${columnOrHeader}["']?\\b`, 'i')
+          : null
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]
+          if (!inTargetTable) {
+            if (tableRegex.test(line)) {
+              inTargetTable = true
+              targetLine = i + 1
+              if (!columnOrHeader) break
+            }
+          } else {
+            if (line.trim().startsWith('}') && !line.includes('{')) {
+              break
+            }
+            if (colRegex && colRegex.test(line)) {
+              targetLine = i + 1
+              break
+            }
+          }
+        }
+      } else {
+        const cleanTarget = targetOrTable.replace(/^#+\s*/, '').trim().toLowerCase()
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]
+          const cleanLine = line.replace(/^#+\s*/, '').trim().toLowerCase()
+          if (cleanLine === cleanTarget || line.toLowerCase().includes(cleanTarget)) {
+            targetLine = i + 1
+            break
+          }
+        }
+      }
+
+      if (targetLine > 0) {
+        editor.revealLineInCenter(targetLine)
+        editor.setPosition({ lineNumber: targetLine, column: 1 })
+        editor.setSelection(
+          new monaco.Range(
+            targetLine,
+            1,
+            targetLine,
+            model.getLineMaxColumn(targetLine)
+          )
+        )
+        editor.focus()
+      }
+    },
+    []
+  )
+
+  const handleDividerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsResizing(true)
+    const container = splitContainerRef.current
+    if (!container) return
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const rect = container.getBoundingClientRect()
+      if (rect.width <= 0) return
+      const newPercent = Math.min(
+        Math.max(((moveEvent.clientX - rect.left) / rect.width) * 100, 15),
+        85
+      )
+      setStoreSplitPercent(userId, Math.round(newPercent))
+    }
+
+    const handlePointerUp = () => {
+      setIsResizing(false)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+  }
+
+  return (
+    <>
+      <div className='relative flex flex-col overflow-hidden bg-background h-full w-full'>
+        {isResizing && (
+          <div className='fixed inset-0 z-50 cursor-col-resize select-none pointer-events-auto' />
+        )}
+
+        <div
+          ref={splitContainerRef}
+          className='relative flex flex-1 flex-col lg:flex-row overflow-hidden min-h-0 w-full h-full'
+        >
+          {viewMode !== 'preview' && (
+            <div
+              style={{
+                width: viewMode === 'code' ? '100%' : `${splitPercent}%`,
+                flex: viewMode === 'code' ? '1 1 0%' : 'none',
+              }}
+              className={`flex h-full flex-col bg-background ${
+                viewMode === 'split' ? 'border-r border-border/80' : ''
+              } overflow-hidden shrink-0 min-h-0`}
+            >
+              <div className='flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 shrink-0 gap-2 overflow-x-auto'>
+                <div className='flex items-center gap-1 shrink-0'>
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    onClick={handleUndo}
+                    className='size-6 text-muted-foreground hover:text-foreground'
+                    title='Undo (⌘Z / Ctrl+Z)'
+                  >
+                    <Undo2 className='size-3.5' />
+                  </Button>
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    onClick={handleRedo}
+                    className='size-6 text-muted-foreground hover:text-foreground'
+                    title='Redo (⌘Y / Ctrl+Y)'
+                  >
+                    <Redo2 className='size-3.5' />
+                  </Button>
+
+                  {customToolbarActions && (
+                    <>
+                      <div className='h-4 w-px bg-border/60 mx-1' />
+                      {customToolbarActions}
+                    </>
+                  )}
+                </div>
+
+                <div className='flex items-center gap-1.5 shrink-0'>
+                  {showSyncScrollToggle && (
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      onClick={toggleSyncScroll}
+                      className={`h-6 gap-1 px-1.5 text-[11px] font-medium transition-colors ${
+                        syncScroll
+                          ? 'text-blue-600 dark:text-blue-400 hover:bg-blue-500/10'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                      title={
+                        syncScroll
+                          ? 'Sync Scroll is ON (Click to Disable)'
+                          : 'Sync Scroll is OFF (Click to Enable)'
+                      }
+                    >
+                      <ChevronsUpDown className='size-3' />
+                      <span className='hidden sm:inline text-[10px]'>
+                        Sync Scroll
+                      </span>
+                    </Button>
+                  )}
+
+                  {showLiveRenderToggle && (
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      onClick={toggleLiveRender}
+                      className={`h-6 gap-1 px-1.5 text-[11px] font-medium transition-colors ${
+                        isLiveRenderActive
+                          ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
+                          : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10'
+                      }`}
+                      title={
+                        isLiveRenderActive
+                          ? 'Live Render is ON (Click to Pause)'
+                          : 'Live Render is PAUSED (Click to Enable)'
+                      }
+                    >
+                      {isLiveRenderActive ? (
+                        <>
+                          <Zap className='size-3 fill-current' />
+                          <span className='hidden sm:inline text-[10px]'>
+                            Live ON
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <ZapOff className='size-3' />
+                          <span className='hidden sm:inline text-[10px]'>
+                            Live PAUSED
+                          </span>
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  {showLiveRenderToggle && (!isLiveRenderActive || hasPendingChanges) && (
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={triggerManualSync}
+                      className='h-6 gap-1 px-2 text-[11px] font-medium border-primary/50 text-primary hover:bg-primary/10 animate-pulse'
+                      title='Synchronize Preview (Ctrl+Enter)'
+                    >
+                      <RefreshCw className='size-3' />
+                      <span>Sync</span>
+                    </Button>
+                  )}
+
+                  <div className='h-4 w-px bg-border/60 mx-0.5' />
+
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    onClick={handleSearch}
+                    className='size-6 text-muted-foreground hover:text-foreground'
+                    title='Find & Replace (⌘F / Ctrl+F)'
+                  >
+                    <Search className='size-3.5' />
+                  </Button>
+
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    onClick={handleCopyCode}
+                    className='size-6 text-muted-foreground hover:text-foreground'
+                    title='Copy Code'
+                  >
+                    <Copy className='size-3.5' />
+                  </Button>
+
+                  <Button
+                    variant='ghost'
+                    size='icon'
+                    onClick={() => setShowShortcutsHelp(true)}
+                    className='size-6 text-muted-foreground hover:text-foreground'
+                    title='Shortcuts Help'
+                  >
+                    <HelpCircle className='size-3.5' />
+                  </Button>
+                </div>
+              </div>
+
+              <div className='relative flex-1 overflow-hidden min-h-0 bg-background'>
+                <div ref={containerRefCallback} className='size-full' />
+              </div>
+
+              <div className='flex items-center justify-between border-t border-border/70 bg-muted/30 px-3 py-1 text-[11px] font-mono text-muted-foreground shrink-0'>
+                <div className='flex items-center gap-3'>
+                  <span>
+                    Ln {cursorPos.line}, Col {cursorPos.col}
+                  </span>
+                  <span>•</span>
+                  <span>{stats.lines} lines</span>
+                </div>
+                <div className='flex items-center gap-2'>
+                  {hasPendingChanges && (
+                    <span className='text-[10px] text-amber-500 font-medium animate-pulse'>
+                      Unsynced changes
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {viewMode === 'split' && (
+            <div
+              onPointerDown={handleDividerPointerDown}
+              className={`group relative hidden lg:flex w-2 cursor-col-resize items-center justify-center bg-border/60 hover:bg-primary/50 transition-colors z-20 select-none shrink-0 ${
+                isResizing ? 'bg-primary ring-2 ring-primary/20' : ''
+              }`}
+            >
+              <div className='absolute -inset-x-2 inset-y-0 cursor-col-resize' />
+              <div className='h-8 w-0.5 rounded-full bg-muted-foreground/40 group-hover:bg-primary-foreground transition-colors' />
+            </div>
+          )}
+
+          {viewMode !== 'code' && (
+            <div
+              style={{
+                width: viewMode === 'preview' ? '100%' : `${100 - splitPercent}%`,
+                flex: viewMode === 'preview' ? '1 1 0%' : 'none',
+              }}
+              className='flex h-full flex-col bg-background overflow-hidden shrink-0 min-h-0'
+            >
+              <div className='flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 text-xs font-medium text-muted-foreground shrink-0'>
+                <div className='flex items-center gap-2'>
+                  {previewToolbarActions && (
+                    <div className='flex items-center gap-1 shrink-0'>
+                      {previewToolbarActions}
+                    </div>
+                  )}
+                  {previewIcon}
+                  {previewTitle && (
+                    <span className='text-xs font-medium text-foreground'>
+                      {previewTitle}
+                    </span>
+                  )}
+                  {badgeLabel && (
+                    <span
+                      className={
+                        badgeColorClass ||
+                        'rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground'
+                      }
+                    >
+                      {badgeLabel}
+                    </span>
+                  )}
+                </div>
+                {showLiveRenderToggle && !isLiveRenderActive && (
+                  <div className='flex items-center gap-1 shrink-0'>
+                    <span className='rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400'>
+                      Paused
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className='flex-1 overflow-hidden min-h-0'>
+                {typeof previewContent === 'function'
+                  ? previewContent({
+                      scrollRef: previewScrollRef,
+                      onScroll: handlePreviewScroll,
+                      navigateToSource,
+                    })
+                  : previewContent}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Floating sticky bottom-center view switcher */}
+        <div className='absolute bottom-5 left-1/2 -translate-x-1/2 z-30 pointer-events-auto select-none'>
+          <div className='flex items-center gap-1 rounded-full border border-border/80 bg-background/90 p-1 shadow-md backdrop-blur-md transition-all hover:border-border hover:shadow-lg'>
+            <Button
+              variant={viewMode === 'code' ? 'default' : 'ghost'}
+              size='sm'
+              onClick={() => setStoreViewMode(userId, 'code')}
+              className={`h-7 rounded-full gap-1.5 px-3 text-xs font-medium transition-all ${
+                viewMode === 'code'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              }`}
+            >
+              <Code2 className='size-3.5' />
+              <span>Editor</span>
+            </Button>
+            <Button
+              variant={viewMode === 'split' ? 'default' : 'ghost'}
+              size='sm'
+              onClick={() => setStoreViewMode(userId, 'split')}
+              className={`h-7 rounded-full gap-1.5 px-3 text-xs font-medium transition-all ${
+                viewMode === 'split'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              }`}
+            >
+              <Columns2 className='size-3.5' />
+              <span>Split</span>
+            </Button>
+            <Button
+              variant={viewMode === 'preview' ? 'default' : 'ghost'}
+              size='sm'
+              onClick={() => setStoreViewMode(userId, 'preview')}
+              className={`h-7 rounded-full gap-1.5 px-3 text-xs font-medium transition-all ${
+                viewMode === 'preview'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              }`}
+            >
+              <Eye className='size-3.5' />
+              <span>Preview</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={showShortcutsHelp} onOpenChange={setShowShortcutsHelp}>
+        <DialogContent className='sm:max-w-md'>
+          <DialogHeader>
+            <DialogTitle className='text-base font-bold'>
+              Editor Keyboard Shortcuts
+            </DialogTitle>
+            <DialogDescription className='text-xs'>
+              High performance Monaco Editor keyboard shortcuts & controls
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-2 text-xs py-2'>
+            <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+              <span className='text-muted-foreground'>Sync Preview</span>
+              <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                ⌘ + Enter / Ctrl + Enter
+              </kbd>
+            </div>
+            <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+              <span className='text-muted-foreground'>Undo</span>
+              <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                ⌘ + Z / Ctrl + Z
+              </kbd>
+            </div>
+            <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+              <span className='text-muted-foreground'>Redo</span>
+              <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                ⌘ + Y / Ctrl + Y
+              </kbd>
+            </div>
+            <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+              <span className='text-muted-foreground'>Find & Replace</span>
+              <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                ⌘ + F / Ctrl + F
+              </kbd>
+            </div>
+            <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+              <span className='text-muted-foreground'>Toggle Comment</span>
+              <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                ⌘ + / / Ctrl + /
+              </kbd>
+            </div>
+            <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+              <span className='text-muted-foreground'>Multi-Cursor Selection</span>
+              <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                Alt + Click / Option + Click
+              </kbd>
+            </div>
+            {language === 'markdown' && (
+              <>
+                <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+                  <span className='text-muted-foreground'>Bold</span>
+                  <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                    ⌘ + B / Ctrl + B
+                  </kbd>
+                </div>
+                <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+                  <span className='text-muted-foreground'>Italic</span>
+                  <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                    ⌘ + I / Ctrl + I
+                  </kbd>
+                </div>
+                <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+                  <span className='text-muted-foreground'>Insert Link</span>
+                  <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                    ⌘ + K / Ctrl + K
+                  </kbd>
+                </div>
+              </>
+            )}
+            <div className='flex items-center justify-between border-b border-border/40 py-1.5'>
+              <span className='text-muted-foreground'>Smart Wrap Selection</span>
+              <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                Type &#123;, [, (, &quot;, &apos;, `, *, _
+              </kbd>
+            </div>
+            <div className='flex items-center justify-between py-1.5'>
+              <span className='text-muted-foreground'>Move Line Up / Down</span>
+              <kbd className='rounded border bg-muted px-1.5 py-0.5 font-sans text-xs font-medium'>
+                Alt + ↑ / Alt + ↓
+              </kbd>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}

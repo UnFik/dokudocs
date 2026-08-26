@@ -74,7 +74,7 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
         <ContextMenuTrigger asChild>
           <div
             onClick={handleCardClick}
-            className='group relative flex flex-col justify-between rounded-xl border border-border/80 bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-sidebar-ring/60 hover:shadow-md cursor-pointer select-none'
+            className='group relative flex flex-col justify-between rounded-xl border border-border/80 bg-card p-4 transform-gpu transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:border-sidebar-ring/60 hover:shadow-md cursor-pointer select-none will-change-transform'
           >
             <div>
               <div className='mb-3 flex items-start justify-between'>
@@ -224,7 +224,7 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
                     to='/projects/$projectId'
                     params={{ projectId: project.id }}
                     onClick={(e) => e.stopPropagation()}
-                    className='flex h-24 flex-col items-center justify-center rounded-lg border border-border/60 bg-background/70 text-center transition-colors hover:border-primary/50 hover:bg-primary/5'
+                    className='flex h-24 flex-col items-center justify-center rounded-lg border border-border/60 bg-background/70 text-center transition-[background-color,border-color] duration-150 hover:border-primary/50 hover:bg-primary/5'
                   >
                     <Layers className='mb-1 size-4 text-muted-foreground' />
                     <span className='text-xs font-semibold text-foreground'>

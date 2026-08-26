@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getDocCategories } from '@/lib/doc-category-utils'
+import { generateDualThumbnailsAsync } from '../lib/doc-thumbnail-generator'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 
 export function useDocEditor(docId: string) {
   const updateDocument = useDokudocsStore((s) => s.updateDocument)
+  const updateDocumentThumbnail = useDokudocsStore((s) => s.updateDocumentThumbnail)
   const recordDocumentView = useDokudocsStore((s) => s.recordDocumentView)
   const projects = useDokudocsStore((s) => s.projects)
   const doc = useDokudocsStore(
@@ -56,8 +58,16 @@ export function useDocEditor(docId: string) {
       setProjectId(doc.projectId ?? null)
       setCategories(getDocCategories(doc))
       setIsDirty(false)
+
+      if (!doc.thumbnail) {
+        generateDualThumbnailsAsync(doc.type, doc.content, doc.id).then((thumb) => {
+          if (thumb.thumbnail || thumb.thumbnailDark) {
+            updateDocumentThumbnail(doc.id, thumb.thumbnail, thumb.thumbnailDark)
+          }
+        })
+      }
     }
-  }, [doc])
+  }, [doc, updateDocumentThumbnail])
 
   const handleSetContent = useCallback((newContent: string) => {
     setContent(newContent)
@@ -88,18 +98,29 @@ export function useDocEditor(docId: string) {
     if (!isDirty || !doc) return
 
     setIsSaving(true)
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       const currentProjId = projectIdRef.current
       const targetProject = projects.find((p) => p.id === currentProjId)
       const currentCategories = categoriesRef.current
+      const currentTitle = titleRef.current.trim() || 'Untitled Document'
+      const currentContent = contentRef.current
+
+      const thumb = await generateDualThumbnailsAsync(
+        doc.type,
+        currentContent,
+        doc.id
+      )
+
       updateDocument(doc.id, {
-        title: titleRef.current.trim() || 'Untitled Document',
-        content: contentRef.current,
+        title: currentTitle,
+        content: currentContent,
         projectId: currentProjId ?? null,
         projectName: targetProject?.name ?? null,
         categories: currentCategories,
         category: currentCategories[0] ?? null,
         isDraft: !currentProjId,
+        thumbnail: thumb.thumbnail || doc.thumbnail,
+        thumbnailDark: thumb.thumbnailDark || doc.thumbnailDark,
       })
       setIsSaving(false)
       setIsDirty(false)
@@ -107,7 +128,7 @@ export function useDocEditor(docId: string) {
     }, 1500)
 
     return () => clearTimeout(timer)
-  }, [isDirty, doc?.id, updateDocument, projects])
+  }, [isDirty, doc?.id, doc?.type, doc?.thumbnail, doc?.thumbnailDark, updateDocument, projects])
 
   return {
     document: doc,

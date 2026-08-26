@@ -4,6 +4,7 @@ services:
       context: .
       target: dev
     container_name: dokudocs-frontend
+    restart: unless-stopped
     working_dir: /app
     env_file:
       - .env.example

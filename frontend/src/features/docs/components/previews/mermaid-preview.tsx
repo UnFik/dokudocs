@@ -1,92 +1,118 @@
-import { useMemo, useState } from 'react'
-import { AlertCircle, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
+import { useCallback } from 'react'
+import {
+  AlertTriangle,
+  RotateCcw,
+  Sparkles,
+  Workflow,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react'
+import { useCanvasPanZoom } from '../../hooks/use-canvas-pan-zoom'
+import { useMermaidRender } from '../../hooks/use-mermaid-render'
 import { Button } from '@/components/ui/button'
+import { useTheme } from '@/context/theme-provider'
 
 interface MermaidPreviewProps {
+  docId?: string
   content: string
 }
 
-interface MermaidNode {
-  id: string
-  label: string
-  shape?: 'box' | 'round' | 'rhombus'
-}
+export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
+  const { svg, error, isValid, isRendering } = useMermaidRender(content, isDark)
 
-interface MermaidLink {
-  from: string
-  to: string
-  label?: string
-}
+  const {
+    viewportRef,
+    canvasLayerRef,
+    zoomBadgeRef,
+    isPanning,
+    panRef,
+    zoomRef,
+    handleZoomIn,
+    handleZoomOut,
+    handleResetView,
+    handleMouseDownBackground,
+    setPanAndZoom,
+  } = useCanvasPanZoom({
+    docId,
+    initialPan: { x: 40, y: 40 },
+    initialZoom: 1,
+    storagePrefix: 'dokudocs_mermaid_layout_',
+  })
 
-export function MermaidPreview({ content }: MermaidPreviewProps) {
-  const [zoom, setZoom] = useState(1)
+  const handleFitToView = useCallback(() => {
+    const viewport = viewportRef.current
+    const canvasLayer = canvasLayerRef.current
+    if (!viewport || !canvasLayer) return
 
-  const parsedDiagram = useMemo(() => {
-    if (!content.trim()) return { nodes: [], links: [], type: 'graph', isValid: true }
+    const svgElement = canvasLayer.querySelector('svg')
+    if (!svgElement) return
 
-    const lines = content.split('\n')
-    const nodesMap = new Map<string, MermaidNode>()
-    const links: MermaidLink[] = []
+    const svgRect = svgElement.getBoundingClientRect()
+    const viewportRect = viewport.getBoundingClientRect()
 
-    let isSequence = content.toLowerCase().includes('sequencediagram')
-    let isValid = true
+    const currentZoom = zoomRef.current
+    const rawWidth = svgRect.width / currentZoom
+    const rawHeight = svgRect.height / currentZoom
 
-    try {
-      lines.forEach((line) => {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('%%')) return
+    if (rawWidth <= 0 || rawHeight <= 0) return
 
-        const linkMatch = trimmed.match(
-          /(\w+)(?:\[(.*?)\]|\{(.*?)\})?\s*-->\s*(?:\|(.*?)\|)?\s*(\w+)(?:\[(.*?)\]|\{(.*?)\})?/
-        )
-        if (linkMatch) {
-          const fromId = linkMatch[1]
-          const fromLabel = linkMatch[2] || linkMatch[3] || fromId
-          const linkText = linkMatch[4]
-          const toId = linkMatch[5]
-          const toLabel = linkMatch[6] || linkMatch[7] || toId
+    const padding = 60
+    const scaleX = (viewportRect.width - padding * 2) / rawWidth
+    const scaleY = (viewportRect.height - padding * 2) / rawHeight
+    const nextZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.2), 2.5)
 
-          if (!nodesMap.has(fromId)) {
-            nodesMap.set(fromId, { id: fromId, label: fromLabel })
-          }
-          if (!nodesMap.has(toId)) {
-            nodesMap.set(toId, { id: toId, label: toLabel })
-          }
+    const nextPanX = Math.max(20, (viewportRect.width - rawWidth * nextZoom) / 2)
+    const nextPanY = Math.max(20, (viewportRect.height - rawHeight * nextZoom) / 2)
 
-          links.push({ from: fromId, to: toId, label: linkText })
-        }
-      })
-    } catch {
-      isValid = false
-    }
-
-    return {
-      nodes: Array.from(nodesMap.values()),
-      links,
-      type: isSequence ? 'sequence' : 'graph',
-      isValid,
-    }
-  }, [content])
+    setPanAndZoom({ x: nextPanX, y: nextPanY }, nextZoom)
+  }, [setPanAndZoom, viewportRef, canvasLayerRef, zoomRef])
 
   return (
-    <div className='relative h-full w-full overflow-auto bg-muted/20 p-6 select-none'>
-      <div className='absolute top-4 right-4 z-10 flex items-center gap-1 rounded-lg border border-border bg-background/90 p-1 shadow-sm backdrop-blur-xs'>
+    <div className='relative flex h-full w-full flex-col overflow-hidden bg-muted/15 select-none'>
+      <div className='absolute top-3 right-3 z-30 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 p-1 shadow-md backdrop-blur-md'>
+        {isRendering && (
+          <>
+            <div className='flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 animate-pulse'>
+              <span className='size-1.5 rounded-full bg-purple-500' />
+              <span>Rendering</span>
+            </div>
+            <div className='h-4 w-px bg-border/60 mx-0.5' />
+          </>
+        )}
+        <Button
+          variant='ghost'
+          size='sm'
+          className='h-7 gap-1 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground'
+          onClick={handleFitToView}
+          title='Fit diagram into screen'
+        >
+          <Sparkles className='size-3.5 text-purple-500' />
+          <span>Fit View</span>
+        </Button>
+        <div className='h-4 w-px bg-border/60 mx-0.5' />
         <Button
           variant='ghost'
           size='icon'
           className='size-7'
-          onClick={() => setZoom((z) => Math.min(z + 0.15, 2))}
+          onClick={handleZoomIn}
+          title='Zoom in'
         >
           <ZoomIn className='size-3.5' />
         </Button>
-        <span className='px-1 font-mono text-[10px] font-semibold text-muted-foreground'>
-          {Math.round(zoom * 100)}%
+        <span
+          ref={zoomBadgeRef}
+          className='px-1 font-mono text-[10px] font-semibold text-muted-foreground min-w-10 text-center'
+        >
+          {Math.round(zoomRef.current * 100)}%
         </span>
         <Button
           variant='ghost'
           size='icon'
           className='size-7'
-          onClick={() => setZoom((z) => Math.max(z - 0.15, 0.5))}
+          onClick={handleZoomOut}
+          title='Zoom out'
         >
           <ZoomOut className='size-3.5' />
         </Button>
@@ -94,57 +120,64 @@ export function MermaidPreview({ content }: MermaidPreviewProps) {
           variant='ghost'
           size='icon'
           className='size-7'
-          onClick={() => setZoom(1)}
+          onClick={handleResetView}
+          title='Reset zoom & pan'
         >
           <RotateCcw className='size-3.5' />
         </Button>
       </div>
 
-      {!parsedDiagram.isValid && (
-        <div className='mb-4 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive'>
-          <AlertCircle className='size-4 shrink-0' />
-          <span>Invalid Mermaid syntax in editor. Check diagram syntax.</span>
+      {!isValid && error && (
+        <div className='absolute top-14 left-4 right-4 z-20 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-600 dark:text-amber-400 shadow-lg backdrop-blur-md animate-in fade-in duration-150'>
+          <div className='flex items-center gap-2 min-w-0'>
+            <AlertTriangle className='size-4 shrink-0' />
+            <span className='font-mono font-medium truncate'>
+              {error.replace(/^Error:\s*/, '')}
+            </span>
+          </div>
+          <span className='text-[10px] text-amber-600/80 dark:text-amber-400/80 shrink-0 font-sans'>
+            Showing last valid preview
+          </span>
         </div>
       )}
 
-      {parsedDiagram.nodes.length === 0 ? (
-        <div className='flex h-full flex-col items-center justify-center gap-2 text-xs text-muted-foreground italic'>
-          <p>Flowchart Diagram Preview Engine Active</p>
-          <p className='text-[10px] not-italic text-muted-foreground/70'>
-            Type standard Mermaid syntax (e.g. A[Start] --&gt; B[Process]) to render diagram
-          </p>
-        </div>
-      ) : (
-        <div
-          className='flex flex-col items-center justify-center gap-6 py-8 transition-transform duration-150 origin-top'
-          style={{ transform: `scale(${zoom})` }}
-        >
-          {parsedDiagram.nodes.map((node, index) => {
-            const outgoingLinks = parsedDiagram.links.filter((l) => l.from === node.id)
-            return (
-              <div key={node.id} className='flex flex-col items-center gap-4'>
-                <div className='flex items-center justify-center rounded-xl border border-purple-500/40 bg-card px-5 py-3 shadow-md transition-shadow hover:shadow-lg'>
-                  <span className='font-mono text-xs font-semibold text-purple-600 dark:text-purple-400'>
-                    {node.label}
-                  </span>
-                </div>
-
-                {index < parsedDiagram.nodes.length - 1 && (
-                  <div className='flex flex-col items-center gap-1 my-1 text-[10px] text-muted-foreground font-mono'>
-                    {outgoingLinks[0]?.label && (
-                      <span className='rounded bg-purple-500/10 px-1.5 py-0.5 text-purple-600 dark:text-purple-400 font-semibold'>
-                        {outgoingLinks[0].label}
-                      </span>
-                    )}
-                    <div className='h-6 w-0.5 bg-purple-500/40' />
-                    <div className='size-0 border-x-4 border-x-transparent border-t-6 border-t-purple-500/60' />
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+      <div
+        ref={viewportRef}
+        onMouseDown={handleMouseDownBackground}
+        className={`relative flex-1 overflow-hidden ${
+          isPanning ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+      >
+        {!content.trim() ? (
+          <div className='flex h-full min-h-[300px] flex-col items-center justify-center gap-3 p-6 text-center text-xs text-muted-foreground'>
+            <div className='flex size-12 items-center justify-center rounded-2xl border border-purple-500/20 bg-purple-500/10 text-purple-500 shadow-sm'>
+              <Workflow className='size-6' />
+            </div>
+            <div>
+              <p className='font-medium text-foreground'>Mermaid Live Diagram Engine</p>
+              <p className='mt-1 text-[11px] text-muted-foreground max-w-sm'>
+                Type standard Mermaid diagrams (Sequence Diagram, Flowchart, Class Diagram, ERD, State Diagram) in the editor to render live.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div
+            ref={canvasLayerRef}
+            id='mermaid-canvas-layer'
+            className='absolute inset-0 size-full overflow-visible p-8'
+            style={{
+              transform: `translate3d(${panRef.current.x}px, ${panRef.current.y}px, 0) scale(${zoomRef.current})`,
+              transformOrigin: '0 0',
+              willChange: 'transform',
+            }}
+          >
+            <div
+              className='inline-block pointer-events-auto filter drop-shadow-sm select-text [&_svg]:max-w-none [&_svg]:h-auto'
+              dangerouslySetInnerHTML={{ __html: svg }}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

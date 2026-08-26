@@ -3,9 +3,12 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
   CheckCircle2,
+  Code,
   Copy,
   Download,
+  FileCode,
   Folder,
+  Image as ImageIcon,
   Loader2,
   Share2,
   Tag,
@@ -36,7 +39,9 @@ interface EditorHeaderProps {
   lastSaved: Date | null
   onTitleChange: (newTitle: string) => void
   onExportCode?: () => void
+  onExportCopySvg?: () => void
   onExportSvg?: () => void
+  onExportPng?: () => void
 }
 
 export function EditorHeader({
@@ -51,7 +56,9 @@ export function EditorHeader({
   lastSaved,
   onTitleChange,
   onExportCode,
+  onExportCopySvg,
   onExportSvg,
+  onExportPng,
 }: EditorHeaderProps) {
   const navigate = useNavigate()
   const { projects } = useDokudocsStore()
@@ -219,17 +226,29 @@ export function EditorHeader({
               <span>Export</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align='end' className='w-44'>
+          <DropdownMenuContent align='end' className='w-48'>
             {onExportCode && (
-              <DropdownMenuItem onClick={onExportCode}>
-                <Copy className='mr-2 size-3.5' />
-                Copy Code
+              <DropdownMenuItem onClick={onExportCode} className='text-xs gap-2'>
+                <Copy className='size-3.5' />
+                <span>Copy Raw Code</span>
+              </DropdownMenuItem>
+            )}
+            {onExportCopySvg && (
+              <DropdownMenuItem onClick={onExportCopySvg} className='text-xs gap-2'>
+                <Code className='size-3.5 text-purple-500' />
+                <span>Copy SVG Code</span>
               </DropdownMenuItem>
             )}
             {onExportSvg && (
-              <DropdownMenuItem onClick={onExportSvg}>
-                <Download className='mr-2 size-3.5' />
-                Export SVG / Image
+              <DropdownMenuItem onClick={onExportSvg} className='text-xs gap-2'>
+                <FileCode className='size-3.5 text-blue-500' />
+                <span>Download as SVG</span>
+              </DropdownMenuItem>
+            )}
+            {onExportPng && (
+              <DropdownMenuItem onClick={onExportPng} className='text-xs gap-2'>
+                <ImageIcon className='size-3.5 text-emerald-500' />
+                <span>Download as PNG</span>
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>

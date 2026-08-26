@@ -168,7 +168,14 @@ export function DocCard({ document }: DocCardProps) {
             className='group relative flex flex-col justify-between overflow-hidden rounded-xl border border-border/80 bg-card transition-all duration-200 hover:-translate-y-0.5 hover:border-sidebar-ring/60 hover:shadow-md cursor-pointer select-none'
           >
             <div className='relative h-32 w-full border-b border-border/40'>
-              <DocThumbnailPreview type={document.type} className='h-full w-full' />
+              <DocThumbnailPreview
+                docId={document.id}
+                type={document.type}
+                content={document.content}
+                thumbnail={document.thumbnail || document.thumbnailPreview}
+                thumbnailDark={document.thumbnailDark || document.thumbnailPreviewDark}
+                className='h-full w-full'
+              />
 
               <button
                 type='button'

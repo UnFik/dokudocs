@@ -14,6 +14,7 @@ import {
 import { mockDocuments } from '@/features/docs/data/mock-docs'
 import { mockProjects } from '@/features/projects/data/mock-projects'
 import { mockTrash } from '@/features/trash/data/mock-trash'
+import { invalidateThumbnailCache } from '@/features/docs/components/doc-thumbnail-preview'
 
 export const defaultOrganizations: OrganizationItem[] = [
   {
@@ -66,6 +67,11 @@ interface DokudocsState {
     isDraft?: boolean
   }) => DocumentItem
   updateDocument: (id: string, updates: Partial<DocumentItem>) => void
+  updateDocumentThumbnail: (
+    id: string,
+    thumbnail: string,
+    thumbnailDark?: string
+  ) => void
   moveToTrash: (id: string) => void
   restoreFromTrash: (id: string) => void
   permanentDeleteFromTrash: (id: string) => void
@@ -249,6 +255,21 @@ export const useDokudocsStore = create<DokudocsState>()(
         }))
       },
 
+      updateDocumentThumbnail: (id, thumbnail, thumbnailDark) => {
+        invalidateThumbnailCache(id)
+        set((state) => ({
+          documents: (state.documents || []).map((doc) =>
+            doc.id === id
+              ? {
+                  ...doc,
+                  thumbnail,
+                  ...(thumbnailDark !== undefined ? { thumbnailDark } : {}),
+                }
+              : doc
+          ),
+        }))
+      },
+
       moveToTrash: (id) => {
         const doc = (get().documents || []).find((d) => d.id === id)
         if (!doc) return
@@ -296,6 +317,7 @@ export const useDokudocsStore = create<DokudocsState>()(
           (t) => t.id === id || t.docId === id
         )
         const targetDocId = trashItem ? trashItem.docId : id
+        invalidateThumbnailCache(targetDocId)
         set((state) => ({
           trash: (state.trash || []).filter(
             (t) => t.id !== id && t.docId !== id
@@ -305,6 +327,7 @@ export const useDokudocsStore = create<DokudocsState>()(
       },
 
       emptyTrash: () => {
+        invalidateThumbnailCache()
         const trashDocIds = (get().trash || []).map((t) => t.docId)
         set((state) => ({
           trash: [],

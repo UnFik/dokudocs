@@ -77,7 +77,9 @@ const router = createRouter({
   routeTree,
   context: { queryClient },
   defaultPreload: 'intent',
-  defaultPreloadStaleTime: 0,
+  defaultPreloadDelay: 0,
+  defaultPreloadStaleTime: 1000 * 60 * 5,
+  defaultPreloadGcTime: 1000 * 60 * 15,
 })
 
 // Register the router instance for type safety

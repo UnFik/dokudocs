@@ -34,7 +34,10 @@ export interface DocumentItem {
   updatedAt: string
   lastViewedAt?: string | null
   deletedAt?: string | null
+  thumbnail?: string | null
+  thumbnailDark?: string | null
   thumbnailPreview?: string
+  thumbnailPreviewDark?: string
   tags?: string[]
 }
 

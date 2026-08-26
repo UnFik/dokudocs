@@ -1,191 +1,204 @@
-import React, { useRef, useState } from 'react'
-import { handleEditorPairingKeyDown } from '../lib/editor-pairing'
+import { useState } from 'react'
+import { Sparkles } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { MermaidPreview } from './previews/mermaid-preview'
+import { UnifiedMonacoEditor } from './unified-monaco-editor'
 
 interface MermaidEditorProps {
+  docId?: string
   content: string
   onChange: (newContent: string) => void
 }
 
-interface HistoryEntry {
-  text: string
-  cursor: number
-}
+const MERMAID_TEMPLATES = [
+  {
+    name: 'Sequence API Authentication Flow',
+    description: 'OAuth2 / HMAC authentication request & response sequence',
+    category: 'Sequence Diagram',
+    code: `sequenceDiagram
+    autonumber
+    participant App as Elysia Application
+    participant RestClient as TuyaRestClient
+    participant Tuya as Tuya OpenAPI
 
-export function MermaidEditor({ content, onChange }: MermaidEditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [history, setHistory] = useState<HistoryEntry[]>([
-    { text: content, cursor: 0 },
-  ])
-  const [historyIndex, setHistoryIndex] = useState(0)
+    Note over App, RestClient: 1. Get Access Token (If expired or empty)
+    RestClient->>RestClient: Generate SHA256 of empty body -> bodyHash
+    RestClient->>RestClient: stringToSign = "GET\\n" + bodyHash + "\\n\\n/v1.0/token?grant_type=1"
+    RestClient->>RestClient: payload = clientID + "" + timestamp + stringToSign
+    RestClient->>RestClient: signature = HMAC-SHA256(payload, secret).toUpperCase()
+    RestClient->>Tuya: GET /v1.0/token?grant_type=1
+    Note over RestClient, Tuya: Headers:<br/>client_id: accessId<br/>t: timestamp<br/>sign_method: HMAC-SHA256<br/>sign: signature<br/>Content-Type: application/json
+    Tuya-->>RestClient: 200 OK (access_token, expire_time)
 
-  const pushHistory = (newText: string, cursor: number) => {
-    setHistory((prev) => {
-      const next = prev.slice(0, historyIndex + 1)
-      return [...next, { text: newText, cursor }]
-    })
-    setHistoryIndex((prev) => prev + 1)
+    Note over App, Tuya: 2. Execute Authenticated API Request
+    App->>RestClient: request(method, path, body, query)
+    RestClient->>RestClient: Generate SHA256 of JSON body -> bodyHash
+    RestClient->>RestClient: stringToSign = method + "\\n" + bodyHash + "\\n\\n" + path + query
+    RestClient->>RestClient: payload = clientID + token + timestamp + stringToSign
+    RestClient->>RestClient: signature = HMAC-SHA256(payload, secret).toUpperCase()
+    RestClient->>Tuya: HTTP [method] path + query
+    Note over RestClient, Tuya: Headers:<br/>client_id: accessId<br/>t: timestamp<br/>sign_method: HMAC-SHA256<br/>sign: signature<br/>access_token: token<br/>Content-Type: application/json
+    Tuya-->>RestClient: Response JSON
+    RestClient-->>App: Return Decoded Data
+`,
+  },
+  {
+    name: 'Microservices Flowchart',
+    description: 'Decision logic, caching layers, and database interactions',
+    category: 'Flowchart',
+    code: `flowchart TD
+    Client([Web & Mobile Client]) --> CDN[Cloudflare CDN]
+    CDN --> Gateway[API Gateway / Ingress]
+
+    subgraph CoreServices [Microservices Core]
+        Gateway --> Auth[Auth Service]
+        Gateway --> Order[Order Service]
+        Gateway --> Payment[Payment Gateway]
+    end
+
+    subgraph DataTier [Storage & Cache]
+        Order --> Redis[(Redis Cache)]
+        Order --> PG[(PostgreSQL Primary)]
+        PG -. Replica .-> PGReplica[(Read Replica)]
+    end
+
+    Payment --> StripeAPI[Stripe Webhook API]
+`,
+  },
+  {
+    name: 'E-Commerce Domain Model',
+    description: 'Class hierarchy, composition, and domain entities',
+    category: 'Class Diagram',
+    code: `classDiagram
+    class User {
+        +String id
+        +String email
+        +String role
+        +login() bool
+    }
+    class Order {
+        +String orderId
+        +Float totalAmount
+        +String status
+        +checkout()
+    }
+    class Product {
+        +String sku
+        +String name
+        +Float price
+        +isInStock() bool
+    }
+    User "1" *-- "*" Order : places
+    Order "1" o-- "*" Product : contains
+`,
+  },
+  {
+    name: 'Git Feature Branching',
+    description: 'Branch merges, release tags, and cherry-picks',
+    category: 'Git Graph',
+    code: `gitGraph
+    commit id: "Initial Commit"
+    commit id: "Setup Router"
+    branch develop
+    checkout develop
+    commit id: "Add Auth Store"
+    branch feature/mermaid
+    checkout feature/mermaid
+    commit id: "Implement Live Preview"
+    commit id: "Add IntelliSense"
+    checkout develop
+    merge feature/mermaid tag: "v1.1-preview"
+    checkout main
+    merge develop tag: "v1.1.0"
+`,
+  },
+]
+
+export function MermaidEditor({ docId, content, onChange }: MermaidEditorProps) {
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false)
+
+  const handleSelectTemplate = (templateCode: string) => {
+    onChange(templateCode)
+    setShowTemplatesModal(false)
+    toast.success('Template loaded into editor')
   }
 
-  const applyChange = (
-    newText: string,
-    cursorStart?: number,
-    cursorEnd?: number
-  ) => {
-    onChange(newText)
-    const targetStart = cursorStart ?? newText.length
-    const targetEnd = cursorEnd ?? targetStart
-    pushHistory(newText, targetEnd)
+  const customActions = (
+    <>
+      <Button
+        variant='ghost'
+        size='sm'
+        onClick={() => setShowTemplatesModal(true)}
+        className='h-6 gap-1 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground'
+        title='Insert Mermaid Template'
+      >
+        <Sparkles className='size-3 text-purple-500' />
+        <span>Templates</span>
+      </Button>
 
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus()
-        textareaRef.current.setSelectionRange(targetStart, targetEnd)
-      }
-    }, 0)
-  }
+      <Dialog open={showTemplatesModal} onOpenChange={setShowTemplatesModal}>
+        <DialogContent className='sm:max-w-2xl max-h-[85vh] overflow-y-auto'>
+          <DialogHeader>
+            <DialogTitle className='text-base font-bold flex items-center gap-2'>
+              <Sparkles className='size-4 text-purple-500' />
+              <span>Insert Mermaid Template</span>
+            </DialogTitle>
+            <DialogDescription className='text-xs'>
+              Select a pre-configured architecture or sequence diagram template
+            </DialogDescription>
+          </DialogHeader>
 
-  const handleUndo = () => {
-    if (historyIndex > 0) {
-      const nextIdx = historyIndex - 1
-      const entry = history[nextIdx]
-      setHistoryIndex(nextIdx)
-      onChange(entry.text)
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus()
-          textareaRef.current.setSelectionRange(entry.cursor, entry.cursor)
-        }
-      }, 0)
-    }
-  }
-
-  const handleRedo = () => {
-    if (historyIndex < history.length - 1) {
-      const nextIdx = historyIndex + 1
-      const entry = history[nextIdx]
-      setHistoryIndex(nextIdx)
-      onChange(entry.text)
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus()
-          textareaRef.current.setSelectionRange(entry.cursor, entry.cursor)
-        }
-      }, 0)
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const isCmdOrCtrl = e.metaKey || e.ctrlKey
-
-    if (isCmdOrCtrl && e.key.toLowerCase() === 'z') {
-      e.preventDefault()
-      if (e.shiftKey) {
-        handleRedo()
-      } else {
-        handleUndo()
-      }
-      return
-    }
-
-    if (isCmdOrCtrl && e.key.toLowerCase() === 'y') {
-      e.preventDefault()
-      handleRedo()
-      return
-    }
-
-    if (textareaRef.current) {
-      const handled = handleEditorPairingKeyDown(
-        e,
-        textareaRef.current,
-        (newContent, cursorStart, cursorEnd) => {
-          applyChange(newContent, cursorStart, cursorEnd)
-        }
-      )
-      if (handled) return
-    }
-
-    if (e.key === 'Tab') {
-      e.preventDefault()
-      const textarea = textareaRef.current
-      if (!textarea) return
-
-      const start = textarea.selectionStart
-      const end = textarea.selectionEnd
-
-      if (e.shiftKey) {
-        const textBefore = content.substring(0, start)
-        const lineStart = textBefore.lastIndexOf('\n') + 1
-        const lineEnd =
-          content.indexOf('\n', end) === -1
-            ? content.length
-            : content.indexOf('\n', end)
-        const selectedBlock = content.substring(lineStart, lineEnd)
-
-        const unindented = selectedBlock
-          .split('\n')
-          .map((line) => line.replace(/^ {1,2}/, ''))
-          .join('\n')
-
-        const newContent =
-          content.substring(0, lineStart) + unindented + content.substring(lineEnd)
-        const diff = selectedBlock.length - unindented.length
-        applyChange(newContent, Math.max(lineStart, start - 2), Math.max(lineStart, end - diff))
-      } else if (start !== end) {
-        const textBefore = content.substring(0, start)
-        const lineStart = textBefore.lastIndexOf('\n') + 1
-        const lineEnd =
-          content.indexOf('\n', end) === -1
-            ? content.length
-            : content.indexOf('\n', end)
-        const selectedBlock = content.substring(lineStart, lineEnd)
-
-        const indented = selectedBlock
-          .split('\n')
-          .map((line) => '  ' + line)
-          .join('\n')
-
-        const newContent =
-          content.substring(0, lineStart) + indented + content.substring(lineEnd)
-        const linesCount = selectedBlock.split('\n').length
-        applyChange(newContent, start + 2, end + linesCount * 2)
-      } else {
-        const newContent =
-          content.substring(0, start) + '  ' + content.substring(start)
-        applyChange(newContent, start + 2, start + 2)
-      }
-    }
-  }
+          <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 py-3'>
+            {MERMAID_TEMPLATES.map((tmpl) => (
+              <div
+                key={tmpl.name}
+                onClick={() => handleSelectTemplate(tmpl.code)}
+                className='flex flex-col justify-between p-3 rounded-lg border border-border/80 bg-muted/20 hover:border-purple-500/60 hover:bg-purple-500/5 transition-all cursor-pointer group'
+              >
+                <div>
+                  <div className='flex items-center justify-between mb-1.5'>
+                    <span className='text-xs font-bold text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400'>
+                      {tmpl.name}
+                    </span>
+                    <span className='text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-mono font-medium'>
+                      {tmpl.category}
+                    </span>
+                  </div>
+                  <p className='text-[11px] text-muted-foreground line-clamp-2 mb-3'>
+                    {tmpl.description}
+                  </p>
+                </div>
+                <Button
+                  size='sm'
+                  variant='outline'
+                  className='w-full text-xs h-7 group-hover:bg-purple-500 group-hover:text-white group-hover:border-purple-500 transition-colors'
+                >
+                  Use Template
+                </Button>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
 
   return (
-    <div className='grid h-[calc(100vh-3.5rem)] w-full grid-cols-1 divide-y divide-border lg:grid-cols-2 lg:divide-x lg:divide-y-0'>
-      <div className='flex h-full flex-col bg-muted/10 p-4'>
-        <div className='mb-2 flex items-center justify-between text-xs text-muted-foreground font-medium'>
-          <span>MERMAID CODE EDITOR</span>
-          <span>Mermaid Syntax</span>
-        </div>
-        <textarea
-          ref={textareaRef}
-          value={content}
-          onChange={(e) => {
-            const nextVal = e.target.value
-            onChange(nextVal)
-            pushHistory(nextVal, e.target.selectionStart)
-          }}
-          onKeyDown={handleKeyDown}
-          placeholder='graph TD&#10;  A[Start] --> B[Process]'
-          className='h-full w-full resize-none rounded-lg border border-purple-500/30 bg-background p-4 font-mono text-xs leading-relaxed text-foreground shadow-2xs outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/40'
-        />
-      </div>
-
-      <div className='flex h-full flex-col bg-background'>
-        <div className='border-b border-border/60 bg-muted/20 px-4 py-2 text-xs font-medium text-muted-foreground'>
-          LIVE FLOWCHART RENDERER
-        </div>
-        <div className='flex-1 overflow-hidden'>
-          <MermaidPreview content={content} />
-        </div>
-      </div>
-    </div>
+    <UnifiedMonacoEditor
+      docId={docId}
+      content={content}
+      onChange={onChange}
+      language='mermaid'
+      previewContent={<MermaidPreview docId={docId} content={content} />}
+      customToolbarActions={customActions}
+    />
   )
 }

@@ -1,20 +1,307 @@
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { DocType } from '@/types/dokudocs'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/context/theme-provider'
+import { generateDbmlThumbnail, generateMermaidThumbnail } from '../lib/doc-thumbnail-generator'
 
 interface DocThumbnailPreviewProps {
+  docId?: string
   type: DocType
+  content?: string
+  thumbnail?: string | null
+  thumbnailDark?: string | null
   className?: string
 }
 
-export function DocThumbnailPreview({
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+})
+
+const thumbnailHtmlCache = new Map<string, string>()
+const thumbnailSvgCache = new Map<string, string>()
+const loadedImageCache = new Set<string>()
+const visibleDocCache = new Set<string>()
+
+export function invalidateThumbnailCache(docId?: string) {
+  if (!docId) {
+    thumbnailHtmlCache.clear()
+    thumbnailSvgCache.clear()
+    loadedImageCache.clear()
+    visibleDocCache.clear()
+    return
+  }
+
+  for (const key of thumbnailHtmlCache.keys()) {
+    if (key.includes(docId)) thumbnailHtmlCache.delete(key)
+  }
+  for (const key of thumbnailSvgCache.keys()) {
+    if (key.includes(docId)) thumbnailSvgCache.delete(key)
+  }
+  visibleDocCache.delete(docId)
+}
+
+function ThumbnailSkeleton({
   type,
   className,
-}: DocThumbnailPreviewProps) {
+}: {
+  type: DocType
+  className?: string
+}) {
   if (type === 'markdown') {
     return (
       <div
         className={cn(
-          'relative flex h-full w-full flex-col justify-start overflow-hidden bg-gradient-to-b from-blue-500/5 via-muted/20 to-transparent p-2.5 select-none',
+          'flex h-full w-full flex-col justify-start p-3 space-y-2 bg-muted/20 select-none animate-pulse',
+          className
+        )}
+      >
+        <div className='h-2.5 w-1/3 rounded-full bg-blue-500/20' />
+        <div className='h-2 w-4/5 rounded-full bg-foreground/15' />
+        <div className='h-2 w-3/4 rounded-full bg-foreground/10' />
+        <div className='h-2 w-1/2 rounded-full bg-foreground/10' />
+        <div className='mt-2 space-y-1 pl-2 border-l-2 border-blue-500/20'>
+          <div className='h-1.5 w-2/3 rounded-full bg-foreground/15' />
+          <div className='h-1.5 w-1/2 rounded-full bg-foreground/10' />
+        </div>
+      </div>
+    )
+  }
+
+  if (type === 'dbdiagram') {
+    return (
+      <div
+        className={cn(
+          'flex h-full w-full items-center justify-center gap-2 p-2 bg-muted/20 select-none animate-pulse',
+          className
+        )}
+      >
+        <div className='flex w-16 flex-col rounded border border-emerald-500/20 bg-background/50 p-1.5 space-y-1 shadow-2xs'>
+          <div className='h-2 w-full rounded bg-emerald-500/30' />
+          <div className='h-1 w-full rounded bg-foreground/15' />
+          <div className='h-1 w-3/4 rounded bg-foreground/15' />
+          <div className='h-1 w-1/2 rounded bg-foreground/10' />
+        </div>
+        <div className='h-px w-3 bg-emerald-500/30' />
+        <div className='flex w-16 flex-col rounded border border-emerald-500/20 bg-background/50 p-1.5 space-y-1 shadow-2xs'>
+          <div className='h-2 w-full rounded bg-emerald-500/30' />
+          <div className='h-1 w-full rounded bg-foreground/15' />
+          <div className='h-1 w-2/3 rounded bg-foreground/10' />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={cn(
+        'flex h-full w-full items-center justify-center gap-1.5 p-2 bg-muted/20 select-none animate-pulse',
+        className
+      )}
+    >
+      <div className='size-5 rounded-full bg-purple-500/20' />
+      <div className='h-px w-2.5 bg-purple-500/20' />
+      <div className='size-5.5 rounded-md bg-purple-500/30' />
+      <div className='h-px w-2.5 bg-purple-500/20' />
+      <div className='size-5 rounded-full bg-purple-500/20' />
+    </div>
+  )
+}
+
+export function DocThumbnailPreview({
+  docId,
+  type,
+  content,
+  thumbnail,
+  thumbnailDark,
+  className,
+}: DocThumbnailPreviewProps) {
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
+
+  const activeThumbnail = isDark && thumbnailDark ? thumbnailDark : thumbnail
+  const isRasterImage =
+    activeThumbnail && (activeThumbnail.startsWith('data:image/') || activeThumbnail.startsWith('http'))
+
+  const docKey = docId || `${type}-${(content || '').slice(0, 32)}`
+
+  const [isVisible, setIsVisible] = useState(() => visibleDocCache.has(docKey))
+  const [isImgLoaded, setIsImgLoaded] = useState(() =>
+    Boolean(activeThumbnail && loadedImageCache.has(activeThumbnail))
+  )
+  const observerRef = useRef<IntersectionObserver | null>(null)
+
+  const containerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+        observerRef.current = null
+      }
+
+      if (!node) return
+
+      if (visibleDocCache.has(docKey)) {
+        setIsVisible(true)
+        return
+      }
+
+      if (typeof IntersectionObserver === 'undefined') {
+        visibleDocCache.add(docKey)
+        setIsVisible(true)
+        return
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const [entry] = entries
+          if (entry.isIntersecting) {
+            visibleDocCache.add(docKey)
+            setIsVisible(true)
+            observer.disconnect()
+          }
+        },
+        { rootMargin: '200px' }
+      )
+
+      observer.observe(node)
+      observerRef.current = observer
+    },
+    [docKey]
+  )
+
+  const markdownHtml = useMemo(() => {
+    if (!isVisible || type !== 'markdown' || !content?.trim()) return ''
+    const cacheKey = `md-${docId || 'temp'}-${content.length}-${content.slice(0, 40)}`
+    const cached = thumbnailHtmlCache.get(cacheKey)
+    if (cached) return cached
+
+    try {
+      const raw = marked.parse(content) as string
+      const sanitized = DOMPurify.sanitize(raw)
+      thumbnailHtmlCache.set(cacheKey, sanitized)
+      return sanitized
+    } catch {
+      return ''
+    }
+  }, [isVisible, type, content, docId])
+
+  const dynamicSvg = useMemo(() => {
+    if (!isVisible || isRasterImage) return null
+    if (activeThumbnail && activeThumbnail.startsWith('<svg')) {
+      return activeThumbnail
+    }
+    if (!content?.trim()) return null
+
+    const cacheKey = `svg-${type}-${docId || 'temp'}-${isDark ? 'dark' : 'light'}-${content.length}-${content.slice(0, 40)}`
+    const cached = thumbnailSvgCache.get(cacheKey)
+    if (cached) return cached
+
+    let svgResult: string | null = null
+    if (type === 'dbdiagram') {
+      svgResult = generateDbmlThumbnail(content, docId, isDark)
+    } else if (type === 'mermaid') {
+      svgResult = generateMermaidThumbnail(content, isDark)
+    }
+
+    if (svgResult) {
+      thumbnailSvgCache.set(cacheKey, svgResult)
+    }
+    return svgResult
+  }, [isVisible, type, content, activeThumbnail, docId, isDark, isRasterImage])
+
+  const handleImageLoad = useCallback(() => {
+    if (activeThumbnail) {
+      loadedImageCache.add(activeThumbnail)
+    }
+    setIsImgLoaded(true)
+  }, [activeThumbnail])
+
+  if (!isVisible) {
+    return (
+      <div ref={containerRef} className={cn('h-full w-full overflow-hidden', className)}>
+        <ThumbnailSkeleton type={type} />
+      </div>
+    )
+  }
+
+  if (isRasterImage) {
+    return (
+      <div
+        ref={containerRef}
+        className={cn(
+          'relative flex h-full w-full items-center justify-center overflow-hidden bg-card select-none pointer-events-none',
+          className
+        )}
+      >
+        {!isImgLoaded && (
+          <div className='absolute inset-0 z-10'>
+            <ThumbnailSkeleton type={type} />
+          </div>
+        )}
+        <img
+          src={activeThumbnail}
+          alt=''
+          onLoad={handleImageLoad}
+          className={cn(
+            'h-full w-full object-cover object-center transform-gpu transition-opacity duration-150',
+            isImgLoaded ? 'opacity-100' : 'opacity-0'
+          )}
+          loading='lazy'
+          decoding='async'
+        />
+      </div>
+    )
+  }
+
+  if (type === 'markdown' && markdownHtml) {
+    return (
+      <div
+        ref={containerRef}
+        className={cn(
+          'relative h-full w-full overflow-hidden bg-card select-none pointer-events-none',
+          className
+        )}
+      >
+        <div
+          className='w-[270%] h-[270%] scale-[0.37] origin-top-left p-4 text-foreground text-xs leading-relaxed space-y-2.5
+          [&_h1]:text-xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:border-b [&_h1]:border-border/60 [&_h1]:pb-1.5 [&_h1]:mb-2 [&_h1]:text-blue-500
+          [&_h2]:text-base [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:border-b [&_h2]:border-border/40 [&_h2]:pb-1 [&_h2]:mt-3 [&_h2]:mb-1.5 [&_h2]:text-blue-500/90
+          [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1
+          [&_p]:my-1.5 [&_p]:leading-relaxed [&_p]:text-foreground/90
+          [&_ul]:my-1.5 [&_ul]:ml-4 [&_ul]:list-disc [&_ul]:space-y-0.5
+          [&_ol]:my-1.5 [&_ol]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-0.5
+          [&_li]:my-0.5
+          [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-500/60 [&_blockquote]:bg-muted/30 [&_blockquote]:px-2.5 [&_blockquote]:py-1 [&_blockquote]:italic [&_blockquote]:text-muted-foreground
+          [&_pre]:my-2 [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border/60 [&_pre]:bg-muted/50 [&_pre]:p-2.5 [&_pre]:font-mono [&_pre]:text-[11px]
+          [&_code]:rounded [&_code]:border [&_code]:border-border/40 [&_code]:bg-muted/60 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[10px]'
+          dangerouslySetInnerHTML={{ __html: markdownHtml }}
+        />
+        <div className='absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card via-card/70 to-transparent pointer-events-none' />
+      </div>
+    )
+  }
+
+  if (dynamicSvg) {
+    return (
+      <div
+        ref={containerRef}
+        className={cn(
+          'relative flex h-full w-full items-center justify-center overflow-hidden bg-card select-none pointer-events-none [&_svg]:h-full [&_svg]:w-full [&_svg]:object-contain',
+          className
+        )}
+        dangerouslySetInnerHTML={{ __html: dynamicSvg }}
+      />
+    )
+  }
+
+  if (type === 'markdown') {
+    return (
+      <div
+        ref={containerRef}
+        className={cn(
+          'relative flex h-full w-full flex-col justify-start overflow-hidden bg-gradient-to-b from-blue-500/5 via-muted/20 to-transparent p-2.5 select-none pointer-events-none',
           className
         )}
       >
@@ -33,8 +320,9 @@ export function DocThumbnailPreview({
   if (type === 'dbdiagram') {
     return (
       <div
+        ref={containerRef}
         className={cn(
-          'relative flex h-full w-full items-center justify-center gap-1.5 overflow-hidden bg-gradient-to-b from-emerald-500/5 via-muted/20 to-transparent p-2 select-none',
+          'relative flex h-full w-full items-center justify-center gap-1.5 overflow-hidden bg-gradient-to-b from-emerald-500/5 via-muted/20 to-transparent p-2 select-none pointer-events-none',
           className
         )}
       >
@@ -62,8 +350,9 @@ export function DocThumbnailPreview({
 
   return (
     <div
+      ref={containerRef}
       className={cn(
-        'relative flex h-full w-full items-center justify-center gap-1 overflow-hidden bg-gradient-to-b from-purple-500/5 via-muted/20 to-transparent p-2 select-none',
+        'relative flex h-full w-full items-center justify-center gap-1 overflow-hidden bg-gradient-to-b from-purple-500/5 via-muted/20 to-transparent p-2 select-none pointer-events-none',
         className
       )}
     >
