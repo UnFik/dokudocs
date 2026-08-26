@@ -78,9 +78,8 @@ export function CommandMenu() {
                   const project = projects.find((p) => p.id === doc.projectId)
                   const docCats = getDocCategories(doc)
 
-                  const uniqueValue = `doc-${doc.id}-${idx}-${doc.title}-${
-                    doc.projectName || 'draft'
-                  }-${docCats.join('-')}-${doc.type}`
+                  const uniqueValue = `doc-${doc.id}-${idx}-${doc.title}-${doc.projectName || 'draft'
+                    }-${docCats.join('-')}-${doc.type}`
 
                   return (
                     <CommandItem
@@ -156,9 +155,8 @@ export function CommandMenu() {
                 <CommandSeparator />
                 <CommandGroup heading='Projects'>
                   {projects.map((proj, idx) => {
-                    const uniqueValue = `proj-${proj.id}-${idx}-${proj.name}-${
-                      proj.description || ''
-                    }`
+                    const uniqueValue = `proj-${proj.id}-${idx}-${proj.name}-${proj.description || ''
+                      }`
 
                     return (
                       <CommandItem
@@ -216,7 +214,7 @@ export function CommandMenu() {
                 <div className='flex size-5 items-center justify-center rounded-sm bg-blue-500/10 text-blue-600 dark:text-blue-400'>
                   <FileText className='size-3' />
                 </div>
-                <span>New FSD / Markdown Document</span>
+                <span>New Markdown Document</span>
               </CommandItem>
               <CommandItem
                 key='action-create-dbdiagram'

@@ -99,7 +99,7 @@ export function DraftsPage() {
                   All
                 </TabsTrigger>
                 <TabsTrigger value='markdown' className='h-7 text-xs px-2.5'>
-                  FSD
+                  MD
                 </TabsTrigger>
                 <TabsTrigger value='dbdiagram' className='h-7 text-xs px-2.5'>
                   DB

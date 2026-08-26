@@ -62,7 +62,7 @@ export function Dashboard() {
             <DropdownMenuContent align='end' className='w-48'>
               <DropdownMenuItem onClick={() => handleOpenCreate('markdown')}>
                 <FileText className='mr-2 size-3.5 text-blue-500' />
-                FSD / Markdown
+                Markdown
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleOpenCreate('dbdiagram')}>
                 <Database className='mr-2 size-3.5 text-emerald-500' />

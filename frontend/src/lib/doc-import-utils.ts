@@ -166,6 +166,6 @@ export function detectDocTypeAndContent(
   return {
     type: 'markdown',
     content: trimmed,
-    detectedReason: 'FSD / Markdown content',
+    detectedReason: 'Markdown content',
   }
 }

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
 export type EditorViewMode = 'code' | 'split' | 'preview'
+export type MarkdownPreviewMode = 'view' | 'edit'
 
 export interface UserEditorPreference {
   viewMode: EditorViewMode
@@ -9,6 +10,7 @@ export interface UserEditorPreference {
   isLiveRenderActive: boolean
   syncScroll: boolean
   showOutline?: boolean
+  previewMode?: MarkdownPreviewMode
 }
 
 const DEFAULT_PREFERENCE: UserEditorPreference = {
@@ -17,6 +19,7 @@ const DEFAULT_PREFERENCE: UserEditorPreference = {
   isLiveRenderActive: true,
   syncScroll: true,
   showOutline: false,
+  previewMode: 'view',
 }
 
 interface EditorPreferenceState {
@@ -30,6 +33,10 @@ interface EditorPreferenceState {
   ) => void
   setSyncScroll: (userId: string | null | undefined, syncScroll: boolean) => void
   setShowOutline: (userId: string | null | undefined, showOutline: boolean) => void
+  setPreviewMode: (
+    userId: string | null | undefined,
+    previewMode: MarkdownPreviewMode
+  ) => void
 }
 
 export const useEditorPreferenceStore = create<EditorPreferenceState>()(
@@ -116,6 +123,22 @@ export const useEditorPreferenceStore = create<EditorPreferenceState>()(
               [key]: {
                 ...current,
                 showOutline,
+              },
+            },
+          }
+        })
+      },
+
+      setPreviewMode: (userId, previewMode) => {
+        const key = userId || 'guest'
+        set((state) => {
+          const current = state.preferencesByUser[key] ?? DEFAULT_PREFERENCE
+          return {
+            preferencesByUser: {
+              ...state.preferencesByUser,
+              [key]: {
+                ...current,
+                previewMode,
               },
             },
           }

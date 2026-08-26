@@ -13,4 +13,5 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - ../marktext:/marktext:ro
     command: bun run dev --host

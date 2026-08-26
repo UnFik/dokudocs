@@ -125,10 +125,46 @@ export function useDocEditor(docId: string) {
       setIsSaving(false)
       setIsDirty(false)
       setLastSaved(new Date())
-    }, 1500)
+    }, 1000)
 
     return () => clearTimeout(timer)
-  }, [isDirty, doc?.id, doc?.type, doc?.thumbnail, doc?.thumbnailDark, updateDocument, projects])
+  }, [
+    content,
+    title,
+    projectId,
+    categories,
+    isDirty,
+    doc?.id,
+    doc?.type,
+    doc?.thumbnail,
+    doc?.thumbnailDark,
+    updateDocument,
+    projects,
+  ])
+
+  useEffect(() => {
+    return () => {
+      if (isDirty && doc) {
+        const currentProjId = projectIdRef.current
+        const targetProject = projects.find((p) => p.id === currentProjId)
+        const currentCategories = categoriesRef.current
+        const currentTitle = titleRef.current.trim() || 'Untitled Document'
+        const currentContent = contentRef.current
+
+        updateDocument(doc.id, {
+          title: currentTitle,
+          content: currentContent,
+          projectId: currentProjId ?? null,
+          projectName: targetProject?.name ?? null,
+          categories: currentCategories,
+          category: currentCategories[0] ?? null,
+          isDraft: !currentProjId,
+          thumbnail: doc.thumbnail,
+          thumbnailDark: doc.thumbnailDark,
+        })
+      }
+    }
+  }, [isDirty, doc, projects, updateDocument])
 
   return {
     document: doc,

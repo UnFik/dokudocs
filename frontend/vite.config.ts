@@ -19,6 +19,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@muyajs/core': path.resolve(__dirname, './src/features/docs/lib/muya'),
     },
   },
   test: {

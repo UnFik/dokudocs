@@ -84,8 +84,8 @@ export function CreateDocDialog({
   const initialCategories = defaultCategories?.length
     ? defaultCategories
     : defaultCategory
-    ? [defaultCategory]
-    : []
+      ? [defaultCategory]
+      : []
 
   const form = useForm<CreateDocFormValues>({
     resolver: zodResolver(createDocSchema),
@@ -109,8 +109,8 @@ export function CreateDocDialog({
       const initialCats = defaultCategories?.length
         ? defaultCategories
         : defaultCategory
-        ? [defaultCategory]
-        : []
+          ? [defaultCategory]
+          : []
 
       form.reset({
         title: '',
@@ -177,7 +177,7 @@ export function CreateDocDialog({
   const typeOptions = [
     {
       value: 'markdown',
-      label: 'FSD / Markdown',
+      label: 'Markdown',
       description: 'Functional specs & technical docs',
       icon: FileText,
     },
@@ -220,7 +220,7 @@ export function CreateDocDialog({
                   </FormLabel>
                   <FormControl>
                     <Input
-                      placeholder='e.g. Order Processing FSD'
+                      placeholder='e.g. Order Processing'
                       className='h-9 text-xs'
                       autoFocus
                       {...field}
@@ -248,19 +248,17 @@ export function CreateDocDialog({
                           key={opt.value}
                           type='button'
                           onClick={() => field.onChange(opt.value)}
-                          className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all cursor-pointer ${
-                            isSelected
+                          className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all cursor-pointer ${isSelected
                               ? 'border-primary bg-primary/5 ring-1 ring-primary'
                               : 'border-border/80 hover:bg-muted/40 hover:border-border'
-                          }`}
+                            }`}
                         >
                           <div className='flex items-center gap-2 mb-1.5'>
                             <div
-                              className={`p-1.5 rounded-md ${
-                                isSelected
+                              className={`p-1.5 rounded-md ${isSelected
                                   ? 'bg-primary text-primary-foreground'
                                   : 'bg-muted text-muted-foreground'
-                              }`}
+                                }`}
                             >
                               <Icon className='size-3.5' />
                             </div>
@@ -344,11 +342,10 @@ export function CreateDocDialog({
                               key={c}
                               type='button'
                               onClick={() => handleToggleCategory(c)}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${
-                                isSelected
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${isSelected
                                   ? `${palette.bg} ${palette.text} ${palette.border} ring-1 ring-primary/40 shadow-2xs`
                                   : 'bg-background text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
-                              }`}
+                                }`}
                             >
                               <Tag className='size-2.5' />
                               <span>{c}</span>

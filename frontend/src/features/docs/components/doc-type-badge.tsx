@@ -16,19 +16,19 @@ export function DocTypeBadge({
 }: DocTypeBadgeProps) {
   const configs = {
     markdown: {
-      label: 'FSD / Markdown',
+      label: 'Markdown',
       icon: FileText,
-      style: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+      style: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
     },
     dbdiagram: {
-      label: 'DB Diagram',
+      label: 'DBML',
       icon: Database,
-      style: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+      style: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
     },
     mermaid: {
-      label: 'Flowchart',
+      label: 'Mermaid',
       icon: GitFork,
-      style: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+      style: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
     },
   }
 

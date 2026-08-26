@@ -1,0 +1,201 @@
+.muya-container {
+  --themeColor: var(--color-primary, #3b82f6);
+  --themeColor90: rgba(59, 130, 246, 0.9);
+  --themeColor80: rgba(59, 130, 246, 0.8);
+  --themeColor70: rgba(59, 130, 246, 0.7);
+  --themeColor60: rgba(59, 130, 246, 0.6);
+  --themeColor50: rgba(59, 130, 246, 0.5);
+  --themeColor40: rgba(59, 130, 246, 0.4);
+  --themeColor30: rgba(59, 130, 246, 0.3);
+  --themeColor20: rgba(59, 130, 246, 0.2);
+  --themeColor10: rgba(59, 130, 246, 0.1);
+
+  --theme-color: var(--color-primary, #3b82f6);
+  --highlight-color: rgba(59, 130, 246, 0.4);
+  --highlightColor: rgba(59, 130, 246, 0.4);
+  --selection-color: rgba(59, 130, 246, 0.25);
+  --selectionColor: rgba(59, 130, 246, 0.25);
+
+  --editor-color: var(--color-foreground, #09090b);
+  --editor-color-80: var(--color-foreground, #18181b);
+  --editor-color-50: var(--color-muted-foreground, #71717a);
+  --editor-color-30: rgba(125, 125, 125, 0.4);
+  --editor-color-10: rgba(125, 125, 125, 0.15);
+  --editor-color-04: rgba(125, 125, 125, 0.05);
+  --editor-bg-color: transparent;
+  --editorColor: var(--color-foreground, #09090b);
+  --editorBgColor: transparent;
+
+  --h1-color: var(--color-foreground, currentColor);
+  --h2-color: var(--color-foreground, currentColor);
+  --h3-color: var(--color-foreground, currentColor);
+  --h4-color: var(--color-foreground, currentColor);
+  --h5-color: var(--color-foreground, currentColor);
+  --h6-color: var(--color-foreground, currentColor);
+  --headingColor: var(--color-foreground, currentColor);
+
+  --deleteColor: #ef4444;
+  --delete-color: #ef4444;
+  --iconColor: var(--color-foreground, currentColor);
+  --icon-color: var(--color-foreground, currentColor);
+  --codeBgColor: rgba(125, 125, 125, 0.1);
+  --code-bg-color: rgba(125, 125, 125, 0.1);
+  --codeBlockBgColor: rgba(125, 125, 125, 0.08);
+  --code-block-bg-color: rgba(125, 125, 125, 0.08);
+  --footnoteBgColor: rgba(125, 125, 125, 0.1);
+  --inputBgColor: var(--color-muted, rgba(125, 125, 125, 0.15));
+  --input-bg-color: var(--color-muted, rgba(125, 125, 125, 0.15));
+
+  --tableBorderColor: rgba(125, 125, 125, 0.25);
+  --table-border-color: rgba(125, 125, 125, 0.25);
+  --blockquoteTextColor: var(--color-foreground, currentColor);
+  --blockquote-text-color: var(--color-foreground, currentColor);
+  --blockquoteBorderColor: var(--color-primary, #3b82f6);
+  --blockquote-border-color: var(--color-primary, #3b82f6);
+  --hrColor: rgba(125, 125, 125, 0.2);
+  --hr-color: rgba(125, 125, 125, 0.2);
+  --linkColor: var(--color-primary, #3b82f6);
+  --link-color: var(--color-primary, #3b82f6);
+  --listMarkerColor: var(--color-primary, #3b82f6);
+  --list-marker-color: var(--color-primary, #3b82f6);
+
+  --floatFontColor: var(--color-foreground, currentColor);
+  --float-font-color: var(--color-foreground, currentColor);
+  --floatBgColor: var(--color-popover, #ffffff);
+  --float-bg-color: var(--color-popover, #ffffff);
+  --floatHoverColor: rgba(125, 125, 125, 0.1);
+  --float-hover-color: rgba(125, 125, 125, 0.1);
+  --floatBorderColor: rgba(125, 125, 125, 0.2);
+  --float-border-color: rgba(125, 125, 125, 0.2);
+  --floatShadow: rgba(0, 0, 0, 0.15);
+  --float-shadow: rgba(0, 0, 0, 0.15);
+
+  --button-font-color: var(--color-foreground, currentColor);
+  --button-bg-color: transparent;
+
+  font-family: inherit;
+  color: var(--color-foreground, inherit);
+  background-color: transparent;
+}
+
+.dark .muya-container,
+[data-theme='dark'] .muya-container,
+.dark.muya-container {
+  --editor-color: #f4f4f5;
+  --editor-color-80: #f4f4f5;
+  --editor-color-50: #a1a1aa;
+  --editor-color-30: rgba(255, 255, 255, 0.25);
+  --editor-color-10: rgba(255, 255, 255, 0.1);
+  --editor-color-04: rgba(255, 255, 255, 0.04);
+  --editorColor: #f4f4f5;
+  --h1-color: #f4f4f5;
+  --h2-color: #f4f4f5;
+  --h3-color: #f4f4f5;
+  --h4-color: #f4f4f5;
+  --h5-color: #f4f4f5;
+  --h6-color: #f4f4f5;
+  --headingColor: #f4f4f5;
+  --floatBgColor: #18181b;
+  --float-bg-color: #18181b;
+  --inputBgColor: #27272a;
+  --input-bg-color: #27272a;
+  --codeBgColor: rgba(255, 255, 255, 0.08);
+  --code-bg-color: rgba(255, 255, 255, 0.08);
+  --codeBlockBgColor: rgba(255, 255, 255, 0.05);
+  --code-block-bg-color: rgba(255, 255, 255, 0.05);
+}
+
+.muya-container .mu-container {
+  max-width: 100% !important;
+  padding: 0 !important;
+  color: var(--editor-color, inherit) !important;
+}
+
+.muya-container .mu-editor {
+  outline: none;
+  min-height: 100%;
+  padding-bottom: 8rem;
+  font-size: 0.8125rem;
+  line-height: 1.625;
+}
+
+.muya-container .mu-paragraph {
+  margin: 0.5rem 0;
+}
+
+.muya-container .mu-atx-heading {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.muya-container .mu-atx-heading-1 {
+  font-size: 1.5rem;
+  border-bottom: 1px solid rgba(125, 125, 125, 0.2);
+  padding-bottom: 0.375rem;
+}
+
+.muya-container .mu-atx-heading-2 {
+  font-size: 1.25rem;
+  border-bottom: 1px solid rgba(125, 125, 125, 0.15);
+  padding-bottom: 0.25rem;
+}
+
+.muya-container .mu-atx-heading-3 {
+  font-size: 1.0625rem;
+}
+
+.muya-container .mu-atx-heading-4 {
+  font-size: 0.9375rem;
+}
+
+.muya-container .mu-table {
+  border-collapse: collapse;
+  margin: 1rem 0;
+  width: 100%;
+  font-size: 0.75rem;
+}
+
+.muya-container .mu-table th,
+.muya-container .mu-table td {
+  border: 1px solid rgba(125, 125, 125, 0.25);
+  padding: 0.5rem 0.75rem;
+}
+
+.muya-container .mu-table th {
+  background-color: rgba(125, 125, 125, 0.1);
+  font-weight: 600;
+}
+
+.muya-container .mu-code-block {
+  background-color: rgba(125, 125, 125, 0.08);
+  border: 1px solid rgba(125, 125, 125, 0.15);
+  border-radius: 0.375rem;
+  margin: 0.75rem 0;
+  font-size: 0.75rem;
+}
+
+.muya-container .mu-block-quote {
+  border-left: 3px solid var(--color-primary, #3b82f6);
+  background: rgba(125, 125, 125, 0.05);
+  padding: 0.5rem 0.875rem;
+  margin: 0.75rem 0;
+  border-radius: 0 0.25rem 0.25rem 0;
+}
+
+.mu-popover {
+  z-index: 60 !important;
+}
+
+.mu-editor.mu-read-only,
+.muya-container.mu-read-only {
+  user-select: text;
+  cursor: default;
+}
+
+.mu-editor.mu-read-only .mu-paragraph-placeholder,
+.mu-editor.mu-read-only .mu-front-button,
+.mu-editor.mu-read-only .mu-table-drag-bar {
+  display: none !important;
+}
+

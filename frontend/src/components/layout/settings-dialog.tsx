@@ -417,7 +417,7 @@ export function SettingsDialog({
                               onChange={(e) => setAllowDocRead(e.target.checked)}
                               className='size-3.5 rounded border-border text-primary'
                             />
-                            <span>Read workspace specifications & Markdown FSD</span>
+                            <span>Read workspace specifications & Markdown</span>
                           </label>
                           <label className='flex items-center gap-2 text-xs text-foreground cursor-pointer'>
                             <input

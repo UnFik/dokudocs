@@ -5,8 +5,10 @@
     { "path": "./tsconfig.node.json" }
   ],
   "compilerOptions": {
+    "experimentalDecorators": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@muyajs/core": ["./src/types/muya-core.d.ts"]
     }
   }
 }

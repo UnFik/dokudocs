@@ -54,6 +54,7 @@ export interface UnifiedMonacoEditorProps {
   previewIcon?: ReactNode
   previewContent: ReactNode | ((props: PreviewSlotProps) => ReactNode)
   customToolbarActions?: ReactNode
+  previewLeftActions?: ReactNode
   previewToolbarActions?: ReactNode
   badgeLabel?: string
   badgeColorClass?: string
@@ -69,6 +70,7 @@ export function UnifiedMonacoEditor({
   previewIcon,
   previewContent,
   customToolbarActions,
+  previewLeftActions,
   previewToolbarActions,
   badgeLabel,
   badgeColorClass,
@@ -94,6 +96,9 @@ export function UnifiedMonacoEditor({
   const setStoreSyncScroll = useEditorPreferenceStore(
     (state) => state.setSyncScroll
   )
+  const setStorePreviewMode = useEditorPreferenceStore(
+    (state) => state.setPreviewMode
+  )
 
   const viewMode: EditorViewMode = userPreference?.viewMode ?? 'split'
   const splitPercent: number = userPreference?.splitPercent ?? 50
@@ -107,6 +112,10 @@ export function UnifiedMonacoEditor({
   const previewScrollRef = useRef<HTMLDivElement | null>(null)
   const isUpdatingFromPropRef = useRef(false)
   const isSyncingScrollRef = useRef(false)
+  const contentRef = useRef(content)
+  contentRef.current = content
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
   const lastEmittedValueRef = useRef(content)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const decorationsCollectionRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
@@ -129,9 +138,9 @@ export function UnifiedMonacoEditor({
       }
       lastEmittedValueRef.current = value
       setHasPendingChanges(false)
-      onChange(value)
+      onChangeRef.current(value)
     },
-    [onChange]
+    []
   )
 
   const triggerManualSync = useCallback(() => {
@@ -213,7 +222,7 @@ export function UnifiedMonacoEditor({
       setupMonaco()
 
       const editor = monaco.editor.create(element, {
-        value: content,
+        value: contentRef.current,
         language: language,
         theme: isDark ? 'dokudocs-dark' : 'dokudocs-light',
         minimap: { enabled: false },
@@ -247,7 +256,7 @@ export function UnifiedMonacoEditor({
       })
 
       editorRef.current = editor
-      lastEmittedValueRef.current = content
+      lastEmittedValueRef.current = contentRef.current
 
       scheduleDiagnostics(editor, language)
 
@@ -496,6 +505,12 @@ export function UnifiedMonacoEditor({
       lastEmittedValueRef.current = content
       isUpdatingFromPropRef.current = false
     }
+
+    if (viewMode !== 'preview') {
+      requestAnimationFrame(() => {
+        editorRef.current?.layout()
+      })
+    }
   }
 
   const handleUndo = () => {
@@ -660,13 +675,13 @@ export function UnifiedMonacoEditor({
           ref={splitContainerRef}
           className='relative flex flex-1 flex-col lg:flex-row overflow-hidden min-h-0 w-full h-full'
         >
-          {viewMode !== 'preview' && (
             <div
               style={{
                 width: viewMode === 'code' ? '100%' : `${splitPercent}%`,
                 flex: viewMode === 'code' ? '1 1 0%' : 'none',
+                display: viewMode === 'preview' ? 'none' : 'flex',
               }}
-              className={`flex h-full flex-col bg-background ${
+              className={`h-full flex-col bg-background ${
                 viewMode === 'split' ? 'border-r border-border/80' : ''
               } overflow-hidden shrink-0 min-h-0`}
             >
@@ -825,7 +840,6 @@ export function UnifiedMonacoEditor({
                 </div>
               </div>
             </div>
-          )}
 
           {viewMode === 'split' && (
             <div
@@ -849,9 +863,9 @@ export function UnifiedMonacoEditor({
             >
               <div className='flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 text-xs font-medium text-muted-foreground shrink-0'>
                 <div className='flex items-center gap-2'>
-                  {previewToolbarActions && (
+                  {previewLeftActions && (
                     <div className='flex items-center gap-1 shrink-0'>
-                      {previewToolbarActions}
+                      {previewLeftActions}
                     </div>
                   )}
                   {previewIcon}
@@ -871,13 +885,18 @@ export function UnifiedMonacoEditor({
                     </span>
                   )}
                 </div>
-                {showLiveRenderToggle && !isLiveRenderActive && (
-                  <div className='flex items-center gap-1 shrink-0'>
+                <div className='flex items-center gap-2 shrink-0'>
+                  {showLiveRenderToggle && !isLiveRenderActive && (
                     <span className='rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400'>
                       Paused
                     </span>
-                  </div>
-                )}
+                  )}
+                  {previewToolbarActions && (
+                    <div className='flex items-center gap-1 shrink-0'>
+                      {previewToolbarActions}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className='flex-1 overflow-hidden min-h-0'>
                 {typeof previewContent === 'function'
@@ -911,7 +930,10 @@ export function UnifiedMonacoEditor({
             <Button
               variant={viewMode === 'split' ? 'default' : 'ghost'}
               size='sm'
-              onClick={() => setStoreViewMode(userId, 'split')}
+              onClick={() => {
+                setStoreViewMode(userId, 'split')
+                setStorePreviewMode(userId, 'view')
+              }}
               className={`h-7 rounded-full gap-1.5 px-3 text-xs font-medium transition-all ${
                 viewMode === 'split'
                   ? 'bg-primary text-primary-foreground shadow-xs'
