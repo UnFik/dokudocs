@@ -57,4 +57,5 @@ export const lucideIcons = {
   plantuml: svg('<circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.5 8.5 15.5 15.5"/>'),
   sequence: svg('<rect width="4" height="14" x="4" y="5" rx="1"/><rect width="4" height="14" x="16" y="5" rx="1"/><path d="m8 9 8 3-8 3"/>'),
   turninto: svg('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>'),
+  comment: svg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
 }

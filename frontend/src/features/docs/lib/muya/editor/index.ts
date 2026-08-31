@@ -441,37 +441,23 @@ export class Editor {
             return;
 
         const { anchor, focus, isSelectionInSameBlock } = selection;
-        // `ScrollPage.queryBlock` consumes the path array in place (`path.shift`),
-        // so query against a copy and leave the caller's selection untouched.
         const cursorBlock = this.scrollPage?.queryBlock([...anchor.path]);
-
-        const begin = Math.min(anchor.offset, focus.offset);
         const end = Math.max(anchor.offset, focus.offset);
 
         if (isSelectionInSameBlock && cursorBlock && cursorBlock.isContent()) {
-            cursorBlock.setCursor(begin, end, true);
+            cursorBlock.setCursor(end, end, true);
             return;
         }
 
-        // When the tree was rebuilt wholesale (rebuildContents), the saved
-        // selection's cached `anchorBlock` / `focusBlock` reference DETACHED
-        // nodes from the previous tree — resolving them would set the native DOM
-        // range onto a detached node and crash the next `getSelection()` read.
-        // Re-resolve the caret from the (cloned) path against the fresh tree;
-        // fall back to focusing the first content block when the saved path no
-        // longer points at a content leaf (e.g. a paragraph became a table).
         if (treeRebuilt) {
             if (cursorBlock && cursorBlock.isContent())
-                cursorBlock.setCursor(begin, end, true);
+                cursorBlock.setCursor(end, end, true);
             else
                 this.focus();
 
             return;
         }
 
-        // Incremental (updateContents) path. Clone the paths so
-        // `queryBlock(path)` can't drain the caller's arrays — notably the
-        // selection object stored in the undo stack.
         const anchorBlock = this.scrollPage?.queryBlock([...anchor.path]);
         const focusBlock = this.scrollPage?.queryBlock([...focus.path]);
         if (!anchorBlock || !anchorBlock.isContent() || !focusBlock || !focusBlock.isContent()) {
@@ -479,10 +465,7 @@ export class Editor {
             return;
         }
 
-        this.selection.setSelection(
-            { offset: anchor.offset, block: anchorBlock, path: [...anchor.path] },
-            { offset: focus.offset, block: focusBlock, path: [...focus.path] },
-        );
+        focusBlock.setCursor(end, end, true);
     }
 
     /**

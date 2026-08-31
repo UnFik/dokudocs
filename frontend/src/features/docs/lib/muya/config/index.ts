@@ -352,6 +352,7 @@ export const MUYA_DEFAULT_OPTIONS = {
     // Whether HTML rendering is disabled or not.
     disableHtml: false,
     readOnly: false,
+    isSuggestingMode: false,
     locale: en,
 };
 

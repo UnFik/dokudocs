@@ -90,7 +90,7 @@ export function CreateDocDialog({
   const form = useForm<CreateDocFormValues>({
     resolver: zodResolver(createDocSchema),
     defaultValues: {
-      title: '',
+      title: 'My Draft',
       type: defaultType,
       projectId: initialProjectId,
       categories: initialCategories,
@@ -113,7 +113,7 @@ export function CreateDocDialog({
           : []
 
       form.reset({
-        title: '',
+        title: 'My Draft',
         type: defaultType,
         projectId: activeProjId,
         categories: initialCats,

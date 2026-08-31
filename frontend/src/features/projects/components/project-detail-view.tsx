@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from '@tanstack/react-router'
+import { getRouteApi, Link } from '@tanstack/react-router'
 import {
   ArrowLeft,
   Folder,
@@ -12,7 +12,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { ViewMode } from '@/types/dokudocs'
+import type { ViewMode } from '@/types/dokudocs'
 import { getDocCategories } from '@/lib/doc-category-utils'
 import { formatRelativeTime } from '@/lib/time-utils'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
@@ -28,27 +28,63 @@ import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
 import { EditProjectDialog } from './edit-project-dialog'
 import { ProjectCategoryFilter } from './project-category-filter'
 
+const route = getRouteApi('/_authenticated/projects/$projectId')
+
 export function ProjectDetailView() {
-  const { projectId } = useParams({ from: '/_authenticated/projects/$projectId' })
+  const { projectId } = route.useParams()
+  const { categories = [], q = '', viewMode = 'grid' } = route.useSearch()
+  const navigate = route.useNavigate()
+
   const { projectsWithDocs } = useDokudocs()
   const toggleStarProject = useDokudocsStore((s) => s.toggleStarProject)
 
   const project = projectsWithDocs.find((p) => p.id === projectId)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [createDocOpen, setCreateDocOpen] = useState(false)
   const [importDocOpen, setImportDocOpen] = useState(false)
   const [editProjectOpen, setEditProjectOpen] = useState(false)
 
   const handleToggleCategory = (cat: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    )
+    const nextCategories = categories.includes(cat)
+      ? categories.filter((c) => c !== cat)
+      : [...categories, cat]
+
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        categories: nextCategories.length > 0 ? nextCategories : undefined,
+      }),
+      replace: false,
+    })
   }
 
   const handleClearCategories = () => {
-    setSelectedCategories([])
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        categories: undefined,
+      }),
+      replace: false,
+    })
+  }
+
+  const handleSearchChange = (value: string) => {
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        q: value || undefined,
+      }),
+      replace: true,
+    })
+  }
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        viewMode: mode === 'grid' ? undefined : mode,
+      }),
+      replace: false,
+    })
   }
 
   const handleToggleStar = () => {
@@ -92,18 +128,18 @@ export function ProjectDetailView() {
   const filteredDocs = project.documents.filter((doc) => {
     const docCats = getDocCategories(doc)
     if (
-      selectedCategories.length > 0 &&
-      !selectedCategories.some((cat) => docCats.includes(cat))
+      categories.length > 0 &&
+      !categories.some((cat) => docCats.includes(cat))
     ) {
       return false
     }
 
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.toLowerCase()
+    if (!q.trim()) return true
+    const searchLower = q.toLowerCase()
     return (
-      doc.title.toLowerCase().includes(q) ||
-      docCats.some((c) => c.toLowerCase().includes(q)) ||
-      doc.tags?.some((t) => t.toLowerCase().includes(q))
+      doc.title.toLowerCase().includes(searchLower) ||
+      docCats.some((c) => c.toLowerCase().includes(searchLower)) ||
+      doc.tags?.some((t) => t.toLowerCase().includes(searchLower))
     )
   })
 
@@ -213,8 +249,8 @@ export function ProjectDetailView() {
               <div className='relative w-48 sm:w-60'>
                 <Search className='absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground' />
                 <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={q}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   placeholder='Search within project...'
                   className='h-8 pl-8 text-xs'
                 />
@@ -225,7 +261,7 @@ export function ProjectDetailView() {
                   variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
                   size='icon'
                   className='size-7'
-                  onClick={() => setViewMode('grid')}
+                  onClick={() => handleViewModeChange('grid')}
                 >
                   <LayoutGrid className='size-3.5' />
                 </Button>
@@ -233,7 +269,7 @@ export function ProjectDetailView() {
                   variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                   size='icon'
                   className='size-7'
-                  onClick={() => setViewMode('list')}
+                  onClick={() => handleViewModeChange('list')}
                 >
                   <List className='size-3.5' />
                 </Button>
@@ -245,7 +281,7 @@ export function ProjectDetailView() {
         <ProjectCategoryFilter
           projectId={project.id}
           categories={project.categories ?? []}
-          selectedCategories={selectedCategories}
+          selectedCategories={categories}
           onToggleCategory={handleToggleCategory}
           onClearCategories={handleClearCategories}
           docCountsByCategory={docCountsByCategory}
@@ -255,9 +291,9 @@ export function ProjectDetailView() {
         {filteredDocs.length === 0 ? (
           <div className='flex min-h-[30vh] flex-col items-center justify-center rounded-xl border border-dashed border-border/80 p-8 text-center'>
             <p className='text-xs text-muted-foreground'>
-              {selectedCategories.length === 0
+              {categories.length === 0
                 ? 'No documents in this project yet.'
-                : `No documents found in selected categories (${selectedCategories.join(', ')}).`}
+                : `No documents found in selected categories (${categories.join(', ')}).`}
             </p>
             <Button
               size='sm'
@@ -287,8 +323,8 @@ export function ProjectDetailView() {
         open={createDocOpen}
         onOpenChange={setCreateDocOpen}
         preselectedProjectId={project.id}
-        defaultCategories={selectedCategories}
-        defaultCategory={selectedCategories[0] ?? null}
+        defaultCategories={categories}
+        defaultCategory={categories[0] ?? null}
       />
 
       <ImportDocDialog

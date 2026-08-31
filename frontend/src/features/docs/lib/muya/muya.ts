@@ -3,10 +3,25 @@ import type Parent from './block/base/parent';
 import type { TBlockPath } from './block/types';
 import type { Listener } from './event/types';
 import type { ILocale } from './i18n/types';
-import type { IIndexCursor } from './selection/offsetCursor';
+import {
+    type IIndexCursor,
+    injectSentinels,
+    injectStateSentinels,
+    locateSentinelOffsets,
+    resolveSentinelCursor,
+} from './selection/offsetCursor';
 import type { IHistorySelection, IPublicCursorInput } from './selection/types';
 import type { ITocItem } from './state/getTOC';
-import type { IBulletListState, IOrderListState, ITableState, ITaskListState, TState } from './state/types';
+import {
+    type IBulletListState,
+    type IOrderListState,
+    isAnyListState,
+    isAtxHeadingState,
+    isCodeBlockState,
+    type ITableState,
+    type ITaskListState,
+    type TState,
+} from './state/types';
 import type { IMuyaOptions, Nullable } from './types';
 import Format from './block/base/format';
 import { canTurnInto, insertBlockBelowByLabel, insertFrontMatterAtStart, replaceBlockByLabel } from './block/blockTransforms';
@@ -22,13 +37,6 @@ import {
 import { Editor } from './editor/index';
 import EventCenter from './event/index';
 import I18n from './i18n/index';
-import {
-    injectSentinels,
-    injectStateSentinels,
-    locateSentinelOffsets,
-    resolveSentinelCursor,
-} from './selection/offsetCursor';
-import { isAnyListState, isAtxHeadingState, isCodeBlockState } from './state/types';
 import { Ui } from './ui/ui';
 import { deepClone } from './utils';
 import { encodeImageSrc } from './utils/image';
@@ -227,6 +235,10 @@ export class Muya {
 
     setReadOnly(readOnly: boolean) {
         this.options.readOnly = readOnly;
+        this.options.hideQuickInsertHint = readOnly;
+        this.options.autoPairBracket = !readOnly;
+        this.options.autoPairMarkdownSyntax = !readOnly;
+        this.options.autoPairQuote = !readOnly;
         if (this.domNode) {
             this.domNode.setAttribute('contenteditable', readOnly ? 'false' : 'true');
             this.domNode.classList.toggle('mu-read-only', readOnly);
@@ -240,12 +252,28 @@ export class Muya {
         }
     }
 
+    getIsSuggestingMode(): boolean {
+        return !!this.options.isSuggestingMode;
+    }
+
+    setIsSuggestingMode(isSuggestingMode: boolean) {
+        this.options.isSuggestingMode = isSuggestingMode;
+    }
+
     undo() {
         this.editor.history.undo();
     }
 
     redo() {
         this.editor.history.redo();
+    }
+
+    canUndo(): boolean {
+        return this.editor.history.canUndo();
+    }
+
+    canRedo(): boolean {
+        return this.editor.history.canRedo();
     }
 
     getHistory() {
@@ -925,7 +953,7 @@ export class Muya {
         if (!block)
             return;
 
-        let cursorBlock: Content | null = null;
+        let cursorBlock: Content | null | undefined;
         if (block.prev) {
             cursorBlock = block.prev.lastContentInDescendant();
         }

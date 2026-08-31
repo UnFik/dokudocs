@@ -12,7 +12,7 @@ export function TrashEmptyState() {
         Trash is empty
       </h3>
       <p className='mt-1.5 max-w-sm text-xs leading-relaxed text-muted-foreground'>
-        Deleted documents and mock diagrams will be stored here for 30 days before being permanently removed.
+        Deleted documents will be stored here for 30 days before being permanently removed.
       </p>
       <Button asChild variant='outline' size='sm' className='mt-6 text-xs gap-1.5'>
         <Link to='/'>

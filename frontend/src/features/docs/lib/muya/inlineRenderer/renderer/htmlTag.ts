@@ -65,6 +65,9 @@ function buildRawHtmlTag(
     if (tag === 'code' || tag === 'kbd')
         Object.assign(data.attrs, { spellcheck: 'false' });
 
+    if (tag === 'del' && (attrs['data-suggestion-id'] || (attrs.class && attrs.class.includes('doc-suggestion'))))
+        Object.assign(data.attrs, { contenteditable: 'false' });
+
     if (attrs.id)
         selector += `#${attrs.id}`;
 
@@ -78,7 +81,7 @@ function buildRawHtmlTag(
     for (const attr of Object.keys(attrs)) {
         if (attr !== 'id' && attr !== 'class') {
             const attrData = attrs[attr];
-            if (attrData && isValidAttribute(tag, attr, attrData))
+            if (attrData && (attr.startsWith('data-') || isValidAttribute(tag, attr, attrData)))
                 data.attrs[attr] = attrData;
         }
     }
@@ -116,11 +119,21 @@ export default function htmlTag(
         outerClass,
     }: ISyntaxRenderOptions & { token: HTMLTagToken },
 ) {
-    const { tag, openTag, closeTag, children } = token;
+    const { tag, openTag, closeTag, children, attrs } = token;
 
-    const className = children?.length
-        ? this.getClassName(outerClass, block, token, cursor)
-        : CLASS_NAMES.MU_GRAY;
+    const isCommentOrSuggestionTag
+        = (tag === 'del' || tag === 'ins' || tag === 'mark')
+        && (
+            !!attrs['data-suggestion-id']
+            || !!attrs['data-thread-id']
+            || (typeof attrs.class === 'string' && /doc-suggestion|doc-comment/.test(attrs.class))
+        );
+
+    const className = isCommentOrSuggestionTag
+        ? CLASS_NAMES.MU_HIDE
+        : children?.length
+            ? this.getClassName(outerClass, block, token, cursor)
+            : CLASS_NAMES.MU_GRAY;
     const tagClassName
         = className === CLASS_NAMES.MU_HIDE ? className : CLASS_NAMES.MU_HTML_TAG;
     const { start, end } = token.range;

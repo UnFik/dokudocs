@@ -20,7 +20,7 @@ interface MermaidPreviewProps {
 export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
-  const { svg, error, isValid, isRendering } = useMermaidRender(content, isDark)
+  const { svg, error, isValid, isRendering } = useMermaidRender(content, isDark, docId)
 
   const {
     viewportRef,
@@ -68,6 +68,8 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
 
     setPanAndZoom({ x: nextPanX, y: nextPanY }, nextZoom)
   }, [setPanAndZoom, viewportRef, canvasLayerRef, zoomRef])
+
+  const singleLineError = error ? error.split('\n')[0].replace(/^Error:\s*/i, '') : ''
 
   return (
     <div className='relative flex h-full w-full flex-col overflow-hidden bg-muted/15 select-none'>
@@ -132,12 +134,18 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
           <div className='flex items-center gap-2 min-w-0'>
             <AlertTriangle className='size-4 shrink-0' />
             <span className='font-mono font-medium truncate'>
-              {error.replace(/^Error:\s*/, '')}
+              {singleLineError}
             </span>
           </div>
-          <span className='text-[10px] text-amber-600/80 dark:text-amber-400/80 shrink-0 font-sans'>
-            Showing last valid preview
-          </span>
+          {svg ? (
+            <span className='text-[10px] text-amber-600/80 dark:text-amber-400/80 shrink-0 font-sans'>
+              Showing last valid preview
+            </span>
+          ) : (
+            <span className='text-[10px] text-amber-600/80 dark:text-amber-400/80 shrink-0 font-sans font-medium'>
+              Syntax Error
+            </span>
+          )}
         </div>
       )}
 
@@ -160,6 +168,23 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
               </p>
             </div>
           </div>
+        ) : !isValid && !svg ? (
+          <div className='flex h-full min-h-[300px] flex-col items-center justify-center gap-4 p-6 text-center text-xs select-text'>
+            <div className='flex size-12 items-center justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-500 shadow-sm'>
+              <AlertTriangle className='size-6' />
+            </div>
+            <div className='max-w-md space-y-1.5'>
+              <p className='font-semibold text-foreground text-sm'>Mermaid Syntax Error</p>
+              <p className='text-[11px] text-muted-foreground'>
+                The diagram cannot be rendered because the Mermaid code contains invalid syntax.
+              </p>
+            </div>
+            {error && (
+              <div className='max-w-xl w-full max-h-56 overflow-auto rounded-lg border border-amber-500/20 bg-amber-500/5 p-3.5 text-left font-mono text-[11px] leading-relaxed text-amber-600 dark:text-amber-400 select-text shadow-inner'>
+                <pre className='whitespace-pre-wrap font-mono break-all'>{error}</pre>
+              </div>
+            )}
+          </div>
         ) : (
           <div
             ref={canvasLayerRef}
@@ -172,7 +197,9 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
             }}
           >
             <div
-              className='inline-block pointer-events-auto filter drop-shadow-sm select-text [&_svg]:max-w-none [&_svg]:h-auto'
+              className={`inline-block pointer-events-auto filter drop-shadow-sm select-text [&_svg]:max-w-none [&_svg]:h-auto transition-opacity duration-200 ${
+                !isValid ? 'opacity-70' : 'opacity-100'
+              }`}
               dangerouslySetInnerHTML={{ __html: svg }}
             />
           </div>

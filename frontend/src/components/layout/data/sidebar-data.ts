@@ -5,6 +5,7 @@ import {
   FileText,
   Folder,
   Layers,
+  Settings,
   Trash2,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
@@ -41,25 +42,30 @@ export const sidebarData: SidebarData = {
           url: '/',
           icon: Clock,
         },
-      ],
-    },
-    {
-      title: '',
-      items: [
         {
           title: 'Drafts',
           url: '/drafts',
           icon: FileText,
         },
         {
+          title: 'Trash',
+          url: '/trash',
+          icon: Trash2,
+        },
+      ],
+    },
+    {
+      title: '',
+      items: [
+        {
           title: 'All Projects',
           url: '/projects',
           icon: Folder,
         },
         {
-          title: 'Trash',
-          url: '/trash',
-          icon: Trash2,
+          title: 'Workspace Settings',
+          url: '/settings',
+          icon: Settings,
         },
       ],
     },

@@ -244,3 +244,48 @@ More details.
   })
 })
 
+describe('Mermaid Syntax Validation & Error Handling', () => {
+  it('detects syntax errors in invalid Mermaid code', async () => {
+    const mermaid = (await import('mermaid')).default
+    const invalidCode = `sequenceDiagram
+    autonumber
+    Note over App, `
+
+    let caughtError: any = null
+    try {
+      await mermaid.parse(invalidCode)
+    } catch (err) {
+      caughtError = err
+    }
+
+    expect(caughtError).not.toBeNull()
+    const errorMsg = caughtError?.message || String(caughtError)
+    expect(errorMsg).toContain('Parse error')
+  })
+
+  it('validates correct Mermaid sequence and flowchart code', async () => {
+    const mermaid = (await import('mermaid')).default
+    const validSeq = `sequenceDiagram
+    participant A
+    participant B
+    A->>B: Message`
+
+    const validFlow = `flowchart TD
+    A[Start] --> B[End]`
+
+    const parsedSeq = await mermaid.parse(validSeq)
+    const parsedFlow = await mermaid.parse(validFlow)
+
+    expect(parsedSeq).toBeTruthy()
+    expect(parsedFlow).toBeTruthy()
+  })
+
+  it('safely generates thumbnails for invalid Mermaid input without crashing', () => {
+    const invalidCode = `sequenceDiagram
+    invalid gibberish ::: >>>`
+
+    const thumbnail = generateMermaidThumbnail(invalidCode, false)
+    expect(typeof thumbnail).toBe('string')
+  })
+})
+

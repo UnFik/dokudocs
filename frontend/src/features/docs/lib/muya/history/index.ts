@@ -1,6 +1,11 @@
 import type { JSONOpList } from 'ot-json1';
 import type { Muya } from '../muya';
-import type { IAnchorFocusInfo, IHistorySelection } from '../selection/types';
+import {
+    type IAnchorFocusInfo,
+    type IHistorySelection,
+    SelectionCaretType,
+    SelectionDirection,
+} from '../selection/types';
 import type { TState } from '../state/types';
 import type { Nullable } from '../types';
 import * as json1 from 'ot-json1';
@@ -64,7 +69,8 @@ export interface ISerializedHistory {
         redo: ISerializableOperation[];
     };
     lastRecorded: number;
-    selectionStack: (Nullable<ISerializableSelection>)[];
+    selectionStack?: (Nullable<ISerializableSelection>)[];
+    lastSelection?: Nullable<ISerializableSelection>;
 }
 
 enum HistoryAction {
@@ -80,10 +86,6 @@ const DEFAULT_OPTIONS = {
 
 export type TInputKind = 'insert' | 'delete';
 
-// Undo grouping is otherwise purely time-based (`delay`), so a fast typed
-// sentence coalesces into a single entry. These helpers let the input pipeline
-// hint a boundary: a switch between inserting and deleting, or typing a
-// whitespace (word boundary), starts a fresh undo entry.
 export function classifyInputKind(inputType: string): Nullable<TInputKind> {
     if (inputType.startsWith('insert'))
         return 'insert';
@@ -104,11 +106,77 @@ export function shouldBreakUndoGroup(
     return isWordBoundary || switchedKind;
 }
 
+export function extractSelectionFromOp(op: Nullable<JSONOpList>): Nullable<IHistorySelection> {
+    if (!op || !Array.isArray(op) || op.length === 0)
+        return null;
+
+    const path: (string | number)[] = [];
+    let current: unknown = op;
+
+    while (Array.isArray(current)) {
+        if (current.length === 0)
+            break;
+
+        const last = current[current.length - 1];
+        if (typeof last === 'object' && last !== null && !Array.isArray(last)) {
+            for (let i = 0; i < current.length - 1; i++) {
+                if (typeof current[i] === 'string' || typeof current[i] === 'number')
+                    path.push(current[i] as string | number);
+            }
+
+            const leaf = last as Record<string, unknown>;
+            if (leaf.es && Array.isArray(leaf.es)) {
+                let offset = 0;
+                const es = leaf.es;
+                let idx = 0;
+                if (typeof es[0] === 'number') {
+                    offset = es[0];
+                    idx = 1;
+                }
+
+                let targetOffset = offset;
+
+                for (let i = idx; i < es.length; i++) {
+                    const item = es[i];
+                    if (typeof item === 'string') {
+                        targetOffset += item.length;
+                    }
+                    else if (typeof item === 'number') {
+                        targetOffset += item;
+                    }
+                }
+
+                const blockPath = path.filter(seg => seg !== 'children');
+                const targetPath = blockPath[blockPath.length - 1] === 'text' ? blockPath : [...blockPath, 'text'];
+
+                return {
+                    anchor: { offset: targetOffset, path: targetPath },
+                    focus: { offset: targetOffset, path: targetPath },
+                    isCollapsed: true,
+                    isSelectionInSameBlock: true,
+                    direction: SelectionDirection.NONE,
+                    type: SelectionCaretType.CARET,
+                };
+            }
+            break;
+        }
+        else if (typeof current[0] === 'string' || typeof current[0] === 'number') {
+            path.push(current[0]);
+            current = current[1];
+        }
+        else {
+            break;
+        }
+    }
+
+    return null;
+}
+
 class History {
     private _lastRecorded: number = 0;
     private _lastInputKind: Nullable<TInputKind> = null;
     private _ignoreChange: boolean = false;
-    private _selectionStack: (Nullable<IHistorySelection>)[] = [];
+    private _lastSelection: Nullable<IHistorySelection> = null;
     private _stack: IStack = {
         undo: [],
         redo: [],
@@ -123,6 +191,24 @@ class History {
     }
 
     private _listen() {
+        this._muya.eventCenter.on('selection-change', () => {
+            if (this._ignoreChange)
+                return;
+            const current = this._selection.getSelection();
+            if (current) {
+                if (
+                    this._lastSelection
+                    && (
+                        this._lastSelection.anchor.block !== current.anchor.block
+                        || Math.abs(this._lastSelection.anchor.offset - current.anchor.offset) > 1
+                    )
+                ) {
+                    this.cutoff();
+                }
+                this._lastSelection = current;
+            }
+        });
+
         this._muya.eventCenter.on(
             'json-change',
             ({
@@ -138,10 +224,6 @@ class History {
                 if (this._ignoreChange)
                     return;
 
-                // The identity op (`null`) carries no change to record or
-                // transform. It can still reach here through `json-change` when
-                // queued ops compose away (e.g. IME edits, #4806); `_record`
-                // would otherwise crash reading `op.length`.
                 if (op == null)
                     return;
 
@@ -153,19 +235,36 @@ class History {
         );
     }
 
+    private _emitHistoryChange() {
+        this._muya.eventCenter.emit('history-change', {
+            canUndo: this.canUndo(),
+            canRedo: this.canRedo(),
+        });
+    }
+
     private _change(source: HistoryAction, dest: HistoryAction) {
         if (this._stack[source].length === 0)
             return;
 
-        const { operation, selection, rebuild } = this._stack[source].pop()!;
+        const { operation, selection: storedSelection, rebuild } = this._stack[source].pop()!;
+        const selection = extractSelectionFromOp(operation) ?? storedSelection;
         const inverseOperation = json1.type.invertWithDoc(
             operation,
             asDoc(this._muya.editor.jsonState.getState()),
         );
 
+        const currentSel = this._selection.getSelection();
+        const collapsedSel = currentSel ? {
+            ...currentSel,
+            anchor: { ...currentSel.anchor, offset: Math.max(currentSel.anchor.offset, currentSel.focus.offset) },
+            focus: { ...currentSel.focus, offset: Math.max(currentSel.anchor.offset, currentSel.focus.offset) },
+            isCollapsed: true,
+            type: SelectionCaretType.CARET,
+        } : null;
+
         this._stack[dest].push({
             operation: inverseOperation as JSONOpList,
-            selection: this._selection.getSelection(),
+            selection: collapsedSel,
             rebuild,
         });
 
@@ -181,14 +280,16 @@ class History {
             this._ignoreChange = false;
         }
 
-        this._getLastSelection();
+        this._lastSelection = this._selection.getSelection();
+        this._emitHistoryChange();
     }
 
     clear() {
         this._stack = { undo: [], redo: [] };
-        this._selectionStack = [];
+        this._lastSelection = null;
         this._lastRecorded = 0;
         this._ignoreChange = false;
+        this._emitHistoryChange();
     }
 
     getHistory(): ISerializedHistory {
@@ -198,9 +299,8 @@ class History {
                 redo: this._stack.redo.map(op => this._toSerializableOperation(op)),
             },
             lastRecorded: this._lastRecorded,
-            selectionStack: this._selectionStack.map(sel =>
-                this._toSerializableSelection(sel),
-            ),
+            selectionStack: this._lastSelection ? [this._toSerializableSelection(this._lastSelection)] : [],
+            lastSelection: this._toSerializableSelection(this._lastSelection),
         };
     }
 
@@ -210,9 +310,10 @@ class History {
             redo: history.stack.redo.map(op => this._fromSerializableOperation(op)),
         };
         this._lastRecorded = history.lastRecorded ?? 0;
-        this._selectionStack = (history.selectionStack ?? []).map(sel =>
-            this._fromSerializableSelection(sel),
+        this._lastSelection = this._fromSerializableSelection(
+            history.lastSelection ?? (history.selectionStack && history.selectionStack.length > 0 ? history.selectionStack[0] : null),
         );
+        this._emitHistoryChange();
     }
 
     private _toSerializableOperation(op: IOperation): ISerializableOperation {
@@ -231,7 +332,6 @@ class History {
         };
     }
 
-    // Strip the live block references and keep only plain paths + offsets.
     private _toSerializableSelection(
         selection: Nullable<IHistorySelection>,
     ): Nullable<ISerializableSelection> {
@@ -248,14 +348,6 @@ class History {
         };
     }
 
-    // Rebuild a selection without live block references. The block instances
-    // are intentionally omitted: the only consumers of a restored selection
-    // are `editor.updateContents` and `selection._setCursor`, both of which
-    // re-resolve the target block from each endpoint's `path` via
-    // `scrollPage.queryBlock` when no block instance is present. The return
-    // type is `IHistorySelection`, whose endpoint `block` references are
-    // optional, so the missing block fields are part of the contract rather
-    // than an unsound cast over fabricated `ContentBlock` instances.
     private _fromSerializableSelection(
         selection: Nullable<ISerializableSelection>,
     ): Nullable<IHistorySelection> {
@@ -274,6 +366,7 @@ class History {
 
     cutoff() {
         this._lastRecorded = 0;
+        this._lastSelection = this._selection.getSelection();
     }
 
     markInputBoundary(inputType: string, data: Nullable<string>): void {
@@ -285,22 +378,14 @@ class History {
         this._lastInputKind = kind;
     }
 
-    private _getLastSelection() {
-        this._selectionStack.push(this._selection.getSelection());
-
-        if (this._selectionStack.length > 2)
-            this._selectionStack.shift();
-
-        return this._selectionStack.length === 2 ? this._selectionStack[0] : null;
-    }
-
     private _record(op: JSONOpList, doc: TState[]) {
         if (op.length === 0)
             return;
 
-        let selection = this._getLastSelection();
-        this._stack.redo = [];
         let undoOperation = json1.type.invertWithDoc(op, asDoc(doc));
+        this._stack.redo = [];
+
+        let selection = extractSelectionFromOp(undoOperation) ?? this._lastSelection ?? this._selection.getSelection();
 
         const timestamp = Date.now();
         if (
@@ -309,8 +394,8 @@ class History {
         ) {
             const { operation: lastOperation, selection: lastSelection }
                 = this._stack.undo.pop()!;
-            selection = lastSelection;
             undoOperation = json1.type.compose(undoOperation, lastOperation);
+            selection = extractSelectionFromOp(undoOperation) ?? lastSelection ?? selection;
         }
         else {
             this._lastRecorded = timestamp;
@@ -323,6 +408,9 @@ class History {
 
         if (this._stack.undo.length > this._options.maxStack)
             this._stack.undo.shift();
+
+        this._lastSelection = this._selection.getSelection();
+        this._emitHistoryChange();
     }
 
     /**
@@ -353,6 +441,8 @@ class History {
 
         if (this._stack.undo.length > this._options.maxStack)
             this._stack.undo.shift();
+
+        this._emitHistoryChange();
     }
 
     /**

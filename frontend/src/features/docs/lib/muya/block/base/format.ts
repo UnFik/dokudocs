@@ -1381,18 +1381,19 @@ class Format extends Content {
             if (token.range.end === offset && token.type === 'reference_image')
                 return { needRender: false, imageToken: null, referenceImageToken: token };
 
-            // handle delete the second marker(et:*、$) in inline syntax.(Firefox compatible)
-            // Fix: https://github.com/marktext/muya/issues/113
-            // for example: foo **strong**|
-            if (token.range.end === offset) {
+            const isSyntaxMarker
+                = token.type === 'em'
+                    || token.type === 'strong'
+                    || token.type === 'inline_code'
+                    || token.type === 'del'
+                    || token.type === 'inline_math';
+
+            if (isSyntaxMarker && token.range.end === offset) {
                 token.raw = token.raw.substring(0, token.raw.length - 1);
                 return { needRender: true, imageToken: null, referenceImageToken: null };
             }
 
-            // If preToken is a syntax token, the the cursor is at offset 1, need to set the cursor manually.(Firefox compatible)
-            // // Fix: https://github.com/marktext/muya/issues/113
-            // for example: foo **strong**w|
-            if (token.range.start + 1 === offset) {
+            if (isSyntaxMarker && token.range.start + 1 === offset) {
                 token.raw = token.raw.substring(1);
                 return { needRender: true, imageToken: null, referenceImageToken: null };
             }
@@ -1465,7 +1466,37 @@ class Format extends Content {
     override deleteHandler(event: KeyboardEvent): void {
         const { start, end } = this.getCursor()!;
         const { text } = this;
-        // Let input handler to handle this case.
+
+        if (event.ctrlKey || (event.altKey && !event.shiftKey)) {
+            if (start.offset !== end.offset) {
+                event.preventDefault();
+                this.muya.editor.history.markInputBoundary('deleteWordForward', null);
+                this.text = text.substring(0, start.offset) + text.substring(end.offset);
+                this.setCursor(start.offset, start.offset, true);
+                return;
+            }
+
+            if (start.offset < text.length) {
+                event.preventDefault();
+                this.muya.editor.history.markInputBoundary('deleteWordForward', null);
+                const sub = text.substring(start.offset);
+                let deleteLen = 1;
+                const leadingSpaces = sub.match(/^\s+/);
+                if (leadingSpaces) {
+                    const rest = sub.substring(leadingSpaces[0].length);
+                    const wordMatch = rest.match(/^([\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]+)/u);
+                    deleteLen = leadingSpaces[0].length + (wordMatch ? wordMatch[0].length : 0);
+                } else {
+                    const wordMatch = sub.match(/^([\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]+)/u);
+                    deleteLen = wordMatch ? wordMatch[0].length : 1;
+                }
+                const nextOffset = Math.min(text.length, start.offset + Math.max(1, deleteLen));
+                this.text = text.substring(0, start.offset) + text.substring(nextOffset);
+                this.setCursor(start.offset, start.offset, true);
+                return;
+            }
+        }
+
         if (start.offset !== end.offset || start.offset !== text.length)
             return;
 

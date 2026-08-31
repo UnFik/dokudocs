@@ -10,11 +10,12 @@ import {
   Folder,
   Image as ImageIcon,
   Loader2,
+  MessageSquare,
   Share2,
   Tag,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { DocType } from '@/types/dokudocs'
+import type { DocType } from '@/types/dokudocs'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,9 @@ interface EditorHeaderProps {
   onExportCopySvg?: () => void
   onExportSvg?: () => void
   onExportPng?: () => void
+  onToggleComments?: () => void
+  isCommentsOpen?: boolean
+  commentsCount?: number
 }
 
 export function EditorHeader({
@@ -59,6 +63,9 @@ export function EditorHeader({
   onExportCopySvg,
   onExportSvg,
   onExportPng,
+  onToggleComments,
+  isCommentsOpen,
+  commentsCount,
 }: EditorHeaderProps) {
   const navigate = useNavigate()
   const { projects } = useDokudocsStore()
@@ -113,7 +120,7 @@ export function EditorHeader({
 
         <DocTypeBadge type={type} className='shrink-0' />
 
-        <div className='flex items-center gap-2 min-w-0 flex-1'>
+        <div className='flex items-center gap-2 min-w-0 max-w-sm sm:max-w-md'>
           {isEditingTitle ? (
             <Input
               value={tempTitle}
@@ -141,14 +148,33 @@ export function EditorHeader({
             </h1>
           )}
         </div>
+
+        <div className='flex items-center gap-1.5 text-[11px] font-medium shrink-0 pl-1'>
+          {isSaving ? (
+            <span className='flex items-center gap-1 text-amber-500'>
+              <Loader2 className='size-3 animate-spin' />
+              <span className='hidden sm:inline'>Saving...</span>
+            </span>
+          ) : isDirty ? (
+            <span className='text-muted-foreground/70'>Unsaved</span>
+          ) : (
+            <span
+              className='flex items-center gap-1 text-emerald-600 dark:text-emerald-400'
+              title={lastSaved ? `Last saved at ${lastSaved.toLocaleTimeString()}` : 'Saved'}
+            >
+              <CheckCircle2 className='size-3' />
+              <span className='hidden sm:inline'>Saved</span>
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className='flex items-center gap-3 text-xs text-muted-foreground'>
+      <div className='flex items-center gap-2 text-xs text-muted-foreground'>
         {activeProject ? (
           <Link
             to='/projects/$projectId'
             params={{ projectId: activeProject.id }}
-            className='hidden md:flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors'
+            className='hidden xl:flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors'
           >
             <Folder className='size-3.5 shrink-0 text-muted-foreground/70' />
             <span className='max-w-36 truncate font-medium'>
@@ -156,13 +182,13 @@ export function EditorHeader({
             </span>
           </Link>
         ) : (
-          <span className='hidden md:flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/80'>
+          <span className='hidden xl:flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/80'>
             <Folder className='size-3.5 shrink-0' />
             <span>Draft</span>
           </span>
         )}
 
-        <div className='hidden lg:flex items-center gap-1.5 flex-wrap'>
+        <div className='hidden 2xl:flex items-center gap-1.5 flex-wrap'>
           {docCategories.length > 0 && (() => {
             const firstCat = docCategories[0]
             const colorId = activeProject?.categoryColors?.[firstCat]
@@ -190,24 +216,25 @@ export function EditorHeader({
           })()}
         </div>
 
-        <div className='flex items-center gap-1.5 w-24 justify-end text-[11px] font-medium'>
-          {isSaving ? (
-            <span className='flex items-center gap-1 text-amber-500'>
-              <Loader2 className='size-3 animate-spin' />
-              <span>Saving...</span>
-            </span>
-          ) : isDirty ? (
-            <span className='text-muted-foreground/70'>Unsaved</span>
-          ) : (
-            <span
-              className='flex items-center gap-1 text-emerald-600 dark:text-emerald-400'
-              title={lastSaved ? `Last saved at ${lastSaved.toLocaleTimeString()}` : 'Saved'}
-            >
-              <CheckCircle2 className='size-3' />
-              <span>Saved</span>
-            </span>
-          )}
-        </div>
+        {onToggleComments && (
+          <Button
+            variant={isCommentsOpen ? 'secondary' : 'outline'}
+            size='sm'
+            onClick={onToggleComments}
+            className={`relative h-8 text-xs gap-1.5 ${
+              isCommentsOpen ? 'bg-primary/10 text-primary border-primary/30 font-medium' : ''
+            }`}
+            title='Comments & Suggestions'
+          >
+            <MessageSquare className='size-3.5' />
+            <span className='hidden md:inline'>Comments</span>
+            {typeof commentsCount === 'number' && commentsCount > 0 && (
+              <span className='flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground'>
+                {commentsCount}
+              </span>
+            )}
+          </Button>
+        )}
 
         <Button
           variant='outline'

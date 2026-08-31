@@ -59,6 +59,12 @@ const icons = [
         icon: lucideIcons.image,
     },
     {
+        type: 'comment',
+        tooltip: 'Comment',
+        shortcut: `${COMMAND_KEY}+Alt+M`,
+        icon: lucideIcons.comment,
+    },
+    {
         type: 'clear',
         tooltip: 'Eliminate',
         shortcut: `⇧+${COMMAND_KEY}+R`,

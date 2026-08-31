@@ -67,6 +67,7 @@ export interface OrganizationItem {
   name: string
   plan: string
   avatar?: string
+  type?: string
   role: 'owner' | 'admin' | 'member'
 }
 

@@ -68,10 +68,6 @@ export class ScrollPage extends Parent {
 
     constructor(muya: Muya) {
         super(muya);
-        // muya is not extends Parent, but it is the parent of scrollPage.
-        // ScrollPage is the tree root; widening the base `TreeNode.parent`
-        // declaration would ripple to every node, so spell out the boundary.
-        // eslint-disable-next-line no-restricted-syntax
         this.parent = muya as unknown as Parent;
         this.tagName = 'div';
         this.classList = ['mu-container'];
@@ -109,12 +105,18 @@ export class ScrollPage extends Parent {
      * @param {Array} path
      */
     queryBlock(path: TBlockPath) {
+        while (typeof path[0] === 'string' && /children|meta|align|type|lang/.test(path[0])) {
+            path.shift();
+        }
+
         if (path.length === 0)
             return this;
 
         const p = path.shift() as number;
-        const block = this.find(p) as Parent & { queryBlock: (p: TBlockPath) => Parent | Content | undefined };
-        return block && path.length ? block.queryBlock(path) : block;
+        const block = this.find(p) as (Parent & { queryBlock: (p: TBlockPath) => Parent | Content | undefined }) | Content;
+        return block && path.length && typeof block === 'object' && 'queryBlock' in block
+            ? block.queryBlock(path)
+            : block;
     }
 
     updateRefLinkAndImage(label: string) {

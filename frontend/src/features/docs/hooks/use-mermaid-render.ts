@@ -23,9 +23,10 @@ class MermaidRenderStore {
   }
   private listeners = new Set<() => void>()
   private pipeline = new AsyncRenderPipeline<string>()
-  private lastRenderedContent: string = ''
-  private lastRenderedDark: boolean = false
+  private currentRequestedContent: string = ''
+  private currentRequestedDark: boolean = false
   private latestValidSvg: string = ''
+  private lastDocId?: string
 
   constructor() {
     this.subscribe = this.subscribe.bind(this)
@@ -47,12 +48,11 @@ class MermaidRenderStore {
     this.listeners.forEach((listener) => listener())
   }
 
-  public requestRender(content: string, isDark: boolean): void {
-    const trimmed = content.trim()
-
-    if (!trimmed) {
+  public requestRender(content: string, isDark: boolean, docId?: string): void {
+    if (docId !== undefined && this.lastDocId !== docId) {
       this.pipeline.cancel()
-      this.lastRenderedContent = ''
+      this.lastDocId = docId
+      this.currentRequestedContent = ''
       this.latestValidSvg = ''
       this.state = {
         svg: '',
@@ -62,12 +62,36 @@ class MermaidRenderStore {
         renderDurationMs: 0,
       }
       this.emitChange()
+    }
+
+    const trimmed = content.trim()
+
+    if (!trimmed) {
+      this.pipeline.cancel()
+      this.currentRequestedContent = ''
+      this.latestValidSvg = ''
+      if (this.state.svg !== '' || this.state.error !== null || !this.state.isValid || this.state.isRendering) {
+        this.state = {
+          svg: '',
+          error: null,
+          isValid: true,
+          isRendering: false,
+          renderDurationMs: 0,
+        }
+        this.emitChange()
+      }
       return
     }
 
-    if (this.lastRenderedContent === trimmed && this.lastRenderedDark === isDark) {
+    if (
+      this.currentRequestedContent === trimmed &&
+      this.currentRequestedDark === isDark
+    ) {
       return
     }
+
+    this.currentRequestedContent = trimmed
+    this.currentRequestedDark = isDark
 
     this.pipeline.schedule(
       async () => {
@@ -80,6 +104,8 @@ class MermaidRenderStore {
           logLevel: 'fatal',
         })
 
+        await mermaid.parse(trimmed)
+
         const renderId = `mermaid-render-${Date.now()}-${++renderCounter}`
         try {
           const { svg: rawSvg } = await mermaid.render(renderId, trimmed)
@@ -89,7 +115,7 @@ class MermaidRenderStore {
             ADD_ATTR: ['dominant-baseline', 'text-anchor'],
           })
           return cleanSvg
-        } catch (err: any) {
+        } finally {
           const errorElement = document.getElementById(renderId)
           if (errorElement) {
             errorElement.remove()
@@ -98,12 +124,9 @@ class MermaidRenderStore {
           if (errorD) {
             errorD.remove()
           }
-          throw err
         }
       },
       (cleanSvg, durationMs) => {
-        this.lastRenderedContent = trimmed
-        this.lastRenderedDark = isDark
         this.latestValidSvg = cleanSvg
         this.state = {
           svg: cleanSvg,
@@ -115,10 +138,11 @@ class MermaidRenderStore {
         this.emitChange()
       },
       (err: any) => {
-        const errorMsg = err?.message || 'Invalid Mermaid syntax'
+        const rawMsg = err?.message || err?.str || (typeof err === 'string' ? err : 'Invalid Mermaid syntax')
+        const errorMsg = String(rawMsg).replace(/^Error:\s*/i, '').trim()
         this.state = {
           svg: this.latestValidSvg,
-          error: errorMsg,
+          error: errorMsg || 'Invalid Mermaid syntax',
           isValid: false,
           isRendering: false,
           renderDurationMs: this.state.renderDurationMs,
@@ -140,7 +164,7 @@ class MermaidRenderStore {
 
 const renderStore = new MermaidRenderStore()
 
-export function useMermaidRender(content: string, isDark: boolean): MermaidRenderResult {
-  renderStore.requestRender(content, isDark)
+export function useMermaidRender(content: string, isDark: boolean, docId?: string): MermaidRenderResult {
+  renderStore.requestRender(content, isDark, docId)
   return useSyncExternalStore(renderStore.subscribe, renderStore.getSnapshot)
 }

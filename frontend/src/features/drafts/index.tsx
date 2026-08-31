@@ -99,13 +99,13 @@ export function DraftsPage() {
                   All
                 </TabsTrigger>
                 <TabsTrigger value='markdown' className='h-7 text-xs px-2.5'>
-                  MD
+                  Markdown
                 </TabsTrigger>
                 <TabsTrigger value='dbdiagram' className='h-7 text-xs px-2.5'>
-                  DB
+                  DBML
                 </TabsTrigger>
                 <TabsTrigger value='mermaid' className='h-7 text-xs px-2.5'>
-                  Flow
+                  Mermaid
                 </TabsTrigger>
               </TabsList>
             </Tabs>

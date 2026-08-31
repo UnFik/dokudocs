@@ -7,6 +7,7 @@ import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
 import { Button } from '@/components/ui/button'
 import { useTheme } from '@/context/theme-provider'
+import { useCommentStore } from '@/stores/comment-store'
 
 export function DocEditor() {
   const { docId } = useParams({ from: '/docs/$docId' })
@@ -25,6 +26,12 @@ export function DocEditor() {
     setTitle,
     setContent,
   } = useDocEditor(docId)
+
+  const isSidebarOpen = useCommentStore((state) => state.isSidebarOpen)
+  const toggleSidebar = useCommentStore((state) => state.toggleSidebar)
+  const unresolvedCount = useCommentStore((state) =>
+    doc ? state.getDocUnresolvedCount(doc.id) : 0
+  )
 
   if (!doc) {
     return (
@@ -136,11 +143,18 @@ export function DocEditor() {
         onExportCopySvg={isDiagram ? handleExportCopySvg : undefined}
         onExportSvg={isDiagram ? handleExportSvg : undefined}
         onExportPng={isDiagram ? handleExportPng : undefined}
+        onToggleComments={doc.type === 'markdown' ? toggleSidebar : undefined}
+        isCommentsOpen={isSidebarOpen}
+        commentsCount={doc.type === 'markdown' ? unresolvedCount : undefined}
       />
 
       <div className='flex-1 overflow-hidden'>
         {doc.type === 'markdown' && (
-          <MarkdownEditor content={content} onChange={setContent} />
+          <MarkdownEditor
+            docId={doc.id}
+            content={content}
+            onChange={setContent}
+          />
         )}
         {doc.type === 'dbdiagram' && (
           <DbmlEditor docId={doc.id} content={content} onChange={setContent} />

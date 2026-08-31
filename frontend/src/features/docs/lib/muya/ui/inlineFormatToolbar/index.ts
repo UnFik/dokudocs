@@ -277,9 +277,42 @@ export class InlineFormatToolbar extends BaseFloat {
             { offset: focus.offset, block: focusBlock, path: focusPath },
         );
 
+        if (item.type === 'comment') {
+            const domSelection = window.getSelection();
+            const selectedText = domSelection?.toString() || '';
+            const range = domSelection && domSelection.rangeCount > 0 ? domSelection.getRangeAt(0) : null;
+            const rect = range ? range.getBoundingClientRect() : null;
+
+            const payload = {
+                selectedText,
+                blockPath: anchorPath,
+                rect: rect
+                    ? {
+                        top: rect.top,
+                        bottom: rect.bottom,
+                        left: rect.left,
+                        right: rect.right,
+                        width: rect.width,
+                        height: rect.height,
+                    }
+                    : null,
+                selection,
+            };
+
+            this.muya.eventCenter.emit('muya-comment-trigger', payload);
+            this.muya.domNode.dispatchEvent(
+                new CustomEvent('muya-comment-trigger', {
+                    bubbles: true,
+                    detail: payload,
+                })
+            );
+
+            this.hide();
+            return;
+        }
+
         this._block!.format(item.type);
 
-        // Hide toolbar for link and image, re-render for other formats
         if (/link|image/.test(item.type)) {
             this.hide();
         }

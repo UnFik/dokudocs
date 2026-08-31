@@ -51,6 +51,9 @@ interface DokudocsState {
   sortOrder: SortOrder
 
   setActiveOrgId: (orgId: string) => void
+  createOrganization: (name: string, plan?: string) => OrganizationItem
+  updateOrganization: (id: string, updates: Partial<OrganizationItem>) => void
+  deleteOrganization: (id: string) => void
   setViewMode: (mode: ViewMode) => void
   setFilterTab: (tab: DocFilterTab) => void
   setSearchQuery: (query: string) => void
@@ -159,6 +162,41 @@ export const useDokudocsStore = create<DokudocsState>()(
       sortOrder: 'desc',
 
       setActiveOrgId: (orgId) => set({ activeOrgId: orgId }),
+      createOrganization: (name, plan = 'Free') => {
+        const newOrg: OrganizationItem = {
+          id: `org-${Date.now()}`,
+          name: name.trim(),
+          plan,
+          role: 'owner',
+        }
+        set((state) => ({
+          organizations: [...(state.organizations || []), newOrg],
+          activeOrgId: newOrg.id,
+        }))
+        return newOrg
+      },
+      updateOrganization: (id, updates) => {
+        set((state) => ({
+          organizations: (state.organizations || []).map((org) =>
+            org.id === id ? { ...org, ...updates } : org
+          ),
+        }))
+      },
+      deleteOrganization: (id) => {
+        set((state) => {
+          const remaining = (state.organizations || []).filter(
+            (org) => org.id !== id
+          )
+          const nextActiveId =
+            state.activeOrgId === id
+              ? remaining[0]?.id || 'org-1'
+              : state.activeOrgId
+          return {
+            organizations: remaining,
+            activeOrgId: nextActiveId,
+          }
+        })
+      },
       setViewMode: (viewMode) => set({ viewMode }),
       setFilterTab: (filterTab) => set({ filterTab }),
       setSearchQuery: (searchQuery) => set({ searchQuery }),
@@ -194,7 +232,7 @@ export const useDokudocsStore = create<DokudocsState>()(
         const now = new Date().toISOString()
         const newDoc: DocumentItem = {
           id,
-          title: payload.title,
+          title: payload.title?.trim() || 'My Draft',
           type: payload.type,
           content: payload.content ?? defaultTemplates[payload.type],
           projectId: payload.projectId ?? null,

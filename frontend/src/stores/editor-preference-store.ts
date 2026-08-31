@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
 export type EditorViewMode = 'code' | 'split' | 'preview'
-export type MarkdownPreviewMode = 'view' | 'edit'
+export type MarkdownPreviewMode = 'view' | 'suggesting' | 'edit'
 
 export interface UserEditorPreference {
   viewMode: EditorViewMode

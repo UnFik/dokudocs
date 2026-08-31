@@ -124,6 +124,8 @@ export function UnifiedMonacoEditor({
   const [isResizing, setIsResizing] = useState<boolean>(false)
   const [showShortcutsHelp, setShowShortcutsHelp] = useState<boolean>(false)
   const [hasPendingChanges, setHasPendingChanges] = useState<boolean>(false)
+  const [monacoCanUndo, setMonacoCanUndo] = useState<boolean>(false)
+  const [monacoCanRedo, setMonacoCanRedo] = useState<boolean>(false)
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 })
   const [stats, setStats] = useState(() => ({
     lines: content ? content.split('\n').length : 1,
@@ -266,6 +268,18 @@ export function UnifiedMonacoEditor({
         }
       })
 
+      const updateHistoryState = () => {
+        const model = editor.getModel()
+        if (model) {
+          const u = (model as unknown as { canUndo?: () => boolean }).canUndo?.() ?? false
+          const r = (model as unknown as { canRedo?: () => boolean }).canRedo?.() ?? false
+          setMonacoCanUndo(u)
+          setMonacoCanRedo(r)
+        }
+      }
+
+      updateHistoryState()
+
       editor.onDidChangeModelContent(() => {
         if (isUpdatingFromPropRef.current) return
         const val = editor.getValue()
@@ -277,6 +291,7 @@ export function UnifiedMonacoEditor({
           words: prev.words,
         }))
 
+        updateHistoryState()
         scheduleDiagnostics(editor, language)
 
         if (isLiveRenderActive) {
@@ -516,11 +531,21 @@ export function UnifiedMonacoEditor({
   const handleUndo = () => {
     editorRef.current?.trigger('toolbar', 'undo', null)
     editorRef.current?.focus()
+    const model = editorRef.current?.getModel()
+    if (model) {
+      setMonacoCanUndo((model as unknown as { canUndo?: () => boolean }).canUndo?.() ?? false)
+      setMonacoCanRedo((model as unknown as { canRedo?: () => boolean }).canRedo?.() ?? false)
+    }
   }
 
   const handleRedo = () => {
     editorRef.current?.trigger('toolbar', 'redo', null)
     editorRef.current?.focus()
+    const model = editorRef.current?.getModel()
+    if (model) {
+      setMonacoCanUndo((model as unknown as { canUndo?: () => boolean }).canUndo?.() ?? false)
+      setMonacoCanRedo((model as unknown as { canRedo?: () => boolean }).canRedo?.() ?? false)
+    }
   }
 
   const handleSearch = () => {
@@ -691,7 +716,8 @@ export function UnifiedMonacoEditor({
                     variant='ghost'
                     size='icon'
                     onClick={handleUndo}
-                    className='size-6 text-muted-foreground hover:text-foreground'
+                    disabled={!monacoCanUndo}
+                    className='size-6 text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-30 disabled:pointer-events-none'
                     title='Undo (⌘Z / Ctrl+Z)'
                   >
                     <Undo2 className='size-3.5' />
@@ -700,7 +726,8 @@ export function UnifiedMonacoEditor({
                     variant='ghost'
                     size='icon'
                     onClick={handleRedo}
-                    className='size-6 text-muted-foreground hover:text-foreground'
+                    disabled={!monacoCanRedo}
+                    className='size-6 text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-30 disabled:pointer-events-none'
                     title='Redo (⌘Y / Ctrl+Y)'
                   >
                     <Redo2 className='size-3.5' />

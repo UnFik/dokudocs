@@ -1,12 +1,12 @@
-import { useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import {
   Check,
   ChevronsUpDown,
   Laptop,
   LogOut,
   Moon,
-  Settings,
   Sun,
+  User,
 } from 'lucide-react'
 import { useTheme } from '@/context/theme-provider'
 import useDialogState from '@/hooks/use-dialog-state'
@@ -30,7 +30,6 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { SignOutDialog } from '@/components/sign-out-dialog'
-import { SettingsDialog } from './settings-dialog'
 
 type NavUserProps = {
   user: {
@@ -41,10 +40,10 @@ type NavUserProps = {
 }
 
 export function NavUser({ user }: NavUserProps) {
+  const navigate = useNavigate()
   const { isMobile, state } = useSidebar()
   const { theme, setTheme } = useTheme()
   const [signOutOpen, setSignOutOpen] = useDialogState()
-  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
     <>
@@ -127,9 +126,12 @@ export function NavUser({ user }: NavUserProps) {
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
 
-                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
-                  <Settings className='mr-2 size-4' />
-                  Settings
+                <DropdownMenuItem
+                  onClick={() => navigate({ to: '/account' })}
+                  className='cursor-pointer'
+                >
+                  <User className='mr-2 size-4' />
+                  Account Settings
                 </DropdownMenuItem>
               </DropdownMenuGroup>
 
@@ -146,12 +148,6 @@ export function NavUser({ user }: NavUserProps) {
           </DropdownMenu>
         </SidebarMenuItem>
       </SidebarMenu>
-
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        user={user}
-      />
 
       <SignOutDialog open={!!signOutOpen} onOpenChange={setSignOutOpen} />
     </>

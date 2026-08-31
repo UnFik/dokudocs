@@ -42,6 +42,7 @@ export interface IMuyaOptions {
         };
     };
     readOnly?: boolean;
+    isSuggestingMode?: boolean;
     json?: TState[];
     markdown?: string;
     /**
