@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Building2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,7 +13,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 
 interface CreateWorkspaceDialogProps {
   open: boolean
@@ -24,7 +24,9 @@ export function CreateWorkspaceDialog({
   onOpenChange,
 }: CreateWorkspaceDialogProps) {
   const [workspaceName, setWorkspaceName] = useState('')
-  const createOrganization = useDokudocsStore((state) => state.createOrganization)
+  const createOrganization = useDokudocsStore(
+    (state) => state.createOrganization
+  )
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { getRouteApi, Link } from '@tanstack/react-router'
+import type { ViewMode } from '@/types/dokudocs'
 import {
   ArrowLeft,
   Folder,
@@ -12,15 +13,14 @@ import {
   Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { ViewMode } from '@/types/dokudocs'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getDocCategories } from '@/lib/doc-category-utils'
 import { formatRelativeTime } from '@/lib/time-utils'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
-import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { CreateDocDialog } from '@/features/docs/components/create-doc-dialog'
 import { DocCard } from '@/features/docs/components/doc-card'
 import { DocListRow } from '@/features/docs/components/doc-list-row'
@@ -149,13 +149,15 @@ export function ProjectDetailView() {
         <div className='flex items-center gap-2 text-sm'>
           <Link
             to='/projects'
-            className='flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors'
+            className='flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground'
           >
             <ArrowLeft className='size-3.5' />
             <span>Projects</span>
           </Link>
           <span className='text-muted-foreground/60'>/</span>
-          <span className='font-semibold truncate max-w-48'>{project.name}</span>
+          <span className='max-w-48 truncate font-semibold'>
+            {project.name}
+          </span>
         </div>
 
         <div className='ml-auto flex items-center gap-2'>
@@ -199,7 +201,7 @@ export function ProjectDetailView() {
         </div>
       </Header>
 
-      <Main className='space-y-6 pb-12 pt-4'>
+      <Main className='space-y-6 pt-4 pb-12'>
         <div className='flex flex-col gap-3 border-b border-border/40 pb-5'>
           <div className='flex items-center justify-between gap-4'>
             <div className='flex items-center gap-3'>
@@ -207,7 +209,7 @@ export function ProjectDetailView() {
                 <img
                   src={project.logoUrl}
                   alt={project.name}
-                  className='size-11 shrink-0 rounded-xl object-cover border border-border shadow-2xs'
+                  className='size-11 shrink-0 rounded-xl border border-border object-cover shadow-2xs'
                 />
               ) : (
                 <div className='flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary'>
@@ -247,7 +249,7 @@ export function ProjectDetailView() {
 
             <div className='flex items-center gap-2'>
               <div className='relative w-48 sm:w-60'>
-                <Search className='absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground' />
+                <Search className='absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground' />
                 <Input
                   value={q}
                   onChange={(e) => handleSearchChange(e.target.value)}
@@ -297,7 +299,7 @@ export function ProjectDetailView() {
             </p>
             <Button
               size='sm'
-              className='mt-3 text-xs gap-1.5'
+              className='mt-3 gap-1.5 text-xs'
               onClick={() => setCreateDocOpen(true)}
             >
               <Plus className='size-3.5' />

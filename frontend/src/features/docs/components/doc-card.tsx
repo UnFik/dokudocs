@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { DocumentItem } from '@/types/dokudocs'
 import {
   Check,
   Copy,
@@ -15,12 +16,10 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { DocumentItem } from '@/types/dokudocs'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { getDocCategories } from '@/lib/doc-category-utils'
 import { formatRelativeTime } from '@/lib/time-utils'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,6 +42,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DocThumbnailPreview } from './doc-thumbnail-preview'
 import { DocTypeBadge } from './doc-type-badge'
 import { MoveDocDialog } from './move-doc-dialog'
@@ -96,7 +96,8 @@ export function DocCard({ document }: DocCardProps) {
     toast.success('Moved document to Trash', {
       action: {
         label: 'Undo',
-        onClick: () => useDokudocsStore.getState().restoreFromTrash(document.id),
+        onClick: () =>
+          useDokudocsStore.getState().restoreFromTrash(document.id),
       },
     })
   }
@@ -128,7 +129,9 @@ export function DocCard({ document }: DocCardProps) {
       moveDocumentToProject(document.id, targetId)
       if (targetId) {
         const targetProj = projects.find((p) => p.id === targetId)
-        toast.success(`Moved "${document.title}" to "${targetProj?.name || 'Project'}"`)
+        toast.success(
+          `Moved "${document.title}" to "${targetProj?.name || 'Project'}"`
+        )
       } else {
         toast.success(`Moved "${document.title}" to Drafts`)
       }
@@ -140,7 +143,9 @@ export function DocCard({ document }: DocCardProps) {
       moveDocumentToProject(document.id, pendingTargetProjectId)
       if (pendingTargetProjectId) {
         const targetProj = projects.find((p) => p.id === pendingTargetProjectId)
-        toast.success(`Moved "${document.title}" to "${targetProj?.name || 'Project'}"`)
+        toast.success(
+          `Moved "${document.title}" to "${targetProj?.name || 'Project'}"`
+        )
       } else {
         toast.success(`Moved "${document.title}" to Drafts`)
       }
@@ -165,7 +170,7 @@ export function DocCard({ document }: DocCardProps) {
         <ContextMenuTrigger asChild>
           <div
             onClick={handleCardClick}
-            className='group relative flex flex-col justify-between overflow-hidden rounded-xl border border-border/80 bg-card transition-all duration-200 hover:-translate-y-0.5 hover:border-sidebar-ring/60 hover:shadow-md cursor-pointer select-none'
+            className='group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-xl border border-border/80 bg-card transition-all duration-200 select-none hover:-translate-y-0.5 hover:border-sidebar-ring/60 hover:shadow-md'
           >
             <div className='relative h-32 w-full border-b border-border/40'>
               <DocThumbnailPreview
@@ -173,7 +178,9 @@ export function DocCard({ document }: DocCardProps) {
                 type={document.type}
                 content={document.content}
                 thumbnail={document.thumbnail || document.thumbnailPreview}
-                thumbnailDark={document.thumbnailDark || document.thumbnailPreviewDark}
+                thumbnailDark={
+                  document.thumbnailDark || document.thumbnailPreviewDark
+                }
                 className='h-full w-full'
               />
 
@@ -198,36 +205,44 @@ export function DocCard({ document }: DocCardProps) {
             <div className='flex flex-1 flex-col justify-between p-3.5'>
               <div>
                 <div className='mb-1.5 flex items-center justify-between gap-2'>
-                  <div className='flex items-center gap-1.5 flex-wrap'>
+                  <div className='flex flex-wrap items-center gap-1.5'>
                     <DocTypeBadge type={document.type} />
-                    {docCategories.length > 0 && (() => {
-                      const firstCat = docCategories[0]
-                      const colorId = project?.categoryColors?.[firstCat]
-                      const categoryPalette = getCategoryPalette(firstCat, colorId, 0)
-                      const remainingCount = docCategories.length - 1
+                    {docCategories.length > 0 &&
+                      (() => {
+                        const firstCat = docCategories[0]
+                        const colorId = project?.categoryColors?.[firstCat]
+                        const categoryPalette = getCategoryPalette(
+                          firstCat,
+                          colorId,
+                          0
+                        )
+                        const remainingCount = docCategories.length - 1
 
-                      return (
-                        <>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[9px] font-medium border ${categoryPalette.bg} ${categoryPalette.text} ${categoryPalette.border}`}
-                          >
-                            {firstCat}
-                          </span>
-                          {remainingCount > 0 && (
+                        return (
+                          <>
                             <span
-                              title={docCategories.slice(1).join(', ')}
-                              className='rounded-full px-1.5 py-0.5 text-[9px] font-medium border border-border/80 bg-muted/60 text-muted-foreground'
+                              className={`rounded-full border px-2 py-0.5 text-[9px] font-medium ${categoryPalette.bg} ${categoryPalette.text} ${categoryPalette.border}`}
                             >
-                              +{remainingCount}
+                              {firstCat}
                             </span>
-                          )}
-                        </>
-                      )
-                    })()}
+                            {remainingCount > 0 && (
+                              <span
+                                title={docCategories.slice(1).join(', ')}
+                                className='rounded-full border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
+                              >
+                                +{remainingCount}
+                              </span>
+                            )}
+                          </>
+                        )
+                      })()}
                   </div>
 
                   <div onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+                    <DropdownMenu
+                      open={dropdownOpen}
+                      onOpenChange={setDropdownOpen}
+                    >
                       <DropdownMenuTrigger asChild>
                         <Button
                           variant='ghost'
@@ -239,7 +254,10 @@ export function DocCard({ document }: DocCardProps) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align='end' className='w-48'>
                         <DropdownMenuItem asChild>
-                          <Link to='/docs/$docId' params={{ docId: document.id }}>
+                          <Link
+                            to='/docs/$docId'
+                            params={{ docId: document.id }}
+                          >
                             <FileEdit className='mr-2 size-3.5' />
                             Open Editor
                           </Link>
@@ -275,10 +293,16 @@ export function DocCard({ document }: DocCardProps) {
                               onClick={() => handleRequestMove(null)}
                               disabled={!document.projectId}
                             >
-                              <span className='flex-1'>Drafts (No Project)</span>
-                              {!document.projectId && <Check className='size-3.5' />}
+                              <span className='flex-1'>
+                                Drafts (No Project)
+                              </span>
+                              {!document.projectId && (
+                                <Check className='size-3.5' />
+                              )}
                             </DropdownMenuItem>
-                            {orgProjects.length > 0 && <DropdownMenuSeparator />}
+                            {orgProjects.length > 0 && (
+                              <DropdownMenuSeparator />
+                            )}
                             {orgProjects.map((p) => {
                               const isCurrent = document.projectId === p.id
                               return (
@@ -295,7 +319,7 @@ export function DocCard({ document }: DocCardProps) {
                                         className='size-3.5 shrink-0 rounded object-cover'
                                       />
                                     ) : (
-                                      <Folder className='size-3.5 text-primary shrink-0' />
+                                      <Folder className='size-3.5 shrink-0 text-primary' />
                                     )}
                                     <span className='truncate'>{p.name}</span>
                                   </div>
@@ -326,14 +350,24 @@ export function DocCard({ document }: DocCardProps) {
                               onClick={handleClearCategories}
                               disabled={docCategories.length === 0}
                             >
-                              <span className='flex-1 text-muted-foreground'>Clear All</span>
-                              {docCategories.length === 0 && <Check className='size-3.5' />}
+                              <span className='flex-1 text-muted-foreground'>
+                                Clear All
+                              </span>
+                              {docCategories.length === 0 && (
+                                <Check className='size-3.5' />
+                              )}
                             </DropdownMenuItem>
-                            {projectCategories.length > 0 && <DropdownMenuSeparator />}
+                            {projectCategories.length > 0 && (
+                              <DropdownMenuSeparator />
+                            )}
                             {projectCategories.map((c, idx) => {
                               const isSelected = docCategories.includes(c)
                               const colorId = project?.categoryColors?.[c]
-                              const palette = getCategoryPalette(c, colorId, idx)
+                              const palette = getCategoryPalette(
+                                c,
+                                colorId,
+                                idx
+                              )
                               return (
                                 <DropdownMenuItem
                                   key={c}
@@ -389,11 +423,11 @@ export function DocCard({ document }: DocCardProps) {
                   </div>
                 </div>
 
-                <h3 className='line-clamp-1 font-medium text-sm text-foreground tracking-tight group-hover:text-primary transition-colors'>
+                <h3 className='line-clamp-1 text-sm font-medium tracking-tight text-foreground transition-colors group-hover:text-primary'>
                   {document.title}
                 </h3>
 
-                <p className='mt-1 text-[11px] text-muted-foreground/80 font-normal line-clamp-1'>
+                <p className='mt-1 line-clamp-1 text-[11px] font-normal text-muted-foreground/80'>
                   {document.projectName || 'Personal Draft'}
                 </p>
               </div>
@@ -409,12 +443,16 @@ export function DocCard({ document }: DocCardProps) {
                       {document.author.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <span className='truncate max-w-[80px] font-medium'>
+                  <span className='max-w-[80px] truncate font-medium'>
                     {document.author.name}
                   </span>
                 </div>
 
-                <span>{formatRelativeTime(document.lastViewedAt || document.updatedAt)}</span>
+                <span>
+                  {formatRelativeTime(
+                    document.lastViewedAt || document.updatedAt
+                  )}
+                </span>
               </div>
             </div>
           </div>
@@ -489,7 +527,7 @@ export function DocCard({ document }: DocCardProps) {
                           className='size-3.5 shrink-0 rounded object-cover'
                         />
                       ) : (
-                        <Folder className='size-3.5 text-primary shrink-0' />
+                        <Folder className='size-3.5 shrink-0 text-primary' />
                       )}
                       <span className='truncate'>{p.name}</span>
                     </div>
@@ -535,9 +573,7 @@ export function DocCard({ document }: DocCardProps) {
                     className='flex items-center justify-between'
                   >
                     <div className='flex items-center gap-1.5 truncate'>
-                      <div
-                        className={`size-1.5 rounded-full ${palette.dot}`}
-                      />
+                      <div className={`size-1.5 rounded-full ${palette.dot}`} />
                       <span className='truncate'>{c}</span>
                     </div>
                     {isSelected && <Check className='size-3.5' />}
@@ -605,8 +641,14 @@ export function DocCard({ document }: DocCardProps) {
         title='Move document to another project?'
         desc={
           <span>
-            This document currently belongs to <strong>&ldquo;{project?.name}&rdquo;</strong>.
-            Moving it to {pendingTargetProjectId ? <strong>&ldquo;{targetProject?.name}&rdquo;</strong> : 'Drafts'} will transfer its ownership. Are you sure you want to continue?
+            This document currently belongs to{' '}
+            <strong>&ldquo;{project?.name}&rdquo;</strong>. Moving it to{' '}
+            {pendingTargetProjectId ? (
+              <strong>&ldquo;{targetProject?.name}&rdquo;</strong>
+            ) : (
+              'Drafts'
+            )}{' '}
+            will transfer its ownership. Are you sure you want to continue?
           </span>
         }
         confirmText='Yes, Move Document'

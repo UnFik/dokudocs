@@ -16,4 +16,3 @@ export const Route = createFileRoute('/_authenticated/projects/$projectId')({
   validateSearch: projectDetailSearchSchema,
   component: ProjectDetailView,
 })
-

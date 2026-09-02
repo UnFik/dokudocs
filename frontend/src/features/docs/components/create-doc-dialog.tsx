@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
+import { z } from 'zod'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from '@tanstack/react-router'
+import { DocType } from '@/types/dokudocs'
 import {
   Code2,
   Database,
@@ -10,12 +13,9 @@ import {
   Tag,
   X,
 } from 'lucide-react'
-import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { z } from 'zod'
-import { DocType } from '@/types/dokudocs'
-import { getCategoryPalette } from '@/lib/category-palette'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { getCategoryPalette } from '@/lib/category-palette'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -79,7 +79,7 @@ export function CreateDocDialog({
       ? preselectedProjectId === null
         ? 'unassigned'
         : preselectedProjectId
-      : defaultProjectId ?? (projects[0]?.id || 'unassigned')
+      : (defaultProjectId ?? (projects[0]?.id || 'unassigned'))
 
   const initialCategories = defaultCategories?.length
     ? defaultCategories
@@ -104,7 +104,7 @@ export function CreateDocDialog({
           ? preselectedProjectId === null
             ? 'unassigned'
             : preselectedProjectId
-          : defaultProjectId ?? (projects[0]?.id || 'unassigned')
+          : (defaultProjectId ?? (projects[0]?.id || 'unassigned'))
 
       const initialCats = defaultCategories?.length
         ? defaultCategories
@@ -120,7 +120,16 @@ export function CreateDocDialog({
       })
       setCustomCategoryInput('')
     }
-  }, [open, defaultType, defaultProjectId, defaultCategory, defaultCategories, preselectedProjectId, projects, form])
+  }, [
+    open,
+    defaultType,
+    defaultProjectId,
+    defaultCategory,
+    defaultCategories,
+    preselectedProjectId,
+    projects,
+    form,
+  ])
 
   const selectedProjectId = form.watch('projectId')
   const activeProject = projects.find((p) => p.id === selectedProjectId)
@@ -197,19 +206,23 @@ export function CreateDocDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[540px] max-h-[90vh] overflow-y-auto'>
+      <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-[540px]'>
         <DialogHeader>
-          <DialogTitle className='text-lg font-bold flex items-center gap-2'>
+          <DialogTitle className='flex items-center gap-2 text-lg font-bold'>
             <Code2 className='size-5 text-primary' />
             Create Document
           </DialogTitle>
           <DialogDescription className='text-xs text-muted-foreground'>
-            Choose document type, target project, and assign optional category tags.
+            Choose document type, target project, and assign optional category
+            tags.
           </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4 pt-1'>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className='space-y-4 pt-1'
+          >
             <FormField
               control={form.control}
               name='title'
@@ -239,7 +252,7 @@ export function CreateDocDialog({
                   <FormLabel className='text-xs font-semibold'>
                     Document Type
                   </FormLabel>
-                  <div className='grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1'>
+                  <div className='grid grid-cols-1 gap-2.5 pt-1 sm:grid-cols-3'>
                     {typeOptions.map((opt) => {
                       const Icon = opt.icon
                       const isSelected = field.value === opt.value
@@ -248,17 +261,19 @@ export function CreateDocDialog({
                           key={opt.value}
                           type='button'
                           onClick={() => field.onChange(opt.value)}
-                          className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all cursor-pointer ${isSelected
+                          className={`flex cursor-pointer flex-col items-start rounded-lg border p-3 text-left transition-all ${
+                            isSelected
                               ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                              : 'border-border/80 hover:bg-muted/40 hover:border-border'
-                            }`}
+                              : 'border-border/80 hover:border-border hover:bg-muted/40'
+                          }`}
                         >
-                          <div className='flex items-center gap-2 mb-1.5'>
+                          <div className='mb-1.5 flex items-center gap-2'>
                             <div
-                              className={`p-1.5 rounded-md ${isSelected
+                              className={`rounded-md p-1.5 ${
+                                isSelected
                                   ? 'bg-primary text-primary-foreground'
                                   : 'bg-muted text-muted-foreground'
-                                }`}
+                              }`}
                             >
                               <Icon className='size-3.5' />
                             </div>
@@ -266,7 +281,7 @@ export function CreateDocDialog({
                               {opt.label}
                             </span>
                           </div>
-                          <span className='text-[10px] text-muted-foreground line-clamp-2 leading-relaxed'>
+                          <span className='line-clamp-2 text-[10px] leading-relaxed text-muted-foreground'>
                             {opt.description}
                           </span>
                         </button>
@@ -296,7 +311,7 @@ export function CreateDocDialog({
                       }
                     >
                       <FormControl>
-                        <SelectTrigger className='h-9 text-xs w-full'>
+                        <SelectTrigger className='h-9 w-full text-xs'>
                           <SelectValue placeholder='Select target project' />
                         </SelectTrigger>
                       </FormControl>
@@ -317,21 +332,21 @@ export function CreateDocDialog({
               />
 
               <div className='space-y-2'>
-                <FormLabel className='text-xs font-semibold flex items-center justify-between'>
+                <FormLabel className='flex items-center justify-between text-xs font-semibold'>
                   <span>Categories (Multiple)</span>
-                  <span className='text-[10px] text-muted-foreground font-normal'>
+                  <span className='text-[10px] font-normal text-muted-foreground'>
                     {selectedCategories.length} selected
                   </span>
                 </FormLabel>
 
                 {selectedProjectId === 'unassigned' ? (
-                  <p className='text-xs text-muted-foreground italic py-1'>
+                  <p className='py-1 text-xs text-muted-foreground italic'>
                     Categories are available when assigned to a project.
                   </p>
                 ) : (
                   <div className='space-y-2.5'>
                     {allVisibleCategories.length > 0 && (
-                      <div className='flex flex-wrap gap-1.5 p-2 rounded-lg border border-border/60 bg-muted/20 min-h-10'>
+                      <div className='flex min-h-10 flex-wrap gap-1.5 rounded-lg border border-border/60 bg-muted/20 p-2'>
                         {allVisibleCategories.map((c) => {
                           const isSelected = selectedCategories.includes(c)
                           const colorId = activeProject?.categoryColors?.[c]
@@ -342,14 +357,15 @@ export function CreateDocDialog({
                               key={c}
                               type='button'
                               onClick={() => handleToggleCategory(c)}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${isSelected
-                                  ? `${palette.bg} ${palette.text} ${palette.border} ring-1 ring-primary/40 shadow-2xs`
-                                  : 'bg-background text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
-                                }`}
+                              className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${
+                                isSelected
+                                  ? `${palette.bg} ${palette.text} ${palette.border} shadow-2xs ring-1 ring-primary/40`
+                                  : 'border-border/80 bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                              }`}
                             >
                               <Tag className='size-2.5' />
                               <span>{c}</span>
-                              {isSelected && <X className='size-2.5 ml-0.5' />}
+                              {isSelected && <X className='ml-0.5 size-2.5' />}
                             </button>
                           )
                         })}
@@ -359,7 +375,7 @@ export function CreateDocDialog({
                     <div className='flex items-center gap-2'>
                       <Input
                         placeholder='Add new category tag...'
-                        className='h-8 text-xs flex-1'
+                        className='h-8 flex-1 text-xs'
                         value={customCategoryInput}
                         onChange={(e) => setCustomCategoryInput(e.target.value)}
                         onKeyDown={(e) => {
@@ -375,7 +391,7 @@ export function CreateDocDialog({
                         size='sm'
                         onClick={handleAddCustomCategory}
                         disabled={!customCategoryInput.trim()}
-                        className='h-8 px-2.5 text-xs gap-1 shrink-0'
+                        className='h-8 shrink-0 gap-1 px-2.5 text-xs'
                       >
                         <Plus className='size-3.5' />
                         <span>Add</span>
@@ -386,17 +402,17 @@ export function CreateDocDialog({
               </div>
             </div>
 
-            <DialogFooter className='pt-2 flex items-center justify-end gap-2'>
+            <DialogFooter className='flex items-center justify-end gap-2 pt-2'>
               <Button
                 type='button'
                 variant='outline'
                 size='sm'
-                className='text-xs h-8'
+                className='h-8 text-xs'
                 onClick={() => onOpenChange(false)}
               >
                 Cancel
               </Button>
-              <Button type='submit' size='sm' className='text-xs h-8 px-4'>
+              <Button type='submit' size='sm' className='h-8 px-4 text-xs'>
                 Create Document
               </Button>
             </DialogFooter>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
+import { DocumentItem } from '@/types/dokudocs'
 import { Plus, Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { DocumentItem } from '@/types/dokudocs'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { getDocCategories } from '@/lib/doc-category-utils'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -104,7 +104,7 @@ export function SetDocCategoryDialog({
             </div>
 
             {allVisibleCategories.length > 0 ? (
-              <div className='flex flex-wrap gap-1.5 p-2.5 rounded-lg border border-border/60 bg-muted/20 min-h-12'>
+              <div className='flex min-h-12 flex-wrap gap-1.5 rounded-lg border border-border/60 bg-muted/20 p-2.5'>
                 {allVisibleCategories.map((c) => {
                   const isSelected = selectedCategories.includes(c)
                   const colorId = project?.categoryColors?.[c]
@@ -115,15 +115,15 @@ export function SetDocCategoryDialog({
                       key={c}
                       type='button'
                       onClick={() => handleToggle(c)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${
+                      className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${
                         isSelected
-                          ? `${palette.bg} ${palette.text} ${palette.border} ring-1 ring-primary/40 shadow-2xs`
-                          : 'bg-background text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
+                          ? `${palette.bg} ${palette.text} ${palette.border} shadow-2xs ring-1 ring-primary/40`
+                          : 'border-border/80 bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
                       }`}
                     >
                       <Tag className='size-2.5' />
                       <span>{c}</span>
-                      {isSelected && <X className='size-2.5 ml-0.5' />}
+                      {isSelected && <X className='ml-0.5 size-2.5' />}
                     </button>
                   )
                 })}
@@ -156,7 +156,7 @@ export function SetDocCategoryDialog({
                 size='sm'
                 onClick={handleAddCustom}
                 disabled={!customInput.trim()}
-                className='h-9 px-3 text-xs gap-1 shrink-0'
+                className='h-9 shrink-0 gap-1 px-3 text-xs'
               >
                 <Plus className='size-3.5' />
                 <span>Add</span>
@@ -165,7 +165,7 @@ export function SetDocCategoryDialog({
           </div>
         </div>
 
-        <DialogFooter className='flex items-center justify-between sm:justify-between gap-2 pt-2'>
+        <DialogFooter className='flex items-center justify-between gap-2 pt-2 sm:justify-between'>
           <Button
             type='button'
             variant='ghost'

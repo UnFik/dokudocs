@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DocType } from '@/types/dokudocs'
 import {
   ChevronDown,
   Database,
@@ -7,8 +8,6 @@ import {
   Plus,
   Upload,
 } from 'lucide-react'
-import { DocType } from '@/types/dokudocs'
-import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -18,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { CreateDocDialog } from '@/features/docs/components/create-doc-dialog'
 import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
 import { FilterTabs } from './components/filter-tabs'
@@ -31,7 +31,10 @@ export function Dashboard() {
   const [selectedType, setSelectedType] = useState<DocType>('markdown')
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
 
-  const handleOpenCreate = (type: DocType = 'markdown', projectId: string | null = null) => {
+  const handleOpenCreate = (
+    type: DocType = 'markdown',
+    projectId: string | null = null
+  ) => {
     setSelectedType(type)
     setSelectedProject(projectId)
     setCreateDialogOpen(true)
@@ -53,7 +56,10 @@ export function Dashboard() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size='sm' className='h-8 gap-1.5 px-3 text-xs font-semibold shadow-xs'>
+              <Button
+                size='sm'
+                className='h-8 gap-1.5 px-3 text-xs font-semibold shadow-xs'
+              >
                 <Plus className='size-3.5' />
                 <span>New</span>
                 <ChevronDown className='size-3 opacity-60' />
@@ -77,8 +83,8 @@ export function Dashboard() {
         </div>
       </Header>
 
-      <Main className='space-y-6 pb-12 pt-4'>
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/40 pb-4'>
+      <Main className='space-y-6 pt-4 pb-12'>
+        <div className='flex flex-col gap-3 border-b border-border/40 pb-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <h1 className='text-2xl font-bold tracking-tight text-foreground'>
               {activeOrg?.name || 'Dokudocs Workspace'}
@@ -90,10 +96,14 @@ export function Dashboard() {
           <FilterTabs />
         </div>
 
-        <RecentSection onOpenCreateDialog={() => handleOpenCreate('markdown')} />
+        <RecentSection
+          onOpenCreateDialog={() => handleOpenCreate('markdown')}
+        />
 
         <ProjectsSection
-          onAddDocToProject={(projectId) => handleOpenCreate('markdown', projectId)}
+          onAddDocToProject={(projectId) =>
+            handleOpenCreate('markdown', projectId)
+          }
         />
       </Main>
 

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useCommentStore, parseSuggestionsFromMarkdown } from './comment-store'
-import type { CommentAuthor } from './comment-store'
+import {
+  type CommentAuthor,
+  getDecorationsForBlock,
+  useCommentStore,
+} from './comment-store'
 
 const mockAuthor: CommentAuthor = {
   id: 'usr-1',
@@ -139,91 +142,73 @@ describe('useCommentStore', () => {
     expect(useCommentStore.getState().getDocUnresolvedCount('doc-123')).toBe(1)
   })
 
-  it('parses suggestions from markdown correctly for Delete, Add, and Replace', () => {
-    const markdown = `
-      Some text with <del data-suggestion-id="sug-1">valid</del> deleted,
-      and <ins data-suggestion-id="sug-2">ation</ins> added,
-      and <del data-suggestion-id="sug-3">validation</del><ins data-suggestion-id="sug-3">invalid</ins> replaced.
-    `
-    const parsed = parseSuggestionsFromMarkdown(markdown)
-    expect(parsed).toHaveLength(3)
-
-    const delSug = parsed.find((p) => p.id === 'sug-1')
-    expect(delSug).toBeDefined()
-    expect(delSug?.type).toBe('delete')
-    expect(delSug?.originalText).toBe('valid')
-    expect(delSug?.suggestedText).toBe('')
-
-    const addSug = parsed.find((p) => p.id === 'sug-2')
-    expect(addSug).toBeDefined()
-    expect(addSug?.type).toBe('add')
-    expect(addSug?.originalText).toBe('')
-    expect(addSug?.suggestedText).toBe('ation')
-
-    const replaceSug = parsed.find((p) => p.id === 'sug-3')
-    expect(replaceSug).toBeDefined()
-    expect(replaceSug?.type).toBe('replace')
-    expect(replaceSug?.originalText).toBe('validation')
-    expect(replaceSug?.suggestedText).toBe('invalid')
-  })
-
-  it('syncs document suggestions and automatically appends and unappends threads', () => {
-    const docId = 'doc-123'
-    const md1 = 'Hello <del data-suggestion-id="sug-del">valid</del> world'
-    useCommentStore.getState().syncDocumentSuggestions(docId, md1, mockAuthor)
-
-    let threads = useCommentStore.getState().getDocThreads(docId)
-    expect(threads).toHaveLength(1)
-    expect(threads[0].content).toBe('Delete: “valid”')
-    expect(threads[0].suggestion?.type).toBe('delete')
-
-    const md2 = 'Hello <del data-suggestion-id="sug-del">valid</del> <ins data-suggestion-id="sug-add">ation</ins> world'
-    useCommentStore.getState().syncDocumentSuggestions(docId, md2, mockAuthor)
-    threads = useCommentStore.getState().getDocThreads(docId)
-    expect(threads).toHaveLength(2)
-
-    const mdUndo = 'Hello world'
-    useCommentStore.getState().syncDocumentSuggestions(docId, mdUndo, mockAuthor)
-    threads = useCommentStore.getState().getDocThreads(docId)
-    expect(threads).toHaveLength(0)
-
-    useCommentStore.getState().syncDocumentSuggestions(docId, md2, mockAuthor)
-    threads = useCommentStore.getState().getDocThreads(docId)
-    expect(threads).toHaveLength(2)
-  })
-
-  it('accepts and rejects suggestions by transforming document markdown', () => {
-    const docId = 'doc-123'
-    const md = 'Value is <del data-suggestion-id="sug-rep">validation</del><ins data-suggestion-id="sug-rep">invalid</ins> here.'
-    useCommentStore.getState().syncDocumentSuggestions(docId, md, mockAuthor)
-
-    const thread = useCommentStore.getState().getDocThreads(docId)[0]
-    expect(thread).toBeDefined()
-    expect(thread.content).toBe('Replace: “validation” with “invalid”')
-
-    let updatedDoc = md
-    useCommentStore.getState().acceptSuggestion(thread.id, (transform) => {
-      updatedDoc = transform(updatedDoc)
+  it('isolates decorations to the matching blockId and respects exact offsets', () => {
+    const docId = 'doc-iso-test'
+    useCommentStore.getState().addThread({
+      docId,
+      selectedText: 'target',
+      content: 'Comment on block 2',
+      author: mockAuthor,
+      blockId: 'blk-2',
+      from: 14,
+      to: 20,
     })
 
-    expect(updatedDoc).toBe('Value is invalid here.')
-    let currentThread = useCommentStore.getState().threads.find((t) => t.id === thread.id)
-    expect(currentThread?.isResolved).toBe(true)
-    expect(currentThread?.suggestion?.status).toBe('accepted')
+    const block1Decs = getDecorationsForBlock(
+      docId,
+      'blk-1',
+      'This has target word here.',
+      null
+    )
+    expect(block1Decs).toHaveLength(0)
 
-    const mdDel = 'Value is <del data-suggestion-id="sug-d">valid</del> done.'
-    useCommentStore.getState().syncDocumentSuggestions(docId, mdDel, mockAuthor)
-    const delThread = useCommentStore.getState().getDocThreads(docId).find((t) => t.suggestion?.id === 'sug-d')!
-    expect(delThread).toBeDefined()
+    const block2Decs = getDecorationsForBlock(
+      docId,
+      'blk-2',
+      'Another line, target word here.',
+      null
+    )
+    expect(block2Decs).toHaveLength(1)
+    expect(block2Decs[0].start).toBe(14)
+    expect(block2Decs[0].end).toBe(20)
+    expect(block2Decs[0].className).toBe('doc-comment-highlight')
+  })
 
-    let docAfterReject = mdDel
-    useCommentStore.getState().rejectSuggestion(delThread.id, (transform) => {
-      docAfterReject = transform(docAfterReject)
+  it('matches decorations across unassigned blockId using fallback text matching after reload', () => {
+    const docId = 'doc-reload-test'
+    useCommentStore.getState().addThread({
+      docId,
+      selectedText: 'reloaded sentence',
+      content: 'Persistent comment',
+      author: mockAuthor,
+      from: 5,
+      to: 22,
     })
 
-    expect(docAfterReject).toBe('Value is valid done.')
-    const rejectedThread = useCommentStore.getState().threads.find((t) => t.id === delThread.id)
-    expect(rejectedThread?.isResolved).toBe(true)
-    expect(rejectedThread?.suggestion?.status).toBe('rejected')
+    const newBlockDecs = getDecorationsForBlock(
+      docId,
+      'newly-generated-block-id',
+      'This reloaded sentence is preserved.',
+      null
+    )
+    expect(newBlockDecs).toHaveLength(1)
+    expect(newBlockDecs[0].start).toBe(5)
+    expect(newBlockDecs[0].end).toBe(22)
+    expect(newBlockDecs[0].className).toBe('doc-comment-highlight')
+  })
+
+  it('handles sidebar open state and active thread state', () => {
+    expect(useCommentStore.getState().isSidebarOpen).toBe(false)
+    useCommentStore.getState().setSidebarOpen(true)
+    expect(useCommentStore.getState().isSidebarOpen).toBe(true)
+
+    useCommentStore.getState().toggleSidebar()
+    expect(useCommentStore.getState().isSidebarOpen).toBe(false)
+
+    useCommentStore.getState().setActiveThreadId('test-thread-id')
+    expect(useCommentStore.getState().activeThreadId).toBe('test-thread-id')
   })
 })
+
+
+

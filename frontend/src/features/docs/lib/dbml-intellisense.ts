@@ -20,7 +20,8 @@ export interface DbmlTableInfo {
 export const DBML_KEYWORDS: DbmlSuggestion[] = [
   {
     label: 'Table',
-    insertText: 'Table ${1:table_name} {\n  id int [pk, increment]\n  created_at timestamp [default: `now()`]\n}',
+    insertText:
+      'Table ${1:table_name} {\n  id int [pk, increment]\n  created_at timestamp [default: `now()`]\n}',
     kind: 'snippet',
     detail: 'Table definition',
     documentation: 'Define a new database table with fields and attributes.',
@@ -37,18 +38,21 @@ export const DBML_KEYWORDS: DbmlSuggestion[] = [
     insertText: 'TableGroup ${1:group_name} {\n  ${2:table_name}\n}',
     kind: 'snippet',
     detail: 'Table group',
-    documentation: 'Group related tables together visually in the schema canvas.',
+    documentation:
+      'Group related tables together visually in the schema canvas.',
   },
   {
     label: 'Ref',
     insertText: 'Ref: ${1:table1}.${2:col1} > ${3:table2}.${4:col2}',
     kind: 'snippet',
     detail: 'Foreign key relation',
-    documentation: 'Define a relationship between two tables (> many-to-one, < one-to-many, - one-to-one).',
+    documentation:
+      'Define a relationship between two tables (> many-to-one, < one-to-many, - one-to-one).',
   },
   {
     label: 'Project',
-    insertText: "Project ${1:project_name} {\n  database_type: 'PostgreSQL'\n  Note: 'Project documentation'\n}",
+    insertText:
+      "Project ${1:project_name} {\n  database_type: 'PostgreSQL'\n  Note: 'Project documentation'\n}",
     kind: 'snippet',
     detail: 'Project metadata',
     documentation: 'Define global project metadata and database target.',
@@ -75,7 +79,8 @@ export const DBML_DATA_TYPES: DbmlSuggestion[] = [
     insertText: 'int',
     kind: 'type',
     detail: 'Integer (32-bit)',
-    documentation: 'Standard 4-byte signed integer (-2,147,483,648 to 2,147,483,647).',
+    documentation:
+      'Standard 4-byte signed integer (-2,147,483,648 to 2,147,483,647).',
   },
   {
     label: 'bigint',
@@ -96,14 +101,16 @@ export const DBML_DATA_TYPES: DbmlSuggestion[] = [
     insertText: 'varchar(255)',
     kind: 'type',
     detail: 'Variable string',
-    documentation: 'Variable-length character string with maximum length constraint.',
+    documentation:
+      'Variable-length character string with maximum length constraint.',
   },
   {
     label: 'text',
     insertText: 'text',
     kind: 'type',
     detail: 'Unlimited text',
-    documentation: 'Unlimited length UTF-8 string for articles and descriptions.',
+    documentation:
+      'Unlimited length UTF-8 string for articles and descriptions.',
   },
   {
     label: 'boolean',
@@ -204,7 +211,8 @@ export const DBML_ATTRIBUTES: DbmlSuggestion[] = [
     insertText: '[pk]',
     kind: 'attribute',
     detail: 'Primary key constraint',
-    documentation: 'Designates this column as the unique primary key identifier.',
+    documentation:
+      'Designates this column as the unique primary key identifier.',
   },
   {
     label: '[pk, increment]',
@@ -232,7 +240,8 @@ export const DBML_ATTRIBUTES: DbmlSuggestion[] = [
     insertText: '[unique]',
     kind: 'attribute',
     detail: 'Unique constraint',
-    documentation: 'Ensures all non-null values across this column remain unique.',
+    documentation:
+      'Ensures all non-null values across this column remain unique.',
   },
   {
     label: '[increment]',

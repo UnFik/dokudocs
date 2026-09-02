@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { ProjectWithDocuments } from '@/types/dokudocs'
 import {
   Folder,
   Layers,
@@ -10,9 +11,8 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { ProjectWithDocuments } from '@/types/dokudocs'
-import { formatRelativeTime } from '@/lib/time-utils'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { formatRelativeTime } from '@/lib/time-utils'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -74,16 +74,16 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
         <ContextMenuTrigger asChild>
           <div
             onClick={handleCardClick}
-            className='group relative flex flex-col justify-between rounded-xl border border-border/80 bg-card p-4 transform-gpu transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:border-sidebar-ring/60 hover:shadow-md cursor-pointer select-none will-change-transform'
+            className='group relative flex transform-gpu cursor-pointer flex-col justify-between rounded-xl border border-border/80 bg-card p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out will-change-transform select-none hover:-translate-y-0.5 hover:border-sidebar-ring/60 hover:shadow-md'
           >
             <div>
               <div className='mb-3 flex items-start justify-between'>
-                <div className='flex items-center gap-2.5 min-w-0'>
+                <div className='flex min-w-0 items-center gap-2.5'>
                   {project.logoUrl ? (
                     <img
                       src={project.logoUrl}
                       alt={project.name}
-                      className='size-9 shrink-0 rounded-lg object-cover border border-border/80 shadow-2xs'
+                      className='size-9 shrink-0 rounded-lg border border-border/80 object-cover shadow-2xs'
                     />
                   ) : (
                     <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary'>
@@ -91,10 +91,10 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
                     </div>
                   )}
                   <div className='min-w-0'>
-                    <h3 className='block truncate font-semibold text-sm tracking-tight text-foreground transition-colors group-hover:text-primary'>
+                    <h3 className='block truncate text-sm font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary'>
                       {project.name}
                     </h3>
-                    <p className='text-xs text-muted-foreground truncate max-w-44'>
+                    <p className='max-w-44 truncate text-xs text-muted-foreground'>
                       {project.description
                         ? project.description
                         : `${project.totalDocsCount} ${
@@ -107,15 +107,17 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
                 </div>
 
                 <div
-                  className='flex items-center gap-0.5 shrink-0'
+                  className='flex shrink-0 items-center gap-0.5'
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Button
                     variant='ghost'
                     size='icon'
                     onClick={handleToggleStar}
-                    className='size-7 text-muted-foreground hover:text-amber-500 transition-colors'
-                    title={project.isStarred ? 'Unstar Project' : 'Star Project'}
+                    className='size-7 text-muted-foreground transition-colors hover:text-amber-500'
+                    title={
+                      project.isStarred ? 'Unstar Project' : 'Star Project'
+                    }
                   >
                     <Star
                       className={`size-3.5 ${
@@ -188,7 +190,7 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
                 </div>
               </div>
 
-              <div className='mt-3 grid grid-cols-2 grid-rows-2 gap-2.5 rounded-xl bg-muted/30 p-2.5 border border-border/50'>
+              <div className='mt-3 grid grid-cols-2 grid-rows-2 gap-2.5 rounded-xl border border-border/50 bg-muted/30 p-2.5'>
                 {slot1 ? (
                   <div onClick={(e) => e.stopPropagation()}>
                     <ProjectSubCard document={slot1} />
@@ -253,10 +255,7 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
 
         <ContextMenuContent className='w-48'>
           <ContextMenuItem asChild>
-            <Link
-              to='/projects/$projectId'
-              params={{ projectId: project.id }}
-            >
+            <Link to='/projects/$projectId' params={{ projectId: project.id }}>
               <Folder className='mr-2 size-3.5 text-primary' />
               Open Project
             </Link>
@@ -268,9 +267,7 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
                 project.isStarred ? 'fill-amber-400 text-amber-500' : ''
               }`}
             />
-            <span>
-              {project.isStarred ? 'Unstar Project' : 'Star Project'}
-            </span>
+            <span>{project.isStarred ? 'Unstar Project' : 'Star Project'}</span>
           </ContextMenuItem>
 
           <ContextMenuItem onClick={() => setEditDialogOpen(true)}>

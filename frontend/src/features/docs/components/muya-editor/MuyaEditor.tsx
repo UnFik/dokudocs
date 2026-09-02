@@ -20,13 +20,16 @@ import {
   TableDragBar,
   TableRowColumMenu,
 } from '@muyajs/core'
-import { AlignLeft, Edit3, MessageSquare } from 'lucide-react'
-import { useMountEffect } from '@/hooks/use-mount-effect'
-import { useCommentStore } from '@/stores/comment-store'
-import 'katex/dist/katex.min.css'
 import 'github-markdown-css/github-markdown.css'
-import '@/features/docs/lib/muya/assets/styles/index.css'
+import 'katex/dist/katex.min.css'
+import { AlignLeft, MessageSquare } from 'lucide-react'
+import {
+  getDecorationsForBlock,
+  useCommentStore,
+} from '@/stores/comment-store'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 import '@/features/docs/lib/muya/assets/styles/blockSyntax.css'
+import '@/features/docs/lib/muya/assets/styles/index.css'
 import '@/features/docs/lib/muya/assets/styles/inlineSyntax.css'
 import '@/features/docs/lib/muya/assets/styles/prismjs/light.theme.css'
 import './muya.css'
@@ -43,7 +46,10 @@ export interface MuyaEditorHandle {
 
 export interface CommentTriggerPayload {
   selectedText: string
+  blockId?: string
   blockPath?: (string | number)[]
+  from?: number
+  to?: number
   rect: {
     top: number
     bottom: number
@@ -55,11 +61,11 @@ export interface CommentTriggerPayload {
 }
 
 interface MuyaEditorProps {
+  docId: string
   content: string
   onChange: (value: string) => void
   onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void
   readOnly?: boolean
-  isSuggestingMode?: boolean
   className?: string
   editorRef?: React.MutableRefObject<MuyaEditorHandle | null>
   showToc?: boolean
@@ -67,57 +73,9 @@ interface MuyaEditorProps {
   onCommentTrigger?: (payload: CommentTriggerPayload) => void
 }
 
-function findEnclosingInsTag(text: string, offset: number) {
-  const insRegex =
-    /<ins\b[^>]*\bdata-suggestion-id=["']([^"']+)["'][^>]*>([\s\S]*?)<\/ins>/gi
-  let match: RegExpExecArray | null
-  while ((match = insRegex.exec(text)) !== null) {
-    const fullTag = match[0]
-    const openTagMatch = fullTag.match(/^<ins\b[^>]*>/i)
-    if (!openTagMatch) continue
-    const openTagLen = openTagMatch[0].length
-    const openStart = match.index
-    const openEnd = openStart + openTagLen
-    const closeStart = openStart + fullTag.length - 6
-    const closeEnd = openStart + fullTag.length
-
-    if (offset >= openEnd && offset <= closeStart) {
-      return {
-        id: match[1],
-        openStart,
-        openEnd,
-        closeStart,
-        closeEnd,
-        inner: match[2],
-      }
-    }
-  }
-  return null
-}
-
-function findPrecedingDelTag(text: string, offset: number) {
-  const sub = text.substring(0, offset)
-  const delEndMatch = sub.match(
-    /<del\b[^>]*\bdata-suggestion-id=["']([^"']+)["'][^>]*>([\s\S]*?)<\/del>$/i
-  )
-  if (delEndMatch && delEndMatch.index !== undefined) {
-    const fullDel = delEndMatch[0]
-    const openTagMatch = fullDel.match(/^<del\b[^>]*>/i)
-    if (openTagMatch) {
-      return {
-        id: delEndMatch[1],
-        fullStart: delEndMatch.index,
-        openTag: openTagMatch[0],
-        inner: delEndMatch[2],
-        fullEnd: offset,
-      }
-    }
-  }
-  return null
-}
-
 let pluginsRegistered = false
 
+/* eslint-disable react-hooks/rules-of-hooks */
 function registerMuyaPlugins() {
   if (pluginsRegistered) return
   pluginsRegistered = true
@@ -140,13 +98,14 @@ function registerMuyaPlugins() {
   Muya.use(TableDragBar)
   Muya.use(TableRowColumMenu)
 }
+/* eslint-enable react-hooks/rules-of-hooks */
 
 export function MuyaEditor({
+  docId,
   content,
   onChange,
   onHistoryChange,
   readOnly = false,
-  isSuggestingMode = false,
   className = '',
   editorRef,
   showToc = false,
@@ -154,144 +113,161 @@ export function MuyaEditor({
   onCommentTrigger,
 }: MuyaEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const muyaRef = useRef<any>(null)
+  const muyaRef = useRef<InstanceType<typeof Muya> | null>(null)
   const lastEmittedValueRef = useRef(content)
+  const lastPropContentRef = useRef(content)
+  /* eslint-disable react-hooks/refs */
   const lastReadOnlyRef = useRef(readOnly)
   lastReadOnlyRef.current = readOnly
-  const isSuggestingRef = useRef(isSuggestingMode)
-  isSuggestingRef.current = isSuggestingMode
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const onHistoryChangeRef = useRef(onHistoryChange)
   onHistoryChangeRef.current = onHistoryChange
   const onCommentTriggerRef = useRef(onCommentTrigger)
   onCommentTriggerRef.current = onCommentTrigger
+  /* eslint-enable react-hooks/refs */
   const [tocItems, setTocItems] = useState<ITocItem[]>([])
   const [lineIndicators, setLineIndicators] = useState<
     Array<{
       id: string
       top: number
-      type: 'comment' | 'suggestion'
       count: number
       threadId: string
     }>
   >([])
 
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tocDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rafIndicatorsTimerRef = useRef<number | null>(null)
+  const blockOffsetsRef = useRef<Map<string, { start: number; end: number }>>(
+    new Map()
+  )
+
   const updateLineIndicators = useCallback(() => {
-    if (!containerRef.current) return
-    const container = containerRef.current
-    const containerRect = container.getBoundingClientRect()
-
-    const markedElements = container.querySelectorAll(
-      '[data-thread-id], [data-suggestion-id], mark, del, ins, .doc-comment-highlight, .doc-suggestion-del, .doc-suggestion-ins'
-    )
-    if (markedElements.length === 0) {
-      setLineIndicators([])
-      return
+    if (rafIndicatorsTimerRef.current) {
+      cancelAnimationFrame(rafIndicatorsTimerRef.current)
     }
+    rafIndicatorsTimerRef.current = requestAnimationFrame(() => {
+      if (!containerRef.current) return
+      const container = containerRef.current
+      const markedElements = container.querySelectorAll(
+        '[data-thread-id], mark, .doc-comment-highlight'
+      )
+      if (markedElements.length === 0) {
+        setLineIndicators((prev) => (prev.length === 0 ? prev : []))
+        return
+      }
 
-    const blockMap = new Map<
-      Element,
-      {
-        type: 'comment' | 'suggestion'
+      const containerRect = container.getBoundingClientRect()
+      const blockMap = new Map<
+        Element,
+        {
+          count: number
+          threadId: string
+          top: number
+        }
+      >()
+
+      const allThreads = useCommentStore.getState().threads || []
+
+      markedElements.forEach((el) => {
+        const blockEl =
+          el.closest(
+            '.mu-paragraph, .mu-header1, .mu-header2, .mu-header3, .mu-header4, .mu-header5, .mu-header6, .mu-list-item, .mu-table-cell, .mu-block, p, h1, h2, h3, h4, h5, h6, li'
+          ) || el.parentElement
+        if (!blockEl) return
+
+        let threadId = el.getAttribute('data-thread-id')
+
+        if (!threadId) {
+          if (
+            el.tagName.toLowerCase() === 'mark' ||
+            el.classList.contains('doc-comment-highlight')
+          ) {
+            const firstOpenThread = allThreads.find(
+              (t) => !t.isResolved
+            )
+            if (firstOpenThread) threadId = firstOpenThread.id
+          }
+        }
+
+        const matchedThreadId = threadId || ''
+        const rect = blockEl.getBoundingClientRect()
+        const top = rect.top - containerRect.top + rect.height / 2
+
+        const existing = blockMap.get(blockEl)
+        if (existing) {
+          existing.count += 1
+        } else {
+          blockMap.set(blockEl, {
+            count: 1,
+            threadId: matchedThreadId,
+            top,
+          })
+        }
+      })
+
+      const indicators: Array<{
+        id: string
+        top: number
         count: number
         threadId: string
-        top: number
-      }
-    >()
+      }> = []
 
-    const allThreads = useCommentStore.getState().threads || []
-
-    markedElements.forEach((el) => {
-      const blockEl =
-        el.closest(
-          '.mu-paragraph, .mu-header1, .mu-header2, .mu-header3, .mu-header4, .mu-header5, .mu-header6, .mu-list-item, .mu-table-cell, .mu-block, p, h1, h2, h3, h4, h5, h6, li'
-        ) || el.parentElement
-      if (!blockEl) return
-
-      let threadId = el.getAttribute('data-thread-id')
-      let sugId = el.getAttribute('data-suggestion-id')
-
-      if (!threadId && !sugId) {
-        if (
-          el.tagName.toLowerCase() === 'mark' ||
-          el.classList.contains('doc-comment-highlight')
-        ) {
-          const firstOpenThread = allThreads.find(
-            (t) => !t.isResolved && !t.suggestion
-          )
-          if (firstOpenThread) threadId = firstOpenThread.id
-        } else if (
-          el.tagName.toLowerCase() === 'del' ||
-          el.tagName.toLowerCase() === 'ins' ||
-          el.classList.contains('doc-suggestion-del') ||
-          el.classList.contains('doc-suggestion-ins')
-        ) {
-          const firstOpenSug = allThreads.find(
-            (t) => !t.isResolved && t.suggestion
-          )
-          if (firstOpenSug) threadId = firstOpenSug.id
-        }
-      }
-
-      let matchedThreadId = threadId || ''
-      let indicatorType: 'comment' | 'suggestion' = 'comment'
-
-      if (
-        sugId ||
-        el.tagName.toLowerCase() === 'del' ||
-        el.tagName.toLowerCase() === 'ins' ||
-        el.classList.contains('doc-suggestion-del') ||
-        el.classList.contains('doc-suggestion-ins')
-      ) {
-        indicatorType = 'suggestion'
-        if (sugId) {
-          const matched = allThreads.find((t) => t.suggestion?.id === sugId)
-          if (matched) matchedThreadId = matched.id
-        }
-      }
-
-      const rect = blockEl.getBoundingClientRect()
-      const top = rect.top - containerRect.top + rect.height / 2
-
-      const existing = blockMap.get(blockEl)
-      if (existing) {
-        existing.count += 1
-      } else {
-        blockMap.set(blockEl, {
-          type: indicatorType,
-          count: 1,
-          threadId: matchedThreadId,
-          top,
+      let index = 0
+      blockMap.forEach((val) => {
+        indicators.push({
+          id: `ind-${index++}-${val.threadId}`,
+          top: val.top,
+          count: val.count,
+          threadId: val.threadId,
         })
-      }
-    })
-
-    const indicators: Array<{
-      id: string
-      top: number
-      type: 'comment' | 'suggestion'
-      count: number
-      threadId: string
-    }> = []
-
-    let index = 0
-    blockMap.forEach((val) => {
-      indicators.push({
-        id: `ind-${index++}-${val.threadId}`,
-        top: val.top,
-        type: val.type,
-        count: val.count,
-        threadId: val.threadId,
       })
-    })
 
-    setLineIndicators(indicators)
+      setLineIndicators(indicators)
+    })
+  }, [])
+
+  const updateBlockOffsets = useCallback((ed: Muya) => {
+    const map = new Map<string, { start: number; end: number }>()
+    const scrollPage = ed.editor?.scrollPage
+    if (!scrollPage) return map
+    const md = ed.getMarkdown()
+
+    let searchPos = 0
+    scrollPage.breadthFirstTraverse(
+      (node: { isContent: () => boolean; text?: string; id: string }) => {
+        if (node.isContent()) {
+          const text = node.text || ''
+          if (!text) return
+          const idx = md.indexOf(text, searchPos)
+          if (idx !== -1) {
+            map.set(node.id, { start: idx, end: idx + text.length })
+            searchPos = idx + text.length
+          } else {
+            const fallbackIdx = md.indexOf(text)
+            if (fallbackIdx !== -1) {
+              map.set(node.id, {
+                start: fallbackIdx,
+                end: fallbackIdx + text.length,
+              })
+            }
+          }
+        }
+      }
+    )
+    blockOffsetsRef.current = map
+    return map
   }, [])
 
   const fallbackHeadings = useMemo(() => {
     if (!content.trim()) return []
-    const results: { text: string; level: number; id: string; slug?: string }[] = []
+    const results: {
+      text: string
+      level: number
+      id: string
+      slug?: string
+    }[] = []
     const lines = content.split('\n')
     let inCode = false
 
@@ -323,7 +299,9 @@ export function MuyaEditor({
     let targetEl: HTMLElement | null = null
 
     if (item.slug) {
-      targetEl = container.querySelector<HTMLElement>(`[data-slug="${item.slug}"]`)
+      targetEl = container.querySelector<HTMLElement>(
+        `[data-slug="${item.slug}"]`
+      )
     }
 
     if (!targetEl) {
@@ -343,8 +321,14 @@ export function MuyaEditor({
       for (let i = 0; i < allHeadings.length; i++) {
         const h = allHeadings[i]
         const cleanContent =
-          h.textContent?.replace(/^[#\s]+/, '').toLowerCase().trim() || ''
-        if (cleanContent === cleanTarget || cleanContent.includes(cleanTarget)) {
+          h.textContent
+            ?.replace(/^[#\s]+/, '')
+            .toLowerCase()
+            .trim() || ''
+        if (
+          cleanContent === cleanTarget ||
+          cleanContent.includes(cleanTarget)
+        ) {
           targetEl = h
           break
         }
@@ -353,20 +337,8 @@ export function MuyaEditor({
 
     if (targetEl) {
       targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      targetEl.classList.add(
-        'ring-2',
-        'ring-primary/40',
-        'bg-primary/10',
-        'rounded',
-        'transition-all',
-        'duration-500'
-      )
-      setTimeout(() => {
-        targetEl?.classList.remove('ring-2', 'ring-primary/40', 'bg-primary/10')
-      }, 1200)
+      onNavigateToSource?.(item.text)
     }
-
-    onNavigateToSource?.(item.text)
   }
 
   useMountEffect(() => {
@@ -376,9 +348,7 @@ export function MuyaEditor({
 
     const editor = new Muya(containerRef.current, {
       markdown: content,
-      disableHtml: false,
       readOnly: readOnly,
-      isSuggestingMode: isSuggestingMode,
       isGitlabCompatibilityEnabled: false,
       tabSize: 2,
       fontSize: 13,
@@ -388,43 +358,117 @@ export function MuyaEditor({
       autoPairBracket: !readOnly,
       autoPairMarkdownSyntax: !readOnly,
       autoPairQuote: !readOnly,
+      getDecorations: (block: {
+        text?: string
+        id?: string
+        parent?: { id?: string }
+        path?: (string | number)[]
+      }) => {
+        const text = block.text || ''
+        const blockId =
+          block.id ||
+          block.parent?.id ||
+          (block.path && block.path.length ? block.path.join('.') : '')
+        const blockOffset = block.id
+          ? blockOffsetsRef.current.get(block.id)
+          : undefined
+        return getDecorationsForBlock(
+          docId,
+          blockId,
+          text,
+          useCommentStore.getState().activeThreadId,
+          block.path,
+          blockOffset
+        )
+      },
     })
 
     editor.init()
+    updateBlockOffsets(editor)
+    if (readOnly) {
+      editor.setReadOnly(true)
+    }
     muyaRef.current = editor
 
     try {
       setTocItems(editor.getTOC())
-    } catch {}
+    } catch (err) {
+      void err
+    }
 
-    editor.on('change', ({ markdown }: { markdown: string }) => {
-      lastEmittedValueRef.current = markdown
-      onChangeRef.current(markdown)
+    const flushChange = () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
       try {
-        setTocItems(editor.getTOC())
-      } catch {}
+        const md = editor.getMarkdown()
+        if (md !== lastEmittedValueRef.current) {
+          lastEmittedValueRef.current = md
+          lastPropContentRef.current = md
+          onChangeRef.current(md)
+          updateLineIndicators()
+        }
+      } catch (err) {
+        void err
+      }
+    }
+
+    const handleEditorChange = () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null
+        try {
+          const markdown = editor.getMarkdown()
+          if (markdown === lastEmittedValueRef.current) return
+          lastEmittedValueRef.current = markdown
+          lastPropContentRef.current = markdown
+          onChangeRef.current(markdown)
+          updateLineIndicators()
+
+          if (tocDebounceTimerRef.current) {
+            clearTimeout(tocDebounceTimerRef.current)
+          }
+          tocDebounceTimerRef.current = setTimeout(() => {
+            try {
+              setTocItems(editor.getTOC())
+            } catch (err) {
+              void err
+            }
+          }, 300)
+        } catch (err) {
+          void err
+        }
+      }, 300)
+    }
+
+    editor.on('change', handleEditorChange)
+    editor.on('json-change', handleEditorChange)
+    editor.on('content-change', handleEditorChange)
+
+    editor.on('muya-comment-trigger', (payload: CommentTriggerPayload) => {
+      queueMicrotask(() => {
+        onCommentTriggerRef.current?.(payload)
+      })
     })
 
-    editor.on('json-change', () => {
-      const markdown = editor.getMarkdown()
-      lastEmittedValueRef.current = markdown
-      onChangeRef.current(markdown)
-      try {
-        setTocItems(editor.getTOC())
-      } catch {}
-    })
+    editor.on(
+      'history-change',
+      (state: { canUndo: boolean; canRedo: boolean }) => {
+        queueMicrotask(() => {
+          onHistoryChangeRef.current?.(state)
+        })
+        flushChange()
+      }
+    )
 
-    editor.on('muya-comment-trigger', (payload: any) => {
-      onCommentTriggerRef.current?.(payload)
-    })
-
-    editor.on('history-change', (state: { canUndo: boolean; canRedo: boolean }) => {
-      onHistoryChangeRef.current?.(state)
-    })
-
-    onHistoryChangeRef.current?.({
-      canUndo: editor.canUndo(),
-      canRedo: editor.canRedo(),
+    queueMicrotask(() => {
+      onHistoryChangeRef.current?.({
+        canUndo: editor.canUndo(),
+        canRedo: editor.canRedo(),
+      })
     })
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -448,240 +492,11 @@ export function MuyaEditor({
           e.stopPropagation()
           editor.redo()
           return
-        }
-      }
-
-      if (isSuggestingRef.current && !mod && !e.altKey) {
-        const activeBlock =
-          editor.editor?.activeContentBlock ??
-          editor.editor?.selection?.anchorBlock ??
-          editor.editor?.selection?.focusBlock
-        if (activeBlock && typeof activeBlock.getCursor === 'function') {
-          const cursor = activeBlock.getCursor()
-          if (cursor) {
-            const { start, end } = cursor
-            const text = activeBlock.text || ''
-
-            if (e.key === 'Backspace' || e.key === 'Delete') {
-              if (start.offset !== end.offset) {
-                const rawSelected = text.substring(start.offset, end.offset)
-                const cleanSelected = rawSelected.replace(
-                  /<\/?(del|ins|mark)\b[^>]*>/gi,
-                  ''
-                )
-                if (cleanSelected.length > 0) {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  const sugId = `sug-${Date.now()}-${Math.random()
-                    .toString(36)
-                    .slice(2, 7)}`
-                  const wrapped = `<del class="doc-suggestion-del" data-suggestion-id="${sugId}">${cleanSelected}</del>`
-                  editor.editor?.history?.markInputBoundary('deleteContentForward', null)
-                  activeBlock.text =
-                    text.substring(0, start.offset) +
-                    wrapped +
-                    text.substring(end.offset)
-                  const newOffset = start.offset + wrapped.length
-                  activeBlock.update()
-                  activeBlock.setCursor(newOffset, newOffset, true)
-                  const md = editor.getMarkdown()
-                  lastEmittedValueRef.current = md
-                  onChangeRef.current(md)
-                  setTimeout(updateLineIndicators, 50)
-                  return
-                }
-              } else if (e.key === 'Backspace' && start.offset > 0) {
-                const insTag = findEnclosingInsTag(text, start.offset)
-                if (insTag && start.offset > insTag.openEnd) {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  const newText =
-                    text.substring(0, start.offset - 1) +
-                    text.substring(start.offset)
-                  const newCloseStart = insTag.closeStart - 1
-                  const inner = newText.substring(insTag.openEnd, newCloseStart)
-                  if (inner.length === 0) {
-                    const cleanText =
-                      newText.substring(0, insTag.openStart) +
-                      newText.substring(newCloseStart + 6)
-                    activeBlock.text = cleanText
-                    activeBlock.update()
-                    activeBlock.setCursor(insTag.openStart, insTag.openStart, true)
-                  } else {
-                    activeBlock.text = newText
-                    activeBlock.update()
-                    activeBlock.setCursor(
-                      start.offset - 1,
-                      start.offset - 1,
-                      true
-                    )
-                  }
-                  const md = editor.getMarkdown()
-                  lastEmittedValueRef.current = md
-                  onChangeRef.current(md)
-                  setTimeout(updateLineIndicators, 50)
-                  return
-                } else if (!insTag) {
-                  const precedingDel = findPrecedingDelTag(text, start.offset)
-                  if (precedingDel && precedingDel.fullStart > 0) {
-                    const charBeforeDel = text.substring(
-                      precedingDel.fullStart - 1,
-                      precedingDel.fullStart
-                    )
-                    if (charBeforeDel && charBeforeDel !== '\n' && !charBeforeDel.endsWith('>')) {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const mergedDel = `${precedingDel.openTag}${charBeforeDel}${precedingDel.inner}</del>`
-                      editor.editor?.history?.markInputBoundary(
-                        'deleteContentBackward',
-                        null
-                      )
-                      activeBlock.text =
-                        text.substring(0, precedingDel.fullStart - 1) +
-                        mergedDel +
-                        text.substring(start.offset)
-                      const newOffset = precedingDel.fullStart - 1 + mergedDel.length
-                      activeBlock.update()
-                      activeBlock.setCursor(newOffset, newOffset, true)
-                      const md = editor.getMarkdown()
-                      lastEmittedValueRef.current = md
-                      onChangeRef.current(md)
-                      setTimeout(updateLineIndicators, 50)
-                      return
-                    }
-                  }
-
-                  const subBefore = text.substring(0, start.offset)
-                  if (!subBefore.endsWith('>')) {
-                    const charToDelete = text.substring(start.offset - 1, start.offset)
-                    if (charToDelete && charToDelete !== '\n') {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const sugId = `sug-${Date.now()}-${Math.random()
-                        .toString(36)
-                        .slice(2, 7)}`
-                      const wrapped = `<del class="doc-suggestion-del" data-suggestion-id="${sugId}">${charToDelete}</del>`
-                      editor.editor?.history?.markInputBoundary('deleteContentBackward', null)
-                      activeBlock.text =
-                        text.substring(0, start.offset - 1) +
-                        wrapped +
-                        text.substring(start.offset)
-                      const newOffset = start.offset - 1 + wrapped.length
-                      activeBlock.update()
-                      activeBlock.setCursor(newOffset, newOffset, true)
-                      const md = editor.getMarkdown()
-                      lastEmittedValueRef.current = md
-                      onChangeRef.current(md)
-                      setTimeout(updateLineIndicators, 50)
-                      return
-                    }
-                  }
-                }
-              } else if (e.key === 'Delete' && start.offset < text.length) {
-                const insTag = findEnclosingInsTag(text, start.offset)
-                if (!insTag) {
-                  const subAfter = text.substring(start.offset)
-                  if (!subAfter.startsWith('<')) {
-                    const charToDelete = text.substring(start.offset, start.offset + 1)
-                    if (charToDelete && charToDelete !== '\n') {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const sugId = `sug-${Date.now()}-${Math.random()
-                        .toString(36)
-                        .slice(2, 7)}`
-                      const wrapped = `<del class="doc-suggestion-del" data-suggestion-id="${sugId}">${charToDelete}</del>`
-                      editor.editor?.history?.markInputBoundary('deleteContentForward', null)
-                      activeBlock.text =
-                        text.substring(0, start.offset) +
-                        wrapped +
-                        text.substring(start.offset + 1)
-                      const newOffset = start.offset + wrapped.length
-                      activeBlock.update()
-                      activeBlock.setCursor(newOffset, newOffset, true)
-                      const md = editor.getMarkdown()
-                      lastEmittedValueRef.current = md
-                      onChangeRef.current(md)
-                      setTimeout(updateLineIndicators, 50)
-                      return
-                    }
-                  }
-                }
-              }
-            } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-              if (start.offset !== end.offset) {
-                const rawSelected = text.substring(start.offset, end.offset)
-                const cleanSelected = rawSelected.replace(
-                  /<\/?(del|ins|mark)\b[^>]*>/gi,
-                  ''
-                )
-                if (cleanSelected.length > 0) {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  const sugId = `sug-${Date.now()}-${Math.random()
-                    .toString(36)
-                    .slice(2, 7)}`
-                  const openIns = `<ins class="doc-suggestion-ins" data-suggestion-id="${sugId}">`
-                  const wrapped = `<del class="doc-suggestion-del" data-suggestion-id="${sugId}">${cleanSelected}</del>${openIns}${e.key}</ins>`
-                  editor.editor?.history?.markInputBoundary('insertText', e.key)
-                  activeBlock.text =
-                    text.substring(0, start.offset) +
-                    wrapped +
-                    text.substring(end.offset)
-                  const caretPos =
-                    start.offset +
-                    wrapped.length -
-                    6
-                  activeBlock.update()
-                  activeBlock.setCursor(caretPos, caretPos, true)
-                  const md = editor.getMarkdown()
-                  lastEmittedValueRef.current = md
-                  onChangeRef.current(md)
-                  setTimeout(updateLineIndicators, 50)
-                  return
-                }
-              } else {
-                const insTag = findEnclosingInsTag(text, start.offset)
-                if (insTag) {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  editor.editor?.history?.markInputBoundary('insertText', e.key)
-                  activeBlock.text =
-                    text.substring(0, start.offset) +
-                    e.key +
-                    text.substring(start.offset)
-                  const caretPos = start.offset + 1
-                  activeBlock.update()
-                  activeBlock.setCursor(caretPos, caretPos, true)
-                  const md = editor.getMarkdown()
-                  lastEmittedValueRef.current = md
-                  onChangeRef.current(md)
-                  setTimeout(updateLineIndicators, 50)
-                  return
-                } else {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  const sugId = `sug-${Date.now()}-${Math.random()
-                    .toString(36)
-                    .slice(2, 7)}`
-                  const openTag = `<ins class="doc-suggestion-ins" data-suggestion-id="${sugId}">`
-                  const wrapped = `${openTag}${e.key}</ins>`
-                  editor.editor?.history?.markInputBoundary('insertText', e.key)
-                  activeBlock.text =
-                    text.substring(0, start.offset) +
-                    wrapped +
-                    text.substring(start.offset)
-                  const caretPos = start.offset + openTag.length + 1
-                  activeBlock.update()
-                  activeBlock.setCursor(caretPos, caretPos, true)
-                  const md = editor.getMarkdown()
-                  lastEmittedValueRef.current = md
-                  onChangeRef.current(md)
-                  setTimeout(updateLineIndicators, 50)
-                  return
-                }
-              }
-            }
-          }
+        } else if (key === 'a') {
+          e.preventDefault()
+          e.stopPropagation()
+          editor.selectAll()
+          return
         }
       }
     }
@@ -690,34 +505,29 @@ export function MuyaEditor({
       const target = e.target as HTMLElement | null
       if (!target) return
 
-      const markEl = target.closest('[data-thread-id]') as HTMLElement | null
+      const markEl = target.closest(
+        '[data-thread-id], .doc-comment-highlight'
+      ) as HTMLElement | null
       if (markEl) {
-        const threadId = markEl.getAttribute('data-thread-id')
+        const threadId =
+          markEl.getAttribute('data-thread-id') || markEl.dataset.threadId
         if (threadId) {
           useCommentStore.getState().setActiveThreadId(threadId)
           useCommentStore.getState().setSidebarOpen(true)
           return
         }
       }
+    }
 
-      const sugEl = target.closest('[data-suggestion-id]') as HTMLElement | null
-      if (sugEl) {
-        const sugId = sugEl.getAttribute('data-suggestion-id')
-        if (sugId) {
-          const thread = useCommentStore
-            .getState()
-            .threads.find((t) => t.suggestion?.id === sugId)
-          if (thread) {
-            useCommentStore.getState().setActiveThreadId(thread.id)
-            useCommentStore.getState().setSidebarOpen(true)
-          }
-        }
-      }
+    const handleBlur = () => {
+      flushChange()
     }
 
     const container = containerRef.current
     container.addEventListener('keydown', handleKeyDown, true)
     container.addEventListener('click', handleDomClick)
+    container.addEventListener('blur', handleBlur, true)
+    editor.on('blur', handleBlur)
 
     const handleScrollOrResize = () => {
       updateLineIndicators()
@@ -727,29 +537,42 @@ export function MuyaEditor({
     window.addEventListener('resize', handleScrollOrResize)
     scrollContainer.addEventListener('scroll', handleScrollOrResize)
 
-    const observer = new MutationObserver(() => {
-      updateLineIndicators()
-    })
-    observer.observe(container, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      characterData: true,
-    })
-
-    const unsubscribeStore = useCommentStore.subscribe(() => {
-      updateLineIndicators()
+    let lastThreadsJson = ''
+    const unsubscribeStore = useCommentStore.subscribe((state) => {
+      const docThreads = state.threads.filter((t) => t.docId === docId)
+      const key = JSON.stringify({
+        activeId: state.activeThreadId,
+        threads: docThreads.map((t) => ({
+          id: t.id,
+          isResolved: t.isResolved,
+        })),
+      })
+      if (key !== lastThreadsJson) {
+        lastThreadsJson = key
+        updateBlockOffsets(editor)
+        editor.forceUpdateDecorations()
+        updateLineIndicators()
+      }
     })
 
     setTimeout(updateLineIndicators, 100)
 
     if (editorRef) {
       editorRef.current = {
-        undo: () => editor.undo(),
-        redo: () => editor.redo(),
+        undo: () => {
+          editor.undo()
+          flushChange()
+        },
+        redo: () => {
+          editor.redo()
+          flushChange()
+        },
         canUndo: () => editor.canUndo(),
         canRedo: () => editor.canRedo(),
-        getMarkdown: () => editor.getMarkdown(),
+        getMarkdown: () => {
+          flushChange()
+          return editor.getMarkdown()
+        },
         getTOC: () => editor.getTOC(),
         scrollToText: (text: string) => {
           if (!containerRef.current || !text.trim()) return
@@ -796,10 +619,30 @@ export function MuyaEditor({
     }
 
     return () => {
-      observer.disconnect()
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
+      if (tocDebounceTimerRef.current) {
+        clearTimeout(tocDebounceTimerRef.current)
+      }
+      if (rafIndicatorsTimerRef.current) {
+        cancelAnimationFrame(rafIndicatorsTimerRef.current)
+      }
+      try {
+        const currentMd = editor.getMarkdown()
+        if (currentMd && currentMd !== lastEmittedValueRef.current) {
+          lastEmittedValueRef.current = currentMd
+          lastPropContentRef.current = currentMd
+          onChangeRef.current(currentMd)
+        }
+      } catch (err) {
+        void err
+      }
       unsubscribeStore()
       container.removeEventListener('keydown', handleKeyDown, true)
       container.removeEventListener('click', handleDomClick)
+      container.removeEventListener('blur', handleBlur, true)
       window.removeEventListener('resize', handleScrollOrResize)
       scrollContainer.removeEventListener('scroll', handleScrollOrResize)
       editor.destroy()
@@ -810,25 +653,29 @@ export function MuyaEditor({
     }
   })
 
+  /* eslint-disable react-hooks/refs */
   if (muyaRef.current) {
     const editor = muyaRef.current
     if (editor.getReadOnly() !== readOnly) {
       editor.setReadOnly(readOnly)
     }
-    if (editor.getIsSuggestingMode() !== isSuggestingMode) {
-      editor.setIsSuggestingMode(isSuggestingMode)
-    }
-    if (content !== lastEmittedValueRef.current) {
-      lastEmittedValueRef.current = content
-      if (!editor.hasFocus() && editor.getMarkdown() !== content) {
+    if (content !== lastPropContentRef.current) {
+      lastPropContentRef.current = content
+      if (content !== lastEmittedValueRef.current && editor.getMarkdown() !== content) {
         try {
+          lastEmittedValueRef.current = content
           editor.replaceContent(content)
+          updateBlockOffsets(editor)
+          editor.forceUpdateDecorations()
           setTocItems(editor.getTOC())
-          setTimeout(updateLineIndicators, 50)
-        } catch {}
+          updateLineIndicators()
+        } catch (err) {
+          void err
+        }
       }
     }
   }
+  /* eslint-enable react-hooks/refs */
 
   const renderedToc =
     tocItems.length > 0
@@ -842,42 +689,42 @@ export function MuyaEditor({
 
   return (
     <div
-      className={`relative h-full w-full overflow-y-auto overflow-x-hidden p-6 select-text bg-background muya-container ${className} ${readOnly ? 'mu-read-only' : ''}`}
+      className={`muya-container relative h-full w-full overflow-x-hidden overflow-y-auto bg-background p-6 select-text ${className} ${readOnly ? 'mu-read-only' : ''}`}
     >
-      <div className='relative max-w-5xl mx-auto flex items-start justify-center gap-8 pb-16'>
+      <div className='relative mx-auto flex max-w-5xl items-start justify-center gap-8 pb-16'>
         {showToc && (
-          <aside className='sticky top-2 w-48 2xl:w-56 shrink-0 select-none py-1'>
-            <div className='flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2.5 px-1'>
+          <aside className='sticky top-2 w-48 shrink-0 py-1 select-none 2xl:w-56'>
+            <div className='mb-2.5 flex items-center gap-1.5 px-1 text-[10px] font-semibold tracking-wider text-muted-foreground/70 uppercase'>
               <AlignLeft className='size-3 text-muted-foreground' />
               <span>On this page</span>
             </div>
 
-            <div className='border-l border-border/50 ml-1 pl-2 space-y-0.5 max-h-[calc(100vh-200px)] overflow-y-auto'>
+            <div className='ml-1 max-h-[calc(100vh-200px)] space-y-0.5 overflow-y-auto border-l border-border/50 pl-2'>
               {renderedToc.length > 0 ? (
                 renderedToc.map((h, idx) => {
                   const indentClass =
                     h.level === 1
                       ? 'pl-0 font-medium text-foreground text-xs'
                       : h.level === 2
-                      ? 'pl-2.5 text-muted-foreground hover:text-foreground text-xs'
-                      : h.level === 3
-                      ? 'pl-5 text-muted-foreground/80 hover:text-foreground text-[11px]'
-                      : 'pl-7 text-muted-foreground/60 hover:text-foreground text-[11px]'
+                        ? 'pl-2.5 text-muted-foreground hover:text-foreground text-xs'
+                        : h.level === 3
+                          ? 'pl-5 text-muted-foreground/80 hover:text-foreground text-[11px]'
+                          : 'pl-7 text-muted-foreground/60 hover:text-foreground text-[11px]'
 
                   return (
                     <button
                       key={h.id}
                       type='button'
                       onClick={() => handleHeadingClick(h, idx)}
-                      className={`group block w-full text-left py-0.5 pr-1.5 rounded transition-colors cursor-pointer truncate hover:text-primary ${indentClass}`}
+                      className={`group block w-full cursor-pointer truncate rounded py-0.5 pr-1.5 text-left transition-colors hover:text-primary ${indentClass}`}
                       title={h.text}
                     >
-                      <span className='truncate block'>{h.text}</span>
+                      <span className='block truncate'>{h.text}</span>
                     </button>
                   )
                 })
               ) : (
-                <p className='text-xs text-muted-foreground/60 italic px-1'>
+                <p className='px-1 text-xs text-muted-foreground/60 italic'>
                   No headings found
                 </p>
               )}
@@ -885,8 +732,11 @@ export function MuyaEditor({
           </aside>
         )}
 
-        <div className='flex-1 min-w-0 max-w-3xl relative'>
-          <div ref={containerRef} className='muya-editor-root min-h-[500px]' />
+        <div className='relative max-w-3xl min-w-0 flex-1'>
+          <div
+            ref={containerRef}
+            className={`muya-editor-root min-h-[500px] ${readOnly ? 'mu-read-only' : ''}`}
+          />
 
           {lineIndicators.length > 0 && (
             <div className='mu-line-indicators-container'>
@@ -902,22 +752,10 @@ export function MuyaEditor({
                     }
                     useCommentStore.getState().setSidebarOpen(true)
                   }}
-                  className={`mu-line-indicator-btn size-6 rounded-full border shadow-sm transition-all cursor-pointer hover:scale-110 ${
-                    ind.type === 'suggestion'
-                      ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25'
-                      : 'bg-amber-500/15 border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25'
-                  }`}
-                  title={
-                    ind.type === 'suggestion'
-                      ? `${ind.count} suggestion(s) on this line`
-                      : `${ind.count} comment(s) on this line`
-                  }
+                  className='mu-line-indicator-btn size-6 cursor-pointer rounded-full border border-amber-500/50 bg-amber-500/15 text-amber-600 shadow-sm transition-all hover:scale-110 hover:bg-amber-500/25 dark:text-amber-400'
+                  title={`${ind.count} comment(s) on this line`}
                 >
-                  {ind.type === 'suggestion' ? (
-                    <Edit3 className='size-3' />
-                  ) : (
-                    <MessageSquare className='size-3' />
-                  )}
+                  <MessageSquare className='size-3' />
                 </button>
               ))}
             </div>

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
 export type EditorViewMode = 'code' | 'split' | 'preview'
-export type MarkdownPreviewMode = 'view' | 'suggesting' | 'edit'
+export type MarkdownPreviewMode = 'view' | 'edit'
 
 export interface UserEditorPreference {
   viewMode: EditorViewMode
@@ -31,8 +31,14 @@ interface EditorPreferenceState {
     userId: string | null | undefined,
     active: boolean
   ) => void
-  setSyncScroll: (userId: string | null | undefined, syncScroll: boolean) => void
-  setShowOutline: (userId: string | null | undefined, showOutline: boolean) => void
+  setSyncScroll: (
+    userId: string | null | undefined,
+    syncScroll: boolean
+  ) => void
+  setShowOutline: (
+    userId: string | null | undefined,
+    showOutline: boolean
+  ) => void
   setPreviewMode: (
     userId: string | null | undefined,
     previewMode: MarkdownPreviewMode

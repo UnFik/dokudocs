@@ -13,6 +13,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -31,7 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { toast } from 'sonner'
 
 export interface DbmlVisualCanvasProps {
   docId?: string
@@ -140,7 +140,10 @@ function getPathLength(points: JointPoint[]): number {
   }, 0)
 }
 
-function getPointAtDistance(points: JointPoint[], targetDistance: number): JointPoint {
+function getPointAtDistance(
+  points: JointPoint[],
+  targetDistance: number
+): JointPoint {
   let traversed = 0
 
   for (let index = 0; index < points.length - 1; index++) {
@@ -152,7 +155,10 @@ function getPointAtDistance(points: JointPoint[], targetDistance: number): Joint
     if (length < 0.5) continue
 
     if (traversed + length >= targetDistance || index === points.length - 2) {
-      const ratio = Math.max(0, Math.min(1, (targetDistance - traversed) / length))
+      const ratio = Math.max(
+        0,
+        Math.min(1, (targetDistance - traversed) / length)
+      )
       return {
         x: Math.round(start.x + dx * ratio),
         y: Math.round(start.y + dy * ratio),
@@ -193,7 +199,10 @@ function getDistanceAlongPath(
 
     const ratio = Math.max(
       0,
-      Math.min(1, ((target.x - start.x) * dx + (target.y - start.y) * dy) / lengthSquared)
+      Math.min(
+        1,
+        ((target.x - start.x) * dx + (target.y - start.y) * dy) / lengthSquared
+      )
     )
     const distance = traversed + ratio * length
     const gap = Math.hypot(
@@ -220,7 +229,9 @@ export function getGhostJointCandidates(
   const distances = [0]
 
   for (let index = 1; index < joints.length - 1; index++) {
-    distances.push(getDistanceAlongPath(pathPoints, joints[index], distances[index - 1]))
+    distances.push(
+      getDistanceAlongPath(pathPoints, joints[index], distances[index - 1])
+    )
   }
   distances.push(pathLength)
 
@@ -514,7 +525,9 @@ export function DbmlVisualCanvas({
     applyCanvasTransform(initialPan, initialZoom)
   }, [initialPan, initialZoom, applyCanvasTransform])
 
-  const [tablePositions, setTablePositions] = useState<Record<string, TablePosition>>(() => {
+  const [tablePositions, setTablePositions] = useState<
+    Record<string, TablePosition>
+  >(() => {
     if (docId) {
       try {
         const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
@@ -529,20 +542,22 @@ export function DbmlVisualCanvas({
     return {}
   })
 
-  const [edgeJoints, setEdgeJoints] = useState<Record<string, JointPoint[]>>(() => {
-    if (docId) {
-      try {
-        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          if (parsed.edgeJoints) {
-            return parsed.edgeJoints
+  const [edgeJoints, setEdgeJoints] = useState<Record<string, JointPoint[]>>(
+    () => {
+      if (docId) {
+        try {
+          const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (parsed.edgeJoints) {
+              return parsed.edgeJoints
+            }
           }
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
+      return {}
     }
-    return {}
-  })
+  )
 
   const [draggingJoint, setDraggingJoint] = useState<{
     relKey: string
@@ -574,11 +589,17 @@ export function DbmlVisualCanvas({
   } | null>(null)
 
   const [hoveredTable, setHoveredTable] = useState<string | null>(null)
-  const [hoveredField, setHoveredField] = useState<{ table: string; column: string } | null>(null)
+  const [hoveredField, setHoveredField] = useState<{
+    table: string
+    column: string
+  } | null>(null)
   const [hoveredRelation, setHoveredRelation] = useState<string | null>(null)
 
   const [selectedTable, setSelectedTable] = useState<string | null>(null)
-  const [selectedField, setSelectedField] = useState<{ table: string; column: string } | null>(null)
+  const [selectedField, setSelectedField] = useState<{
+    table: string
+    column: string
+  } | null>(null)
   const [selectedRelation, setSelectedRelation] = useState<string | null>(null)
 
   useEffect(() => {
@@ -614,263 +635,267 @@ export function DbmlVisualCanvas({
         }
       }
 
-    const relations: ParsedRelation[] = []
+      const relations: ParsedRelation[] = []
 
-    const standaloneRefRegex =
-      /Ref\s*(?:[\w.-]+)?\s*:\s*([\w."]+)\.([\w."]+)\s*([><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/gi
-    let refMatch: RegExpExecArray | null
-    while ((refMatch = standaloneRefRegex.exec(cleanContent)) !== null) {
-      relations.push({
-        fromTable: refMatch[1].replace(/["']/g, '').trim(),
-        fromColumn: refMatch[2].replace(/["']/g, '').trim(),
-        toTable: refMatch[4].replace(/["']/g, '').trim(),
-        toColumn: refMatch[5].replace(/["']/g, '').trim(),
-        relType: refMatch[3].trim(),
-        raw: refMatch[0],
-      })
-    }
-
-    const refBlockRegex = /Ref\s*(?:[\w.-]+)?\s*\{([^}]+)\}/gi
-    let blockMatch: RegExpExecArray | null
-    while ((blockMatch = refBlockRegex.exec(cleanContent)) !== null) {
-      const blockContent = blockMatch[1]
-      const lineRefs = blockContent.split('\n')
-      lineRefs.forEach((line) => {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('//')) return
-        const lineMatch = trimmed.match(
-          /([\w."]+)\.([\w."]+)\s*([><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/
-        )
-        if (lineMatch) {
-          relations.push({
-            fromTable: lineMatch[1].replace(/["']/g, '').trim(),
-            fromColumn: lineMatch[2].replace(/["']/g, '').trim(),
-            toTable: lineMatch[4].replace(/["']/g, '').trim(),
-            toColumn: lineMatch[5].replace(/["']/g, '').trim(),
-            relType: lineMatch[3].trim(),
-            raw: lineMatch[0],
-          })
-        }
-      })
-    }
-
-    const tableGroups: ParsedTableGroup[] = []
-    const groupRegex =
-      /TableGroup\s+(\w+)(?:\s+as\s+(\w+))?\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}/gi
-    let groupMatch: RegExpExecArray | null
-    while ((groupMatch = groupRegex.exec(cleanContent)) !== null) {
-      const groupName = groupMatch[1]
-      const groupOpts = groupMatch[3] || ''
-      const groupBody = groupMatch[4]
-      const groupTables = groupBody
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l && !l.startsWith('//'))
-
-      let groupColor: string | undefined = undefined
-      const colorMatch = groupOpts.match(
-        /(?:headercolor|color|fill)\s*:\s*['"]?([#\w]+)['"]?/i
-      )
-      if (colorMatch) {
-        groupColor = colorMatch[1]
+      const standaloneRefRegex =
+        /Ref\s*(?:[\w.-]+)?\s*:\s*([\w."]+)\.([\w."]+)\s*([><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/gi
+      let refMatch: RegExpExecArray | null
+      while ((refMatch = standaloneRefRegex.exec(cleanContent)) !== null) {
+        relations.push({
+          fromTable: refMatch[1].replace(/["']/g, '').trim(),
+          fromColumn: refMatch[2].replace(/["']/g, '').trim(),
+          toTable: refMatch[4].replace(/["']/g, '').trim(),
+          toColumn: refMatch[5].replace(/["']/g, '').trim(),
+          relType: refMatch[3].trim(),
+          raw: refMatch[0],
+        })
       }
 
-      tableGroups.push({
-        name: groupName,
-        color: groupColor,
-        tables: groupTables,
-      })
-    }
-
-    const tables: ParsedTable[] = []
-    const tableRegex =
-      /Table\s+([\w."]+)(?:\s+as\s+([\w."]+))?\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}/gi
-
-    let match: RegExpExecArray | null
-    while ((match = tableRegex.exec(cleanContent)) !== null) {
-      const tableName = match[1].replace(/["']/g, '').trim()
-      const alias = match[2]?.replace(/["']/g, '').trim()
-      const tableOpts = match[3] || ''
-      const body = match[4]
-
-      let headerColor: string | undefined = undefined
-      const colorMatch = tableOpts.match(
-        /(?:headercolor|color|fill)\s*:\s*['"]?([#\w]+)['"]?/i
-      )
-      if (colorMatch) {
-        headerColor = colorMatch[1]
-      }
-
-      let indexes: TableIndex[] = []
-      let bodyWithoutIndexes = body
-
-      const indexesMatch = body.match(/indexes\s*\{([^}]+)\}/i)
-      if (indexesMatch) {
-        bodyWithoutIndexes = body.replace(/indexes\s*\{([^}]+)\}/i, '')
-        const idxLines = indexesMatch[1].split('\n')
-        idxLines.forEach((line) => {
+      const refBlockRegex = /Ref\s*(?:[\w.-]+)?\s*\{([^}]+)\}/gi
+      let blockMatch: RegExpExecArray | null
+      while ((blockMatch = refBlockRegex.exec(cleanContent)) !== null) {
+        const blockContent = blockMatch[1]
+        const lineRefs = blockContent.split('\n')
+        lineRefs.forEach((line) => {
           const trimmed = line.trim()
           if (!trimmed || trimmed.startsWith('//')) return
-
-          const compMatch = trimmed.match(/^\(([^)]+)\)(.*)$/)
-          if (compMatch) {
-            const cols = compMatch[1].split(',').map((c) => c.replace(/["']/g, '').trim())
-            const opts = compMatch[2] || ''
-            const nameMatch = opts.match(/name:\s*['"]?([\w]+)['"]?/i)
-            indexes.push({
-              columns: cols,
-              name: nameMatch ? nameMatch[1] : undefined,
-              isUnique: /unique/i.test(opts),
-              isPk: /pk/i.test(opts),
+          const lineMatch = trimmed.match(
+            /([\w."]+)\.([\w."]+)\s*([><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/
+          )
+          if (lineMatch) {
+            relations.push({
+              fromTable: lineMatch[1].replace(/["']/g, '').trim(),
+              fromColumn: lineMatch[2].replace(/["']/g, '').trim(),
+              toTable: lineMatch[4].replace(/["']/g, '').trim(),
+              toColumn: lineMatch[5].replace(/["']/g, '').trim(),
+              relType: lineMatch[3].trim(),
+              raw: lineMatch[0],
             })
-          } else {
-            const singleMatch = trimmed.match(/^([\w."]+)(.*)$/)
-            if (singleMatch) {
-              const col = singleMatch[1].replace(/["']/g, '').trim()
-              const opts = singleMatch[2] || ''
-              const nameMatch = opts.match(/name:\s*['"]?([\w]+)['"]?/i)
-              indexes.push({
-                columns: [col],
-                name: nameMatch ? nameMatch[1] : undefined,
-                isUnique: /unique/i.test(opts),
-                isPk: /pk/i.test(opts),
-              })
-            }
           }
         })
       }
 
-      const lines = bodyWithoutIndexes.split('\n')
-      const columns: TableColumn[] = []
+      const tableGroups: ParsedTableGroup[] = []
+      const groupRegex =
+        /TableGroup\s+(\w+)(?:\s+as\s+(\w+))?\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}/gi
+      let groupMatch: RegExpExecArray | null
+      while ((groupMatch = groupRegex.exec(cleanContent)) !== null) {
+        const groupName = groupMatch[1]
+        const groupOpts = groupMatch[3] || ''
+        const groupBody = groupMatch[4]
+        const groupTables = groupBody
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l && !l.startsWith('//'))
 
-      lines.forEach((line) => {
-        const trimmed = line.trim()
-        if (
-          !trimmed ||
-          trimmed.startsWith('indexes') ||
-          trimmed.startsWith('Note:') ||
-          trimmed.startsWith('//')
+        let groupColor: string | undefined = undefined
+        const colorMatch = groupOpts.match(
+          /(?:headercolor|color|fill)\s*:\s*['"]?([#\w]+)['"]?/i
         )
-          return
+        if (colorMatch) {
+          groupColor = colorMatch[1]
+        }
 
-        const colMatch = trimmed.match(/^([\w."]+)\s+([\w()]+)(.*)$/)
-        if (colMatch) {
-          const colName = colMatch[1].replace(/["']/g, '').trim()
-          const colType = colMatch[2]
-          const colOpts = colMatch[3] || ''
+        tableGroups.push({
+          name: groupName,
+          color: groupColor,
+          tables: groupTables,
+        })
+      }
 
-          let isFk = false
-          let fkTarget: TableColumn['fkTarget'] = undefined
+      const tables: ParsedTable[] = []
+      const tableRegex =
+        /Table\s+([\w."]+)(?:\s+as\s+([\w."]+))?\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}/gi
 
-          const inlineRefMatch = colOpts.match(
-            /ref:\s*([><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/i
-          )
-          if (inlineRefMatch) {
-            const toTable = inlineRefMatch[2].replace(/["']/g, '').trim()
-            const toColumn = inlineRefMatch[3].replace(/["']/g, '').trim()
-            const relType = inlineRefMatch[1].trim()
-            isFk = true
-            fkTarget = {
-              table: toTable,
-              column: toColumn,
-              relType,
+      let match: RegExpExecArray | null
+      while ((match = tableRegex.exec(cleanContent)) !== null) {
+        const tableName = match[1].replace(/["']/g, '').trim()
+        const alias = match[2]?.replace(/["']/g, '').trim()
+        const tableOpts = match[3] || ''
+        const body = match[4]
+
+        let headerColor: string | undefined = undefined
+        const colorMatch = tableOpts.match(
+          /(?:headercolor|color|fill)\s*:\s*['"]?([#\w]+)['"]?/i
+        )
+        if (colorMatch) {
+          headerColor = colorMatch[1]
+        }
+
+        let indexes: TableIndex[] = []
+        let bodyWithoutIndexes = body
+
+        const indexesMatch = body.match(/indexes\s*\{([^}]+)\}/i)
+        if (indexesMatch) {
+          bodyWithoutIndexes = body.replace(/indexes\s*\{([^}]+)\}/i, '')
+          const idxLines = indexesMatch[1].split('\n')
+          idxLines.forEach((line) => {
+            const trimmed = line.trim()
+            if (!trimmed || trimmed.startsWith('//')) return
+
+            const compMatch = trimmed.match(/^\(([^)]+)\)(.*)$/)
+            if (compMatch) {
+              const cols = compMatch[1]
+                .split(',')
+                .map((c) => c.replace(/["']/g, '').trim())
+              const opts = compMatch[2] || ''
+              const nameMatch = opts.match(/name:\s*['"]?([\w]+)['"]?/i)
+              indexes.push({
+                columns: cols,
+                name: nameMatch ? nameMatch[1] : undefined,
+                isUnique: /unique/i.test(opts),
+                isPk: /pk/i.test(opts),
+              })
+            } else {
+              const singleMatch = trimmed.match(/^([\w."]+)(.*)$/)
+              if (singleMatch) {
+                const col = singleMatch[1].replace(/["']/g, '').trim()
+                const opts = singleMatch[2] || ''
+                const nameMatch = opts.match(/name:\s*['"]?([\w]+)['"]?/i)
+                indexes.push({
+                  columns: [col],
+                  name: nameMatch ? nameMatch[1] : undefined,
+                  isUnique: /unique/i.test(opts),
+                  isPk: /pk/i.test(opts),
+                })
+              }
             }
-            relations.push({
-              fromTable: tableName,
-              fromColumn: colName,
-              toTable,
-              toColumn,
-              relType,
-              raw: `[${inlineRefMatch[0]}]`,
-            })
-          }
-
-          const standaloneRel = relations.find(
-            (r) =>
-              (r.fromTable.toLowerCase() === tableName.toLowerCase() &&
-                r.fromColumn.toLowerCase() === colName.toLowerCase()) ||
-              (r.toTable.toLowerCase() === tableName.toLowerCase() &&
-                r.toColumn.toLowerCase() === colName.toLowerCase() &&
-                (r.relType === '<' || r.relType === '<?' || r.relType === '?<'))
-          )
-          if (standaloneRel) {
-            isFk = true
-            fkTarget = {
-              table: standaloneRel.toTable,
-              column: standaloneRel.toColumn,
-              relType: standaloneRel.relType,
-            }
-          }
-
-          columns.push({
-            name: colName,
-            type: colType,
-            isPk: colOpts.includes('pk') || colOpts.includes('primary key'),
-            isFk,
-            isUnique: colOpts.includes('unique'),
-            fkTarget,
           })
         }
-      })
 
-      tables.push({ name: tableName, alias, headerColor, columns, indexes })
-    }
+        const lines = bodyWithoutIndexes.split('\n')
+        const columns: TableColumn[] = []
 
-    const parsedRecords: Record<string, ParsedRecordSet> = {}
-    const recordsRegex = /Records?\s+([\w."]+)\s*\(([^)]+)\)\s*\{([^}]+)\}/gi
-    let recordMatch: RegExpExecArray | null
-    while ((recordMatch = recordsRegex.exec(cleanContent)) !== null) {
-      const rawTableName = recordMatch[1].replace(/["']/g, '').trim()
-      const rawCols = recordMatch[2]
-        .split(',')
-        .map((c) => c.replace(/["']/g, '').trim())
-        .filter(Boolean)
-      const body = recordMatch[3]
-      const rows: string[][] = []
+        lines.forEach((line) => {
+          const trimmed = line.trim()
+          if (
+            !trimmed ||
+            trimmed.startsWith('indexes') ||
+            trimmed.startsWith('Note:') ||
+            trimmed.startsWith('//')
+          )
+            return
 
-      const lines = body.split('\n')
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('//')) continue
+          const colMatch = trimmed.match(/^([\w."]+)\s+([\w()]+)(.*)$/)
+          if (colMatch) {
+            const colName = colMatch[1].replace(/["']/g, '').trim()
+            const colType = colMatch[2]
+            const colOpts = colMatch[3] || ''
 
-        const rowValues: string[] = []
-        const cellRegex =
-          /\s*(?:'([^'\\]*(?:\\.[^'\\]*)*)'|"([^"\\]*(?:\\.[^"\\]*)*)"|([^,]+?))\s*(?:,|$)/g
-        let cellMatch: RegExpExecArray | null
-        while ((cellMatch = cellRegex.exec(trimmed)) !== null) {
-          const val =
-            cellMatch[1] !== undefined
-              ? cellMatch[1]
-              : cellMatch[2] !== undefined
-              ? cellMatch[2]
-              : cellMatch[3]
-          if (val !== undefined) {
-            rowValues.push(val.trim())
+            let isFk = false
+            let fkTarget: TableColumn['fkTarget'] = undefined
+
+            const inlineRefMatch = colOpts.match(
+              /ref:\s*([><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/i
+            )
+            if (inlineRefMatch) {
+              const toTable = inlineRefMatch[2].replace(/["']/g, '').trim()
+              const toColumn = inlineRefMatch[3].replace(/["']/g, '').trim()
+              const relType = inlineRefMatch[1].trim()
+              isFk = true
+              fkTarget = {
+                table: toTable,
+                column: toColumn,
+                relType,
+              }
+              relations.push({
+                fromTable: tableName,
+                fromColumn: colName,
+                toTable,
+                toColumn,
+                relType,
+                raw: `[${inlineRefMatch[0]}]`,
+              })
+            }
+
+            const standaloneRel = relations.find(
+              (r) =>
+                (r.fromTable.toLowerCase() === tableName.toLowerCase() &&
+                  r.fromColumn.toLowerCase() === colName.toLowerCase()) ||
+                (r.toTable.toLowerCase() === tableName.toLowerCase() &&
+                  r.toColumn.toLowerCase() === colName.toLowerCase() &&
+                  (r.relType === '<' ||
+                    r.relType === '<?' ||
+                    r.relType === '?<'))
+            )
+            if (standaloneRel) {
+              isFk = true
+              fkTarget = {
+                table: standaloneRel.toTable,
+                column: standaloneRel.toColumn,
+                relType: standaloneRel.relType,
+              }
+            }
+
+            columns.push({
+              name: colName,
+              type: colType,
+              isPk: colOpts.includes('pk') || colOpts.includes('primary key'),
+              isFk,
+              isUnique: colOpts.includes('unique'),
+              fkTarget,
+            })
           }
-          if (cellRegex.lastIndex >= trimmed.length) break
+        })
+
+        tables.push({ name: tableName, alias, headerColor, columns, indexes })
+      }
+
+      const parsedRecords: Record<string, ParsedRecordSet> = {}
+      const recordsRegex = /Records?\s+([\w."]+)\s*\(([^)]+)\)\s*\{([^}]+)\}/gi
+      let recordMatch: RegExpExecArray | null
+      while ((recordMatch = recordsRegex.exec(cleanContent)) !== null) {
+        const rawTableName = recordMatch[1].replace(/["']/g, '').trim()
+        const rawCols = recordMatch[2]
+          .split(',')
+          .map((c) => c.replace(/["']/g, '').trim())
+          .filter(Boolean)
+        const body = recordMatch[3]
+        const rows: string[][] = []
+
+        const lines = body.split('\n')
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed || trimmed.startsWith('//')) continue
+
+          const rowValues: string[] = []
+          const cellRegex =
+            /\s*(?:'([^'\\]*(?:\\.[^'\\]*)*)'|"([^"\\]*(?:\\.[^"\\]*)*)"|([^,]+?))\s*(?:,|$)/g
+          let cellMatch: RegExpExecArray | null
+          while ((cellMatch = cellRegex.exec(trimmed)) !== null) {
+            const val =
+              cellMatch[1] !== undefined
+                ? cellMatch[1]
+                : cellMatch[2] !== undefined
+                  ? cellMatch[2]
+                  : cellMatch[3]
+            if (val !== undefined) {
+              rowValues.push(val.trim())
+            }
+            if (cellRegex.lastIndex >= trimmed.length) break
+          }
+
+          if (rowValues.length > 0) {
+            rows.push(rowValues)
+          }
         }
 
-        if (rowValues.length > 0) {
-          rows.push(rowValues)
+        if (rawCols.length > 0 && rows.length > 0) {
+          parsedRecords[rawTableName.toLowerCase()] = {
+            tableName: rawTableName,
+            columns: rawCols,
+            rows,
+          }
         }
       }
 
-      if (rawCols.length > 0 && rows.length > 0) {
-        parsedRecords[rawTableName.toLowerCase()] = {
-          tableName: rawTableName,
-          columns: rawCols,
-          rows,
-        }
+      return {
+        parsedTables: tables,
+        parsedRelations: relations,
+        parsedTableGroups: tableGroups,
+        parsedRecords,
       }
-    }
-
-    return {
-      parsedTables: tables,
-      parsedRelations: relations,
-      parsedTableGroups: tableGroups,
-      parsedRecords,
-    }
-  }, [content])
+    }, [content])
 
   const calculateAutoLayout = useCallback(
     (tables: ParsedTable[], groups: ParsedTableGroup[]) => {
@@ -1098,8 +1123,10 @@ export function DbmlVisualCanvas({
         const activationDistance = draggingJoint.isGhost ? 3 : 1
         if (
           !draggingJoint.hasMoved &&
-          Math.hypot(e.clientX - draggingJoint.startX, e.clientY - draggingJoint.startY) <=
-            activationDistance
+          Math.hypot(
+            e.clientX - draggingJoint.startX,
+            e.clientY - draggingJoint.startY
+          ) <= activationDistance
         )
           return
         draggingJoint.hasMoved = true
@@ -1477,7 +1504,10 @@ export function DbmlVisualCanvas({
         const safeToColIdx = toColIdx >= 0 ? toColIdx : 0
 
         const fromY =
-          fromPos.y + HEADER_HEIGHT + safeFromColIdx * ROW_HEIGHT + ROW_HEIGHT / 2
+          fromPos.y +
+          HEADER_HEIGHT +
+          safeFromColIdx * ROW_HEIGHT +
+          ROW_HEIGHT / 2
         const toY =
           toPos.y + HEADER_HEIGHT + safeToColIdx * ROW_HEIGHT + ROW_HEIGHT / 2
 
@@ -1501,7 +1531,8 @@ export function DbmlVisualCanvas({
           fromIsLeft,
           []
         )
-        const interiorJoints = customJoints ?? getDefaultEdgeJoints(defaultGeometry.cleaned)
+        const interiorJoints =
+          customJoints ?? getDefaultEdgeJoints(defaultGeometry.cleaned)
         const { cleaned } =
           customJoints === undefined
             ? defaultGeometry
@@ -1727,7 +1758,7 @@ export function DbmlVisualCanvas({
           <Sparkles className='size-3.5 text-emerald-500' />
           <span>Auto Layout</span>
         </Button>
-        <div className='h-4 w-px bg-border/60 mx-0.5' />
+        <div className='mx-0.5 h-4 w-px bg-border/60' />
         <Button
           variant='ghost'
           size='icon'
@@ -1739,7 +1770,7 @@ export function DbmlVisualCanvas({
         </Button>
         <span
           ref={zoomBadgeRef}
-          className='px-1 font-mono text-[10px] font-semibold text-muted-foreground min-w-10 text-center'
+          className='min-w-10 px-1 text-center font-mono text-[10px] font-semibold text-muted-foreground'
         >
           {Math.round(zoomRef.current * 100)}%
         </span>
@@ -1777,7 +1808,7 @@ export function DbmlVisualCanvas({
       >
         {parsedTables.length === 0 ? (
           <div className='flex h-full min-h-[300px] flex-col items-center justify-center text-xs text-muted-foreground'>
-            <Layers className='size-8 opacity-30 mb-2' />
+            <Layers className='mb-2 size-8 opacity-30' />
             <p>No valid DBML table definitions found in schema code.</p>
           </div>
         ) : (
@@ -1805,7 +1836,9 @@ export function DbmlVisualCanvas({
                     backgroundColor: grp.color ? `${grp.color}0d` : undefined,
                   }}
                   className={`pointer-events-none z-10 rounded-2xl border-2 border-dashed p-3 ${
-                    grp.color ? '' : 'border-emerald-500/30 bg-emerald-500/[0.03]'
+                    grp.color
+                      ? ''
+                      : 'border-emerald-500/30 bg-emerald-500/[0.03]'
                   }`}
                 >
                   <div
@@ -1815,7 +1848,7 @@ export function DbmlVisualCanvas({
                     }`}
                   >
                     <Layers className='size-3.5' />
-                    <span className='font-mono uppercase tracking-wider text-[11px]'>
+                    <span className='font-mono text-[11px] tracking-wider uppercase'>
                       {grp.name}
                     </span>
                   </div>
@@ -1824,7 +1857,7 @@ export function DbmlVisualCanvas({
             })}
 
             <svg
-              className='pointer-events-none absolute inset-0 size-full overflow-visible z-20'
+              className='pointer-events-none absolute inset-0 z-20 size-full overflow-visible'
               xmlns='http://www.w3.org/2000/svg'
             >
               {relationLines.map((line) => {
@@ -1844,11 +1877,7 @@ export function DbmlVisualCanvas({
                     onMouseEnter={() => setHoveredRelation(line.id)}
                     onMouseMove={(e) =>
                       line.isDirectlyActive &&
-                      handleRelationMouseMove(
-                        e,
-                        line.id,
-                        line.ghostCandidates
-                      )
+                      handleRelationMouseMove(e, line.id, line.ghostCandidates)
                     }
                     onMouseLeave={() => {
                       setHoveredRelation(null)
@@ -1889,8 +1918,8 @@ export function DbmlVisualCanvas({
                       strokeLinejoin='round'
                       className={
                         line.isActive
-                          ? 'text-emerald-500 transition-colors pointer-events-none'
-                          : 'text-muted-foreground/45 transition-colors pointer-events-none'
+                          ? 'pointer-events-none text-emerald-500 transition-colors'
+                          : 'pointer-events-none text-muted-foreground/45 transition-colors'
                       }
                     />
 
@@ -1922,7 +1951,7 @@ export function DbmlVisualCanvas({
                       x={line.startX + (line.startX < line.endX ? 8 : -8)}
                       y={line.startY - 5}
                       textAnchor={line.startX < line.endX ? 'start' : 'end'}
-                      className={`font-mono text-[9px] font-bold pointer-events-none ${
+                      className={`pointer-events-none font-mono text-[9px] font-bold ${
                         line.isActive
                           ? 'fill-emerald-500'
                           : 'fill-muted-foreground/80'
@@ -1940,7 +1969,7 @@ export function DbmlVisualCanvas({
                       x={line.endX + (line.startX < line.endX ? -8 : 8)}
                       y={line.endY - 5}
                       textAnchor={line.startX < line.endX ? 'end' : 'start'}
-                      className={`font-mono text-[9px] font-bold pointer-events-none ${
+                      className={`pointer-events-none font-mono text-[9px] font-bold ${
                         line.isActive
                           ? 'fill-emerald-500'
                           : 'fill-muted-foreground/80'
@@ -1956,7 +1985,8 @@ export function DbmlVisualCanvas({
 
                     {line.isDirectlyActive &&
                       line.joints.map((joint, jIdx) => {
-                        const isEndpoint = jIdx === 0 || jIdx === line.joints.length - 1
+                        const isEndpoint =
+                          jIdx === 0 || jIdx === line.joints.length - 1
                         const interiorIndex = jIdx - 1
                         const isThisJointDragging =
                           !isEndpoint &&
@@ -2010,7 +2040,7 @@ export function DbmlVisualCanvas({
                               r={isThisJointDragging ? 8 : 6}
                               fill='#10b981'
                               fillOpacity={0.25}
-                              className='animate-pulse pointer-events-none'
+                              className='pointer-events-none animate-pulse'
                             />
 
                             <circle
@@ -2075,12 +2105,12 @@ export function DbmlVisualCanvas({
                         }
                         width={108}
                         height={32}
-                        className='overflow-visible pointer-events-auto'
+                        className='pointer-events-auto overflow-visible'
                       >
                         <button
                           type='button'
                           onClick={(e) => handleResetEdgeJoints(e, line.id)}
-                          className='flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background/95 hover:bg-destructive hover:text-destructive-foreground text-foreground border border-border shadow-lg text-[10px] font-semibold transition-colors duration-150 backdrop-blur-md cursor-pointer select-none'
+                          className='hover:text-destructive-foreground flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background/95 px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-lg backdrop-blur-md transition-colors duration-150 select-none hover:bg-destructive'
                           title='Reset joints to default effective edge'
                         >
                           <RotateCcw className='h-3 w-3 shrink-0' />
@@ -2121,12 +2151,12 @@ export function DbmlVisualCanvas({
                   onMouseDown={(e) => handleMouseDownTable(table.name, e)}
                   onMouseEnter={() => setHoveredTable(table.name)}
                   onMouseLeave={() => setHoveredTable(null)}
-                  className={`group/table z-30 flex flex-col rounded-xl border bg-card shadow-sm cursor-grab active:cursor-grabbing transition-[border-color,box-shadow] duration-150 ${
+                  className={`group/table z-30 flex cursor-grab flex-col rounded-xl border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 active:cursor-grabbing ${
                     isSelected
-                      ? 'border-emerald-500 ring-1 ring-emerald-500/30 shadow-md'
+                      ? 'border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
                       : isHovered
-                      ? 'border-emerald-500/60 shadow-sm'
-                      : 'border-border/80 hover:border-border hover:shadow-md'
+                        ? 'border-emerald-500/60 shadow-sm'
+                        : 'border-border/80 hover:border-border hover:shadow-md'
                   }`}
                 >
                   <div
@@ -2138,15 +2168,15 @@ export function DbmlVisualCanvas({
                     onClick={() => {
                       onNavigateToSource?.(table.name)
                     }}
-                    className={`flex items-center justify-between border-b px-3 py-2.5 transition-colors rounded-t-[11px] cursor-pointer ${
+                    className={`flex cursor-pointer items-center justify-between rounded-t-[11px] border-b px-3 py-2.5 transition-colors ${
                       table.headerColor
                         ? 'border-black/15 text-white'
                         : 'border-border/80 bg-muted/60 text-foreground'
                     }`}
                   >
-                    <div className='flex items-center gap-1.5 min-w-0'>
+                    <div className='flex min-w-0 items-center gap-1.5'>
                       <span
-                        className={`font-mono text-xs font-bold truncate ${
+                        className={`truncate font-mono text-xs font-bold ${
                           table.headerColor ? 'text-white' : 'text-foreground'
                         }`}
                       >
@@ -2154,7 +2184,7 @@ export function DbmlVisualCanvas({
                       </span>
                       {table.alias && (
                         <span
-                          className={`text-[10px] font-mono font-normal ${
+                          className={`font-mono text-[10px] font-normal ${
                             table.headerColor
                               ? 'text-white/80'
                               : 'text-muted-foreground'
@@ -2164,7 +2194,7 @@ export function DbmlVisualCanvas({
                         </span>
                       )}
                     </div>
-                    <div className='flex items-center gap-1 shrink-0'>
+                    <div className='flex shrink-0 items-center gap-1'>
                       {recordSet && (
                         <Button
                           variant='ghost'
@@ -2174,7 +2204,7 @@ export function DbmlVisualCanvas({
                             setViewingRecordsTable(recordSet)
                             setRecordSearchQuery('')
                           }}
-                          className={`size-5 rounded p-0 opacity-0 group-hover/table:opacity-100 transition-opacity ${
+                          className={`size-5 rounded p-0 opacity-0 transition-opacity group-hover/table:opacity-100 ${
                             table.headerColor
                               ? 'text-white hover:bg-black/25 hover:text-white'
                               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
@@ -2186,9 +2216,9 @@ export function DbmlVisualCanvas({
                       )}
                       <Badge
                         variant='outline'
-                        className={`text-[10px] font-mono px-1.5 py-0 shrink-0 ${
+                        className={`shrink-0 px-1.5 py-0 font-mono text-[10px] ${
                           table.headerColor
-                            ? 'bg-black/25 text-white border-white/25 shadow-xs'
+                            ? 'border-white/25 bg-black/25 text-white shadow-xs'
                             : 'bg-background/80'
                         }`}
                       >
@@ -2198,7 +2228,7 @@ export function DbmlVisualCanvas({
                   </div>
 
                   <div
-                    className={`divide-y divide-border/40 p-1 bg-background ${
+                    className={`divide-y divide-border/40 bg-background p-1 ${
                       table.indexes.length > 0 ? '' : 'rounded-b-[11px]'
                     }`}
                   >
@@ -2215,15 +2245,12 @@ export function DbmlVisualCanvas({
                           hoveredField?.column.toLowerCase() ===
                             col.name.toLowerCase()) ||
                         (hoveredRelation &&
-                          hoveredRelation.includes(
-                            `${table.name}.${col.name}`
-                          ))
+                          hoveredRelation.includes(`${table.name}.${col.name}`))
 
-                      const isFieldRelated =
-                        Boolean(
-                          selectedRelation &&
-                            selectedRelation.includes(`${table.name}.${col.name}`)
-                        )
+                      const isFieldRelated = Boolean(
+                        selectedRelation &&
+                        selectedRelation.includes(`${table.name}.${col.name}`)
+                      )
 
                       const isFieldActive =
                         isFieldSelected || isFieldHovered || isFieldRelated
@@ -2253,13 +2280,13 @@ export function DbmlVisualCanvas({
                             e.stopPropagation()
                             setHoveredField(null)
                           }}
-                          className={`group relative flex items-center justify-between px-2.5 text-xs transition-colors rounded cursor-pointer ${
+                          className={`group relative flex cursor-pointer items-center justify-between rounded px-2.5 text-xs transition-colors ${
                             isFieldActive
-                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-medium'
-                              : 'hover:bg-muted/40 text-foreground'
+                              ? 'bg-emerald-500/15 font-medium text-emerald-600 dark:text-emerald-400'
+                              : 'text-foreground hover:bg-muted/40'
                           }`}
                         >
-                          <div className='flex items-center gap-2 min-w-0 flex-1'>
+                          <div className='flex min-w-0 flex-1 items-center gap-2'>
                             {col.isPk ? (
                               <Key className='size-3.5 shrink-0 text-amber-500' />
                             ) : col.isFk ? (
@@ -2271,29 +2298,27 @@ export function DbmlVisualCanvas({
                                 }`}
                               />
                             ) : (
-                              <div className='size-1.5 rounded-full bg-muted-foreground/30 ml-1' />
+                              <div className='ml-1 size-1.5 rounded-full bg-muted-foreground/30' />
                             )}
-                            <span className='font-mono text-xs truncate'>
+                            <span className='truncate font-mono text-xs'>
                               {col.name}
                             </span>
                           </div>
 
-                          <div className='flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground shrink-0'>
+                          <div className='flex shrink-0 items-center gap-1.5 font-mono text-[10px] text-muted-foreground'>
                             <span>{col.type}</span>
                             {col.isPk && (
-                              <span className='rounded bg-amber-500/15 px-1 py-0.2 text-[9px] font-bold text-amber-600 dark:text-amber-400'>
+                              <span className='py-0.2 rounded bg-amber-500/15 px-1 text-[9px] font-bold text-amber-600 dark:text-amber-400'>
                                 PK
                               </span>
                             )}
                             {col.isFk && (
-                              <span
-                                className='flex items-center gap-0.5 rounded bg-blue-500/15 px-1.5 py-0.2 text-[9px] font-bold text-blue-600 dark:text-blue-400'
-                              >
+                              <span className='py-0.2 flex items-center gap-0.5 rounded bg-blue-500/15 px-1.5 text-[9px] font-bold text-blue-600 dark:text-blue-400'>
                                 FK
                               </span>
                             )}
                             {col.isUnique && !col.isPk && (
-                              <span className='rounded bg-purple-500/15 px-1 py-0.2 text-[9px] font-bold text-purple-600 dark:text-purple-400'>
+                              <span className='py-0.2 rounded bg-purple-500/15 px-1 text-[9px] font-bold text-purple-600 dark:text-purple-400'>
                                 UQ
                               </span>
                             )}
@@ -2304,8 +2329,8 @@ export function DbmlVisualCanvas({
                   </div>
 
                   {table.indexes.length > 0 && (
-                    <div className='border-t border-border/60 bg-muted/20 p-1 rounded-b-[11px]'>
-                      <div className='px-2 py-1 text-[9px] font-bold tracking-wider uppercase text-muted-foreground'>
+                    <div className='rounded-b-[11px] border-t border-border/60 bg-muted/20 p-1'>
+                      <div className='px-2 py-1 text-[9px] font-bold tracking-wider text-muted-foreground uppercase'>
                         Indexes
                       </div>
                       <div className='space-y-0.5'>
@@ -2313,18 +2338,18 @@ export function DbmlVisualCanvas({
                           <div
                             key={i}
                             style={{ height: `${INDEX_ROW_HEIGHT}px` }}
-                            className='flex items-center justify-between rounded px-2 text-[10px] font-mono hover:bg-muted/40'
+                            className='flex items-center justify-between rounded px-2 font-mono text-[10px] hover:bg-muted/40'
                             title={
                               idx.name
                                 ? `Index: ${idx.name}`
                                 : `Index on (${idx.columns.join(', ')})`
                             }
                           >
-                            <span className='truncate text-foreground/80 max-w-40'>
+                            <span className='max-w-40 truncate text-foreground/80'>
                               ({idx.columns.join(', ')})
                             </span>
                             <span
-                              className={`rounded px-1 py-0.2 text-[8px] font-bold ${
+                              className={`py-0.2 rounded px-1 text-[8px] font-bold ${
                                 idx.isUnique
                                   ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400'
                                   : 'bg-muted text-muted-foreground'
@@ -2353,17 +2378,17 @@ export function DbmlVisualCanvas({
           }
         }}
       >
-        <DialogContent className='sm:max-w-2xl max-h-[85vh] flex flex-col p-6 gap-4'>
-          <DialogHeader className='flex flex-row items-center justify-between gap-4 pb-2 border-b border-border/60 shrink-0'>
+        <DialogContent className='flex max-h-[85vh] flex-col gap-4 p-6 sm:max-w-2xl'>
+          <DialogHeader className='flex shrink-0 flex-row items-center justify-between gap-4 border-b border-border/60 pb-2'>
             <div>
-              <DialogTitle className='text-base font-bold flex items-center gap-2 font-mono'>
+              <DialogTitle className='flex items-center gap-2 font-mono text-base font-bold'>
                 <Database className='size-4 text-emerald-500' />
                 <span>{viewingRecordsTable?.tableName}</span>
-                <Badge variant='outline' className='text-[10px] font-mono'>
+                <Badge variant='outline' className='font-mono text-[10px]'>
                   {viewingRecordsTable?.rows.length} records
                 </Badge>
               </DialogTitle>
-              <DialogDescription className='text-xs text-muted-foreground mt-0.5'>
+              <DialogDescription className='mt-0.5 text-xs text-muted-foreground'>
                 Mock dataset defined in DBML Records block
               </DialogDescription>
             </div>
@@ -2381,7 +2406,9 @@ export function DbmlVisualCanvas({
                     })
                     return obj
                   })
-                  navigator.clipboard.writeText(JSON.stringify(recordsObj, null, 2))
+                  navigator.clipboard.writeText(
+                    JSON.stringify(recordsObj, null, 2)
+                  )
                   toast.success('Records copied as JSON')
                 }}
                 className='h-7 gap-1.5 px-2 text-xs font-medium'
@@ -2400,7 +2427,11 @@ export function DbmlVisualCanvas({
                     ...viewingRecordsTable.rows.map((row) =>
                       row
                         .map((val) => {
-                          if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+                          if (
+                            val.includes(',') ||
+                            val.includes('"') ||
+                            val.includes('\n')
+                          ) {
                             return `"${val.replace(/"/g, '""')}"`
                           }
                           return val
@@ -2421,25 +2452,28 @@ export function DbmlVisualCanvas({
           </DialogHeader>
 
           <div className='relative shrink-0'>
-            <Search className='absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground' />
+            <Search className='absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground' />
             <Input
               placeholder='Search in records...'
               value={recordSearchQuery}
               onChange={(e) => setRecordSearchQuery(e.target.value)}
-              className='h-8 pl-8 text-xs bg-muted/20'
+              className='h-8 bg-muted/20 pl-8 text-xs'
             />
           </div>
 
-          <div className='flex-1 overflow-auto rounded-lg border border-border/80 min-h-0 bg-card'>
+          <div className='min-h-0 flex-1 overflow-auto rounded-lg border border-border/80 bg-card'>
             {filteredRows.length > 0 ? (
               <Table>
-                <TableHeader className='bg-muted/50 sticky top-0 z-10'>
+                <TableHeader className='sticky top-0 z-10 bg-muted/50'>
                   <TableRow>
-                    <TableHead className='w-12 text-[11px] font-mono text-center font-bold'>
+                    <TableHead className='w-12 text-center font-mono text-[11px] font-bold'>
                       #
                     </TableHead>
                     {viewingRecordsTable?.columns.map((col) => (
-                      <TableHead key={col} className='text-[11px] font-mono font-bold'>
+                      <TableHead
+                        key={col}
+                        className='font-mono text-[11px] font-bold'
+                      >
                         {col}
                       </TableHead>
                     ))}
@@ -2447,12 +2481,18 @@ export function DbmlVisualCanvas({
                 </TableHeader>
                 <TableBody>
                   {filteredRows.map((row, rowIdx) => (
-                    <TableRow key={rowIdx} className='hover:bg-muted/30 transition-colors'>
-                      <TableCell className='text-[11px] font-mono text-center text-muted-foreground'>
+                    <TableRow
+                      key={rowIdx}
+                      className='transition-colors hover:bg-muted/30'
+                    >
+                      <TableCell className='text-center font-mono text-[11px] text-muted-foreground'>
                         {rowIdx + 1}
                       </TableCell>
                       {row.map((cellVal, cellIdx) => (
-                        <TableCell key={cellIdx} className='text-xs font-mono py-2'>
+                        <TableCell
+                          key={cellIdx}
+                          className='py-2 font-mono text-xs'
+                        >
                           {cellVal}
                         </TableCell>
                       ))}
@@ -2461,8 +2501,8 @@ export function DbmlVisualCanvas({
                 </TableBody>
               </Table>
             ) : (
-              <div className='flex flex-col items-center justify-center p-8 text-center text-muted-foreground text-xs'>
-                <Table2 className='size-8 opacity-40 mb-2' />
+              <div className='flex flex-col items-center justify-center p-8 text-center text-xs text-muted-foreground'>
+                <Table2 className='mb-2 size-8 opacity-40' />
                 <span>No records match your search filter</span>
               </div>
             )}

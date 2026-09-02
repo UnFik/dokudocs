@@ -9,6 +9,8 @@ import {
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
+import { useCommentStore } from '@/stores/comment-store'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { handleServerError } from '@/lib/handle-server-error'
 import { DirectionProvider } from './context/direction-provider'
 import { FontProvider } from './context/font-provider'
@@ -17,6 +19,11 @@ import { ThemeProvider } from './context/theme-provider'
 import { routeTree } from './routeTree.gen'
 // Styles
 import './styles/index.css'
+
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { useCommentStore: unknown }).useCommentStore = useCommentStore
+  ;(window as unknown as { useDokudocsStore: unknown }).useDokudocsStore = useDokudocsStore
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

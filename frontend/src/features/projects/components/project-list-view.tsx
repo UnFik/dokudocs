@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { FolderPlus, Plus, Search } from 'lucide-react'
-import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { CreateDocDialog } from '@/features/docs/components/create-doc-dialog'
 import { CreateProjectDialog } from './create-project-dialog'
 import { ProjectCard } from './project-card'
@@ -33,7 +33,7 @@ export function ProjectListView() {
   return (
     <>
       <Header fixed>
-        <div className='flex items-center gap-2 font-semibold text-sm'>
+        <div className='flex items-center gap-2 text-sm font-semibold'>
           <span>Projects</span>
         </div>
         <div className='ml-auto flex items-center gap-2.5'>
@@ -48,8 +48,8 @@ export function ProjectListView() {
         </div>
       </Header>
 
-      <Main className='space-y-6 pb-12 pt-4'>
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-border/40 pb-4'>
+      <Main className='space-y-6 pt-4 pb-12'>
+        <div className='flex flex-col gap-3 border-b border-border/40 pb-4 sm:flex-row sm:items-center sm:justify-between'>
           <div>
             <h1 className='text-2xl font-bold tracking-tight text-foreground'>
               All Projects
@@ -60,7 +60,7 @@ export function ProjectListView() {
           </div>
 
           <div className='relative w-full max-w-xs'>
-            <Search className='absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground' />
+            <Search className='absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground' />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -83,7 +83,7 @@ export function ProjectListView() {
             </p>
             <Button
               size='sm'
-              className='mt-5 text-xs gap-1.5'
+              className='mt-5 gap-1.5 text-xs'
               onClick={() => setCreateProjectOpen(true)}
             >
               <Plus className='size-3.5' />

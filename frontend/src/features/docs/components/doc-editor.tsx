@@ -1,13 +1,15 @@
+import { useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import { useCommentStore } from '@/stores/comment-store'
+import { useTheme } from '@/context/theme-provider'
+import { Button } from '@/components/ui/button'
 import { useDocEditor } from '../hooks/use-doc-editor'
 import { DbmlEditor } from './dbml-editor'
 import { EditorHeader } from './editor-header'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
-import { Button } from '@/components/ui/button'
-import { useTheme } from '@/context/theme-provider'
-import { useCommentStore } from '@/stores/comment-store'
+import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
 
 export function DocEditor() {
   const { docId } = useParams({ from: '/docs/$docId' })
@@ -26,6 +28,8 @@ export function DocEditor() {
     setTitle,
     setContent,
   } = useDocEditor(docId)
+
+  const [isMermaidExportOpen, setIsMermaidExportOpen] = useState(false)
 
   const isSidebarOpen = useCommentStore((state) => state.isSidebarOpen)
   const toggleSidebar = useCommentStore((state) => state.toggleSidebar)
@@ -139,6 +143,7 @@ export function DocEditor() {
         isDirty={isDirty}
         lastSaved={lastSaved}
         onTitleChange={setTitle}
+        onExportDiagram={doc.type === 'mermaid' ? () => setIsMermaidExportOpen(true) : undefined}
         onExportCode={handleExportCode}
         onExportCopySvg={isDiagram ? handleExportCopySvg : undefined}
         onExportSvg={isDiagram ? handleExportSvg : undefined}
@@ -160,9 +165,23 @@ export function DocEditor() {
           <DbmlEditor docId={doc.id} content={content} onChange={setContent} />
         )}
         {doc.type === 'mermaid' && (
-          <MermaidEditor docId={doc.id} content={content} onChange={setContent} />
+          <MermaidEditor
+            docId={doc.id}
+            content={content}
+            onChange={setContent}
+          />
         )}
       </div>
+
+      {doc.type === 'mermaid' && (
+        <MermaidExportDialog
+          open={isMermaidExportOpen}
+          onOpenChange={setIsMermaidExportOpen}
+          docTitle={title}
+          content={content}
+          svg={getDiagramSvg() || ''}
+        />
+      )}
     </div>
   )
 }

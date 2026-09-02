@@ -10,15 +10,19 @@ export function NavigationProgress() {
   const router = useRouter()
 
   useMountEffect(() => {
-    const unsubBeforeLoad = router.subscribe('onBeforeLoad', () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current)
+    const unsubBeforeLoad = router.subscribe(
+      'onBeforeLoad',
+      ({ pathChanged }) => {
+        if (!pathChanged) return
+        if (timerRef.current) {
+          clearTimeout(timerRef.current)
+        }
+        timerRef.current = setTimeout(() => {
+          isStartedRef.current = true
+          ref.current?.continuousStart()
+        }, 150)
       }
-      timerRef.current = setTimeout(() => {
-        isStartedRef.current = true
-        ref.current?.continuousStart()
-      }, 150)
-    })
+    )
 
     const unsubResolved = router.subscribe('onResolved', () => {
       if (timerRef.current) {

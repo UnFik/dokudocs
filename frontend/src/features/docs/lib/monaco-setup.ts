@@ -70,7 +70,20 @@ export function setupMonaco(): typeof monaco {
         'uuid',
         'blob',
       ],
-      operators: ['>', '<', '-', ':', '?>', '<?', '<>', '?-', '-?', '?-?', '>?', '?<'],
+      operators: [
+        '>',
+        '<',
+        '-',
+        ':',
+        '?>',
+        '<?',
+        '<>',
+        '?-',
+        '-?',
+        '?-?',
+        '>?',
+        '?<',
+      ],
       tokenizer: {
         root: [
           [/\/\/.*$/, 'comment'],
@@ -314,4 +327,3 @@ export function setupMonaco(): typeof monaco {
   isInitialized = true
   return monaco
 }
-

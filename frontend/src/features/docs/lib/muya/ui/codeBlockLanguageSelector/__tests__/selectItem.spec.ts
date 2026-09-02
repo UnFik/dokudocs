@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest';
-import { CodeBlockLanguageSelector } from '../index';
+import { describe, expect, it, vi } from 'vitest'
+import { CodeBlockLanguageSelector } from '../index'
 
 // `selectItem` only touches a small, structurally-typed slice of the selector
 // surface: `this._block` (the language-input content), `this.muya`, and — via
@@ -18,54 +18,54 @@ import { CodeBlockLanguageSelector } from '../index';
 // untouched.
 
 function selectLanguage(fakeThis: unknown, name: string) {
-    CodeBlockLanguageSelector.prototype.selectItem.call(
-        fakeThis as CodeBlockLanguageSelector,
-        { name },
-    );
+  CodeBlockLanguageSelector.prototype.selectItem.call(
+    fakeThis as CodeBlockLanguageSelector,
+    { name }
+  )
 }
 
 describe('codeBlockLanguageSelector.selectItem', () => {
-    it('applies the language to the parent code block when attached', () => {
-        const lastContent = { setCursor: vi.fn() };
-        const parent = {
-            lang: '',
-            lastContentInDescendant: vi.fn(() => lastContent),
-        };
-        const block = {
-            blockName: 'language-input',
-            text: '',
-            parent,
-            outMostBlock: parent, // truthy => attached to the document
-            update: vi.fn(),
-        };
-        const fakeThis = { _block: block, muya: {}, hide: vi.fn() };
+  it('applies the language to the parent code block when attached', () => {
+    const lastContent = { setCursor: vi.fn() }
+    const parent = {
+      lang: '',
+      lastContentInDescendant: vi.fn(() => lastContent),
+    }
+    const block = {
+      blockName: 'language-input',
+      text: '',
+      parent,
+      outMostBlock: parent, // truthy => attached to the document
+      update: vi.fn(),
+    }
+    const fakeThis = { _block: block, muya: {}, hide: vi.fn() }
 
-        selectLanguage(fakeThis, 'python');
+    selectLanguage(fakeThis, 'python')
 
-        expect(block.text).toBe('python');
-        expect(block.update).toHaveBeenCalledTimes(1);
-        expect(parent.lang).toBe('python');
-        expect(lastContent.setCursor).toHaveBeenCalledWith(0, 0);
-    });
+    expect(block.text).toBe('python')
+    expect(block.update).toHaveBeenCalledTimes(1)
+    expect(parent.lang).toBe('python')
+    expect(lastContent.setCursor).toHaveBeenCalledWith(0, 0)
+  })
 
-    // Regression: #4654 — when the language-input's block is detached from the
-    // document (its code block was converted away while the picker stayed open),
-    // `outMostBlock` is null and selectItem must bail without mutating, instead
-    // of crashing on the orphaned parent chain.
-    it('leaves a detached block untouched (outMostBlock null)', () => {
-        const parent = { lang: '', lastContentInDescendant: vi.fn() };
-        const block = {
-            blockName: 'language-input',
-            text: '',
-            parent, // immediate parent exists, but...
-            outMostBlock: null, // ...an ancestor is detached from the root
-            update: vi.fn(),
-        };
-        const fakeThis = { _block: block, muya: {}, hide: vi.fn() };
+  // Regression: #4654 — when the language-input's block is detached from the
+  // document (its code block was converted away while the picker stayed open),
+  // `outMostBlock` is null and selectItem must bail without mutating, instead
+  // of crashing on the orphaned parent chain.
+  it('leaves a detached block untouched (outMostBlock null)', () => {
+    const parent = { lang: '', lastContentInDescendant: vi.fn() }
+    const block = {
+      blockName: 'language-input',
+      text: '',
+      parent, // immediate parent exists, but...
+      outMostBlock: null, // ...an ancestor is detached from the root
+      update: vi.fn(),
+    }
+    const fakeThis = { _block: block, muya: {}, hide: vi.fn() }
 
-        expect(() => selectLanguage(fakeThis, 'javascript')).not.toThrow();
-        expect(block.text).toBe('');
-        expect(block.update).not.toHaveBeenCalled();
-        expect(parent.lang).toBe('');
-    });
-});
+    expect(() => selectLanguage(fakeThis, 'javascript')).not.toThrow()
+    expect(block.text).toBe('')
+    expect(block.update).not.toHaveBeenCalled()
+    expect(parent.lang).toBe('')
+  })
+})

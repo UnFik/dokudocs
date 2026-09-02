@@ -122,7 +122,11 @@ const MERMAID_TEMPLATES = [
   },
 ]
 
-export function MermaidEditor({ docId, content, onChange }: MermaidEditorProps) {
+export function MermaidEditor({
+  docId,
+  content,
+  onChange,
+}: MermaidEditorProps) {
   const [showTemplatesModal, setShowTemplatesModal] = useState(false)
 
   const handleSelectTemplate = (templateCode: string) => {
@@ -145,9 +149,9 @@ export function MermaidEditor({ docId, content, onChange }: MermaidEditorProps) 
       </Button>
 
       <Dialog open={showTemplatesModal} onOpenChange={setShowTemplatesModal}>
-        <DialogContent className='sm:max-w-2xl max-h-[85vh] overflow-y-auto'>
+        <DialogContent className='max-h-[85vh] overflow-y-auto sm:max-w-2xl'>
           <DialogHeader>
-            <DialogTitle className='text-base font-bold flex items-center gap-2'>
+            <DialogTitle className='flex items-center gap-2 text-base font-bold'>
               <Sparkles className='size-4 text-purple-500' />
               <span>Insert Mermaid Template</span>
             </DialogTitle>
@@ -156,30 +160,30 @@ export function MermaidEditor({ docId, content, onChange }: MermaidEditorProps) 
             </DialogDescription>
           </DialogHeader>
 
-          <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 py-3'>
+          <div className='grid grid-cols-1 gap-3 py-3 sm:grid-cols-2'>
             {MERMAID_TEMPLATES.map((tmpl) => (
               <div
                 key={tmpl.name}
                 onClick={() => handleSelectTemplate(tmpl.code)}
-                className='flex flex-col justify-between p-3 rounded-lg border border-border/80 bg-muted/20 hover:border-purple-500/60 hover:bg-purple-500/5 transition-all cursor-pointer group'
+                className='group flex cursor-pointer flex-col justify-between rounded-lg border border-border/80 bg-muted/20 p-3 transition-all hover:border-purple-500/60 hover:bg-purple-500/5'
               >
                 <div>
-                  <div className='flex items-center justify-between mb-1.5'>
+                  <div className='mb-1.5 flex items-center justify-between'>
                     <span className='text-xs font-bold text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400'>
                       {tmpl.name}
                     </span>
-                    <span className='text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-mono font-medium'>
+                    <span className='rounded bg-purple-500/10 px-1.5 py-0.5 font-mono text-[9px] font-medium text-purple-600 dark:text-purple-400'>
                       {tmpl.category}
                     </span>
                   </div>
-                  <p className='text-[11px] text-muted-foreground line-clamp-2 mb-3'>
+                  <p className='mb-3 line-clamp-2 text-[11px] text-muted-foreground'>
                     {tmpl.description}
                   </p>
                 </div>
                 <Button
                   size='sm'
                   variant='outline'
-                  className='w-full text-xs h-7 group-hover:bg-purple-500 group-hover:text-white group-hover:border-purple-500 transition-colors'
+                  className='h-7 w-full text-xs transition-colors group-hover:border-purple-500 group-hover:bg-purple-500 group-hover:text-white'
                 >
                   Use Template
                 </Button>

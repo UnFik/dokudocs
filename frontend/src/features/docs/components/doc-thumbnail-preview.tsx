@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 import { DocType } from '@/types/dokudocs'
+import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/context/theme-provider'
-import { generateDbmlThumbnail, generateMermaidThumbnail } from '../lib/doc-thumbnail-generator'
+import {
+  generateDbmlThumbnail,
+  generateMermaidThumbnail,
+} from '../lib/doc-thumbnail-generator'
 
 interface DocThumbnailPreviewProps {
   docId?: string
@@ -54,7 +57,7 @@ function ThumbnailSkeleton({
     return (
       <div
         className={cn(
-          'flex h-full w-full flex-col justify-start p-3 space-y-2 bg-muted/20 select-none animate-pulse',
+          'flex h-full w-full animate-pulse flex-col justify-start space-y-2 bg-muted/20 p-3 select-none',
           className
         )}
       >
@@ -62,7 +65,7 @@ function ThumbnailSkeleton({
         <div className='h-2 w-4/5 rounded-full bg-foreground/15' />
         <div className='h-2 w-3/4 rounded-full bg-foreground/10' />
         <div className='h-2 w-1/2 rounded-full bg-foreground/10' />
-        <div className='mt-2 space-y-1 pl-2 border-l-2 border-blue-500/20'>
+        <div className='mt-2 space-y-1 border-l-2 border-blue-500/20 pl-2'>
           <div className='h-1.5 w-2/3 rounded-full bg-foreground/15' />
           <div className='h-1.5 w-1/2 rounded-full bg-foreground/10' />
         </div>
@@ -74,18 +77,18 @@ function ThumbnailSkeleton({
     return (
       <div
         className={cn(
-          'flex h-full w-full items-center justify-center gap-2 p-2 bg-muted/20 select-none animate-pulse',
+          'flex h-full w-full animate-pulse items-center justify-center gap-2 bg-muted/20 p-2 select-none',
           className
         )}
       >
-        <div className='flex w-16 flex-col rounded border border-emerald-500/20 bg-background/50 p-1.5 space-y-1 shadow-2xs'>
+        <div className='flex w-16 flex-col space-y-1 rounded border border-emerald-500/20 bg-background/50 p-1.5 shadow-2xs'>
           <div className='h-2 w-full rounded bg-emerald-500/30' />
           <div className='h-1 w-full rounded bg-foreground/15' />
           <div className='h-1 w-3/4 rounded bg-foreground/15' />
           <div className='h-1 w-1/2 rounded bg-foreground/10' />
         </div>
         <div className='h-px w-3 bg-emerald-500/30' />
-        <div className='flex w-16 flex-col rounded border border-emerald-500/20 bg-background/50 p-1.5 space-y-1 shadow-2xs'>
+        <div className='flex w-16 flex-col space-y-1 rounded border border-emerald-500/20 bg-background/50 p-1.5 shadow-2xs'>
           <div className='h-2 w-full rounded bg-emerald-500/30' />
           <div className='h-1 w-full rounded bg-foreground/15' />
           <div className='h-1 w-2/3 rounded bg-foreground/10' />
@@ -97,7 +100,7 @@ function ThumbnailSkeleton({
   return (
     <div
       className={cn(
-        'flex h-full w-full items-center justify-center gap-1.5 p-2 bg-muted/20 select-none animate-pulse',
+        'flex h-full w-full animate-pulse items-center justify-center gap-1.5 bg-muted/20 p-2 select-none',
         className
       )}
     >
@@ -123,7 +126,9 @@ export function DocThumbnailPreview({
 
   const activeThumbnail = isDark && thumbnailDark ? thumbnailDark : thumbnail
   const isRasterImage =
-    activeThumbnail && (activeThumbnail.startsWith('data:image/') || activeThumbnail.startsWith('http'))
+    activeThumbnail &&
+    (activeThumbnail.startsWith('data:image/') ||
+      activeThumbnail.startsWith('http'))
 
   const docKey = docId || `${type}-${(content || '').slice(0, 32)}`
 
@@ -220,7 +225,10 @@ export function DocThumbnailPreview({
 
   if (!isVisible) {
     return (
-      <div ref={containerRef} className={cn('h-full w-full overflow-hidden', className)}>
+      <div
+        ref={containerRef}
+        className={cn('h-full w-full overflow-hidden', className)}
+      >
         <ThumbnailSkeleton type={type} />
       </div>
     )
@@ -231,7 +239,7 @@ export function DocThumbnailPreview({
       <div
         ref={containerRef}
         className={cn(
-          'relative flex h-full w-full items-center justify-center overflow-hidden bg-card select-none pointer-events-none',
+          'pointer-events-none relative flex h-full w-full items-center justify-center overflow-hidden bg-card select-none',
           className
         )}
       >
@@ -245,7 +253,7 @@ export function DocThumbnailPreview({
           alt=''
           onLoad={handleImageLoad}
           className={cn(
-            'h-full w-full object-cover object-center transform-gpu transition-opacity duration-150',
+            'h-full w-full transform-gpu object-cover object-center transition-opacity duration-150',
             isImgLoaded ? 'opacity-100' : 'opacity-0'
           )}
           loading='lazy'
@@ -260,25 +268,15 @@ export function DocThumbnailPreview({
       <div
         ref={containerRef}
         className={cn(
-          'relative h-full w-full overflow-hidden bg-card select-none pointer-events-none',
+          'pointer-events-none relative h-full w-full overflow-hidden bg-card select-none',
           className
         )}
       >
         <div
-          className='w-[270%] h-[270%] scale-[0.37] origin-top-left p-4 text-foreground text-xs leading-relaxed space-y-2.5
-          [&_h1]:text-xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:border-b [&_h1]:border-border/60 [&_h1]:pb-1.5 [&_h1]:mb-2 [&_h1]:text-blue-500
-          [&_h2]:text-base [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:border-b [&_h2]:border-border/40 [&_h2]:pb-1 [&_h2]:mt-3 [&_h2]:mb-1.5 [&_h2]:text-blue-500/90
-          [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1
-          [&_p]:my-1.5 [&_p]:leading-relaxed [&_p]:text-foreground/90
-          [&_ul]:my-1.5 [&_ul]:ml-4 [&_ul]:list-disc [&_ul]:space-y-0.5
-          [&_ol]:my-1.5 [&_ol]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-0.5
-          [&_li]:my-0.5
-          [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-500/60 [&_blockquote]:bg-muted/30 [&_blockquote]:px-2.5 [&_blockquote]:py-1 [&_blockquote]:italic [&_blockquote]:text-muted-foreground
-          [&_pre]:my-2 [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border/60 [&_pre]:bg-muted/50 [&_pre]:p-2.5 [&_pre]:font-mono [&_pre]:text-[11px]
-          [&_code]:rounded [&_code]:border [&_code]:border-border/40 [&_code]:bg-muted/60 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[10px]'
+          className='h-[270%] w-[270%] origin-top-left scale-[0.37] space-y-2.5 p-4 text-xs leading-relaxed text-foreground [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-500/60 [&_blockquote]:bg-muted/30 [&_blockquote]:px-2.5 [&_blockquote]:py-1 [&_blockquote]:text-muted-foreground [&_blockquote]:italic [&_code]:rounded [&_code]:border [&_code]:border-border/40 [&_code]:bg-muted/60 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[10px] [&_h1]:mb-2 [&_h1]:border-b [&_h1]:border-border/60 [&_h1]:pb-1.5 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h1]:text-blue-500 [&_h2]:mt-3 [&_h2]:mb-1.5 [&_h2]:border-b [&_h2]:border-border/40 [&_h2]:pb-1 [&_h2]:text-base [&_h2]:font-bold [&_h2]:tracking-tight [&_h2]:text-blue-500/90 [&_h3]:mt-2 [&_h3]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:ml-4 [&_ol]:list-decimal [&_ol]:space-y-0.5 [&_p]:my-1.5 [&_p]:leading-relaxed [&_p]:text-foreground/90 [&_pre]:my-2 [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border/60 [&_pre]:bg-muted/50 [&_pre]:p-2.5 [&_pre]:font-mono [&_pre]:text-[11px] [&_ul]:my-1.5 [&_ul]:ml-4 [&_ul]:list-disc [&_ul]:space-y-0.5'
           dangerouslySetInnerHTML={{ __html: markdownHtml }}
         />
-        <div className='absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card via-card/70 to-transparent pointer-events-none' />
+        <div className='pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card via-card/70 to-transparent' />
       </div>
     )
   }
@@ -288,7 +286,7 @@ export function DocThumbnailPreview({
       <div
         ref={containerRef}
         className={cn(
-          'relative flex h-full w-full items-center justify-center overflow-hidden bg-card select-none pointer-events-none [&_svg]:h-full [&_svg]:w-full [&_svg]:object-contain',
+          'pointer-events-none relative flex h-full w-full items-center justify-center overflow-hidden bg-card select-none [&_svg]:h-full [&_svg]:w-full [&_svg]:object-contain',
           className
         )}
         dangerouslySetInnerHTML={{ __html: dynamicSvg }}
@@ -301,7 +299,7 @@ export function DocThumbnailPreview({
       <div
         ref={containerRef}
         className={cn(
-          'relative flex h-full w-full flex-col justify-start overflow-hidden bg-gradient-to-b from-blue-500/5 via-muted/20 to-transparent p-2.5 select-none pointer-events-none',
+          'pointer-events-none relative flex h-full w-full flex-col justify-start overflow-hidden bg-gradient-to-b from-blue-500/5 via-muted/20 to-transparent p-2.5 select-none',
           className
         )}
       >
@@ -322,7 +320,7 @@ export function DocThumbnailPreview({
       <div
         ref={containerRef}
         className={cn(
-          'relative flex h-full w-full items-center justify-center gap-1.5 overflow-hidden bg-gradient-to-b from-emerald-500/5 via-muted/20 to-transparent p-2 select-none pointer-events-none',
+          'pointer-events-none relative flex h-full w-full items-center justify-center gap-1.5 overflow-hidden bg-gradient-to-b from-emerald-500/5 via-muted/20 to-transparent p-2 select-none',
           className
         )}
       >
@@ -352,19 +350,19 @@ export function DocThumbnailPreview({
     <div
       ref={containerRef}
       className={cn(
-        'relative flex h-full w-full items-center justify-center gap-1 overflow-hidden bg-gradient-to-b from-purple-500/5 via-muted/20 to-transparent p-2 select-none pointer-events-none',
+        'pointer-events-none relative flex h-full w-full items-center justify-center gap-1 overflow-hidden bg-gradient-to-b from-purple-500/5 via-muted/20 to-transparent p-2 select-none',
         className
       )}
     >
-      <div className='flex size-5 items-center justify-center rounded-full border border-purple-500/50 bg-background/90 text-[7px] font-bold text-purple-600 dark:text-purple-400 shadow-2xs'>
+      <div className='flex size-5 items-center justify-center rounded-full border border-purple-500/50 bg-background/90 text-[7px] font-bold text-purple-600 shadow-2xs dark:text-purple-400'>
         A
       </div>
       <div className='h-px w-2 bg-purple-500/50' />
-      <div className='flex size-5.5 items-center justify-center rounded-md border border-purple-500/60 bg-background/90 text-[7px] font-bold text-purple-600 dark:text-purple-400 shadow-2xs'>
+      <div className='flex size-5.5 items-center justify-center rounded-md border border-purple-500/60 bg-background/90 text-[7px] font-bold text-purple-600 shadow-2xs dark:text-purple-400'>
         B
       </div>
       <div className='h-px w-2 bg-purple-500/50' />
-      <div className='flex size-5 items-center justify-center rounded-full border border-purple-500/50 bg-background/90 text-[7px] font-bold text-purple-600 dark:text-purple-400 shadow-2xs'>
+      <div className='flex size-5 items-center justify-center rounded-full border border-purple-500/50 bg-background/90 text-[7px] font-bold text-purple-600 shadow-2xs dark:text-purple-400'>
         C
       </div>
     </div>

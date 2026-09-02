@@ -7,10 +7,10 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
+import { useTheme } from '@/context/theme-provider'
+import { Button } from '@/components/ui/button'
 import { useCanvasPanZoom } from '../../hooks/use-canvas-pan-zoom'
 import { useMermaidRender } from '../../hooks/use-mermaid-render'
-import { Button } from '@/components/ui/button'
-import { useTheme } from '@/context/theme-provider'
 
 interface MermaidPreviewProps {
   docId?: string
@@ -20,14 +20,19 @@ interface MermaidPreviewProps {
 export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
-  const { svg, error, isValid, isRendering } = useMermaidRender(content, isDark, docId)
+  const { svg, error, isValid, isRendering } = useMermaidRender(
+    content,
+    isDark,
+    docId
+  )
 
   const {
     viewportRef,
     canvasLayerRef,
     zoomBadgeRef,
     isPanning,
-    panRef,
+    initialPan,
+    initialZoom,
     zoomRef,
     handleZoomIn,
     handleZoomOut,
@@ -58,29 +63,31 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
 
     if (rawWidth <= 0 || rawHeight <= 0) return
 
-    const padding = 60
+    const padding = 40
     const scaleX = (viewportRect.width - padding * 2) / rawWidth
     const scaleY = (viewportRect.height - padding * 2) / rawHeight
-    const nextZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.2), 2.5)
+    const nextZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.1), 12)
 
-    const nextPanX = Math.max(20, (viewportRect.width - rawWidth * nextZoom) / 2)
-    const nextPanY = Math.max(20, (viewportRect.height - rawHeight * nextZoom) / 2)
+    const nextPanX = (viewportRect.width - rawWidth * nextZoom) / 2
+    const nextPanY = (viewportRect.height - rawHeight * nextZoom) / 2
 
     setPanAndZoom({ x: nextPanX, y: nextPanY }, nextZoom)
   }, [setPanAndZoom, viewportRef, canvasLayerRef, zoomRef])
 
-  const singleLineError = error ? error.split('\n')[0].replace(/^Error:\s*/i, '') : ''
+  const singleLineError = error
+    ? error.split('\n')[0].replace(/^Error:\s*/i, '')
+    : ''
 
   return (
-    <div className='relative flex h-full w-full flex-col overflow-hidden bg-muted/15 select-none'>
+    <div className='relative flex h-full w-full flex-col overflow-hidden bg-background select-none [background-size:24px_24px] [background-image:radial-gradient(circle,rgba(0,0,0,0.06)_1.5px,transparent_1.5px)] dark:[background-image:radial-gradient(circle,rgba(255,255,255,0.07)_1.5px,transparent_1.5px)]'>
       <div className='absolute top-3 right-3 z-30 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 p-1 shadow-md backdrop-blur-md'>
         {isRendering && (
           <>
-            <div className='flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 animate-pulse'>
+            <div className='flex animate-pulse items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400'>
               <span className='size-1.5 rounded-full bg-purple-500' />
               <span>Rendering</span>
             </div>
-            <div className='h-4 w-px bg-border/60 mx-0.5' />
+            <div className='mx-0.5 h-4 w-px bg-border/60' />
           </>
         )}
         <Button
@@ -93,7 +100,7 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
           <Sparkles className='size-3.5 text-purple-500' />
           <span>Fit View</span>
         </Button>
-        <div className='h-4 w-px bg-border/60 mx-0.5' />
+        <div className='mx-0.5 h-4 w-px bg-border/60' />
         <Button
           variant='ghost'
           size='icon'
@@ -105,9 +112,9 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
         </Button>
         <span
           ref={zoomBadgeRef}
-          className='px-1 font-mono text-[10px] font-semibold text-muted-foreground min-w-10 text-center'
+          className='min-w-10 px-1 text-center font-mono text-[10px] font-semibold text-muted-foreground'
         >
-          {Math.round(zoomRef.current * 100)}%
+          {Math.round(initialZoom * 100)}%
         </span>
         <Button
           variant='ghost'
@@ -130,19 +137,19 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
       </div>
 
       {!isValid && error && (
-        <div className='absolute top-14 left-4 right-4 z-20 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-600 dark:text-amber-400 shadow-lg backdrop-blur-md animate-in fade-in duration-150'>
-          <div className='flex items-center gap-2 min-w-0'>
+        <div className='absolute top-14 right-4 left-4 z-20 flex animate-in items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-600 shadow-lg backdrop-blur-md duration-150 fade-in dark:text-amber-400'>
+          <div className='flex min-w-0 items-center gap-2'>
             <AlertTriangle className='size-4 shrink-0' />
-            <span className='font-mono font-medium truncate'>
+            <span className='truncate font-mono font-medium'>
               {singleLineError}
             </span>
           </div>
           {svg ? (
-            <span className='text-[10px] text-amber-600/80 dark:text-amber-400/80 shrink-0 font-sans'>
+            <span className='shrink-0 font-sans text-[10px] text-amber-600/80 dark:text-amber-400/80'>
               Showing last valid preview
             </span>
           ) : (
-            <span className='text-[10px] text-amber-600/80 dark:text-amber-400/80 shrink-0 font-sans font-medium'>
+            <span className='shrink-0 font-sans text-[10px] font-medium text-amber-600/80 dark:text-amber-400/80'>
               Syntax Error
             </span>
           )}
@@ -162,9 +169,12 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
               <Workflow className='size-6' />
             </div>
             <div>
-              <p className='font-medium text-foreground'>Mermaid Live Diagram Engine</p>
-              <p className='mt-1 text-[11px] text-muted-foreground max-w-sm'>
-                Type standard Mermaid diagrams (Sequence Diagram, Flowchart, Class Diagram, ERD, State Diagram) in the editor to render live.
+              <p className='font-medium text-foreground'>
+                Mermaid Live Diagram Engine
+              </p>
+              <p className='mt-1 max-w-sm text-[11px] text-muted-foreground'>
+                Type standard Mermaid diagrams (Sequence Diagram, Flowchart,
+                Class Diagram, ERD, State Diagram) in the editor to render live.
               </p>
             </div>
           </div>
@@ -174,14 +184,19 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
               <AlertTriangle className='size-6' />
             </div>
             <div className='max-w-md space-y-1.5'>
-              <p className='font-semibold text-foreground text-sm'>Mermaid Syntax Error</p>
+              <p className='text-sm font-semibold text-foreground'>
+                Mermaid Syntax Error
+              </p>
               <p className='text-[11px] text-muted-foreground'>
-                The diagram cannot be rendered because the Mermaid code contains invalid syntax.
+                The diagram cannot be rendered because the Mermaid code contains
+                invalid syntax.
               </p>
             </div>
             {error && (
-              <div className='max-w-xl w-full max-h-56 overflow-auto rounded-lg border border-amber-500/20 bg-amber-500/5 p-3.5 text-left font-mono text-[11px] leading-relaxed text-amber-600 dark:text-amber-400 select-text shadow-inner'>
-                <pre className='whitespace-pre-wrap font-mono break-all'>{error}</pre>
+              <div className='max-h-56 w-full max-w-xl overflow-auto rounded-lg border border-amber-500/20 bg-amber-500/5 p-3.5 text-left font-mono text-[11px] leading-relaxed text-amber-600 shadow-inner select-text dark:text-amber-400'>
+                <pre className='font-mono break-all whitespace-pre-wrap'>
+                  {error}
+                </pre>
               </div>
             )}
           </div>
@@ -191,13 +206,13 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
             id='mermaid-canvas-layer'
             className='absolute inset-0 size-full overflow-visible p-8'
             style={{
-              transform: `translate3d(${panRef.current.x}px, ${panRef.current.y}px, 0) scale(${zoomRef.current})`,
+              transform: `translate3d(${initialPan.x}px, ${initialPan.y}px, 0) scale(${initialZoom})`,
               transformOrigin: '0 0',
               willChange: 'transform',
             }}
           >
             <div
-              className={`inline-block pointer-events-auto filter drop-shadow-sm select-text [&_svg]:max-w-none [&_svg]:h-auto transition-opacity duration-200 ${
+              className={`pointer-events-auto inline-block transition-opacity duration-200 select-text [&_svg]:h-auto [&_svg]:max-w-none dark:[&_text.messageText]:fill-slate-100 dark:[&_text.actor]:fill-slate-100 dark:[&_text.labelText]:fill-slate-100 dark:[&_text.loopText]:fill-slate-100 dark:[&_line.messageLine0]:stroke-slate-300 dark:[&_line.messageLine1]:stroke-slate-300 dark:[&_path.messageLine0]:stroke-slate-300 dark:[&_path.messageLine1]:stroke-slate-300 dark:[&_.sequenceNumber]:fill-slate-100 ${
                 !isValid ? 'opacity-70' : 'opacity-100'
               }`}
               dangerouslySetInnerHTML={{ __html: svg }}

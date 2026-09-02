@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
+import { DocumentItem, ProjectItem } from '@/types/dokudocs'
 import {
   ChevronRight,
   Copy,
@@ -11,7 +12,6 @@ import {
   StarOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { DocumentItem, ProjectItem } from '@/types/dokudocs'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -105,7 +105,7 @@ export function StarredNavGroup() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton tooltip={`Starred (${totalCount})`}>
-                  <Star className='size-4 text-amber-500 fill-amber-400' />
+                  <Star className='size-4 fill-amber-400 text-amber-500' />
                   <span>Starred</span>
                   {totalCount > 0 && (
                     <Badge className='rounded-full px-1.5 py-0 text-[10px]'>
@@ -123,10 +123,10 @@ export function StarredNavGroup() {
               >
                 <DropdownMenuLabel className='flex items-center justify-between text-xs font-semibold'>
                   <span className='flex items-center gap-1.5'>
-                    <Star className='size-3.5 text-amber-500 fill-amber-400' />
+                    <Star className='size-3.5 fill-amber-400 text-amber-500' />
                     Starred
                   </span>
-                  <span className='text-[10px] text-muted-foreground font-normal'>
+                  <span className='text-[10px] font-normal text-muted-foreground'>
                     {totalCount} items
                   </span>
                 </DropdownMenuLabel>
@@ -137,7 +137,7 @@ export function StarredNavGroup() {
                     No starred items yet
                   </div>
                 ) : (
-                  <div className='max-h-64 overflow-y-auto space-y-0.5'>
+                  <div className='max-h-64 space-y-0.5 overflow-y-auto'>
                     {starredEntries.map((entry) => {
                       if (entry.kind === 'project') {
                         const p = entry.data
@@ -148,7 +148,7 @@ export function StarredNavGroup() {
                                 <Link
                                   to='/projects/$projectId'
                                   params={{ projectId: p.id }}
-                                  className={`flex items-center gap-2 text-xs cursor-pointer ${
+                                  className={`flex cursor-pointer items-center gap-2 text-xs ${
                                     href.includes(p.id)
                                       ? 'bg-secondary font-medium'
                                       : ''
@@ -161,7 +161,7 @@ export function StarredNavGroup() {
                                       className='size-3.5 shrink-0 rounded object-cover'
                                     />
                                   ) : (
-                                    <Folder className='size-3.5 text-primary shrink-0' />
+                                    <Folder className='size-3.5 shrink-0 text-primary' />
                                   )}
                                   <span className='truncate'>{p.name}</span>
                                 </Link>
@@ -225,13 +225,13 @@ export function StarredNavGroup() {
                               <Link
                                 to='/docs/$docId'
                                 params={{ docId: doc.id }}
-                                className={`flex items-center gap-2 text-xs cursor-pointer ${
+                                className={`flex cursor-pointer items-center gap-2 text-xs ${
                                   href.includes(doc.id)
                                     ? 'bg-secondary font-medium'
                                     : ''
                                 }`}
                               >
-                                <Icon className='size-3.5 text-blue-500 shrink-0' />
+                                <Icon className='size-3.5 shrink-0 text-blue-500' />
                                 <span className='truncate'>{doc.title}</span>
                               </Link>
                             </DropdownMenuItem>
@@ -274,7 +274,7 @@ export function StarredNavGroup() {
                                 )
                                 toast.success(
                                   'Document link copied to clipboard'
-                                );
+                                )
                               }}
                             >
                               <Copy className='mr-2 size-3.5' />
@@ -314,11 +314,11 @@ export function StarredNavGroup() {
           <SidebarMenuItem>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton tooltip='Starred'>
-                <Star className='size-4 text-amber-500 fill-amber-400' />
+                <Star className='size-4 fill-amber-400 text-amber-500' />
                 <span className='font-medium'>Starred</span>
                 <Badge
                   variant='secondary'
-                  className='ml-auto text-[10px] px-1.5 py-0 h-4 font-semibold'
+                  className='ml-auto h-4 px-1.5 py-0 text-[10px] font-semibold'
                 >
                   {totalCount}
                 </Badge>
@@ -341,7 +341,10 @@ export function StarredNavGroup() {
                           <SidebarMenuSubItem key={`star-proj-${p.id}`}>
                             <ContextMenu>
                               <ContextMenuTrigger asChild>
-                                <SidebarMenuSubButton asChild isActive={isActive}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  isActive={isActive}
+                                >
                                   <Link
                                     to='/projects/$projectId'
                                     params={{ projectId: p.id }}
@@ -354,7 +357,7 @@ export function StarredNavGroup() {
                                         className='size-3.5 shrink-0 rounded object-cover'
                                       />
                                     ) : (
-                                      <Folder className='size-3.5 text-primary shrink-0' />
+                                      <Folder className='size-3.5 shrink-0 text-primary' />
                                     )}
                                     <span className='truncate'>{p.name}</span>
                                   </Link>
@@ -424,7 +427,7 @@ export function StarredNavGroup() {
                                   params={{ docId: doc.id }}
                                   onClick={() => setOpenMobile(false)}
                                 >
-                                  <Icon className='size-3.5 text-blue-500 shrink-0' />
+                                  <Icon className='size-3.5 shrink-0 text-blue-500' />
                                   <span className='truncate'>{doc.title}</span>
                                 </Link>
                               </SidebarMenuSubButton>

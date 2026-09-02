@@ -22,8 +22,15 @@ export function validateDbml(content: string): DiagnosticMarker[] {
   const lines = content.split('\n')
 
   const braceStack: { line: number; col: number; type: string }[] = []
-  const declaredTables = new Map<string, { line: number; columns: Set<string> }>()
-  let currentTable: { name: string; line: number; columns: Set<string> } | null = null
+  const declaredTables = new Map<
+    string,
+    { line: number; columns: Set<string> }
+  >()
+  let currentTable: {
+    name: string
+    line: number
+    columns: Set<string>
+  } | null = null
   let inIndexesBlock = false
   let inNoteBlock = false
 
@@ -64,7 +71,9 @@ export function validateDbml(content: string): DiagnosticMarker[] {
       }
     }
 
-    const tableMatch = cleanLine.match(/^Table\s+([\w."]+)(?:\s+as\s+([\w."]+))?\s*(?:\[[^\]]*\])?\s*\{?/i)
+    const tableMatch = cleanLine.match(
+      /^Table\s+([\w."]+)(?:\s+as\s+([\w."]+))?\s*(?:\[[^\]]*\])?\s*\{?/i
+    )
     if (tableMatch) {
       const tableName = tableMatch[1].replace(/["']/g, '').trim().toLowerCase()
       if (declaredTables.has(tableName)) {
@@ -79,7 +88,11 @@ export function validateDbml(content: string): DiagnosticMarker[] {
       } else {
         const tableObj = { line: lineNum, columns: new Set<string>() }
         declaredTables.set(tableName, tableObj)
-        currentTable = { name: tableName, line: lineNum, columns: tableObj.columns }
+        currentTable = {
+          name: tableName,
+          line: lineNum,
+          columns: tableObj.columns,
+        }
       }
       continue
     }
@@ -97,13 +110,18 @@ export function validateDbml(content: string): DiagnosticMarker[] {
     }
 
     if (/^TableGroup\b/i.test(cleanLine)) {
-      if (!/^TableGroup\s+([\w."]+)(?:\s+as\s+([\w."]+))?\s*(?:\[[^\]]*\])?\s*\{?/i.test(cleanLine)) {
+      if (
+        !/^TableGroup\s+([\w."]+)(?:\s+as\s+([\w."]+))?\s*(?:\[[^\]]*\])?\s*\{?/i.test(
+          cleanLine
+        )
+      ) {
         markers.push({
           startLineNumber: lineNum,
           startColumn: 1,
           endLineNumber: lineNum,
           endColumn: rawLine.length + 1,
-          message: "Invalid TableGroup definition. Expected 'TableGroup <name> { ... }'",
+          message:
+            "Invalid TableGroup definition. Expected 'TableGroup <name> { ... }'",
           severity: MarkerSeverity.Error,
         })
       }
@@ -131,7 +149,8 @@ export function validateDbml(content: string): DiagnosticMarker[] {
           startColumn: 1,
           endLineNumber: lineNum,
           endColumn: rawLine.length + 1,
-          message: "Invalid Project definition. Expected 'Project <name> { ... }'",
+          message:
+            "Invalid Project definition. Expected 'Project <name> { ... }'",
           severity: MarkerSeverity.Error,
         })
       }
@@ -145,7 +164,8 @@ export function validateDbml(content: string): DiagnosticMarker[] {
           startColumn: 1,
           endLineNumber: lineNum,
           endColumn: rawLine.length + 1,
-          message: "Invalid Records syntax. Expected 'Records <table>(col1, col2) { ... }'",
+          message:
+            "Invalid Records syntax. Expected 'Records <table>(col1, col2) { ... }'",
           severity: MarkerSeverity.Error,
         })
       }
@@ -163,7 +183,8 @@ export function validateDbml(content: string): DiagnosticMarker[] {
           startColumn: 1,
           endLineNumber: lineNum,
           endColumn: rawLine.length + 1,
-          message: "Invalid Ref syntax. Expected 'Ref: table1.col1 > table2.col2'",
+          message:
+            "Invalid Ref syntax. Expected 'Ref: table1.col1 > table2.col2'",
           severity: MarkerSeverity.Error,
         })
       }
@@ -194,7 +215,9 @@ export function validateDbml(content: string): DiagnosticMarker[] {
         })
       }
 
-      const columnMatch = cleanLine.match(/^([\w."]+)\s+([\w."()]+)(?:\s*\[(.*)\])?/i)
+      const columnMatch = cleanLine.match(
+        /^([\w."]+)\s+([\w."()]+)(?:\s*\[(.*)\])?/i
+      )
       if (columnMatch) {
         const colName = columnMatch[1].replace(/["']/g, '').trim().toLowerCase()
         if (currentTable.columns.has(colName)) {
@@ -242,7 +265,10 @@ export function validateDbml(content: string): DiagnosticMarker[] {
       /Ref(?:\s+[\w."]+)?\s*:\s*([\w."]+)\.([\w."]+)\s*(?:[><-][?]|\?[><-]|<>|[><-])\s*([\w."]+)\.([\w."]+)/i
     )
     if (standaloneRef) {
-      const fromTable = standaloneRef[1].replace(/["']/g, '').trim().toLowerCase()
+      const fromTable = standaloneRef[1]
+        .replace(/["']/g, '')
+        .trim()
+        .toLowerCase()
       const fromCol = standaloneRef[2].replace(/["']/g, '').trim().toLowerCase()
       const toTable = standaloneRef[3].replace(/["']/g, '').trim().toLowerCase()
       const toCol = standaloneRef[4].replace(/["']/g, '').trim().toLowerCase()
@@ -257,7 +283,10 @@ export function validateDbml(content: string): DiagnosticMarker[] {
           message: `Referenced table '${standaloneRef[1]}' is not defined`,
           severity: MarkerSeverity.Warning,
         })
-      } else if (fromTblObj.columns.size > 0 && !fromTblObj.columns.has(fromCol)) {
+      } else if (
+        fromTblObj.columns.size > 0 &&
+        !fromTblObj.columns.has(fromCol)
+      ) {
         markers.push({
           startLineNumber: lineNum,
           startColumn: 1,
@@ -294,7 +323,9 @@ export function validateDbml(content: string): DiagnosticMarker[] {
   return markers
 }
 
-export async function validateMermaid(content: string): Promise<DiagnosticMarker[]> {
+export async function validateMermaid(
+  content: string
+): Promise<DiagnosticMarker[]> {
   const trimmed = content.trim()
   if (!trimmed) return []
 
@@ -337,7 +368,8 @@ export async function validateMermaid(content: string): Promise<DiagnosticMarker
     let cleanMsg = msgString
     if (cleanMsg.includes('Parse error on line')) {
       const splitLines = cleanMsg.split('\n')
-      const expectLine = splitLines.find((l: string) => l.includes('Expecting')) || splitLines[0]
+      const expectLine =
+        splitLines.find((l: string) => l.includes('Expecting')) || splitLines[0]
       cleanMsg = expectLine.trim()
     }
 
@@ -384,7 +416,8 @@ export async function runDiagnostics(
   }))
 
   const mInstance =
-    monacoInstance || (typeof window !== 'undefined' ? (window as any).monaco : undefined)
+    monacoInstance ||
+    (typeof window !== 'undefined' ? (window as any).monaco : undefined)
   if (mInstance && mInstance.editor && mInstance.editor.setModelMarkers) {
     mInstance.editor.setModelMarkers(model, language, monacoMarkers)
   }

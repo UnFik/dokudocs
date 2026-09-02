@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { DocumentItem } from '@/types/dokudocs'
 import {
   Check,
   Copy,
@@ -15,12 +16,10 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { DocumentItem } from '@/types/dokudocs'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { getDocCategories } from '@/lib/doc-category-utils'
 import { formatRelativeTime } from '@/lib/time-utils'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,6 +42,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import { DocTypeBadge } from './doc-type-badge'
 import { MoveDocDialog } from './move-doc-dialog'
 import { RenameDocDialog } from './rename-doc-dialog'
@@ -94,7 +94,8 @@ export function DocListRow({ document }: DocListRowProps) {
     toast.success('Moved document to Trash', {
       action: {
         label: 'Undo',
-        onClick: () => useDokudocsStore.getState().restoreFromTrash(document.id),
+        onClick: () =>
+          useDokudocsStore.getState().restoreFromTrash(document.id),
       },
     })
   }
@@ -126,7 +127,9 @@ export function DocListRow({ document }: DocListRowProps) {
       moveDocumentToProject(document.id, targetId)
       if (targetId) {
         const targetProj = projects.find((p) => p.id === targetId)
-        toast.success(`Moved "${document.title}" to "${targetProj?.name || 'Project'}"`)
+        toast.success(
+          `Moved "${document.title}" to "${targetProj?.name || 'Project'}"`
+        )
       } else {
         toast.success(`Moved "${document.title}" to Drafts`)
       }
@@ -138,7 +141,9 @@ export function DocListRow({ document }: DocListRowProps) {
       moveDocumentToProject(document.id, pendingTargetProjectId)
       if (pendingTargetProjectId) {
         const targetProj = projects.find((p) => p.id === pendingTargetProjectId)
-        toast.success(`Moved "${document.title}" to "${targetProj?.name || 'Project'}"`)
+        toast.success(
+          `Moved "${document.title}" to "${targetProj?.name || 'Project'}"`
+        )
       } else {
         toast.success(`Moved "${document.title}" to Drafts`)
       }
@@ -163,16 +168,16 @@ export function DocListRow({ document }: DocListRowProps) {
         <ContextMenuTrigger asChild>
           <div
             onClick={handleRowClick}
-            className='group flex items-center justify-between rounded-lg border border-border/60 bg-card px-4 py-2.5 transition-colors hover:border-sidebar-ring/60 hover:bg-muted/30 cursor-pointer select-none'
+            className='group flex cursor-pointer items-center justify-between rounded-lg border border-border/60 bg-card px-4 py-2.5 transition-colors select-none hover:border-sidebar-ring/60 hover:bg-muted/30'
           >
-            <div className='flex items-center gap-3 min-w-0 flex-1'>
+            <div className='flex min-w-0 flex-1 items-center gap-3'>
               <button
                 type='button'
                 onClick={(e) => {
                   e.stopPropagation()
                   toggleStarDocument(document.id)
                 }}
-                className='text-muted-foreground hover:text-amber-500 transition-colors'
+                className='text-muted-foreground transition-colors hover:text-amber-500'
               >
                 <Star
                   className={`size-4 ${
@@ -185,47 +190,48 @@ export function DocListRow({ document }: DocListRowProps) {
 
               <DocTypeBadge type={document.type} showIcon={false} />
 
-              <span className='truncate text-sm font-medium group-hover:text-primary transition-colors'>
+              <span className='truncate text-sm font-medium transition-colors group-hover:text-primary'>
                 {document.title}
               </span>
 
-              <div className='hidden sm:flex items-center gap-1.5 flex-wrap'>
-                {docCategories.length > 0 && (() => {
-                  const firstCat = docCategories[0]
-                  const colorId = project?.categoryColors?.[firstCat]
-                  const palette = getCategoryPalette(firstCat, colorId, 0)
-                  const remainingCount = docCategories.length - 1
+              <div className='hidden flex-wrap items-center gap-1.5 sm:flex'>
+                {docCategories.length > 0 &&
+                  (() => {
+                    const firstCat = docCategories[0]
+                    const colorId = project?.categoryColors?.[firstCat]
+                    const palette = getCategoryPalette(firstCat, colorId, 0)
+                    const remainingCount = docCategories.length - 1
 
-                  return (
-                    <>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[9px] font-medium border ${palette.bg} ${palette.text} ${palette.border}`}
-                      >
-                        {firstCat}
-                      </span>
-                      {remainingCount > 0 && (
+                    return (
+                      <>
                         <span
-                          title={docCategories.slice(1).join(', ')}
-                          className='rounded-full px-1.5 py-0.5 text-[9px] font-medium border border-border/80 bg-muted/60 text-muted-foreground'
+                          className={`rounded-full border px-2 py-0.5 text-[9px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
                         >
-                          +{remainingCount}
+                          {firstCat}
                         </span>
-                      )}
-                    </>
-                  )
-                })()}
+                        {remainingCount > 0 && (
+                          <span
+                            title={docCategories.slice(1).join(', ')}
+                            className='rounded-full border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
+                          >
+                            +{remainingCount}
+                          </span>
+                        )}
+                      </>
+                    )
+                  })()}
               </div>
             </div>
 
             <div className='flex items-center gap-6 text-xs text-muted-foreground'>
               {document.projectName && (
-                <div className='hidden sm:flex items-center gap-1.5 w-36 truncate'>
+                <div className='hidden w-36 items-center gap-1.5 truncate sm:flex'>
                   <Folder className='size-3.5 shrink-0 text-muted-foreground/70' />
                   <span className='truncate'>{document.projectName}</span>
                 </div>
               )}
 
-              <div className='hidden md:flex items-center gap-1.5 w-28 truncate'>
+              <div className='hidden w-28 items-center gap-1.5 truncate md:flex'>
                 <Avatar className='size-4'>
                   <AvatarImage
                     src={document.author.avatar}
@@ -238,7 +244,11 @@ export function DocListRow({ document }: DocListRowProps) {
                 <span className='truncate'>{document.author.name}</span>
               </div>
 
-              <span className='w-24 text-right'>{formatRelativeTime(document.lastViewedAt || document.updatedAt)}</span>
+              <span className='w-24 text-right'>
+                {formatRelativeTime(
+                  document.lastViewedAt || document.updatedAt
+                )}
+              </span>
 
               <div onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
@@ -290,7 +300,9 @@ export function DocListRow({ document }: DocListRowProps) {
                           disabled={!document.projectId}
                         >
                           <span className='flex-1'>Drafts (No Project)</span>
-                          {!document.projectId && <Check className='size-3.5' />}
+                          {!document.projectId && (
+                            <Check className='size-3.5' />
+                          )}
                         </DropdownMenuItem>
                         {orgProjects.length > 0 && <DropdownMenuSeparator />}
                         {orgProjects.map((p) => {
@@ -309,7 +321,7 @@ export function DocListRow({ document }: DocListRowProps) {
                                     className='size-3.5 shrink-0 rounded object-cover'
                                   />
                                 ) : (
-                                  <Folder className='size-3.5 text-primary shrink-0' />
+                                  <Folder className='size-3.5 shrink-0 text-primary' />
                                 )}
                                 <span className='truncate'>{p.name}</span>
                               </div>
@@ -340,10 +352,16 @@ export function DocListRow({ document }: DocListRowProps) {
                           onClick={handleClearCategories}
                           disabled={docCategories.length === 0}
                         >
-                          <span className='flex-1 text-muted-foreground'>Clear All</span>
-                          {docCategories.length === 0 && <Check className='size-3.5' />}
+                          <span className='flex-1 text-muted-foreground'>
+                            Clear All
+                          </span>
+                          {docCategories.length === 0 && (
+                            <Check className='size-3.5' />
+                          )}
                         </DropdownMenuItem>
-                        {projectCategories.length > 0 && <DropdownMenuSeparator />}
+                        {projectCategories.length > 0 && (
+                          <DropdownMenuSeparator />
+                        )}
                         {projectCategories.map((c, idx) => {
                           const isSelected = docCategories.includes(c)
                           const colorId = project?.categoryColors?.[c]
@@ -474,7 +492,7 @@ export function DocListRow({ document }: DocListRowProps) {
                           className='size-3.5 shrink-0 rounded object-cover'
                         />
                       ) : (
-                        <Folder className='size-3.5 text-primary shrink-0' />
+                        <Folder className='size-3.5 shrink-0 text-primary' />
                       )}
                       <span className='truncate'>{p.name}</span>
                     </div>
@@ -520,9 +538,7 @@ export function DocListRow({ document }: DocListRowProps) {
                     className='flex items-center justify-between'
                   >
                     <div className='flex items-center gap-1.5 truncate'>
-                      <div
-                        className={`size-1.5 rounded-full ${palette.dot}`}
-                      />
+                      <div className={`size-1.5 rounded-full ${palette.dot}`} />
                       <span className='truncate'>{c}</span>
                     </div>
                     {isSelected && <Check className='size-3.5' />}
@@ -590,8 +606,14 @@ export function DocListRow({ document }: DocListRowProps) {
         title='Move document to another project?'
         desc={
           <span>
-            This document currently belongs to <strong>&ldquo;{project?.name}&rdquo;</strong>.
-            Moving it to {pendingTargetProjectId ? <strong>&ldquo;{targetProject?.name}&rdquo;</strong> : 'Drafts'} will transfer its ownership. Are you sure you want to continue?
+            This document currently belongs to{' '}
+            <strong>&ldquo;{project?.name}&rdquo;</strong>. Moving it to{' '}
+            {pendingTargetProjectId ? (
+              <strong>&ldquo;{targetProject?.name}&rdquo;</strong>
+            ) : (
+              'Drafts'
+            )}{' '}
+            will transfer its ownership. Are you sure you want to continue?
           </span>
         }
         confirmText='Yes, Move Document'

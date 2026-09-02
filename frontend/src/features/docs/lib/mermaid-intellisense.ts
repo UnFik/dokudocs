@@ -10,17 +10,21 @@ export interface MermaidSuggestion {
 export const MERMAID_KEYWORDS: MermaidSuggestion[] = [
   {
     label: 'sequenceDiagram',
-    insertText: 'sequenceDiagram\n    autonumber\n    participant App as Client\n    participant Server as Backend\n    \n    App->>Server: Request\n    Server-->>App: Response\n',
+    insertText:
+      'sequenceDiagram\n    autonumber\n    participant App as Client\n    participant Server as Backend\n    \n    App->>Server: Request\n    Server-->>App: Response\n',
     kind: 'diagram',
     detail: 'Sequence Diagram Template',
-    documentation: 'Declare an interactive sequence diagram with actors and lifelines.',
+    documentation:
+      'Declare an interactive sequence diagram with actors and lifelines.',
   },
   {
     label: 'flowchart TD',
-    insertText: 'flowchart TD\n    Start([Start]) --> Process[Process Data]\n    Process --> Decision{Is Valid?}\n    Decision -- Yes --> Success([Success])\n    Decision -- No --> Error([Error])\n',
+    insertText:
+      'flowchart TD\n    Start([Start]) --> Process[Process Data]\n    Process --> Decision{Is Valid?}\n    Decision -- Yes --> Success([Success])\n    Decision -- No --> Error([Error])\n',
     kind: 'diagram',
     detail: 'Top-Down Flowchart',
-    documentation: 'Create a top-to-bottom flowchart with shapes and decision nodes.',
+    documentation:
+      'Create a top-to-bottom flowchart with shapes and decision nodes.',
   },
   {
     label: 'flowchart LR',
@@ -31,21 +35,24 @@ export const MERMAID_KEYWORDS: MermaidSuggestion[] = [
   },
   {
     label: 'classDiagram',
-    insertText: 'classDiagram\n    class User {\n      +String id\n      +String email\n      +login()\n    }\n',
+    insertText:
+      'classDiagram\n    class User {\n      +String id\n      +String email\n      +login()\n    }\n',
     kind: 'diagram',
     detail: 'UML Class Diagram',
     documentation: 'Model object-oriented class hierarchies and methods.',
   },
   {
     label: 'erDiagram',
-    insertText: 'erDiagram\n    USER ||--o{ ORDER : places\n    ORDER ||--|{ LINE-ITEM : contains\n',
+    insertText:
+      'erDiagram\n    USER ||--o{ ORDER : places\n    ORDER ||--|{ LINE-ITEM : contains\n',
     kind: 'diagram',
     detail: 'Entity Relationship Diagram',
     documentation: 'Declare database entity relationships and cardinalities.',
   },
   {
     label: 'stateDiagram-v2',
-    insertText: 'stateDiagram-v2\n    [*] --> Idle\n    Idle --> Processing: Event\n    Processing --> Success: Done\n    Processing --> Error: Fail\n    Success --> [*]\n    Error --> Idle: Retry\n',
+    insertText:
+      'stateDiagram-v2\n    [*] --> Idle\n    Idle --> Processing: Event\n    Processing --> Success: Done\n    Processing --> Error: Fail\n    Success --> [*]\n    Error --> Idle: Retry\n',
     kind: 'diagram',
     detail: 'State Machine Diagram',
     documentation: 'Model finite state transitions and state machines.',
@@ -76,7 +83,8 @@ export const MERMAID_KEYWORDS: MermaidSuggestion[] = [
     insertText: 'Note over ParticipantA, ParticipantB: Note description',
     kind: 'keyword',
     detail: 'Note spanning participants',
-    documentation: 'Render an annotation note spanning one or multiple lifelines.',
+    documentation:
+      'Render an annotation note spanning one or multiple lifelines.',
   },
   {
     label: 'Note right of',
@@ -92,14 +100,16 @@ export const MERMAID_KEYWORDS: MermaidSuggestion[] = [
   },
   {
     label: 'loop',
-    insertText: 'loop Every 5s\n    A->>B: Poll status\n    B-->>A: Status OK\nend',
+    insertText:
+      'loop Every 5s\n    A->>B: Poll status\n    B-->>A: Status OK\nend',
     kind: 'keyword',
     detail: 'Loop block container',
     documentation: 'Wrap repeating sequence steps inside a loop frame.',
   },
   {
     label: 'alt / else',
-    insertText: 'alt Success Case\n    A->>B: 200 OK\nelse Error Case\n    A->>B: 400 Bad Request\nend',
+    insertText:
+      'alt Success Case\n    A->>B: 200 OK\nelse Error Case\n    A->>B: 400 Bad Request\nend',
     kind: 'keyword',
     detail: 'Alternative condition branches',
   },
@@ -111,19 +121,22 @@ export const MERMAID_KEYWORDS: MermaidSuggestion[] = [
   },
   {
     label: 'par / and',
-    insertText: 'par Parallel Task 1\n    A->>B: Fetch User\nand Parallel Task 2\n    A->>C: Fetch Settings\nend',
+    insertText:
+      'par Parallel Task 1\n    A->>B: Fetch User\nand Parallel Task 2\n    A->>C: Fetch Settings\nend',
     kind: 'keyword',
     detail: 'Parallel execution block',
   },
   {
     label: 'critical / option',
-    insertText: 'critical Action\n    A->>B: Critical transaction\noption Fallback\n    A->>C: Rollback\nend',
+    insertText:
+      'critical Action\n    A->>B: Critical transaction\noption Fallback\n    A->>C: Rollback\nend',
     kind: 'keyword',
     detail: 'Critical section with fallback',
   },
   {
     label: 'subgraph',
-    insertText: 'subgraph ClusterName [Group Title]\n    A[Node 1] --> B[Node 2]\nend',
+    insertText:
+      'subgraph ClusterName [Group Title]\n    A[Node 1] --> B[Node 2]\nend',
     kind: 'keyword',
     detail: 'Flowchart group container',
   },
@@ -189,7 +202,8 @@ export const MERMAID_KEYWORDS: MermaidSuggestion[] = [
   },
   {
     label: 'classDef',
-    insertText: 'classDef highlight fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff;\n',
+    insertText:
+      'classDef highlight fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff;\n',
     kind: 'keyword',
     detail: 'Custom CSS node styling',
   },
@@ -211,19 +225,23 @@ export function getMermaidSuggestions(
   const currentWord = wordMatch ? wordMatch[1] : ''
 
   const extractedParticipants: string[] = []
-  const participantMatches = currentText.matchAll(/(?:participant|actor)\s+([a-zA-Z0-9_]+)/g)
+  const participantMatches = currentText.matchAll(
+    /(?:participant|actor)\s+([a-zA-Z0-9_]+)/g
+  )
   for (const m of participantMatches) {
     if (!extractedParticipants.includes(m[1])) {
       extractedParticipants.push(m[1])
     }
   }
 
-  const participantSuggestions: MermaidSuggestion[] = extractedParticipants.map((p) => ({
-    label: p,
-    insertText: p,
-    kind: 'participant',
-    detail: 'Declared Participant',
-  }))
+  const participantSuggestions: MermaidSuggestion[] = extractedParticipants.map(
+    (p) => ({
+      label: p,
+      insertText: p,
+      kind: 'participant',
+      detail: 'Declared Participant',
+    })
+  )
 
   const allSuggestions = [...participantSuggestions, ...MERMAID_KEYWORDS]
 
@@ -237,8 +255,12 @@ export function getMermaidSuggestions(
   const filtered = allSuggestions
     .filter((s) => s.label.toLowerCase().includes(currentWord.toLowerCase()))
     .sort((a, b) => {
-      const aStarts = a.label.toLowerCase().startsWith(currentWord.toLowerCase())
-      const bStarts = b.label.toLowerCase().startsWith(currentWord.toLowerCase())
+      const aStarts = a.label
+        .toLowerCase()
+        .startsWith(currentWord.toLowerCase())
+      const bStarts = b.label
+        .toLowerCase()
+        .startsWith(currentWord.toLowerCase())
       if (aStarts && !bStarts) return -1
       if (!aStarts && bStarts) return 1
       return a.label.localeCompare(b.label)

@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import * as SwitchPrimitive from '@radix-ui/react-switch'
 import { Moon, Sun } from 'lucide-react'
-import { useTheme } from '@/context/theme-provider'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/context/theme-provider'
 
 export function ThemeSwitch() {
   const { theme, setTheme, resolvedTheme } = useTheme()
@@ -22,7 +22,7 @@ export function ThemeSwitch() {
       checked={isDark}
       onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
       className={cn(
-        'peer inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full p-0.5 border border-transparent shadow-xs transition-colors outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50',
+        'peer inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border border-transparent p-0.5 shadow-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
         'bg-muted-foreground/20 data-[state=checked]:bg-primary'
       )}
       aria-label='Toggle theme'
@@ -33,13 +33,11 @@ export function ThemeSwitch() {
         )}
       >
         {isDark ? (
-          <Moon className='size-3 text-indigo-500 fill-indigo-500/10 transition-transform duration-300 rotate-0 dark:rotate-360' />
+          <Moon className='size-3 rotate-0 fill-indigo-500/10 text-indigo-500 transition-transform duration-300 dark:rotate-360' />
         ) : (
-          <Sun className='size-3 text-amber-500 fill-amber-500/10 transition-transform duration-300 rotate-0' />
+          <Sun className='size-3 rotate-0 fill-amber-500/10 text-amber-500 transition-transform duration-300' />
         )}
       </SwitchPrimitive.Thumb>
     </SwitchPrimitive.Root>
   )
 }
-
-

@@ -16,6 +16,17 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  optimizeDeps: {
+    include: [
+      '@tanstack/react-query',
+      '@tanstack/react-query-devtools',
+      '@tanstack/react-router-devtools',
+      'react-dom/client',
+      'react-top-loading-bar',
+      'monaco-editor',
+      'monaco-editor/editor/editor.worker',
+    ],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

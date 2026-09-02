@@ -1,9 +1,9 @@
 import { useState } from 'react'
+import { TrashItem } from '@/types/dokudocs'
 import { Folder, RotateCcw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { TrashItem } from '@/types/dokudocs'
-import { getCategoryPalette } from '@/lib/category-palette'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { getCategoryPalette } from '@/lib/category-palette'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -91,13 +91,13 @@ export function TrashTable({ items }: TrashTableProps) {
                         type={item.document.type}
                         showIcon={false}
                       />
-                      <div className='flex flex-col min-w-0'>
+                      <div className='flex min-w-0 flex-col'>
                         <span className='truncate text-xs font-semibold text-foreground'>
                           {item.document.title}
                         </span>
                         {category && categoryPalette && (
                           <span
-                            className={`mt-1 inline-flex w-fit rounded-full px-1.5 py-0.2 text-[9px] font-medium border ${categoryPalette.bg} ${categoryPalette.text} ${categoryPalette.border}`}
+                            className={`py-0.2 mt-1 inline-flex w-fit rounded-full border px-1.5 text-[9px] font-medium ${categoryPalette.bg} ${categoryPalette.text} ${categoryPalette.border}`}
                           >
                             {category}
                           </span>
@@ -110,7 +110,7 @@ export function TrashTable({ items }: TrashTableProps) {
                     {item.document.projectName ? (
                       <div className='flex items-center gap-1.5 text-xs text-muted-foreground'>
                         <Folder className='size-3.5 shrink-0 text-muted-foreground/70' />
-                        <span className='truncate max-w-40'>
+                        <span className='max-w-40 truncate'>
                           {item.document.projectName}
                         </span>
                       </div>
@@ -133,10 +133,10 @@ export function TrashTable({ items }: TrashTableProps) {
                         </AvatarFallback>
                       </Avatar>
                       <div className='flex flex-col text-xs'>
-                        <span className='text-foreground/90 font-medium text-[11px]'>
+                        <span className='text-[11px] font-medium text-foreground/90'>
                           {item.deletedBy.name}
                         </span>
-                        <span className='text-muted-foreground text-[10px]'>
+                        <span className='text-[10px] text-muted-foreground'>
                           {item.deletedAt}
                         </span>
                       </div>
@@ -144,7 +144,7 @@ export function TrashTable({ items }: TrashTableProps) {
                   </TableCell>
 
                   <TableCell>
-                    <span className='inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 border border-amber-500/20'>
+                    <span className='inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400'>
                       {item.daysRemaining} days left
                     </span>
                   </TableCell>
@@ -154,7 +154,7 @@ export function TrashTable({ items }: TrashTableProps) {
                       <Button
                         variant='outline'
                         size='icon'
-                        className='size-7 text-muted-foreground hover:text-foreground hover:bg-muted'
+                        className='size-7 text-muted-foreground hover:bg-muted hover:text-foreground'
                         onClick={() => handleRestore(item)}
                         title='Restore Document'
                       >
@@ -163,7 +163,7 @@ export function TrashTable({ items }: TrashTableProps) {
                       <Button
                         variant='ghost'
                         size='icon'
-                        className='size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10'
+                        className='size-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
                         onClick={() => setDeleteTarget(item)}
                         title='Delete Permanently'
                       >
@@ -186,7 +186,7 @@ export function TrashTable({ items }: TrashTableProps) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className='text-destructive flex items-center gap-2'>
+            <AlertDialogTitle className='flex items-center gap-2 text-destructive'>
               <Trash2 className='size-4' />
               Delete Document Permanently
             </AlertDialogTitle>
@@ -200,7 +200,7 @@ export function TrashTable({ items }: TrashTableProps) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmPermanentDelete}
-              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+              className='text-destructive-foreground bg-destructive hover:bg-destructive/90'
             >
               Delete Permanently
             </AlertDialogAction>

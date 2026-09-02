@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
+import { z } from 'zod'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, Pencil } from 'lucide-react'
-import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { z } from 'zod'
-import { CATEGORY_COLOR_OPTIONS } from '@/lib/category-palette'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { CATEGORY_COLOR_OPTIONS } from '@/lib/category-palette'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -92,7 +92,8 @@ export function EditCategoryDialog({
                 <DialogTitle>Edit Category</DialogTitle>
               </div>
               <DialogDescription>
-                Rename category &ldquo;{categoryName}&rdquo; or change its color palette.
+                Rename category &ldquo;{categoryName}&rdquo; or change its color
+                palette.
               </DialogDescription>
             </DialogHeader>
 
@@ -122,7 +123,7 @@ export function EditCategoryDialog({
                   <FormItem>
                     <FormLabel>Color Palette</FormLabel>
                     <FormControl>
-                      <div className='flex items-center gap-2 flex-wrap pt-1'>
+                      <div className='flex flex-wrap items-center gap-2 pt-1'>
                         {CATEGORY_COLOR_OPTIONS.map((opt) => {
                           const isSelected = field.value === opt.id
                           return (
@@ -132,13 +133,13 @@ export function EditCategoryDialog({
                               onClick={() => field.onChange(opt.id)}
                               className={`size-7 rounded-full ${opt.dot} flex items-center justify-center transition-all ${
                                 isSelected
-                                  ? 'ring-2 ring-offset-2 ring-primary scale-110 shadow-xs'
-                                  : 'opacity-80 hover:opacity-100 hover:scale-105'
+                                  ? 'scale-110 shadow-xs ring-2 ring-primary ring-offset-2'
+                                  : 'opacity-80 hover:scale-105 hover:opacity-100'
                               }`}
                               title={opt.name}
                             >
                               {isSelected && (
-                                <Check className='size-3.5 text-white stroke-[3]' />
+                                <Check className='size-3.5 stroke-[3] text-white' />
                               )}
                             </button>
                           )

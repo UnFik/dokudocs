@@ -1,12 +1,14 @@
 import { useMemo } from 'react'
-import { defaultOrganizations, useDokudocsStore } from '@/stores/dokudocs-store'
 import { ProjectWithDocuments } from '@/types/dokudocs'
+import { defaultOrganizations, useDokudocsStore } from '@/stores/dokudocs-store'
 
 export function useDokudocs() {
   const store = useDokudocsStore()
 
   const activeOrg = useMemo(() => {
-    const orgs = store.organizations?.length ? store.organizations : defaultOrganizations
+    const orgs = store.organizations?.length
+      ? store.organizations
+      : defaultOrganizations
     return orgs.find((org) => org.id === store.activeOrgId) || orgs[0]
   }, [store.organizations, store.activeOrgId])
 
@@ -22,20 +24,19 @@ export function useDokudocs() {
           const docCats = doc.categories?.length
             ? doc.categories
             : doc.category
-            ? [doc.category]
-            : []
+              ? [doc.category]
+              : []
           const matchTitle = doc.title?.toLowerCase().includes(q)
           const matchProject = doc.projectName?.toLowerCase().includes(q)
           const matchTags = doc.tags?.some((t) => t.toLowerCase().includes(q))
-          const matchCategory = docCats.some((c) =>
-            c.toLowerCase().includes(q)
-          )
+          const matchCategory = docCats.some((c) => c.toLowerCase().includes(q))
           if (!matchTitle && !matchProject && !matchTags && !matchCategory)
             return false
         }
 
         if (store.filterTab === 'starred') return doc.isStarred
-        if (store.filterTab === 'created_by_me') return doc.author?.id === 'usr-1'
+        if (store.filterTab === 'created_by_me')
+          return doc.author?.id === 'usr-1'
         if (store.filterTab === 'shared') return doc.isShared
         return true
       })
@@ -56,9 +57,15 @@ export function useDokudocs() {
         }
 
         const getDocTime = (doc: typeof a) => {
-          const viewedTime = doc.lastViewedAt ? new Date(doc.lastViewedAt).getTime() : 0
-          const updatedTime = doc.updatedAt ? new Date(doc.updatedAt).getTime() : 0
-          const createdTime = doc.createdAt ? new Date(doc.createdAt).getTime() : 0
+          const viewedTime = doc.lastViewedAt
+            ? new Date(doc.lastViewedAt).getTime()
+            : 0
+          const updatedTime = doc.updatedAt
+            ? new Date(doc.updatedAt).getTime()
+            : 0
+          const createdTime = doc.createdAt
+            ? new Date(doc.createdAt).getTime()
+            : 0
           const validViewed = isNaN(viewedTime) ? 0 : viewedTime
           const validUpdated = isNaN(updatedTime) ? 0 : updatedTime
           const validCreated = isNaN(createdTime) ? 0 : createdTime
@@ -67,9 +74,7 @@ export function useDokudocs() {
 
         const aTime = getDocTime(a)
         const bTime = getDocTime(b)
-        return store.sortOrder === 'asc'
-          ? aTime - bTime
-          : bTime - aTime
+        return store.sortOrder === 'asc' ? aTime - bTime : bTime - aTime
       })
   }, [
     store.documents,

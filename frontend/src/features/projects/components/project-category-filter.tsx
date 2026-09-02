@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react'
+import { z } from 'zod'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Check,
@@ -11,14 +13,12 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { z } from 'zod'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import {
   CATEGORY_COLOR_OPTIONS,
   getCategoryPalette,
 } from '@/lib/category-palette'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -80,7 +80,9 @@ export function ProjectCategoryFilter({
   } = useDokudocsStore()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
-  const [filterMode, setFilterMode] = useState<'normal' | 'edit' | 'delete'>('normal')
+  const [filterMode, setFilterMode] = useState<'normal' | 'edit' | 'delete'>(
+    'normal'
+  )
   const [editingCategory, setEditingCategory] = useState<string | null>(null)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
@@ -178,19 +180,23 @@ export function ProjectCategoryFilter({
 
   return (
     <>
-      <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full py-1'>
-        <div className='flex items-center gap-2 flex-1 min-w-0'>
+      <div className='flex w-full flex-col justify-between gap-2.5 py-1 sm:flex-row sm:items-center'>
+        <div className='flex min-w-0 flex-1 items-center gap-2'>
           <div className='shrink-0'>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant='outline' size='sm' className='h-8 text-xs gap-1.5'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  className='h-8 gap-1.5 text-xs'
+                >
                   <Tag className='size-3.5 text-muted-foreground' />
                   <span className='max-w-28 truncate'>
                     {isAllSelected
                       ? 'All Categories'
                       : selectedCategories.length === 1
-                      ? selectedCategories[0]
-                      : `${selectedCategories.length} Categories`}
+                        ? selectedCategories[0]
+                        : `${selectedCategories.length} Categories`}
                   </span>
                 </Button>
               </DropdownMenuTrigger>
@@ -219,7 +225,7 @@ export function ProjectCategoryFilter({
                         <span className='truncate'>{cat}</span>
                       </div>
                       <div className='flex items-center gap-2'>
-                        <span className='text-[10px] text-muted-foreground font-mono'>
+                        <span className='font-mono text-[10px] text-muted-foreground'>
                           {docCountsByCategory[cat] || 0}
                         </span>
                         {isChecked && <Check className='size-3.5' />}
@@ -231,7 +237,7 @@ export function ProjectCategoryFilter({
             </DropdownMenu>
           </div>
 
-          <div className='relative flex flex-1 items-center min-w-0 overflow-hidden'>
+          <div className='relative flex min-w-0 flex-1 items-center overflow-hidden'>
             <Button
               variant='ghost'
               size='icon'
@@ -243,21 +249,21 @@ export function ProjectCategoryFilter({
 
             <div
               ref={scrollContainerRef}
-              className='flex items-center gap-2 overflow-x-auto px-7 scrollbar-none py-2'
+              className='flex scrollbar-none items-center gap-2 overflow-x-auto px-7 py-2'
             >
               <button
                 type='button'
                 onClick={onClearCategories}
                 disabled={filterMode !== 'normal'}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition-all cursor-pointer ${
+                className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                   isAllSelected && filterMode === 'normal'
-                    ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
-                    : 'bg-muted/50 text-muted-foreground border-border/60 hover:bg-muted hover:text-foreground'
+                    ? 'border-primary bg-primary text-primary-foreground shadow-2xs'
+                    : 'border-border/60 bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 <span>All</span>
                 <span
-                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-semibold ${
+                  className={`py-0.2 rounded-full px-1.5 text-[10px] font-semibold ${
                     isAllSelected && filterMode === 'normal'
                       ? 'bg-primary-foreground/20 text-primary-foreground'
                       : 'bg-background/80 text-muted-foreground'
@@ -269,18 +275,22 @@ export function ProjectCategoryFilter({
 
               {safeCategories.map((category, index) => {
                 const count = docCountsByCategory[category] || 0
-                const isSelected = selectedCategories.includes(category) && filterMode === 'normal'
+                const isSelected =
+                  selectedCategories.includes(category) &&
+                  filterMode === 'normal'
                 const isJiggling = filterMode !== 'normal'
                 const isDragging = draggedIndex === index
-                const isDragOver = dragOverIndex === index && draggedIndex !== index
+                const isDragOver =
+                  dragOverIndex === index && draggedIndex !== index
                 const colorId = categoryColors[category]
                 const palette = getCategoryPalette(category, colorId, index)
 
-                const jiggleClass = isJiggling && !isDragging
-                  ? index % 2 === 0
-                    ? 'animate-jiggle'
-                    : 'animate-jiggle-alt'
-                  : ''
+                const jiggleClass =
+                  isJiggling && !isDragging
+                    ? index % 2 === 0
+                      ? 'animate-jiggle'
+                      : 'animate-jiggle-alt'
+                    : ''
 
                 return (
                   <div
@@ -292,47 +302,47 @@ export function ProjectCategoryFilter({
                     onDrop={(e) => handleDrop(e, index)}
                     className={`relative flex shrink-0 items-center rounded-full border transition-all ${jiggleClass} ${
                       isDragging
-                        ? 'opacity-30 scale-95 ring-2 ring-dashed ring-amber-500'
+                        ? 'ring-dashed scale-95 opacity-30 ring-2 ring-amber-500'
                         : isDragOver
-                        ? 'scale-105 ring-2 ring-amber-500 ring-offset-2 shadow-md'
-                        : ''
+                          ? 'scale-105 shadow-md ring-2 ring-amber-500 ring-offset-2'
+                          : ''
                     } ${
                       filterMode === 'edit'
-                        ? 'cursor-grab active:cursor-grabbing ring-2 ring-amber-500/80 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/40 pl-2 pr-2.5 py-1 select-none'
+                        ? 'cursor-grab border-amber-500/40 bg-amber-500/10 py-1 pr-2.5 pl-2 text-amber-700 ring-2 ring-amber-500/80 select-none active:cursor-grabbing dark:text-amber-300'
                         : filterMode === 'delete'
-                        ? 'cursor-pointer ring-2 ring-red-500/80 bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/40 pl-3 pr-2 py-1'
-                        : isSelected
-                        ? `${palette.activeBg} ${palette.activeText} border-transparent ring-1 ring-primary/40 shadow-2xs px-3 py-1`
-                        : `${palette.bg} ${palette.text} ${palette.border} hover:opacity-90 px-3 py-1`
+                          ? 'cursor-pointer border-red-500/40 bg-red-500/10 py-1 pr-2 pl-3 text-red-700 ring-2 ring-red-500/80 dark:text-red-300'
+                          : isSelected
+                            ? `${palette.activeBg} ${palette.activeText} border-transparent px-3 py-1 shadow-2xs ring-1 ring-primary/40`
+                            : `${palette.bg} ${palette.text} ${palette.border} px-3 py-1 hover:opacity-90`
                     }`}
                   >
                     <button
                       type='button'
                       onClick={() => handleCategoryClick(category)}
-                      className='flex items-center gap-1.5 text-xs font-medium cursor-pointer'
+                      className='flex cursor-pointer items-center gap-1.5 text-xs font-medium'
                       title={
                         filterMode === 'edit'
                           ? `Drag to reorder, or click to edit "${category}"`
                           : isSelected
-                          ? `Unselect "${category}"`
-                          : `Filter by "${category}"`
+                            ? `Unselect "${category}"`
+                            : `Filter by "${category}"`
                       }
                     >
                       {filterMode === 'edit' ? (
                         <div className='flex items-center gap-0.5'>
-                          <GripVertical className='size-3 shrink-0 text-amber-600/70 dark:text-amber-400/70 -ml-0.5' />
+                          <GripVertical className='-ml-0.5 size-3 shrink-0 text-amber-600/70 dark:text-amber-400/70' />
                           <Pencil className='size-3 shrink-0 text-amber-600 dark:text-amber-400' />
                         </div>
                       ) : isSelected ? (
                         <Check className='size-3 shrink-0' />
                       ) : (
                         <div
-                          className={`size-1.5 rounded-full shrink-0 ${palette.dot}`}
+                          className={`size-1.5 shrink-0 rounded-full ${palette.dot}`}
                         />
                       )}
                       <span>{category}</span>
                       <span
-                        className={`rounded-full px-1.5 py-0.2 text-[10px] font-semibold ${
+                        className={`py-0.2 rounded-full px-1.5 text-[10px] font-semibold ${
                           isSelected
                             ? 'bg-white/20 text-white'
                             : `${palette.badgeBg} ${palette.badgeText}`
@@ -349,7 +359,7 @@ export function ProjectCategoryFilter({
                           e.stopPropagation()
                           handleCategoryClick(category)
                         }}
-                        className='absolute -top-1.5 -right-1.5 size-5 rounded-full bg-red-600 text-white dark:bg-red-500 flex items-center justify-center shadow-sm hover:scale-115 transition-transform z-20'
+                        className='absolute -top-1.5 -right-1.5 z-20 flex size-5 items-center justify-center rounded-full bg-red-600 text-white shadow-sm transition-transform hover:scale-115 dark:bg-red-500'
                         title='Delete category'
                       >
                         <X className='size-3 stroke-[3] text-white' />
@@ -371,7 +381,7 @@ export function ProjectCategoryFilter({
           </div>
         </div>
 
-        <div className='flex items-center gap-1.5 shrink-0 self-end sm:self-auto'>
+        <div className='flex shrink-0 items-center gap-1.5 self-end sm:self-auto'>
           {filterMode !== 'normal' ? (
             <Button
               variant='default'
@@ -440,9 +450,9 @@ export function ProjectCategoryFilter({
                               Color Palette
                             </FormLabel>
                             <FormControl>
-                              <div className='flex items-center gap-1.5 flex-wrap pt-0.5'>
+                              <div className='flex flex-wrap items-center gap-1.5 pt-0.5'>
                                 {CATEGORY_COLOR_OPTIONS.map((opt) => {
-                                   const isSelected = field.value === opt.id
+                                  const isSelected = field.value === opt.id
                                   return (
                                     <button
                                       key={opt.id}
@@ -450,13 +460,13 @@ export function ProjectCategoryFilter({
                                       onClick={() => field.onChange(opt.id)}
                                       className={`size-6 rounded-full ${opt.dot} flex items-center justify-center transition-all ${
                                         isSelected
-                                          ? 'ring-2 ring-offset-2 ring-primary scale-110 shadow-xs'
-                                          : 'opacity-80 hover:opacity-100 hover:scale-105'
+                                          ? 'scale-110 shadow-xs ring-2 ring-primary ring-offset-2'
+                                          : 'opacity-80 hover:scale-105 hover:opacity-100'
                                       }`}
                                       title={opt.name}
                                     >
                                       {isSelected && (
-                                        <Check className='size-3 text-white stroke-[3]' />
+                                        <Check className='size-3 stroke-[3] text-white' />
                                       )}
                                     </button>
                                   )

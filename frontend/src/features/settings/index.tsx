@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Separator } from '@radix-ui/react-select'
 import {
   AlertTriangle,
   Building2,
@@ -15,6 +16,7 @@ import {
   Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { defaultOrganizations, useDokudocsStore } from '@/stores/dokudocs-store'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -45,8 +47,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { defaultOrganizations, useDokudocsStore } from '@/stores/dokudocs-store'
-import { Separator } from '@radix-ui/react-select'
 
 interface MemberItem {
   id: string
@@ -117,7 +117,9 @@ export function Settings() {
   const [memberSearch, setMemberSearch] = useState('')
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<'Admin' | 'Member' | 'Viewer'>('Member')
+  const [inviteRole, setInviteRole] = useState<'Admin' | 'Member' | 'Viewer'>(
+    'Member'
+  )
 
   const [notifyDocUpdates, setNotifyDocUpdates] = useState(true)
   const [notifyComments, setNotifyComments] = useState(true)
@@ -184,7 +186,9 @@ export function Settings() {
       toast.error('Please enter a valid email address')
       return
     }
-    if (members.some((m) => m.email.toLowerCase() === emailTrimmed.toLowerCase())) {
+    if (
+      members.some((m) => m.email.toLowerCase() === emailTrimmed.toLowerCase())
+    ) {
       toast.error('User is already a member of this workspace')
       return
     }
@@ -214,9 +218,7 @@ export function Settings() {
   }
 
   const handleRoleChange = (id: string, newRole: MemberItem['role']) => {
-    setMembers(
-      members.map((m) => (m.id === id ? { ...m, role: newRole } : m))
-    )
+    setMembers(members.map((m) => (m.id === id ? { ...m, role: newRole } : m)))
     toast.success('Member role updated')
   }
 
@@ -234,7 +236,7 @@ export function Settings() {
 
   return (
     <div className='flex flex-1 flex-col gap-6 p-6'>
-      <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5'>
+      <div className='flex flex-col justify-between gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-center'>
         <div>
           <div className='flex items-center gap-2.5'>
             <div className='flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary'>
@@ -245,7 +247,8 @@ export function Settings() {
             </h1>
           </div>
           <p className='mt-1 text-xs text-muted-foreground'>
-            Manage your workspace profile, billing subscriptions, team members, and notifications.
+            Manage your workspace profile, billing subscriptions, team members,
+            and notifications.
           </p>
         </div>
       </div>
@@ -256,7 +259,7 @@ export function Settings() {
           onValueChange={setActiveTab}
           className='space-y-6'
         >
-          <TabsList className='h-auto p-1 bg-muted/60 rounded-lg inline-flex gap-1 border border-border/40'>
+          <TabsList className='inline-flex h-auto gap-1 rounded-lg border border-border/40 bg-muted/60 p-1'>
             <TabsTrigger
               value='general'
               className='rounded-md px-3.5 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs'
@@ -283,17 +286,20 @@ export function Settings() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value='general' className='space-y-6 focus-visible:outline-none'>
-            <div className='rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs space-y-6'>
+          <TabsContent
+            value='general'
+            className='space-y-6 focus-visible:outline-none'
+          >
+            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
               <div className='flex items-start gap-3.5'>
-                <div className='flex size-9 items-center justify-center rounded-lg bg-muted text-foreground shrink-0'>
+                <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground'>
                   <Building2 className='size-5 text-muted-foreground' />
                 </div>
                 <div>
-                  <h2 className='text-base font-semibold text-foreground leading-none'>
+                  <h2 className='text-base leading-none font-semibold text-foreground'>
                     Workspace Profile
                   </h2>
-                  <p className='text-xs text-muted-foreground mt-1'>
+                  <p className='mt-1 text-xs text-muted-foreground'>
                     Update your workspace's basic information
                   </p>
                 </div>
@@ -303,7 +309,7 @@ export function Settings() {
 
               <form onSubmit={handleSaveProfile} className='space-y-6'>
                 <div className='flex items-center gap-4 pt-1'>
-                  <div className='flex size-16 items-center justify-center rounded-xl bg-muted border border-border text-foreground font-bold text-xl shrink-0'>
+                  <div className='flex size-16 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-xl font-bold text-foreground'>
                     <Building2 className='size-7 text-muted-foreground' />
                   </div>
                   <div className='space-y-1.5'>
@@ -317,7 +323,7 @@ export function Settings() {
                       type='button'
                       variant='outline'
                       size='sm'
-                      className='h-7 text-xs gap-1.5'
+                      className='h-7 gap-1.5 text-xs'
                       onClick={() => toast.info('Logo upload ready')}
                     >
                       <Upload className='size-3' />
@@ -327,7 +333,10 @@ export function Settings() {
                 </div>
 
                 <div className='space-y-1.5'>
-                  <Label htmlFor='workspace-name' className='text-xs font-medium'>
+                  <Label
+                    htmlFor='workspace-name'
+                    className='text-xs font-medium'
+                  >
                     Workspace Name
                   </Label>
                   <Input
@@ -347,7 +356,7 @@ export function Settings() {
                     <Input
                       readOnly
                       value={activeOrg.id}
-                      className='text-xs font-mono bg-muted/40 text-muted-foreground'
+                      className='bg-muted/40 font-mono text-xs text-muted-foreground'
                     />
                     <Button
                       type='button'
@@ -369,22 +378,22 @@ export function Settings() {
                   </p>
                 </div>
 
-                <Button type='submit' size='sm' className='text-xs px-4'>
+                <Button type='submit' size='sm' className='px-4 text-xs'>
                   Save Changes
                 </Button>
               </form>
             </div>
 
-            <div className='rounded-xl border border-red-500/30 bg-red-500/5 p-6 shadow-xs space-y-5'>
+            <div className='space-y-5 rounded-xl border border-red-500/30 bg-red-500/5 p-6 shadow-xs'>
               <div className='flex items-start gap-3.5'>
-                <div className='flex size-9 items-center justify-center rounded-lg bg-red-500/10 text-red-500 shrink-0'>
+                <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-500'>
                   <AlertTriangle className='size-5' />
                 </div>
                 <div>
-                  <h2 className='text-base font-semibold text-destructive leading-none'>
+                  <h2 className='text-base leading-none font-semibold text-destructive'>
                     Danger Zone
                   </h2>
-                  <p className='text-xs text-muted-foreground mt-1'>
+                  <p className='mt-1 text-xs text-muted-foreground'>
                     Irreversible actions that affect your workspace
                   </p>
                 </div>
@@ -397,7 +406,8 @@ export function Settings() {
                       Leave Workspace
                     </p>
                     <p className='text-[11px] text-muted-foreground'>
-                      Revoke your access to documents and resources in this workspace.
+                      Revoke your access to documents and resources in this
+                      workspace.
                     </p>
                   </div>
                   <Button
@@ -405,7 +415,7 @@ export function Settings() {
                     variant='outline'
                     size='sm'
                     onClick={() => setLeaveDialogOpen(true)}
-                    className='text-xs text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0'
+                    className='shrink-0 border-destructive/30 text-xs text-destructive hover:bg-destructive/10'
                   >
                     Leave Workspace
                   </Button>
@@ -428,7 +438,7 @@ export function Settings() {
                       setDeleteConfirmationName('')
                       setDeleteDialogOpen(true)
                     }}
-                    className='text-xs shrink-0'
+                    className='shrink-0 text-xs'
                   >
                     Delete Workspace
                   </Button>
@@ -437,32 +447,38 @@ export function Settings() {
             </div>
           </TabsContent>
 
-          <TabsContent value='billing' className='space-y-6 focus-visible:outline-none'>
-            <div className='rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs space-y-6'>
+          <TabsContent
+            value='billing'
+            className='space-y-6 focus-visible:outline-none'
+          >
+            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
               <div className='flex items-start justify-between'>
                 <div className='flex items-start gap-3.5'>
-                  <div className='flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0'>
+                  <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary'>
                     <Crown className='size-5' />
                   </div>
                   <div>
                     <div className='flex items-center gap-2'>
-                      <h2 className='text-base font-semibold text-foreground leading-none'>
+                      <h2 className='text-base leading-none font-semibold text-foreground'>
                         Current Subscription
                       </h2>
-                      <Badge variant='secondary' className='text-[10px] font-semibold uppercase'>
+                      <Badge
+                        variant='secondary'
+                        className='text-[10px] font-semibold uppercase'
+                      >
                         {activeOrg.plan || 'Free'}
                       </Badge>
                     </div>
-                    <p className='text-xs text-muted-foreground mt-1'>
+                    <p className='mt-1 text-xs text-muted-foreground'>
                       Manage your workspace billing tier and usage limits
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className='grid grid-cols-1 md:grid-cols-3 gap-4 pt-2'>
+              <div className='grid grid-cols-1 gap-4 pt-2 md:grid-cols-3'>
                 <div
-                  className={`rounded-xl p-4 border flex flex-col justify-between transition-all ${
+                  className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
                     activeOrg.plan === 'Free'
                       ? 'border-primary bg-primary/5 shadow-xs'
                       : 'border-border/60 bg-muted/20 hover:border-border'
@@ -476,19 +492,22 @@ export function Settings() {
                       )}
                     </div>
                     <p className='text-2xl font-bold'>
-                      $0 <span className='text-xs font-normal text-muted-foreground'>/mo</span>
+                      $0{' '}
+                      <span className='text-xs font-normal text-muted-foreground'>
+                        /mo
+                      </span>
                     </p>
                     <ul className='space-y-1.5 text-xs text-muted-foreground'>
                       <li className='flex items-center gap-1.5'>
-                        <CheckCircle2 className='size-3.5 text-primary shrink-0' />
+                        <CheckCircle2 className='size-3.5 shrink-0 text-primary' />
                         <span>Up to 10 documents</span>
                       </li>
                       <li className='flex items-center gap-1.5'>
-                        <CheckCircle2 className='size-3.5 text-primary shrink-0' />
+                        <CheckCircle2 className='size-3.5 shrink-0 text-primary' />
                         <span>1 Workspace member</span>
                       </li>
                       <li className='flex items-center gap-1.5'>
-                        <CheckCircle2 className='size-3.5 text-primary shrink-0' />
+                        <CheckCircle2 className='size-3.5 shrink-0 text-primary' />
                         <span>Community Support</span>
                       </li>
                     </ul>
@@ -498,14 +517,16 @@ export function Settings() {
                     variant={activeOrg.plan === 'Free' ? 'outline' : 'default'}
                     disabled={activeOrg.plan === 'Free'}
                     onClick={() => handlePlanChange('Free')}
-                    className='w-full mt-4 text-xs'
+                    className='mt-4 w-full text-xs'
                   >
-                    {activeOrg.plan === 'Free' ? 'Current Plan' : 'Downgrade to Free'}
+                    {activeOrg.plan === 'Free'
+                      ? 'Current Plan'
+                      : 'Downgrade to Free'}
                   </Button>
                 </div>
 
                 <div
-                  className={`rounded-xl p-4 border flex flex-col justify-between transition-all ${
+                  className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
                     activeOrg.plan === 'Pro Workspace'
                       ? 'border-primary bg-primary/5 shadow-xs'
                       : 'border-border/60 bg-muted/20 hover:border-border'
@@ -513,42 +534,51 @@ export function Settings() {
                 >
                   <div className='space-y-3'>
                     <div className='flex items-center justify-between'>
-                      <span className='text-sm font-semibold'>Pro Workspace</span>
+                      <span className='text-sm font-semibold'>
+                        Pro Workspace
+                      </span>
                       {activeOrg.plan === 'Pro Workspace' && (
                         <Badge className='text-[10px]'>Active</Badge>
                       )}
                     </div>
                     <p className='text-2xl font-bold'>
-                      $12 <span className='text-xs font-normal text-muted-foreground'>/mo</span>
+                      $12{' '}
+                      <span className='text-xs font-normal text-muted-foreground'>
+                        /mo
+                      </span>
                     </p>
                     <ul className='space-y-1.5 text-xs text-muted-foreground'>
                       <li className='flex items-center gap-1.5'>
-                        <CheckCircle2 className='size-3.5 text-primary shrink-0' />
+                        <CheckCircle2 className='size-3.5 shrink-0 text-primary' />
                         <span>Unlimited documents & diagrams</span>
                       </li>
                       <li className='flex items-center gap-1.5'>
-                        <CheckCircle2 className='size-3.5 text-primary shrink-0' />
+                        <CheckCircle2 className='size-3.5 shrink-0 text-primary' />
                         <span>Up to 10 team members</span>
                       </li>
                       <li className='flex items-center gap-1.5'>
-                        <CheckCircle2 className='size-3.5 text-primary shrink-0' />
+                        <CheckCircle2 className='size-3.5 shrink-0 text-primary' />
                         <span>Export Markdown, PDF, Mermaid</span>
                       </li>
                     </ul>
                   </div>
                   <Button
                     size='sm'
-                    variant={activeOrg.plan === 'Pro Workspace' ? 'outline' : 'default'}
+                    variant={
+                      activeOrg.plan === 'Pro Workspace' ? 'outline' : 'default'
+                    }
                     disabled={activeOrg.plan === 'Pro Workspace'}
                     onClick={() => handlePlanChange('Pro Workspace')}
-                    className='w-full mt-4 text-xs'
+                    className='mt-4 w-full text-xs'
                   >
-                    {activeOrg.plan === 'Pro Workspace' ? 'Current Plan' : 'Switch to Pro'}
+                    {activeOrg.plan === 'Pro Workspace'
+                      ? 'Current Plan'
+                      : 'Switch to Pro'}
                   </Button>
                 </div>
 
                 <div
-                  className={`rounded-xl p-4 border flex flex-col justify-between transition-all ${
+                  className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
                     activeOrg.plan === 'Enterprise'
                       ? 'border-primary bg-primary/5 shadow-xs'
                       : 'border-border/60 bg-muted/20 hover:border-border'
@@ -562,50 +592,65 @@ export function Settings() {
                       )}
                     </div>
                     <p className='text-2xl font-bold'>
-                      $39 <span className='text-xs font-normal text-muted-foreground'>/mo</span>
+                      $39{' '}
+                      <span className='text-xs font-normal text-muted-foreground'>
+                        /mo
+                      </span>
                     </p>
                     <ul className='space-y-1.5 text-xs text-muted-foreground'>
                       <li className='flex items-center gap-1.5'>
-                        <CheckCircle2 className='size-3.5 text-primary shrink-0' />
+                        <CheckCircle2 className='size-3.5 shrink-0 text-primary' />
                         <span>Unlimited everything</span>
                       </li>
                       <li className='flex items-center gap-1.5'>
-                        <CheckCircle2 className='size-3.5 text-primary shrink-0' />
+                        <CheckCircle2 className='size-3.5 shrink-0 text-primary' />
                         <span>Audit logs & SAML SSO</span>
                       </li>
                       <li className='flex items-center gap-1.5'>
-                        <CheckCircle2 className='size-3.5 text-primary shrink-0' />
+                        <CheckCircle2 className='size-3.5 shrink-0 text-primary' />
                         <span>24/7 Dedicated Support</span>
                       </li>
                     </ul>
                   </div>
                   <Button
                     size='sm'
-                    variant={activeOrg.plan === 'Enterprise' ? 'outline' : 'default'}
+                    variant={
+                      activeOrg.plan === 'Enterprise' ? 'outline' : 'default'
+                    }
                     disabled={activeOrg.plan === 'Enterprise'}
                     onClick={() => handlePlanChange('Enterprise')}
-                    className='w-full mt-4 text-xs'
+                    className='mt-4 w-full text-xs'
                   >
-                    {activeOrg.plan === 'Enterprise' ? 'Current Plan' : 'Switch to Enterprise'}
+                    {activeOrg.plan === 'Enterprise'
+                      ? 'Current Plan'
+                      : 'Switch to Enterprise'}
                   </Button>
                 </div>
               </div>
 
-              <div className='rounded-lg border border-border/50 bg-muted/30 p-4 space-y-3'>
+              <div className='space-y-3 rounded-lg border border-border/50 bg-muted/30 p-4'>
                 <h3 className='text-xs font-semibold text-foreground'>
                   Usage Summary
                 </h3>
-                <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+                <div className='grid grid-cols-1 gap-4 sm:grid-cols-3'>
                   <div className='space-y-1'>
-                    <p className='text-[11px] text-muted-foreground'>Active Documents</p>
+                    <p className='text-[11px] text-muted-foreground'>
+                      Active Documents
+                    </p>
                     <p className='text-base font-bold'>{activeDocCount} docs</p>
                   </div>
                   <div className='space-y-1'>
-                    <p className='text-[11px] text-muted-foreground'>Workspace Members</p>
-                    <p className='text-base font-bold'>{members.length} members</p>
+                    <p className='text-[11px] text-muted-foreground'>
+                      Workspace Members
+                    </p>
+                    <p className='text-base font-bold'>
+                      {members.length} members
+                    </p>
                   </div>
                   <div className='space-y-1'>
-                    <p className='text-[11px] text-muted-foreground'>Storage Used</p>
+                    <p className='text-[11px] text-muted-foreground'>
+                      Storage Used
+                    </p>
                     <p className='text-base font-bold'>24.5 MB / 10 GB</p>
                   </div>
                 </div>
@@ -613,18 +658,21 @@ export function Settings() {
             </div>
           </TabsContent>
 
-          <TabsContent value='members' className='space-y-6 focus-visible:outline-none'>
-            <div className='rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs space-y-6'>
-              <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+          <TabsContent
+            value='members'
+            className='space-y-6 focus-visible:outline-none'
+          >
+            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
+              <div className='flex flex-col justify-between gap-4 sm:flex-row sm:items-center'>
                 <div className='flex items-start gap-3.5'>
-                  <div className='flex size-9 items-center justify-center rounded-lg bg-muted text-foreground shrink-0'>
+                  <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground'>
                     <Users className='size-5 text-muted-foreground' />
                   </div>
                   <div>
-                    <h2 className='text-base font-semibold text-foreground leading-none'>
+                    <h2 className='text-base leading-none font-semibold text-foreground'>
                       Workspace Members
                     </h2>
-                    <p className='text-xs text-muted-foreground mt-1'>
+                    <p className='mt-1 text-xs text-muted-foreground'>
                       Manage team access, permissions, and invitations
                     </p>
                   </div>
@@ -632,7 +680,7 @@ export function Settings() {
                 <Button
                   size='sm'
                   onClick={() => setInviteDialogOpen(true)}
-                  className='text-xs gap-1.5 self-start sm:self-auto'
+                  className='gap-1.5 self-start text-xs sm:self-auto'
                 >
                   <UserPlus className='size-3.5' />
                   <span>Invite Member</span>
@@ -648,14 +696,22 @@ export function Settings() {
                 />
               </div>
 
-              <div className='rounded-lg border border-border/60 overflow-hidden'>
+              <div className='overflow-hidden rounded-lg border border-border/60'>
                 <Table>
                   <TableHeader>
-                    <TableRow className='hover:bg-transparent bg-muted/40'>
-                      <TableHead className='text-xs font-semibold text-foreground'>User</TableHead>
-                      <TableHead className='text-xs font-semibold text-foreground'>Role</TableHead>
-                      <TableHead className='text-xs font-semibold text-foreground hidden sm:table-cell'>Joined</TableHead>
-                      <TableHead className='text-xs font-semibold text-foreground text-end'>Action</TableHead>
+                    <TableRow className='bg-muted/40 hover:bg-transparent'>
+                      <TableHead className='text-xs font-semibold text-foreground'>
+                        User
+                      </TableHead>
+                      <TableHead className='text-xs font-semibold text-foreground'>
+                        Role
+                      </TableHead>
+                      <TableHead className='hidden text-xs font-semibold text-foreground sm:table-cell'>
+                        Joined
+                      </TableHead>
+                      <TableHead className='text-end text-xs font-semibold text-foreground'>
+                        Action
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -664,16 +720,19 @@ export function Settings() {
                         <TableCell className='py-3'>
                           <div className='flex items-center gap-3'>
                             <Avatar className='h-8 w-8 rounded-lg'>
-                              <AvatarImage src={member.avatar} alt={member.name} />
+                              <AvatarImage
+                                src={member.avatar}
+                                alt={member.name}
+                              />
                               <AvatarFallback className='rounded-lg text-xs'>
                                 {member.name.slice(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <div className='grid text-start leading-tight'>
-                              <span className='text-xs font-medium text-foreground truncate'>
+                              <span className='truncate text-xs font-medium text-foreground'>
                                 {member.name}
                               </span>
-                              <span className='text-[11px] text-muted-foreground truncate'>
+                              <span className='truncate text-[11px] text-muted-foreground'>
                                 {member.email}
                               </span>
                             </div>
@@ -683,20 +742,37 @@ export function Settings() {
                           <Select
                             value={member.role}
                             disabled={member.role === 'Owner'}
-                            onValueChange={(val) => handleRoleChange(member.id, val as MemberItem['role'])}
+                            onValueChange={(val) =>
+                              handleRoleChange(
+                                member.id,
+                                val as MemberItem['role']
+                              )
+                            }
                           >
                             <SelectTrigger className='h-7 w-28 text-[11px]'>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value='Owner' disabled className='text-xs'>Owner</SelectItem>
-                              <SelectItem value='Admin' className='text-xs'>Admin</SelectItem>
-                              <SelectItem value='Member' className='text-xs'>Member</SelectItem>
-                              <SelectItem value='Viewer' className='text-xs'>Viewer</SelectItem>
+                              <SelectItem
+                                value='Owner'
+                                disabled
+                                className='text-xs'
+                              >
+                                Owner
+                              </SelectItem>
+                              <SelectItem value='Admin' className='text-xs'>
+                                Admin
+                              </SelectItem>
+                              <SelectItem value='Member' className='text-xs'>
+                                Member
+                              </SelectItem>
+                              <SelectItem value='Viewer' className='text-xs'>
+                                Viewer
+                              </SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell className='py-3 text-xs text-muted-foreground hidden sm:table-cell'>
+                        <TableCell className='hidden py-3 text-xs text-muted-foreground sm:table-cell'>
                           {member.joinedAt}
                         </TableCell>
                         <TableCell className='py-3 text-end'>
@@ -704,7 +780,9 @@ export function Settings() {
                             <Button
                               variant='ghost'
                               size='icon'
-                              onClick={() => handleRemoveMember(member.id, member.name)}
+                              onClick={() =>
+                                handleRemoveMember(member.id, member.name)
+                              }
                               className='size-7 text-muted-foreground hover:text-destructive'
                               title='Remove Member'
                             >
@@ -720,17 +798,20 @@ export function Settings() {
             </div>
           </TabsContent>
 
-          <TabsContent value='notifications' className='space-y-6 focus-visible:outline-none'>
-            <div className='rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs space-y-6'>
+          <TabsContent
+            value='notifications'
+            className='space-y-6 focus-visible:outline-none'
+          >
+            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
               <div className='flex items-start gap-3.5'>
-                <div className='flex size-9 items-center justify-center rounded-lg bg-muted text-foreground shrink-0'>
+                <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground'>
                   <Mail className='size-5 text-muted-foreground' />
                 </div>
                 <div>
-                  <h2 className='text-base font-semibold text-foreground leading-none'>
+                  <h2 className='text-base leading-none font-semibold text-foreground'>
                     Workspace Notifications
                   </h2>
-                  <p className='text-xs text-muted-foreground mt-1'>
+                  <p className='mt-1 text-xs text-muted-foreground'>
                     Configure email and in-app alerts for workspace events
                   </p>
                 </div>
@@ -739,7 +820,7 @@ export function Settings() {
               <div className='divide-y divide-border/60'>
                 <div className='flex items-center justify-between py-4'>
                   <div className='space-y-0.5 pr-4'>
-                    <Label className='text-xs font-medium text-foreground cursor-pointer'>
+                    <Label className='cursor-pointer text-xs font-medium text-foreground'>
                       Document Updates
                     </Label>
                     <p className='text-[11px] text-muted-foreground'>
@@ -754,7 +835,7 @@ export function Settings() {
 
                 <div className='flex items-center justify-between py-4'>
                   <div className='space-y-0.5 pr-4'>
-                    <Label className='text-xs font-medium text-foreground cursor-pointer'>
+                    <Label className='cursor-pointer text-xs font-medium text-foreground'>
                       Comments & Replies
                     </Label>
                     <p className='text-[11px] text-muted-foreground'>
@@ -769,11 +850,12 @@ export function Settings() {
 
                 <div className='flex items-center justify-between py-4'>
                   <div className='space-y-0.5 pr-4'>
-                    <Label className='text-xs font-medium text-foreground cursor-pointer'>
+                    <Label className='cursor-pointer text-xs font-medium text-foreground'>
                       @Mentions
                     </Label>
                     <p className='text-[11px] text-muted-foreground'>
-                      Instant alert when someone tags you in a document or comment.
+                      Instant alert when someone tags you in a document or
+                      comment.
                     </p>
                   </div>
                   <Switch
@@ -784,11 +866,12 @@ export function Settings() {
 
                 <div className='flex items-center justify-between py-4'>
                   <div className='space-y-0.5 pr-4'>
-                    <Label className='text-xs font-medium text-foreground cursor-pointer'>
+                    <Label className='cursor-pointer text-xs font-medium text-foreground'>
                       Weekly Digest
                     </Label>
                     <p className='text-[11px] text-muted-foreground'>
-                      A summary of top documents and changes emailed every Monday.
+                      A summary of top documents and changes emailed every
+                      Monday.
                     </p>
                   </div>
                   <Switch
@@ -799,11 +882,12 @@ export function Settings() {
 
                 <div className='flex items-center justify-between py-4'>
                   <div className='space-y-0.5 pr-4'>
-                    <Label className='text-xs font-medium text-foreground cursor-pointer'>
+                    <Label className='cursor-pointer text-xs font-medium text-foreground'>
                       Security Alerts
                     </Label>
                     <p className='text-[11px] text-muted-foreground'>
-                      Important notices regarding workspace access and settings changes.
+                      Important notices regarding workspace access and settings
+                      changes.
                     </p>
                   </div>
                   <Switch
@@ -824,7 +908,8 @@ export function Settings() {
               Leave Workspace
             </DialogTitle>
             <DialogDescription className='text-xs text-muted-foreground'>
-              Are you sure you want to leave "{activeOrg.name}"? You will lose access to all documents within this workspace.
+              Are you sure you want to leave "{activeOrg.name}"? You will lose
+              access to all documents within this workspace.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className='gap-2 sm:gap-0'>
@@ -855,12 +940,17 @@ export function Settings() {
               Delete Workspace
             </DialogTitle>
             <DialogDescription className='text-xs text-muted-foreground'>
-              This action cannot be undone. All documents and projects in this workspace will be permanently deleted.
+              This action cannot be undone. All documents and projects in this
+              workspace will be permanently deleted.
             </DialogDescription>
           </DialogHeader>
           <div className='space-y-2 py-2'>
             <Label className='text-xs font-medium'>
-              Type <span className='font-bold select-all text-foreground'>{activeOrg.name}</span> to confirm:
+              Type{' '}
+              <span className='font-bold text-foreground select-all'>
+                {activeOrg.name}
+              </span>{' '}
+              to confirm:
             </Label>
             <Input
               value={deleteConfirmationName}
@@ -936,9 +1026,15 @@ export function Settings() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='Admin' className='text-xs'>Admin (Full management)</SelectItem>
-                    <SelectItem value='Member' className='text-xs'>Member (Can edit documents)</SelectItem>
-                    <SelectItem value='Viewer' className='text-xs'>Viewer (Read-only access)</SelectItem>
+                    <SelectItem value='Admin' className='text-xs'>
+                      Admin (Full management)
+                    </SelectItem>
+                    <SelectItem value='Member' className='text-xs'>
+                      Member (Can edit documents)
+                    </SelectItem>
+                    <SelectItem value='Viewer' className='text-xs'>
+                      Viewer (Read-only access)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>

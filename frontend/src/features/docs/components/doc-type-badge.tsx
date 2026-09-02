@@ -1,7 +1,7 @@
-import { Database, FileText, GitFork } from 'lucide-react'
 import { DocType } from '@/types/dokudocs'
-import { Badge } from '@/components/ui/badge'
+import { Database, FileText, GitFork } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 
 interface DocTypeBadgeProps {
   type: DocType
@@ -18,7 +18,8 @@ export function DocTypeBadge({
     markdown: {
       label: 'Markdown',
       icon: FileText,
-      style: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+      style:
+        'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
     },
     dbdiagram: {
       label: 'DBML',

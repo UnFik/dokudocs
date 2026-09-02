@@ -87,7 +87,9 @@ export function detectDocTypeAndContent(
     }
   }
 
-  const mermaidBlockMatch = trimmed.match(/^```(?:mermaid)\s*([\s\S]*?)\s*```$/i)
+  const mermaidBlockMatch = trimmed.match(
+    /^```(?:mermaid)\s*([\s\S]*?)\s*```$/i
+  )
   if (mermaidBlockMatch) {
     return {
       type: 'mermaid',

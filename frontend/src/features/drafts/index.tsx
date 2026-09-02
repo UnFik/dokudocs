@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { FileEdit, LayoutGrid, List, Plus, Search, Upload } from 'lucide-react'
 import { DocType } from '@/types/dokudocs'
+import { FileEdit, LayoutGrid, List, Plus, Search, Upload } from 'lucide-react'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,7 +35,7 @@ export function DraftsPage() {
 
   return (
     <div className='flex flex-1 flex-col gap-6 p-6'>
-      <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5'>
+      <div className='flex flex-col justify-between gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-center'>
         <div>
           <div className='flex items-center gap-2.5'>
             <div className='flex size-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400'>
@@ -49,7 +49,8 @@ export function DraftsPage() {
             </span>
           </div>
           <p className='mt-1 text-xs text-muted-foreground'>
-            Personal and unassigned scratchpad documents before publishing into projects.
+            Personal and unassigned scratchpad documents before publishing into
+            projects.
           </p>
         </div>
 
@@ -57,7 +58,7 @@ export function DraftsPage() {
           <Button
             variant='outline'
             size='sm'
-            className='h-8 text-xs gap-1.5 shadow-xs'
+            className='h-8 gap-1.5 text-xs shadow-xs'
             onClick={() => setImportDialogOpen(true)}
           >
             <Upload className='size-3.5' />
@@ -66,7 +67,7 @@ export function DraftsPage() {
 
           <Button
             size='sm'
-            className='h-8 text-xs gap-1.5 shadow-xs'
+            className='h-8 gap-1.5 text-xs shadow-xs'
             onClick={() => setCreateDialogOpen(true)}
           >
             <Plus className='size-3.5' />
@@ -76,10 +77,10 @@ export function DraftsPage() {
       </div>
 
       {draftDocs.length > 0 && (
-        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3'>
-          <div className='flex items-center gap-2 flex-1 max-w-md'>
+        <div className='flex flex-col justify-between gap-3 sm:flex-row sm:items-center'>
+          <div className='flex max-w-md flex-1 items-center gap-2'>
             <div className='relative w-full'>
-              <Search className='absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground' />
+              <Search className='absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground' />
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -94,17 +95,17 @@ export function DraftsPage() {
               value={typeFilter}
               onValueChange={(val) => setTypeFilter(val as 'all' | DocType)}
             >
-              <TabsList className='h-8 p-0.5 bg-muted/60'>
-                <TabsTrigger value='all' className='h-7 text-xs px-2.5'>
+              <TabsList className='h-8 bg-muted/60 p-0.5'>
+                <TabsTrigger value='all' className='h-7 px-2.5 text-xs'>
                   All
                 </TabsTrigger>
-                <TabsTrigger value='markdown' className='h-7 text-xs px-2.5'>
+                <TabsTrigger value='markdown' className='h-7 px-2.5 text-xs'>
                   Markdown
                 </TabsTrigger>
-                <TabsTrigger value='dbdiagram' className='h-7 text-xs px-2.5'>
+                <TabsTrigger value='dbdiagram' className='h-7 px-2.5 text-xs'>
                   DBML
                 </TabsTrigger>
-                <TabsTrigger value='mermaid' className='h-7 text-xs px-2.5'>
+                <TabsTrigger value='mermaid' className='h-7 px-2.5 text-xs'>
                   Mermaid
                 </TabsTrigger>
               </TabsList>

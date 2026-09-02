@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { z } from 'zod'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { UploadCloud, X } from 'lucide-react'
-import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { z } from 'zod'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
 import {
@@ -151,7 +151,8 @@ export function CreateProjectDialog({
             <DialogHeader>
               <DialogTitle>Create New Project</DialogTitle>
               <DialogDescription>
-                Organize your documents and architecture diagrams in a dedicated project.
+                Organize your documents and architecture diagrams in a dedicated
+                project.
               </DialogDescription>
             </DialogHeader>
 
@@ -185,14 +186,14 @@ export function CreateProjectDialog({
                 />
 
                 {logoUrl ? (
-                  <div className='relative flex items-center gap-3 rounded-lg border border-border/80 p-3 bg-muted/20'>
+                  <div className='relative flex items-center gap-3 rounded-lg border border-border/80 bg-muted/20 p-3'>
                     <img
                       src={logoUrl}
                       alt='Project Logo Preview'
-                      className='size-12 rounded-lg object-cover border border-border shadow-2xs'
+                      className='size-12 rounded-lg border border-border object-cover shadow-2xs'
                     />
-                    <div className='flex-1 min-w-0'>
-                      <p className='text-xs font-medium text-foreground truncate'>
+                    <div className='min-w-0 flex-1'>
+                      <p className='truncate text-xs font-medium text-foreground'>
                         Project Logo Selected
                       </p>
                       <p className='text-[10px] text-muted-foreground'>
@@ -215,13 +216,13 @@ export function CreateProjectDialog({
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
-                    className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${
+                    className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
                       isDragging
                         ? 'border-primary bg-primary/10'
                         : 'border-border/80 hover:border-primary/50 hover:bg-muted/30'
                     }`}
                   >
-                    <div className='flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground mb-2'>
+                    <div className='mb-2 flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground'>
                       <UploadCloud className='size-5' />
                     </div>
                     <p className='text-xs font-medium text-foreground'>

@@ -1,11 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import {
-  Check,
-  ChevronsUpDown,
-  Plus,
-  Settings,
-} from 'lucide-react'
+import { Check, ChevronsUpDown, Plus, Settings } from 'lucide-react'
+import { defaultOrganizations, useDokudocsStore } from '@/stores/dokudocs-store'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +17,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { defaultOrganizations, useDokudocsStore } from '@/stores/dokudocs-store'
 import { CreateWorkspaceDialog } from './create-workspace-dialog'
 
 export function NavWorkspace() {
@@ -46,13 +41,15 @@ export function NavWorkspace() {
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size='lg'
-                className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer'
+                className='cursor-pointer data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
               >
-                <div className='flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shrink-0 shadow-xs'>
-                  {activeOrg.name ? activeOrg.name.slice(0, 2).toUpperCase() : 'DK'}
+                <div className='flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground shadow-xs'>
+                  {activeOrg.name
+                    ? activeOrg.name.slice(0, 2).toUpperCase()
+                    : 'DK'}
                 </div>
                 <div className='grid flex-1 text-start text-sm leading-tight'>
-                  <span className='truncate font-semibold text-xs'>
+                  <span className='truncate text-xs font-semibold'>
                     {activeOrg.name}
                   </span>
                   <span className='truncate text-[10px] text-muted-foreground'>
@@ -68,7 +65,7 @@ export function NavWorkspace() {
               align='start'
               sideOffset={4}
             >
-              <DropdownMenuLabel className='text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-2 py-1.5'>
+              <DropdownMenuLabel className='px-2 py-1.5 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase'>
                 Workspaces
               </DropdownMenuLabel>
               <DropdownMenuGroup>
@@ -78,20 +75,22 @@ export function NavWorkspace() {
                     <DropdownMenuItem
                       key={org.id}
                       onClick={() => setActiveOrgId(org.id)}
-                      className='flex items-center gap-2.5 px-2 py-2 cursor-pointer'
+                      className='flex cursor-pointer items-center gap-2.5 px-2 py-2'
                     >
-                      <div className='flex size-6 items-center justify-center rounded-md bg-muted text-foreground font-semibold text-[10px] shrink-0'>
+                      <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] font-semibold text-foreground'>
                         {org.name.slice(0, 2).toUpperCase()}
                       </div>
-                      <div className='flex flex-col flex-1 min-w-0'>
-                        <span className='text-xs font-medium truncate'>
+                      <div className='flex min-w-0 flex-1 flex-col'>
+                        <span className='truncate text-xs font-medium'>
                           {org.name}
                         </span>
-                        <span className='text-[10px] text-muted-foreground truncate'>
+                        <span className='truncate text-[10px] text-muted-foreground'>
                           {org.plan || 'Free'}
                         </span>
                       </div>
-                      {isActive && <Check className='size-3.5 text-primary shrink-0' />}
+                      {isActive && (
+                        <Check className='size-3.5 shrink-0 text-primary' />
+                      )}
                     </DropdownMenuItem>
                   )
                 })}
@@ -99,14 +98,14 @@ export function NavWorkspace() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => navigate({ to: '/settings' })}
-                className='flex items-center gap-2.5 px-2 py-1.5 text-xs cursor-pointer text-muted-foreground hover:text-foreground'
+                className='flex cursor-pointer items-center gap-2.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground'
               >
                 <Settings className='size-4' />
                 <span>Workspace Settings</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setCreateOpen(true)}
-                className='flex items-center gap-2.5 px-2 py-1.5 text-xs cursor-pointer text-muted-foreground hover:text-foreground'
+                className='flex cursor-pointer items-center gap-2.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground'
               >
                 <div className='flex size-4 items-center justify-center rounded border border-dashed border-border text-muted-foreground'>
                   <Plus className='size-3' />

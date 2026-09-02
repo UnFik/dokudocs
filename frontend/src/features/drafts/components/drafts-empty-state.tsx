@@ -16,11 +16,12 @@ export function DraftsEmptyState() {
           No drafts yet
         </h3>
         <p className='mt-1.5 max-w-sm text-xs leading-relaxed text-muted-foreground'>
-          Drafts are personal scratchpad documents that you can start without assigning them to any project.
+          Drafts are personal scratchpad documents that you can start without
+          assigning them to any project.
         </p>
         <Button
           size='sm'
-          className='mt-6 text-xs gap-1.5'
+          className='mt-6 gap-1.5 text-xs'
           onClick={() => setCreateDialogOpen(true)}
         >
           <Plus className='size-3.5' />

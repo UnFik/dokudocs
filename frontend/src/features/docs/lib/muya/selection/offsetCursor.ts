@@ -2,22 +2,21 @@
 // handoff. The desktop app hands back only a CodeMirror `{ line, ch }` offset
 // pair when switching a tab from source mode to WYSIWYG; this resolves those
 // offsets against the live block tree to recover the caret's block-key cursor.
-
-import type Content from '../block/base/content';
-import type { ScrollPage } from '../block/scrollPage';
-import type { TState } from '../state/types';
-import type { IPathCursor, ISelection } from './types';
+import type Content from '../block/base/content'
+import type { ScrollPage } from '../block/scrollPage'
+import type { TState } from '../state/types'
+import type { IPathCursor, ISelection } from './types'
 
 /** One end of a source-mode (CodeMirror) selection: a `{ line, ch }` offset. */
 export interface IIndexPosition {
-    line: number;
-    ch: number;
+  line: number
+  ch: number
 }
 
 /** A source-mode selection in CodeMirror `{ line, ch }` coordinates. */
 export interface IIndexCursor {
-    anchor: IIndexPosition | null;
-    focus: IIndexPosition | null;
+  anchor: IIndexPosition | null
+  focus: IIndexPosition | null
 }
 
 // Sentinel strings injected at the cursor offsets. They must be improbable in
@@ -26,14 +25,13 @@ export interface IIndexCursor {
 // are plain ASCII with a long random-looking token unlikely to occur in real
 // documents. The two markers share no common substring so neither can be
 // found inside the other.
-const ANCHOR_SENTINEL = 'mUyAcUrSoRzZqAnChOr9x7kPvWb';
-const FOCUS_SENTINEL = 'mUyAcUrSoRzZqFoCuS4t2nDhGj';
+const ANCHOR_SENTINEL = 'mUyAcUrSoRzZqAnChOr9x7kPvWb'
+const FOCUS_SENTINEL = 'mUyAcUrSoRzZqFoCuS4t2nDhGj'
 
 function _clampOffset(offset: number, length: number): number {
-    if (!Number.isInteger(offset))
-        return 0;
+  if (!Number.isInteger(offset)) return 0
 
-    return Math.min(Math.max(offset, 0), length);
+  return Math.min(Math.max(offset, 0), length)
 }
 
 /**
@@ -42,51 +40,52 @@ function _clampOffset(offset: number, length: number): number {
  * exist (stale cursor) so the caller can fall back to no cursor restore.
  */
 export function injectSentinels(
-    markdown: string,
-    cursor: IIndexCursor,
+  markdown: string,
+  cursor: IIndexCursor
 ): string | null {
-    const { anchor, focus } = cursor;
-    if (!anchor || !focus)
-        return null;
+  const { anchor, focus } = cursor
+  if (!anchor || !focus) return null
 
-    const lines = markdown.split('\n');
-    const isValidLine = (line: number): boolean =>
-        Number.isInteger(line) && line >= 0 && line < lines.length;
+  const lines = markdown.split('\n')
+  const isValidLine = (line: number): boolean =>
+    Number.isInteger(line) && line >= 0 && line < lines.length
 
-    if (!isValidLine(anchor.line) || !isValidLine(focus.line))
-        return null;
+  if (!isValidLine(anchor.line) || !isValidLine(focus.line)) return null
 
-    const anchorText = lines[anchor.line]!;
-    const focusText = lines[focus.line]!;
-    const anchorCh = _clampOffset(anchor.ch, anchorText.length);
-    const focusCh = _clampOffset(focus.ch, focusText.length);
+  const anchorText = lines[anchor.line]!
+  const focusText = lines[focus.line]!
+  const anchorCh = _clampOffset(anchor.ch, anchorText.length)
+  const focusCh = _clampOffset(focus.ch, focusText.length)
 
-    if (anchor.line === focus.line) {
-        const min = Math.min(anchorCh, focusCh);
-        const max = Math.max(anchorCh, focusCh);
-        const first = anchorText.substring(0, min);
-        const middle = anchorText.substring(min, max);
-        const last = anchorText.substring(max);
-        lines[anchor.line]
-            = first
-                + (anchorCh <= focusCh ? ANCHOR_SENTINEL : FOCUS_SENTINEL)
-                + middle
-                + (anchorCh <= focusCh ? FOCUS_SENTINEL : ANCHOR_SENTINEL)
-                + last;
-    }
-    else {
-        lines[anchor.line]
-            = anchorText.substring(0, anchorCh) + ANCHOR_SENTINEL + anchorText.substring(anchorCh);
-        lines[focus.line]
-            = focusText.substring(0, focusCh) + FOCUS_SENTINEL + focusText.substring(focusCh);
-    }
+  if (anchor.line === focus.line) {
+    const min = Math.min(anchorCh, focusCh)
+    const max = Math.max(anchorCh, focusCh)
+    const first = anchorText.substring(0, min)
+    const middle = anchorText.substring(min, max)
+    const last = anchorText.substring(max)
+    lines[anchor.line] =
+      first +
+      (anchorCh <= focusCh ? ANCHOR_SENTINEL : FOCUS_SENTINEL) +
+      middle +
+      (anchorCh <= focusCh ? FOCUS_SENTINEL : ANCHOR_SENTINEL) +
+      last
+  } else {
+    lines[anchor.line] =
+      anchorText.substring(0, anchorCh) +
+      ANCHOR_SENTINEL +
+      anchorText.substring(anchorCh)
+    lines[focus.line] =
+      focusText.substring(0, focusCh) +
+      FOCUS_SENTINEL +
+      focusText.substring(focusCh)
+  }
 
-    return lines.join('\n');
+  return lines.join('\n')
 }
 
 interface ISentinelHit {
-    block: Content;
-    offset: number;
+  block: Content
+  offset: number
 }
 
 /**
@@ -96,19 +95,20 @@ interface ISentinelHit {
  * left untouched — the tree carrying the sentinels is transient and replaced by
  * the caller immediately after.
  */
-function _findSentinel(scrollPage: ScrollPage, sentinel: string): ISentinelHit | null {
-    let hit: ISentinelHit | null = null;
+function _findSentinel(
+  scrollPage: ScrollPage,
+  sentinel: string
+): ISentinelHit | null {
+  let hit: ISentinelHit | null = null
 
-    scrollPage.depthFirstTraverse((node) => {
-        if (hit || !node.isContent())
-            return;
+  scrollPage.depthFirstTraverse((node) => {
+    if (hit || !node.isContent()) return
 
-        const idx = node.text.indexOf(sentinel);
-        if (idx > -1)
-            hit = { block: node, offset: idx };
-    });
+    const idx = node.text.indexOf(sentinel)
+    if (idx > -1) hit = { block: node, offset: idx }
+  })
 
-    return hit;
+  return hit
 }
 
 /**
@@ -126,36 +126,37 @@ function _findSentinel(scrollPage: ScrollPage, sentinel: string): ISentinelHit |
  * The returned offsets are sentinel-free: the focus offset is decremented when
  * the anchor sentinel precedes it in the same block.
  */
-export function resolveSentinelCursor(scrollPage: ScrollPage): IPathCursor | null {
-    const anchorHit = _findSentinel(scrollPage, ANCHOR_SENTINEL);
-    const focusHit = _findSentinel(scrollPage, FOCUS_SENTINEL);
+export function resolveSentinelCursor(
+  scrollPage: ScrollPage
+): IPathCursor | null {
+  const anchorHit = _findSentinel(scrollPage, ANCHOR_SENTINEL)
+  const focusHit = _findSentinel(scrollPage, FOCUS_SENTINEL)
 
-    if (!anchorHit && !focusHit)
-        return null;
+  if (!anchorHit && !focusHit) return null
 
-    const anchor = anchorHit ?? focusHit!;
-    const focus = focusHit ?? anchorHit!;
+  const anchor = anchorHit ?? focusHit!
+  const focus = focusHit ?? anchorHit!
 
-    let anchorOffset = anchor.offset;
-    let focusOffset = focus.offset;
+  let anchorOffset = anchor.offset
+  let focusOffset = focus.offset
 
-    // When both sentinels live in the same block, the second one's recorded
-    // offset is shifted by the first sentinel's length. Normalize so both
-    // offsets are expressed against the sentinel-free text.
-    if (anchor.block === focus.block) {
-        if (anchorOffset <= focusOffset)
-            focusOffset = Math.max(focusOffset - ANCHOR_SENTINEL.length, anchorOffset);
-        else
-            anchorOffset = Math.max(anchorOffset - FOCUS_SENTINEL.length, focusOffset);
-    }
+  // When both sentinels live in the same block, the second one's recorded
+  // offset is shifted by the first sentinel's length. Normalize so both
+  // offsets are expressed against the sentinel-free text.
+  if (anchor.block === focus.block) {
+    if (anchorOffset <= focusOffset)
+      focusOffset = Math.max(focusOffset - ANCHOR_SENTINEL.length, anchorOffset)
+    else
+      anchorOffset = Math.max(anchorOffset - FOCUS_SENTINEL.length, focusOffset)
+  }
 
-    // Snapshot the paths now, while the blocks are still attached.
-    return {
-        anchor: { offset: anchorOffset },
-        anchorPath: [...anchor.block.path],
-        focus: { offset: focusOffset },
-        focusPath: [...focus.block.path],
-    };
+  // Snapshot the paths now, while the blocks are still attached.
+  return {
+    anchor: { offset: anchorOffset },
+    anchorPath: [...anchor.block.path],
+    focus: { offset: focusOffset },
+    focusPath: [...focus.block.path],
+  }
 }
 
 // INVERSE direction: WYSIWYG block-key selection -> source `{ line, ch }` index
@@ -169,35 +170,31 @@ export function resolveSentinelCursor(scrollPage: ScrollPage): IPathCursor | nul
  * bail out. Mutates `state` in place; the caller passes a throwaway clone.
  */
 function _injectSentinelAtPath(
-    state: TState[],
-    path: (string | number)[],
-    offset: number,
-    sentinel: string,
+  state: TState[],
+  path: (string | number)[],
+  offset: number,
+  sentinel: string
 ): boolean {
-    if (path.length === 0)
-        return false;
+  if (path.length === 0) return false
 
-    // Navigate to the parent node that owns the final key.
-    let node: unknown = state;
-    for (let i = 0; i < path.length - 1; i++) {
-        if (node == null || typeof node !== 'object')
-            return false;
-        node = (node as Record<string | number, unknown>)[path[i]!];
-    }
+  // Navigate to the parent node that owns the final key.
+  let node: unknown = state
+  for (let i = 0; i < path.length - 1; i++) {
+    if (node == null || typeof node !== 'object') return false
+    node = (node as Record<string | number, unknown>)[path[i]!]
+  }
 
-    const key = path[path.length - 1]!;
-    if (node == null || typeof node !== 'object')
-        return false;
+  const key = path[path.length - 1]!
+  if (node == null || typeof node !== 'object') return false
 
-    const holder = node as Record<string | number, unknown>;
-    const text = holder[key];
-    if (typeof text !== 'string')
-        return false;
+  const holder = node as Record<string | number, unknown>
+  const text = holder[key]
+  if (typeof text !== 'string') return false
 
-    const at = _clampOffset(offset, text.length);
-    holder[key] = text.substring(0, at) + sentinel + text.substring(at);
+  const at = _clampOffset(offset, text.length)
+  holder[key] = text.substring(0, at) + sentinel + text.substring(at)
 
-    return true;
+  return true
 }
 
 /**
@@ -213,45 +210,51 @@ function _injectSentinelAtPath(
  * so injecting the earlier one first keeps the later offset valid.
  */
 export function injectStateSentinels(
-    state: TState[],
-    selection: ISelection,
+  state: TState[],
+  selection: ISelection
 ): TState[] | null {
-    const anchorPath = selection.anchor.path;
-    const focusPath = selection.focus.path;
-    const anchorOffset = selection.anchor.offset;
-    const focusOffset = selection.focus.offset;
+  const anchorPath = selection.anchor.path
+  const focusPath = selection.focus.path
+  const anchorOffset = selection.anchor.offset
+  const focusOffset = selection.focus.offset
 
-    const sameBlock
-        = anchorPath.length === focusPath.length
-            && anchorPath.every((seg, i) => seg === focusPath[i]);
+  const sameBlock =
+    anchorPath.length === focusPath.length &&
+    anchorPath.every((seg, i) => seg === focusPath[i])
 
-    const inject = (
-        path: (string | number)[],
-        offset: number,
-        sentinel: string,
-    ): boolean => _injectSentinelAtPath(state, path, offset, sentinel);
+  const inject = (
+    path: (string | number)[],
+    offset: number,
+    sentinel: string
+  ): boolean => _injectSentinelAtPath(state, path, offset, sentinel)
 
-    if (!sameBlock) {
-        // Different blocks (or different lines): the injections never overlap.
-        const anchorOk = inject(anchorPath, anchorOffset, ANCHOR_SENTINEL);
-        const focusOk = inject(focusPath, focusOffset, FOCUS_SENTINEL);
+  if (!sameBlock) {
+    // Different blocks (or different lines): the injections never overlap.
+    const anchorOk = inject(anchorPath, anchorOffset, ANCHOR_SENTINEL)
+    const focusOk = inject(focusPath, focusOffset, FOCUS_SENTINEL)
 
-        return anchorOk || focusOk ? state : null;
-    }
+    return anchorOk || focusOk ? state : null
+  }
 
-    // Same block: inject the earlier offset first (unshifted), then the later
-    // one shifted by the first sentinel's length.
-    let ok: boolean;
-    if (anchorOffset <= focusOffset) {
-        ok = inject(anchorPath, anchorOffset, ANCHOR_SENTINEL);
-        ok = inject(focusPath, focusOffset + ANCHOR_SENTINEL.length, FOCUS_SENTINEL) || ok;
-    }
-    else {
-        ok = inject(focusPath, focusOffset, FOCUS_SENTINEL);
-        ok = inject(anchorPath, anchorOffset + FOCUS_SENTINEL.length, ANCHOR_SENTINEL) || ok;
-    }
+  // Same block: inject the earlier offset first (unshifted), then the later
+  // one shifted by the first sentinel's length.
+  let ok: boolean
+  if (anchorOffset <= focusOffset) {
+    ok = inject(anchorPath, anchorOffset, ANCHOR_SENTINEL)
+    ok =
+      inject(focusPath, focusOffset + ANCHOR_SENTINEL.length, FOCUS_SENTINEL) ||
+      ok
+  } else {
+    ok = inject(focusPath, focusOffset, FOCUS_SENTINEL)
+    ok =
+      inject(
+        anchorPath,
+        anchorOffset + FOCUS_SENTINEL.length,
+        ANCHOR_SENTINEL
+      ) || ok
+  }
 
-    return ok ? state : null;
+  return ok ? state : null
 }
 
 /**
@@ -260,26 +263,24 @@ export function injectStateSentinels(
  * documents. `lastIndexOf` is a native scan, so the column is cheap too.
  */
 function _lineColAt(markdown: string, idx: number): IIndexPosition {
-    let line = 0;
-    for (let i = 0; i < idx; i++) {
-        if (markdown.charCodeAt(i) === 10 /* \n */)
-            line++;
-    }
-    const lastNewline = markdown.lastIndexOf('\n', idx - 1);
+  let line = 0
+  for (let i = 0; i < idx; i++) {
+    if (markdown.charCodeAt(i) === 10 /* \n */) line++
+  }
+  const lastNewline = markdown.lastIndexOf('\n', idx - 1)
 
-    return { line, ch: idx - (lastNewline + 1) };
+  return { line, ch: idx - (lastNewline + 1) }
 }
 
 /** Locate `sentinel` in `markdown` and return its `{ line, ch }`, or `null`. */
 function _findOffsetInMarkdown(
-    markdown: string,
-    sentinel: string,
+  markdown: string,
+  sentinel: string
 ): IIndexPosition | null {
-    const idx = markdown.indexOf(sentinel);
-    if (idx === -1)
-        return null;
+  const idx = markdown.indexOf(sentinel)
+  if (idx === -1) return null
 
-    return _lineColAt(markdown, idx);
+  return _lineColAt(markdown, idx)
 }
 
 /**
@@ -290,40 +291,48 @@ function _findOffsetInMarkdown(
  * focus position is corrected for any earlier-occurring anchor sentinel.
  */
 export function locateSentinelOffsets(markdown: string): IIndexCursor | null {
-    const anchorRaw = _findOffsetInMarkdown(markdown, ANCHOR_SENTINEL);
-    const focusRaw = _findOffsetInMarkdown(markdown, FOCUS_SENTINEL);
+  const anchorRaw = _findOffsetInMarkdown(markdown, ANCHOR_SENTINEL)
+  const focusRaw = _findOffsetInMarkdown(markdown, FOCUS_SENTINEL)
 
-    if (!anchorRaw && !focusRaw)
-        return null;
+  if (!anchorRaw && !focusRaw) return null
 
-    // Compute each sentinel's flat index so we can subtract the length of any
-    // OTHER sentinel that precedes it (sentinels never share the same index).
-    const anchorIdx = markdown.indexOf(ANCHOR_SENTINEL);
-    const focusIdx = markdown.indexOf(FOCUS_SENTINEL);
+  // Compute each sentinel's flat index so we can subtract the length of any
+  // OTHER sentinel that precedes it (sentinels never share the same index).
+  const anchorIdx = markdown.indexOf(ANCHOR_SENTINEL)
+  const focusIdx = markdown.indexOf(FOCUS_SENTINEL)
 
-    const cleanLineCh = (
-        raw: IIndexPosition | null,
-        ownIdx: number,
-        otherIdx: number,
-        otherLen: number,
-    ): IIndexPosition | null => {
-        if (!raw)
-            return null;
-        // Only same-line earlier sentinels shift `ch`; earlier-line ones don't.
-        if (otherIdx !== -1 && otherIdx < ownIdx) {
-            const otherLine = _lineColAt(markdown, otherIdx).line;
-            if (otherLine === raw.line)
-                return { line: raw.line, ch: raw.ch - otherLen };
-        }
+  const cleanLineCh = (
+    raw: IIndexPosition | null,
+    ownIdx: number,
+    otherIdx: number,
+    otherLen: number
+  ): IIndexPosition | null => {
+    if (!raw) return null
+    // Only same-line earlier sentinels shift `ch`; earlier-line ones don't.
+    if (otherIdx !== -1 && otherIdx < ownIdx) {
+      const otherLine = _lineColAt(markdown, otherIdx).line
+      if (otherLine === raw.line)
+        return { line: raw.line, ch: raw.ch - otherLen }
+    }
 
-        return raw;
-    };
+    return raw
+  }
 
-    const anchor = cleanLineCh(anchorRaw, anchorIdx, focusIdx, FOCUS_SENTINEL.length);
-    const focus = cleanLineCh(focusRaw, focusIdx, anchorIdx, ANCHOR_SENTINEL.length);
+  const anchor = cleanLineCh(
+    anchorRaw,
+    anchorIdx,
+    focusIdx,
+    FOCUS_SENTINEL.length
+  )
+  const focus = cleanLineCh(
+    focusRaw,
+    focusIdx,
+    anchorIdx,
+    ANCHOR_SENTINEL.length
+  )
 
-    return {
-        anchor: anchor ?? focus,
-        focus: focus ?? anchor,
-    };
+  return {
+    anchor: anchor ?? focus,
+    focus: focus ?? anchor,
+  }
 }

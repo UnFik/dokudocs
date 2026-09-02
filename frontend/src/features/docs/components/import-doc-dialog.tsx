@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { z } from 'zod'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -14,15 +16,13 @@ import {
   UploadCloud,
   X,
 } from 'lucide-react'
-import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
-import { z } from 'zod'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import {
   detectDocTypeAndContent,
   parseProperCaseTitle,
 } from '@/lib/doc-import-utils'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -137,10 +137,11 @@ export function ImportDocDialog({
     try {
       const text = await file.text()
       const properTitle = parseProperCaseTitle(file.name)
-      const { type, content, detectedReason: reason } = detectDocTypeAndContent(
-        file.name,
-        text
-      )
+      const {
+        type,
+        content,
+        detectedReason: reason,
+      } = detectDocTypeAndContent(file.name, text)
 
       setSelectedFileName(file.name)
       setFileSize(file.size)
@@ -268,9 +269,9 @@ export function ImportDocDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-[580px] max-h-[90vh] overflow-y-auto'>
+      <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-[580px]'>
         <DialogHeader>
-          <DialogTitle className='text-lg font-bold flex items-center gap-2 text-foreground'>
+          <DialogTitle className='flex items-center gap-2 text-lg font-bold text-foreground'>
             <div className='flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary'>
               <Upload className='size-4' />
             </div>
@@ -283,7 +284,10 @@ export function ImportDocDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4 pt-1'>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className='space-y-4 pt-1'
+          >
             <input
               ref={fileInputRef}
               type='file'
@@ -298,12 +302,13 @@ export function ImportDocDialog({
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-all cursor-pointer ${isDragging
-                    ? 'border-primary bg-primary/5 scale-[0.99]'
-                    : 'border-border/80 bg-muted/20 hover:bg-muted/40 hover:border-primary/50'
-                  }`}
+                className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition-all ${
+                  isDragging
+                    ? 'scale-[0.99] border-primary bg-primary/5'
+                    : 'border-border/80 bg-muted/20 hover:border-primary/50 hover:bg-muted/40'
+                }`}
               >
-                <div className='flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary mb-2'>
+                <div className='mb-2 flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary'>
                   <UploadCloud className='size-5' />
                 </div>
                 <p className='text-xs font-semibold text-foreground'>
@@ -315,7 +320,7 @@ export function ImportDocDialog({
               </div>
             ) : (
               <div className='flex items-center justify-between rounded-xl border border-border/80 bg-muted/30 p-3'>
-                <div className='flex items-center gap-3 min-w-0 flex-1'>
+                <div className='flex min-w-0 flex-1 items-center gap-3'>
                   <div className='flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary'>
                     <FileCode className='size-4' />
                   </div>
@@ -325,13 +330,13 @@ export function ImportDocDialog({
                         {selectedFileName}
                       </p>
                       {fileSize !== null && (
-                        <span className='text-[10px] text-muted-foreground shrink-0'>
+                        <span className='shrink-0 text-[10px] text-muted-foreground'>
                           ({formatFileSize(fileSize)})
                         </span>
                       )}
                     </div>
                     {detectedReason && (
-                      <div className='flex items-center gap-1 mt-0.5'>
+                      <div className='mt-0.5 flex items-center gap-1'>
                         <Sparkles className='size-3 text-amber-500' />
                         <span className='text-[10px] text-muted-foreground'>
                           Detected via {detectedReason}
@@ -341,12 +346,12 @@ export function ImportDocDialog({
                   </div>
                 </div>
 
-                <div className='flex items-center gap-1.5 shrink-0 ml-2'>
+                <div className='ml-2 flex shrink-0 items-center gap-1.5'>
                   <Button
                     type='button'
                     variant='ghost'
                     size='sm'
-                    className='h-7 text-xs px-2 text-muted-foreground hover:text-foreground'
+                    className='h-7 px-2 text-xs text-muted-foreground hover:text-foreground'
                     onClick={() => fileInputRef.current?.click()}
                   >
                     Change
@@ -389,15 +394,16 @@ export function ImportDocDialog({
               name='type'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className='text-xs font-semibold flex items-center justify-between'>
+                  <FormLabel className='flex items-center justify-between text-xs font-semibold'>
                     <span>Document Type</span>
                     {detectedReason && (
-                      <span className='text-[10px] font-normal text-muted-foreground flex items-center gap-1'>
-                        <Sparkles className='size-3 text-amber-500' /> Auto-selected
+                      <span className='flex items-center gap-1 text-[10px] font-normal text-muted-foreground'>
+                        <Sparkles className='size-3 text-amber-500' />{' '}
+                        Auto-selected
                       </span>
                     )}
                   </FormLabel>
-                  <div className='grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1'>
+                  <div className='grid grid-cols-1 gap-2.5 pt-1 sm:grid-cols-3'>
                     {typeOptions.map((opt) => {
                       const Icon = opt.icon
                       const isSelected = field.value === opt.value
@@ -406,17 +412,19 @@ export function ImportDocDialog({
                           key={opt.value}
                           type='button'
                           onClick={() => field.onChange(opt.value)}
-                          className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all cursor-pointer ${isSelected
+                          className={`flex cursor-pointer flex-col items-start rounded-lg border p-3 text-left transition-all ${
+                            isSelected
                               ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                              : 'border-border/80 hover:bg-muted/40 hover:border-border'
-                            }`}
+                              : 'border-border/80 hover:border-border hover:bg-muted/40'
+                          }`}
                         >
-                          <div className='flex items-center gap-2 mb-1.5'>
+                          <div className='mb-1.5 flex items-center gap-2'>
                             <div
-                              className={`p-1.5 rounded-md ${isSelected
+                              className={`rounded-md p-1.5 ${
+                                isSelected
                                   ? 'bg-primary text-primary-foreground'
                                   : 'bg-muted text-muted-foreground'
-                                }`}
+                              }`}
                             >
                               <Icon className='size-3.5' />
                             </div>
@@ -424,7 +432,7 @@ export function ImportDocDialog({
                               {opt.label}
                             </span>
                           </div>
-                          <span className='text-[10px] text-muted-foreground line-clamp-2 leading-relaxed'>
+                          <span className='line-clamp-2 text-[10px] leading-relaxed text-muted-foreground'>
                             {opt.description}
                           </span>
                         </button>
@@ -454,7 +462,7 @@ export function ImportDocDialog({
                       }
                     >
                       <FormControl>
-                        <SelectTrigger className='h-9 text-xs w-full'>
+                        <SelectTrigger className='h-9 w-full text-xs'>
                           <SelectValue placeholder='Select target project' />
                         </SelectTrigger>
                       </FormControl>
@@ -475,21 +483,21 @@ export function ImportDocDialog({
               />
 
               <div className='space-y-2'>
-                <FormLabel className='text-xs font-semibold flex items-center justify-between'>
+                <FormLabel className='flex items-center justify-between text-xs font-semibold'>
                   <span>Categories (Multiple)</span>
-                  <span className='text-[10px] text-muted-foreground font-normal'>
+                  <span className='text-[10px] font-normal text-muted-foreground'>
                     {selectedCategories.length} selected
                   </span>
                 </FormLabel>
 
                 {selectedProjectId === 'unassigned' ? (
-                  <p className='text-xs text-muted-foreground italic py-1'>
+                  <p className='py-1 text-xs text-muted-foreground italic'>
                     Categories are available when assigned to a project.
                   </p>
                 ) : (
                   <div className='space-y-2.5'>
                     {allVisibleCategories.length > 0 && (
-                      <div className='flex flex-wrap gap-1.5 p-2 rounded-lg border border-border/60 bg-muted/20 min-h-10'>
+                      <div className='flex min-h-10 flex-wrap gap-1.5 rounded-lg border border-border/60 bg-muted/20 p-2'>
                         {allVisibleCategories.map((c) => {
                           const isSelected = selectedCategories.includes(c)
                           const colorId = activeProject?.categoryColors?.[c]
@@ -500,14 +508,15 @@ export function ImportDocDialog({
                               key={c}
                               type='button'
                               onClick={() => handleToggleCategory(c)}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer ${isSelected
-                                  ? `${palette.bg} ${palette.text} ${palette.border} ring-1 ring-primary/40 shadow-2xs`
-                                  : 'bg-background text-muted-foreground border-border/80 hover:bg-muted hover:text-foreground'
-                                }`}
+                              className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${
+                                isSelected
+                                  ? `${palette.bg} ${palette.text} ${palette.border} shadow-2xs ring-1 ring-primary/40`
+                                  : 'border-border/80 bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                              }`}
                             >
                               <Tag className='size-2.5' />
                               <span>{c}</span>
-                              {isSelected && <X className='size-2.5 ml-0.5' />}
+                              {isSelected && <X className='ml-0.5 size-2.5' />}
                             </button>
                           )
                         })}
@@ -517,7 +526,7 @@ export function ImportDocDialog({
                     <div className='flex items-center gap-2'>
                       <Input
                         placeholder='Add new category tag...'
-                        className='h-8 text-xs flex-1'
+                        className='h-8 flex-1 text-xs'
                         value={customCategoryInput}
                         onChange={(e) => setCustomCategoryInput(e.target.value)}
                         onKeyDown={(e) => {
@@ -533,7 +542,7 @@ export function ImportDocDialog({
                         size='sm'
                         onClick={handleAddCustomCategory}
                         disabled={!customCategoryInput.trim()}
-                        className='h-8 px-2.5 text-xs gap-1 shrink-0'
+                        className='h-8 shrink-0 gap-1 px-2.5 text-xs'
                       >
                         <Plus className='size-3.5' />
                         <span>Add</span>
@@ -546,26 +555,29 @@ export function ImportDocDialog({
               {currentContent && (
                 <div className='space-y-1.5 pt-1'>
                   <div className='flex items-center justify-between text-xs text-muted-foreground'>
-                    <span className='font-semibold text-foreground text-[11px]'>
+                    <span className='text-[11px] font-semibold text-foreground'>
                       Content Preview
                     </span>
                     <span className='text-[10px]'>
-                      {lineCount} {lineCount === 1 ? 'line' : 'lines'} • {currentContent.length} chars
+                      {lineCount} {lineCount === 1 ? 'line' : 'lines'} •{' '}
+                      {currentContent.length} chars
                     </span>
                   </div>
                   <ScrollArea className='h-24 w-full rounded-md border border-border/70 bg-muted/20 p-2 font-mono text-[10px] text-muted-foreground'>
-                    <pre className='whitespace-pre-wrap'>{currentContent.slice(0, 1000)}</pre>
+                    <pre className='whitespace-pre-wrap'>
+                      {currentContent.slice(0, 1000)}
+                    </pre>
                   </ScrollArea>
                 </div>
               )}
             </div>
 
-            <DialogFooter className='pt-2 flex items-center justify-end gap-2'>
+            <DialogFooter className='flex items-center justify-end gap-2 pt-2'>
               <Button
                 type='button'
                 variant='outline'
                 size='sm'
-                className='text-xs h-8'
+                className='h-8 text-xs'
                 onClick={() => onOpenChange(false)}
               >
                 Cancel
@@ -573,7 +585,7 @@ export function ImportDocDialog({
               <Button
                 type='submit'
                 size='sm'
-                className='text-xs h-8 px-4 gap-1.5'
+                className='h-8 gap-1.5 px-4 text-xs'
                 disabled={!selectedFileName || !form.watch('title').trim()}
               >
                 <Check className='size-3.5' />

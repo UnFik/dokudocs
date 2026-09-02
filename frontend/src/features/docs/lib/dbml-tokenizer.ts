@@ -192,7 +192,12 @@ export function highlightDbml(
 
     if (code[i] === '[') {
       const bStart = i
-      tokens.push({ type: 'operator', value: '[', start: bStart, end: bStart + 1 })
+      tokens.push({
+        type: 'operator',
+        value: '[',
+        start: bStart,
+        end: bStart + 1,
+      })
       i++
 
       while (i < len && code[i] !== ']') {
@@ -269,13 +274,23 @@ export function highlightDbml(
         }
 
         const chStart = i
-        tokens.push({ type: 'text', value: code[i], start: chStart, end: chStart + 1 })
+        tokens.push({
+          type: 'text',
+          value: code[i],
+          start: chStart,
+          end: chStart + 1,
+        })
         i++
       }
 
       if (i < len && code[i] === ']') {
         const bEnd = i
-        tokens.push({ type: 'operator', value: ']', start: bEnd, end: bEnd + 1 })
+        tokens.push({
+          type: 'operator',
+          value: ']',
+          start: bEnd,
+          end: bEnd + 1,
+        })
         i++
       }
       continue
@@ -295,7 +310,12 @@ export function highlightDbml(
 
     if (code[i] === '.') {
       const dStart = i
-      tokens.push({ type: 'operator', value: '.', start: dStart, end: dStart + 1 })
+      tokens.push({
+        type: 'operator',
+        value: '.',
+        start: dStart,
+        end: dStart + 1,
+      })
       i++
       continue
     }
@@ -335,7 +355,12 @@ export function highlightDbml(
     while (i < len && !/[a-zA-Z0-9_'"/`[\].><\-:{}()]/.test(code[i])) {
       i++
     }
-    tokens.push({ type: 'text', value: code.substring(start, i), start, end: i })
+    tokens.push({
+      type: 'text',
+      value: code.substring(start, i),
+      start,
+      end: i,
+    })
   }
 
   return tokens

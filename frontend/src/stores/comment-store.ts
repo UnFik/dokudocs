@@ -16,20 +16,13 @@ export interface CommentReply {
   updatedAt: string
 }
 
-export type SuggestionType = 'add' | 'delete' | 'replace'
-
-export interface SuggestionData {
-  id: string
-  type: SuggestionType
-  originalText: string
-  suggestedText: string
-  status: 'pending' | 'accepted' | 'rejected'
-}
-
 export interface CommentThread {
   id: string
   docId: string
   selectedText: string
+  blockId?: string
+  from?: number
+  to?: number
   blockPath?: (string | number)[]
   sectionTitle?: string
   author: CommentAuthor
@@ -40,7 +33,6 @@ export interface CommentThread {
   resolvedAt?: string | null
   resolvedBy?: CommentAuthor | null
   replies: CommentReply[]
-  suggestion?: SuggestionData
 }
 
 interface CommentState {
@@ -60,21 +52,12 @@ interface CommentState {
     selectedText: string
     content: string
     author: CommentAuthor
+    blockId?: string
+    from?: number
+    to?: number
     blockPath?: (string | number)[]
     sectionTitle?: string
-    suggestion?: {
-      id?: string
-      type?: SuggestionType
-      originalText?: string
-      suggestedText?: string
-    }
   }) => CommentThread
-
-  syncDocumentSuggestions: (
-    docId: string,
-    markdownContent: string,
-    author: CommentAuthor
-  ) => void
 
   addReply: (
     threadId: string,
@@ -99,146 +82,89 @@ interface CommentState {
     author?: CommentAuthor,
     onApply?: (transformContent: (content: string) => string) => void
   ) => void
-
-  acceptSuggestion: (
-    threadId: string,
-    onApply: (transformContent: (content: string) => string) => void
-  ) => void
-
-  rejectSuggestion: (
-    threadId: string,
-    onApply: (transformContent: (content: string) => string) => void
-  ) => void
 }
 
 function generateId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-function findNearestHeadingBefore(
-  markdown: string,
-  index: number
-): string | undefined {
-  const beforeText = markdown.substring(0, index)
-  const lines = beforeText.split('\n')
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].trim()
-    const match = line.match(/^#{1,6}\s+(.+)$/)
-    if (match) {
-      return match[1].replace(/\*\*/g, '').replace(/[*_`]/g, '').trim()
-    }
-  }
-  return undefined
-}
-
-function formatSuggestionTitle(
-  type: SuggestionType,
-  originalText: string,
-  suggestedText: string
-) {
-  if (type === 'delete') {
-    return `Delete: “${originalText}”`
-  }
-  if (type === 'add') {
-    return `Add: “${suggestedText}”`
-  }
-  return `Replace: “${originalText}” with “${suggestedText}”`
-}
-
-export function parseSuggestionsFromMarkdown(markdown: string): Array<{
-  id: string
-  type: SuggestionType
-  originalText: string
-  suggestedText: string
-  sectionTitle?: string
+export function getDecorationsForBlock(
+  docId: string,
+  blockId: string,
+  blockText: string,
+  activeThreadId: string | null,
+  blockPath?: (string | number)[],
+  _blockOffset?: { start: number; end: number }
+): Array<{
+  start: number
+  end: number
+  active?: boolean
+  className?: string
+  dataset?: Record<string, string>
 }> {
-  const map = new Map<
-    string,
-    {
-      hasDel: boolean
-      hasIns: boolean
-      delText: string
-      insText: string
-      sectionTitle?: string
-    }
-  >()
-
-  const delRegex =
-    /<del\b[^>]*\bdata-suggestion-id=["']([^"']+)["'][^>]*>([\s\S]*?)<\/del>/gi
-  let match: RegExpExecArray | null
-  while ((match = delRegex.exec(markdown)) !== null) {
-    const id = match[1]
-    const text = match[2]
-    const existing = map.get(id) || {
-      hasDel: false,
-      hasIns: false,
-      delText: '',
-      insText: '',
-      sectionTitle: findNearestHeadingBefore(markdown, match.index),
-    }
-    existing.hasDel = true
-    existing.delText = text
-    if (!existing.sectionTitle) {
-      existing.sectionTitle = findNearestHeadingBefore(markdown, match.index)
-    }
-    map.set(id, existing)
-  }
-
-  const insRegex =
-    /<ins\b[^>]*\bdata-suggestion-id=["']([^"']+)["'][^>]*>([\s\S]*?)<\/ins>/gi
-  while ((match = insRegex.exec(markdown)) !== null) {
-    const id = match[1]
-    const text = match[2]
-    const existing = map.get(id) || {
-      hasDel: false,
-      hasIns: false,
-      delText: '',
-      insText: '',
-      sectionTitle: findNearestHeadingBefore(markdown, match.index),
-    }
-    existing.hasIns = true
-    existing.insText = text
-    if (!existing.sectionTitle) {
-      existing.sectionTitle = findNearestHeadingBefore(markdown, match.index)
-    }
-    map.set(id, existing)
-  }
-
+  const threads = useCommentStore.getState().threads || []
+  const docThreads = threads.filter((t) => t.docId === docId && !t.isResolved)
   const results: Array<{
-    id: string
-    type: SuggestionType
-    originalText: string
-    suggestedText: string
-    sectionTitle?: string
+    start: number
+    end: number
+    active?: boolean
+    className?: string
+    dataset?: Record<string, string>
   }> = []
 
-  map.forEach((val, id) => {
-    if (val.hasDel && val.hasIns) {
-      results.push({
-        id,
-        type: 'replace',
-        originalText: val.delText,
-        suggestedText: val.insText,
-        sectionTitle: val.sectionTitle,
-      })
-    } else if (val.hasDel) {
-      results.push({
-        id,
-        type: 'delete',
-        originalText: val.delText,
-        suggestedText: '',
-        sectionTitle: val.sectionTitle,
-      })
-    } else if (val.hasIns) {
-      results.push({
-        id,
-        type: 'add',
-        originalText: '',
-        suggestedText: val.insText,
-        sectionTitle: val.sectionTitle,
-      })
+  for (const thread of docThreads) {
+    if (thread.blockId && thread.blockId !== blockId) {
+      continue
     }
-  })
+
+    if (
+      thread.blockPath &&
+      thread.blockPath.length > 0 &&
+      blockPath &&
+      blockPath.length > 0
+    ) {
+      const match =
+        thread.blockPath.length === blockPath.length &&
+        thread.blockPath.every((val, idx) => val === blockPath[idx])
+      if (!match) {
+        continue
+      }
+    }
+
+    const isActive = thread.id === activeThreadId
+
+    if (thread.selectedText) {
+      let foundStart = -1
+      let foundEnd = -1
+
+      if (
+        thread.from !== undefined &&
+        thread.to !== undefined &&
+        thread.blockId === blockId &&
+        thread.from >= 0 &&
+        thread.to <= blockText.length &&
+        blockText.substring(thread.from, thread.to) === thread.selectedText
+      ) {
+        foundStart = thread.from
+        foundEnd = thread.to
+      } else if (blockText.includes(thread.selectedText)) {
+        foundStart = blockText.indexOf(thread.selectedText)
+        foundEnd = foundStart + thread.selectedText.length
+      }
+
+      if (foundStart !== -1) {
+        results.push({
+          start: foundStart,
+          end: foundEnd,
+          active: isActive,
+          className: isActive
+            ? 'doc-comment-highlight is-active'
+            : 'doc-comment-highlight',
+          dataset: { threadId: thread.id },
+        })
+      }
+    }
+  }
 
   return results
 }
@@ -250,10 +176,10 @@ export const useCommentStore = create<CommentState>()(
       activeThreadId: null,
       isSidebarOpen: false,
 
-      setSidebarOpen: (isSidebarOpen) => set({ isSidebarOpen }),
+      setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
       toggleSidebar: () =>
         set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
-      setActiveThreadId: (activeThreadId) => set({ activeThreadId }),
+      setActiveThreadId: (id) => set({ activeThreadId: id }),
 
       getDocThreads: (docId) => {
         return (get().threads || []).filter((t) => t.docId === docId)
@@ -270,46 +196,29 @@ export const useCommentStore = create<CommentState>()(
         selectedText,
         content,
         author,
+        blockId,
+        from,
+        to,
         blockPath,
-        suggestion,
+        sectionTitle,
       }) => {
         const now = new Date().toISOString()
-        const sugId = suggestion?.id || generateId('sug')
-        const sugType: SuggestionType =
-          suggestion?.type ||
-          (suggestion?.originalText && suggestion?.suggestedText
-            ? 'replace'
-            : suggestion?.originalText
-            ? 'delete'
-            : 'add')
 
         const newThread: CommentThread = {
           id: generateId('thread'),
           docId,
-          selectedText,
+          selectedText: selectedText.trim(),
+          blockId,
+          from,
+          to,
           blockPath,
+          sectionTitle,
           author,
-          content:
-            suggestion
-              ? formatSuggestionTitle(
-                  sugType,
-                  suggestion.originalText || '',
-                  suggestion.suggestedText || ''
-                )
-              : content,
+          content: content.trim(),
           createdAt: now,
           updatedAt: now,
           isResolved: false,
           replies: [],
-          suggestion: suggestion
-            ? {
-                id: sugId,
-                type: sugType,
-                originalText: suggestion.originalText || '',
-                suggestedText: suggestion.suggestedText || '',
-                status: 'pending',
-              }
-            : undefined,
         }
 
         set((state) => ({
@@ -318,106 +227,6 @@ export const useCommentStore = create<CommentState>()(
         }))
 
         return newThread
-      },
-
-      syncDocumentSuggestions: (docId, markdownContent, author) => {
-        const parsed = parseSuggestionsFromMarkdown(markdownContent)
-        const parsedMap = new Map(parsed.map((p) => [p.id, p]))
-        const now = new Date().toISOString()
-
-        const currentThreads = get().threads || []
-        const docThreads = currentThreads.filter((t) => t.docId === docId)
-        const otherDocThreads = currentThreads.filter((t) => t.docId !== docId)
-
-        const existingSugIds = new Set<string>()
-        let changed = false
-
-        const updatedDocThreads: CommentThread[] = []
-
-        for (const thread of docThreads) {
-          if (!thread.suggestion) {
-            updatedDocThreads.push(thread)
-            continue
-          }
-
-          if (thread.isResolved) {
-            updatedDocThreads.push(thread)
-            continue
-          }
-
-          const sugId = thread.suggestion.id
-          existingSugIds.add(sugId)
-
-          if (!parsedMap.has(sugId)) {
-            changed = true
-            continue
-          }
-
-          const fresh = parsedMap.get(sugId)!
-          if (
-            thread.suggestion.type !== fresh.type ||
-            thread.suggestion.originalText !== fresh.originalText ||
-            thread.suggestion.suggestedText !== fresh.suggestedText ||
-            thread.sectionTitle !== fresh.sectionTitle
-          ) {
-            changed = true
-            updatedDocThreads.push({
-              ...thread,
-              selectedText: fresh.originalText || fresh.suggestedText,
-              sectionTitle: fresh.sectionTitle,
-              content: formatSuggestionTitle(
-                fresh.type,
-                fresh.originalText,
-                fresh.suggestedText
-              ),
-              updatedAt: now,
-              suggestion: {
-                ...thread.suggestion,
-                type: fresh.type,
-                originalText: fresh.originalText,
-                suggestedText: fresh.suggestedText,
-              },
-            })
-          } else {
-            updatedDocThreads.push(thread)
-          }
-        }
-
-        for (const fresh of parsed) {
-          if (!existingSugIds.has(fresh.id)) {
-            changed = true
-            const newThread: CommentThread = {
-              id: generateId('thread'),
-              docId,
-              selectedText: fresh.originalText || fresh.suggestedText,
-              sectionTitle: fresh.sectionTitle,
-              author,
-              content: formatSuggestionTitle(
-                fresh.type,
-                fresh.originalText,
-                fresh.suggestedText
-              ),
-              createdAt: now,
-              updatedAt: now,
-              isResolved: false,
-              replies: [],
-              suggestion: {
-                id: fresh.id,
-                type: fresh.type,
-                originalText: fresh.originalText,
-                suggestedText: fresh.suggestedText,
-                status: 'pending',
-              },
-            }
-            updatedDocThreads.unshift(newThread)
-          }
-        }
-
-        if (changed) {
-          set({
-            threads: [...updatedDocThreads, ...otherDocThreads],
-          })
-        }
       },
 
       addReply: (threadId, content, author) => {
@@ -473,11 +282,14 @@ export const useCommentStore = create<CommentState>()(
       deleteThread: (threadId, onApply) => {
         if (onApply) {
           onApply((content: string) => {
-            const markRegex = new RegExp(
-              `<mark\\b[^>]*\\bdata-thread-id=["']${threadId}["'][^>]*>([\\s\\S]*?)<\\/mark>`,
-              'gi'
-            )
-            return content.replace(markRegex, '$1')
+            if (content.includes(`data-thread-id="${threadId}"`)) {
+              const markRegex = new RegExp(
+                `<mark\\b[^>]*\\bdata-thread-id=["']${threadId}["'][^>]*>([\\s\\S]*?)<\\/mark>`,
+                'gi'
+              )
+              return content.replace(markRegex, '$1')
+            }
+            return content
           })
         }
         set((state) => ({
@@ -486,7 +298,6 @@ export const useCommentStore = create<CommentState>()(
             state.activeThreadId === threadId ? null : state.activeThreadId,
         }))
       },
-
       deleteReply: (threadId, replyId) => {
         set((state) => ({
           threads: (state.threads || []).map((t) => {
@@ -500,16 +311,21 @@ export const useCommentStore = create<CommentState>()(
       },
 
       toggleResolveThread: (threadId, author, onApply) => {
-        const targetThread = (get().threads || []).find((t) => t.id === threadId)
+        const targetThread = (get().threads || []).find(
+          (t) => t.id === threadId
+        )
         const nextResolved = targetThread ? !targetThread.isResolved : false
 
-        if (onApply && nextResolved && !targetThread?.suggestion) {
+        if (onApply && nextResolved) {
           onApply((content: string) => {
-            const markRegex = new RegExp(
-              `<mark\\b[^>]*\\bdata-thread-id=["']${threadId}["'][^>]*>([\\s\\S]*?)<\\/mark>`,
-              'gi'
-            )
-            return content.replace(markRegex, '$1')
+            if (content.includes(`data-thread-id="${threadId}"`)) {
+              const markRegex = new RegExp(
+                `<mark\\b[^>]*\\bdata-thread-id=["']${threadId}["'][^>]*>([\\s\\S]*?)<\\/mark>`,
+                'gi'
+              )
+              return content.replace(markRegex, '$1')
+            }
+            return content
           })
         }
 
@@ -521,111 +337,7 @@ export const useCommentStore = create<CommentState>()(
               ...t,
               isResolved: nextResolved,
               resolvedAt: nextResolved ? now : null,
-              resolvedBy: nextResolved ? author ?? null : null,
-            }
-          }),
-        }))
-      },
-
-      acceptSuggestion: (threadId, onApply) => {
-        const thread = (get().threads || []).find((t) => t.id === threadId)
-        if (
-          !thread ||
-          !thread.suggestion ||
-          thread.suggestion.status !== 'pending'
-        )
-          return
-
-        const sugId = thread.suggestion.id
-
-        onApply((content: string) => {
-          const replaceRegex = new RegExp(
-            `<del\\b[^>]*\\bdata-suggestion-id=["']${sugId}["'][^>]*>[\\s\\S]*?<\\/del>\\s*<ins\\b[^>]*\\bdata-suggestion-id=["']${sugId}["'][^>]*>([\\s\\S]*?)<\\/ins>`,
-            'gi'
-          )
-          let updated = content.replace(replaceRegex, '$1')
-
-          const delRegex = new RegExp(
-            `<del\\b[^>]*\\bdata-suggestion-id=["']${sugId}["'][^>]*>[\\s\\S]*?<\\/del>`,
-            'gi'
-          )
-          updated = updated.replace(delRegex, '')
-
-          const insRegex = new RegExp(
-            `<ins\\b[^>]*\\bdata-suggestion-id=["']${sugId}["'][^>]*>([\\s\\S]*?)<\\/ins>`,
-            'gi'
-          )
-          updated = updated.replace(insRegex, '$1')
-
-          return updated
-        })
-
-        const now = new Date().toISOString()
-        set((state) => ({
-          threads: (state.threads || []).map((t) => {
-            if (t.id !== threadId) return t
-            return {
-              ...t,
-              isResolved: true,
-              resolvedAt: now,
-              suggestion: t.suggestion
-                ? {
-                    ...t.suggestion,
-                    status: 'accepted',
-                  }
-                : undefined,
-            }
-          }),
-        }))
-      },
-
-      rejectSuggestion: (threadId, onApply) => {
-        const thread = (get().threads || []).find((t) => t.id === threadId)
-        if (
-          !thread ||
-          !thread.suggestion ||
-          thread.suggestion.status !== 'pending'
-        )
-          return
-
-        const sugId = thread.suggestion.id
-
-        onApply((content: string) => {
-          const replaceRegex = new RegExp(
-            `<del\\b[^>]*\\bdata-suggestion-id=["']${sugId}["'][^>]*>([\\s\\S]*?)<\\/del>\\s*<ins\\b[^>]*\\bdata-suggestion-id=["']${sugId}["'][^>]*>[\\s\\S]*?<\\/ins>`,
-            'gi'
-          )
-          let updated = content.replace(replaceRegex, '$1')
-
-          const delRegex = new RegExp(
-            `<del\\b[^>]*\\bdata-suggestion-id=["']${sugId}["'][^>]*>([\\s\\S]*?)<\\/del>`,
-            'gi'
-          )
-          updated = updated.replace(delRegex, '$1')
-
-          const insRegex = new RegExp(
-            `<ins\\b[^>]*\\bdata-suggestion-id=["']${sugId}["'][^>]*>[\\s\\S]*?<\\/ins>`,
-            'gi'
-          )
-          updated = updated.replace(insRegex, '')
-
-          return updated
-        })
-
-        const now = new Date().toISOString()
-        set((state) => ({
-          threads: (state.threads || []).map((t) => {
-            if (t.id !== threadId) return t
-            return {
-              ...t,
-              isResolved: true,
-              resolvedAt: now,
-              suggestion: t.suggestion
-                ? {
-                    ...t.suggestion,
-                    status: 'rejected',
-                  }
-                : undefined,
+              resolvedBy: nextResolved ? (author ?? null) : null,
             }
           }),
         }))
@@ -637,3 +349,4 @@ export const useCommentStore = create<CommentState>()(
     }
   )
 )
+

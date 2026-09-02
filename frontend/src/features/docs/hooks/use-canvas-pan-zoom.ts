@@ -30,7 +30,9 @@ export function useCanvasPanZoom({
             return parsed.pan
           }
         }
-      } catch (e) {}
+      } catch {
+        return initialPan
+      }
     }
     return initialPan
   }, [docId, storagePrefix, initialPan])
@@ -45,7 +47,9 @@ export function useCanvasPanZoom({
             return parsed.zoom
           }
         }
-      } catch (e) {}
+      } catch {
+        return initialZoom
+      }
     }
     return initialZoom
   }, [docId, storagePrefix, initialZoom])
@@ -56,7 +60,12 @@ export function useCanvasPanZoom({
   const wheelRafRef = useRef<number | null>(null)
   const mouseMoveRafRef = useRef<number | null>(null)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const dragStartRef = useRef<{ x: number; y: number; origPanX: number; origPanY: number } | null>(null)
+  const dragStartRef = useRef<{
+    x: number
+    y: number
+    origPanX: number
+    origPanY: number
+  } | null>(null)
 
   const applyCanvasTransform = useCallback(
     (currentPan: { x: number; y: number }, currentZoom: number) => {
@@ -84,7 +93,9 @@ export function useCanvasPanZoom({
             pan: panRef.current,
           })
         )
-      } catch (e) {}
+      } catch {
+        return
+      }
     }
   }, [docId, storagePrefix])
 
@@ -107,7 +118,7 @@ export function useCanvasPanZoom({
 
     const currentZoom = zoomRef.current
     const currentPan = panRef.current
-    const newZoom = Math.min(currentZoom * 1.15, 3)
+    const newZoom = Math.min(currentZoom * 1.15, 12)
 
     const worldX = (centerX - currentPan.x) / currentZoom
     const worldY = (centerY - currentPan.y) / currentZoom
@@ -127,7 +138,7 @@ export function useCanvasPanZoom({
 
     const currentZoom = zoomRef.current
     const currentPan = panRef.current
-    const newZoom = Math.max(currentZoom * 0.85, 0.2)
+    const newZoom = Math.max(currentZoom * 0.85, 0.1)
 
     const worldX = (centerX - currentPan.x) / currentZoom
     const worldY = (centerY - currentPan.y) / currentZoom
@@ -170,7 +181,7 @@ export function useCanvasPanZoom({
 
       if (e.ctrlKey || e.metaKey) {
         const zoomFactor = Math.exp(-e.deltaY * 0.0025)
-        const newZoom = Math.min(Math.max(currentZoom * zoomFactor, 0.2), 3)
+        const newZoom = Math.min(Math.max(currentZoom * zoomFactor, 0.1), 12)
 
         const worldX = (mouseX - currentPan.x) / currentZoom
         const worldY = (mouseY - currentPan.y) / currentZoom
@@ -259,6 +270,8 @@ export function useCanvasPanZoom({
     canvasLayerRef,
     zoomBadgeRef,
     isPanning,
+    initialPan: initialPanValue,
+    initialZoom: initialZoomValue,
     panRef,
     zoomRef,
     handleZoomIn,

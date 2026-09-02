@@ -135,8 +135,8 @@ Records follows(following_user_id, followed_user_id, created_at) {
             cellMatch[1] !== undefined
               ? cellMatch[1]
               : cellMatch[2] !== undefined
-              ? cellMatch[2]
-              : cellMatch[3]
+                ? cellMatch[2]
+                : cellMatch[3]
           if (val !== undefined) {
             rowValues.push(val.trim())
           }

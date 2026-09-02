@@ -240,7 +240,9 @@ export function highlightMermaidCode(
       }
 
       const remaining = str.substring(i)
-      const arrowMatch = remaining.match(/^(?:-->>|->>|--x|-x|--\)|-\)|==>|-\.->|-->|->|<-->|<->|--o|-o|o--o|x--x|::=)/)
+      const arrowMatch = remaining.match(
+        /^(?:-->>|->>|--x|-x|--\)|-\)|==>|-\.->|-->|->|<-->|<->|--o|-o|o--o|x--x|::=)/
+      )
       if (arrowMatch) {
         const val = arrowMatch[0]
         tokens.push({
@@ -253,7 +255,16 @@ export function highlightMermaidCode(
         continue
       }
 
-      if (char === '[' || char === ']' || char === '(' || char === ')' || char === '{' || char === '}' || char === ';' || char === ':') {
+      if (
+        char === '[' ||
+        char === ']' ||
+        char === '(' ||
+        char === ')' ||
+        char === '{' ||
+        char === '}' ||
+        char === ';' ||
+        char === ':'
+      ) {
         tokens.push({
           type: 'delimiter',
           value: char,

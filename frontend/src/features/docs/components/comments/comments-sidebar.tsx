@@ -1,18 +1,11 @@
 import { useState, useMemo } from 'react'
-import {
-  CheckCircle2,
-  MessageSquare,
-  Plus,
-  Send,
-  X,
-} from 'lucide-react'
-import { useCommentStore } from '@/stores/comment-store'
-import type { CommentAuthor } from '@/stores/comment-store'
+import { CheckCircle2, MessageSquare, Plus, Send, X } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
+import { type CommentAuthor, useCommentStore } from '@/stores/comment-store'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { CommentThreadCard } from './comment-thread-card'
 
 interface CommentsSidebarProps {
@@ -20,7 +13,6 @@ interface CommentsSidebarProps {
   isOpen: boolean
   onClose: () => void
   onSelectSnippet?: (text: string) => void
-  onApplySuggestion?: (transformContent: (content: string) => string) => void
 }
 
 export function CommentsSidebar({
@@ -28,14 +20,9 @@ export function CommentsSidebar({
   isOpen,
   onClose,
   onSelectSnippet,
-  onApplySuggestion,
 }: CommentsSidebarProps) {
   const { auth } = useAuthStore()
-  const {
-    threads,
-    activeThreadId,
-    addThread,
-  } = useCommentStore()
+  const { threads, activeThreadId, addThread } = useCommentStore()
 
   const [activeTab, setActiveTab] = useState<'open' | 'resolved'>('open')
   const [isAddingDocComment, setIsAddingDocComment] = useState(false)
@@ -78,11 +65,11 @@ export function CommentsSidebar({
   if (!isOpen) return null
 
   return (
-    <aside className='flex h-full w-80 2xl:w-96 flex-col border-l border-border/80 bg-background/95 backdrop-blur-md shrink-0 shadow-lg z-30 animate-in slide-in-from-right-4 duration-200'>
+    <aside className='z-30 flex h-full w-80 shrink-0 animate-in flex-col border-l border-border/80 bg-background/95 shadow-lg backdrop-blur-md duration-200 slide-in-from-right-4 2xl:w-96'>
       <div className='flex items-center justify-between border-b border-border/60 px-4 py-3'>
         <div className='flex items-center gap-2'>
           <MessageSquare className='size-4 text-primary' />
-          <h2 className='text-sm font-semibold text-foreground tracking-tight'>
+          <h2 className='text-sm font-semibold tracking-tight text-foreground'>
             Comments
           </h2>
           {openThreads.length > 0 && (
@@ -114,16 +101,16 @@ export function CommentsSidebar({
         </div>
       </div>
 
-      <div className='px-4 py-2 border-b border-border/40 bg-muted/20 flex items-center justify-between'>
+      <div className='flex items-center justify-between border-b border-border/40 bg-muted/20 px-4 py-2'>
         <Tabs
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as 'open' | 'resolved')}
           className='w-full'
         >
-          <TabsList className='grid grid-cols-2 h-7 bg-muted/60 p-0.5 w-full'>
+          <TabsList className='grid h-7 w-full grid-cols-2 bg-muted/60 p-0.5'>
             <TabsTrigger
               value='open'
-              className='h-6 text-[11px] font-medium gap-1'
+              className='h-6 gap-1 text-[11px] font-medium'
             >
               <span>Open</span>
               {openThreads.length > 0 && (
@@ -134,7 +121,7 @@ export function CommentsSidebar({
             </TabsTrigger>
             <TabsTrigger
               value='resolved'
-              className='h-6 text-[11px] font-medium gap-1'
+              className='h-6 gap-1 text-[11px] font-medium'
             >
               <span>Resolved</span>
               {resolvedThreads.length > 0 && (
@@ -148,7 +135,7 @@ export function CommentsSidebar({
       </div>
 
       {isAddingDocComment && (
-        <div className='p-3 border-b border-border/50 bg-card/60 space-y-2 animate-in fade-in duration-150'>
+        <div className='animate-in space-y-2 border-b border-border/50 bg-card/60 p-3 duration-150 fade-in'>
           <div className='flex items-center justify-between'>
             <span className='text-[11px] font-medium text-foreground'>
               New Document Comment
@@ -175,7 +162,7 @@ export function CommentsSidebar({
                 setIsAddingDocComment(false)
               }
             }}
-            className='min-h-[64px] text-xs resize-none bg-background'
+            className='min-h-[64px] resize-none bg-background text-xs'
             autoFocus
           />
           <div className='flex items-center justify-end gap-1.5'>
@@ -191,7 +178,7 @@ export function CommentsSidebar({
               size='sm'
               onClick={handleCreateDocComment}
               disabled={!docCommentText.trim()}
-              className='h-6 px-2.5 text-[11px] gap-1'
+              className='h-6 gap-1 px-2.5 text-[11px]'
             >
               <Send className='size-3' />
               <span>Comment</span>
@@ -209,13 +196,12 @@ export function CommentsSidebar({
                 thread={thread}
                 isActive={activeThreadId === thread.id}
                 onSelectSnippet={onSelectSnippet}
-                onApplySuggestion={onApplySuggestion}
               />
             ))}
           </div>
         ) : (
-          <div className='flex h-64 flex-col items-center justify-center text-center px-4'>
-            <div className='flex size-10 items-center justify-center rounded-full bg-muted/60 text-muted-foreground mb-2.5'>
+          <div className='flex h-64 flex-col items-center justify-center px-4 text-center'>
+            <div className='mb-2.5 flex size-10 items-center justify-center rounded-full bg-muted/60 text-muted-foreground'>
               {activeTab === 'open' ? (
                 <MessageSquare className='size-5' />
               ) : (
@@ -223,12 +209,14 @@ export function CommentsSidebar({
               )}
             </div>
             <p className='text-xs font-semibold text-foreground'>
-              {activeTab === 'open' ? 'No open comments' : 'No resolved comments'}
-            </p>
-            <p className='text-[11px] text-muted-foreground mt-1 leading-relaxed max-w-[200px]'>
               {activeTab === 'open'
-                ? 'Select text in the editor to leave a comment or propose a suggestion.'
-                : 'Resolved comments and suggestions will appear here.'}
+                ? 'No open comments'
+                : 'No resolved comments'}
+            </p>
+            <p className='mt-1 max-w-[200px] text-[11px] leading-relaxed text-muted-foreground'>
+              {activeTab === 'open'
+                ? 'Select text in the editor to leave a comment.'
+                : 'Resolved comments will appear here.'}
             </p>
           </div>
         )}

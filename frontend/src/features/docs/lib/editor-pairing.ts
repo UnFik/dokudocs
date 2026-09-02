@@ -22,7 +22,11 @@ const AUTO_EXPAND_PAIRS = new Set(['{}', '[]', '()'])
 export function handleEditorPairingKeyDown(
   e: React.KeyboardEvent<HTMLTextAreaElement>,
   textarea: HTMLTextAreaElement,
-  onChange: (newContent: string, cursorStart?: number, cursorEnd?: number) => void
+  onChange: (
+    newContent: string,
+    cursorStart?: number,
+    cursorEnd?: number
+  ) => void
 ): boolean {
   if (e.metaKey || e.ctrlKey || e.altKey) {
     return false
@@ -66,7 +70,8 @@ export function handleEditorPairingKeyDown(
     const nextChar = text[start]
     if (PAIR_MAP[prevChar] && PAIR_MAP[prevChar] === nextChar) {
       e.preventDefault()
-      const newContent = text.substring(0, start - 1) + text.substring(start + 1)
+      const newContent =
+        text.substring(0, start - 1) + text.substring(start + 1)
       onChange(newContent, start - 1, start - 1)
       return true
     }
@@ -85,7 +90,8 @@ export function handleEditorPairingKeyDown(
       const baseIndent = matchIndent ? matchIndent[0] : ''
       const innerIndent = baseIndent + '  '
       const insertion = '\n' + innerIndent + '\n' + baseIndent
-      const newContent = text.substring(0, start) + insertion + text.substring(start)
+      const newContent =
+        text.substring(0, start) + insertion + text.substring(start)
       const targetPos = start + 1 + innerIndent.length
       onChange(newContent, targetPos, targetPos)
       return true

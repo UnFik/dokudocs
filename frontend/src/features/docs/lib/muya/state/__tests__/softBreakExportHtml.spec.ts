@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { getHighlightHtml } from '../../utils/marked';
+import { describe, expect, it } from 'vitest'
+import { getHighlightHtml } from '../../utils/marked'
 
 // #3676 — a soft line break (Shift+Enter, serialized as a bare `\n` inside a
 // block) shows as a line break in the editor (`.mu-content` is pre-wrap) but
@@ -13,24 +13,29 @@ import { getHighlightHtml } from '../../utils/marked';
 // rendering itself (and the `:has()` exclusion of loose items) is a CSS
 // concern verified in a real browser against the export stylesheet.
 
-const OPTS = { math: false, superSubScript: false, footnote: false, frontMatter: false };
+const OPTS = {
+  math: false,
+  superSubScript: false,
+  footnote: false,
+  frontMatter: false,
+}
 
 describe('#3676 — soft line breaks survive export as a conformant newline', () => {
-    it('keeps a paragraph soft break as a newline, never a <br>', () => {
-        const html = getHighlightHtml('line one\nline two', OPTS);
-        expect(html).toContain('<p>line one\nline two</p>');
-        expect(html).not.toMatch(/<br\s*\/?>/);
-    });
+  it('keeps a paragraph soft break as a newline, never a <br>', () => {
+    const html = getHighlightHtml('line one\nline two', OPTS)
+    expect(html).toContain('<p>line one\nline two</p>')
+    expect(html).not.toMatch(/<br\s*\/?>/)
+  })
 
-    it('keeps a soft break inside a tight list item, never a <br>', () => {
-        const html = getHighlightHtml('- line A\n  line B', OPTS);
-        expect(html).toMatch(/<li>line A\nline B<\/li>/);
-        expect(html).not.toMatch(/<br\s*\/?>/);
-    });
+  it('keeps a soft break inside a tight list item, never a <br>', () => {
+    const html = getHighlightHtml('- line A\n  line B', OPTS)
+    expect(html).toMatch(/<li>line A\nline B<\/li>/)
+    expect(html).not.toMatch(/<br\s*\/?>/)
+  })
 
-    it('leaves a real hard break (two trailing spaces) as <br>', () => {
-        // Sanity: the change only touches soft breaks; hard breaks are untouched.
-        const html = getHighlightHtml('line one  \nline two', OPTS);
-        expect(html).toMatch(/<br\s*\/?>/);
-    });
-});
+  it('leaves a real hard break (two trailing spaces) as <br>', () => {
+    // Sanity: the change only touches soft breaks; hard breaks are untouched.
+    const html = getHighlightHtml('line one  \nline two', OPTS)
+    expect(html).toMatch(/<br\s*\/?>/)
+  })
+})

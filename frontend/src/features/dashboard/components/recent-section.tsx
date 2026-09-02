@@ -1,12 +1,5 @@
-import {
-  ArrowUpDown,
-  FileQuestion,
-  LayoutGrid,
-  List,
-  Plus,
-} from 'lucide-react'
 import { SortField, SortOrder } from '@/types/dokudocs'
-import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
+import { ArrowUpDown, FileQuestion, LayoutGrid, List, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -14,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { DocCard } from '@/features/docs/components/doc-card'
 import { DocListRow } from '@/features/docs/components/doc-list-row'
 
@@ -59,7 +53,11 @@ export function RecentSection({ onOpenCreateDialog }: RecentSectionProps) {
         <div className='flex items-center gap-2'>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant='outline' size='sm' className='h-8 text-xs gap-1.5'>
+              <Button
+                variant='outline'
+                size='sm'
+                className='h-8 gap-1.5 text-xs'
+              >
                 <ArrowUpDown className='size-3.5 text-muted-foreground' />
                 <span>{currentSortLabel}</span>
               </Button>
@@ -77,7 +75,7 @@ export function RecentSection({ onOpenCreateDialog }: RecentSectionProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className='flex items-center rounded-md border border-border/80 p-0.5 bg-muted/30'>
+          <div className='flex items-center rounded-md border border-border/80 bg-muted/30 p-0.5'>
             <Button
               variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
               size='icon'
@@ -99,8 +97,8 @@ export function RecentSection({ onOpenCreateDialog }: RecentSectionProps) {
       </div>
 
       {activeDocuments.length === 0 ? (
-        <div className='flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12 text-center bg-card/40'>
-          <div className='flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground mb-3'>
+        <div className='flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/40 py-12 text-center'>
+          <div className='mb-3 flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground'>
             <FileQuestion className='size-6' />
           </div>
           <h3 className='text-sm font-semibold text-foreground'>

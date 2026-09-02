@@ -1,5 +1,3 @@
-import { create } from 'zustand'
-import { createJSONStorage, persist } from 'zustand/middleware'
 import {
   DocFilterTab,
   DocType,
@@ -11,10 +9,12 @@ import {
   TrashItem,
   ViewMode,
 } from '@/types/dokudocs'
+import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { invalidateThumbnailCache } from '@/features/docs/components/doc-thumbnail-preview'
 import { mockDocuments } from '@/features/docs/data/mock-docs'
 import { mockProjects } from '@/features/projects/data/mock-projects'
 import { mockTrash } from '@/features/trash/data/mock-trash'
-import { invalidateThumbnailCache } from '@/features/docs/components/doc-thumbnail-preview'
 
 export const defaultOrganizations: OrganizationItem[] = [
   {
@@ -104,10 +104,7 @@ interface DokudocsState {
     newCategory: string,
     colorId?: string
   ) => void
-  reorderProjectCategories: (
-    projectId: string,
-    newCategories: string[]
-  ) => void
+  reorderProjectCategories: (projectId: string, newCategories: string[]) => void
 }
 
 const defaultTemplates: Record<DocType, string> = {
@@ -226,8 +223,8 @@ export const useDokudocsStore = create<DokudocsState>()(
         const docCategories = payload.categories?.length
           ? payload.categories
           : payload.category
-          ? [payload.category]
-          : []
+            ? [payload.category]
+            : []
 
         const now = new Date().toISOString()
         const newDoc: DocumentItem = {
@@ -360,7 +357,9 @@ export const useDokudocsStore = create<DokudocsState>()(
           trash: (state.trash || []).filter(
             (t) => t.id !== id && t.docId !== id
           ),
-          documents: (state.documents || []).filter((d) => d.id !== targetDocId),
+          documents: (state.documents || []).filter(
+            (d) => d.id !== targetDocId
+          ),
         }))
       },
 
@@ -446,9 +445,12 @@ export const useDokudocsStore = create<DokudocsState>()(
               }
             }
             if (p.id === targetProjectId && p.id !== oldProjectId) {
-              const docCategories = doc.categories || (doc.category ? [doc.category] : [])
+              const docCategories =
+                doc.categories || (doc.category ? [doc.category] : [])
               const existingCats = p.categories || []
-              const newCats = docCategories.filter((c) => !existingCats.includes(c))
+              const newCats = docCategories.filter(
+                (c) => !existingCats.includes(c)
+              )
               return {
                 ...p,
                 documentIds: [...(p.documentIds || []), docId],
@@ -619,7 +621,10 @@ export const useDokudocsStore = create<DokudocsState>()(
         return {
           ...state,
           documents: docs,
-          sortField: version < 2 || state.sortField === 'updatedAt' ? 'lastViewedAt' : state.sortField || 'lastViewedAt',
+          sortField:
+            version < 2 || state.sortField === 'updatedAt'
+              ? 'lastViewedAt'
+              : state.sortField || 'lastViewedAt',
           sortOrder: state.sortOrder || 'desc',
         }
       },

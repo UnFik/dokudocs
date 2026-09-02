@@ -1,17 +1,12 @@
 import { useRef, useState } from 'react'
-import {
-  Camera,
-  Mail,
-  Phone,
-  User,
-} from 'lucide-react'
+import { Camera, Mail, Phone, User } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useAuthStore } from '@/stores/auth-store'
 import { sidebarData } from '@/components/layout/data/sidebar-data'
 
 export function AccountPage() {
@@ -61,9 +56,9 @@ export function AccountPage() {
   }
 
   return (
-    <div className='flex flex-1 flex-col p-6 overflow-y-auto'>
-      <div className='max-w-4xl mx-auto w-full space-y-6'>
-        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5'>
+    <div className='flex flex-1 flex-col overflow-y-auto p-6'>
+      <div className='mx-auto w-full max-w-4xl space-y-6'>
+        <div className='flex flex-col justify-between gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-center'>
           <div>
             <div className='flex items-center gap-2.5'>
               <div className='flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary'>
@@ -74,7 +69,8 @@ export function AccountPage() {
               </h1>
             </div>
             <p className='mt-1 text-xs text-muted-foreground'>
-              Manage your personal profile, contact information, and public identity.
+              Manage your personal profile, contact information, and public
+              identity.
             </p>
           </div>
         </div>
@@ -83,7 +79,9 @@ export function AccountPage() {
           <div className='rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
             <div className='flex items-center justify-between gap-4'>
               <div className='space-y-1 pr-4'>
-                <h2 className='text-sm font-semibold text-foreground'>Avatar</h2>
+                <h2 className='text-sm font-semibold text-foreground'>
+                  Avatar
+                </h2>
                 <p className='text-xs text-muted-foreground'>
                   This is your avatar.
                 </p>
@@ -93,7 +91,7 @@ export function AccountPage() {
               </div>
               <div
                 onClick={handleAvatarClick}
-                className='relative group cursor-pointer shrink-0'
+                className='group relative shrink-0 cursor-pointer'
                 title='Click to change avatar'
               >
                 <Avatar className='h-16 w-16 rounded-full border-2 border-border transition-all group-hover:opacity-80'>
@@ -116,67 +114,79 @@ export function AccountPage() {
             </div>
           </div>
 
-          <div className='rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs space-y-3'>
+          <div className='space-y-3 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
             <div>
-              <h2 className='text-sm font-semibold text-foreground'>Display Name</h2>
+              <h2 className='text-sm font-semibold text-foreground'>
+                Display Name
+              </h2>
             </div>
             <div className='space-y-1.5'>
-              <Label htmlFor='full-name' className='text-xs font-medium text-muted-foreground'>
+              <Label
+                htmlFor='full-name'
+                className='text-xs font-medium text-muted-foreground'
+              >
                 Full Name
               </Label>
               <Input
                 id='full-name'
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className='text-xs max-w-xl'
+                className='max-w-xl text-xs'
               />
             </div>
           </div>
 
-          <div className='rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs space-y-3'>
+          <div className='space-y-3 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
             <div>
-              <h2 className='text-sm font-semibold text-foreground'>Email Address</h2>
+              <h2 className='text-sm font-semibold text-foreground'>
+                Email Address
+              </h2>
             </div>
             <div className='relative max-w-xl'>
-              <Mail className='absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground' />
+              <Mail className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
               <Input
                 type='email'
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className='text-xs pl-9'
+                className='pl-9 text-xs'
               />
             </div>
           </div>
 
-          <div className='rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs space-y-3'>
+          <div className='space-y-3 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
             <div>
-              <h2 className='text-sm font-semibold text-foreground'>Phone Number</h2>
-              <p className='text-xs text-muted-foreground mt-0.5'>
+              <h2 className='text-sm font-semibold text-foreground'>
+                Phone Number
+              </h2>
+              <p className='mt-0.5 text-xs text-muted-foreground'>
                 Optional phone number for account recovery
               </p>
             </div>
             <div className='space-y-1.5'>
-              <Label htmlFor='phone-number' className='text-xs font-medium text-muted-foreground'>
+              <Label
+                htmlFor='phone-number'
+                className='text-xs font-medium text-muted-foreground'
+              >
                 Phone Number
               </Label>
               <div className='relative max-w-xl'>
-                <Phone className='absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground' />
+                <Phone className='absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
                 <Input
                   id='phone-number'
                   type='tel'
                   placeholder='+1 (555) 000-0000'
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  className='text-xs pl-9'
+                  className='pl-9 text-xs'
                 />
               </div>
             </div>
           </div>
 
-          <div className='rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs space-y-3'>
+          <div className='space-y-3 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
             <div>
               <h2 className='text-sm font-semibold text-foreground'>Bio</h2>
-              <p className='text-xs text-muted-foreground mt-0.5'>
+              <p className='mt-0.5 text-xs text-muted-foreground'>
                 A short bio about yourself
               </p>
             </div>
@@ -186,13 +196,18 @@ export function AccountPage() {
                 onChange={(e) => setBio(e.target.value)}
                 placeholder='Tell us a little bit about yourself...'
                 rows={3}
-                className='text-xs resize-none'
+                className='resize-none text-xs'
               />
             </div>
           </div>
 
           <div className='flex items-center gap-3 pt-2'>
-            <Button type='submit' size='sm' disabled={saving} className='text-xs px-5'>
+            <Button
+              type='submit'
+              size='sm'
+              disabled={saving}
+              className='px-5 text-xs'
+            >
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
+import { DocumentItem } from '@/types/dokudocs'
 import { Check, FileEdit, Folder, FolderInput, Search } from 'lucide-react'
 import { toast } from 'sonner'
-import { DocumentItem } from '@/types/dokudocs'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,6 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 interface MoveDocDialogProps {
   open: boolean
@@ -89,7 +89,11 @@ export function MoveDocDialog({
                   Move to Project
                 </DialogTitle>
                 <DialogDescription className='text-xs'>
-                  Assign <span className='font-medium text-foreground'>&ldquo;{document.title}&rdquo;</span> to a project.
+                  Assign{' '}
+                  <span className='font-medium text-foreground'>
+                    &ldquo;{document.title}&rdquo;
+                  </span>{' '}
+                  to a project.
                 </DialogDescription>
               </div>
             </div>
@@ -97,7 +101,7 @@ export function MoveDocDialog({
 
           <div className='space-y-3 py-2'>
             <div className='relative'>
-              <Search className='absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground' />
+              <Search className='absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground' />
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -112,24 +116,28 @@ export function MoveDocDialog({
                 <button
                   type='button'
                   onClick={() => setSelectedProjectId(null)}
-                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors cursor-pointer ${
+                  className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors ${
                     selectedProjectId === null
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'hover:bg-muted text-foreground'
+                      ? 'bg-primary/10 font-medium text-primary'
+                      : 'text-foreground hover:bg-muted'
                   }`}
                 >
                   <div className='flex items-center gap-2.5 truncate'>
                     <div className='flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground'>
                       <FileEdit className='size-3.5' />
                     </div>
-                    <div className='text-left truncate'>
-                      <p className='truncate font-medium'>Drafts (No Project)</p>
+                    <div className='truncate text-left'>
+                      <p className='truncate font-medium'>
+                        Drafts (No Project)
+                      </p>
                       <p className='text-[10px] text-muted-foreground'>
                         Keep as an unassigned draft
                       </p>
                     </div>
                   </div>
-                  {selectedProjectId === null && <Check className='size-4 shrink-0' />}
+                  {selectedProjectId === null && (
+                    <Check className='size-4 shrink-0' />
+                  )}
                 </button>
 
                 {filteredProjects.map((proj) => {
@@ -139,10 +147,10 @@ export function MoveDocDialog({
                       key={proj.id}
                       type='button'
                       onClick={() => setSelectedProjectId(proj.id)}
-                      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors cursor-pointer ${
+                      className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs transition-colors ${
                         isSelected
-                          ? 'bg-primary/10 text-primary font-medium'
-                          : 'hover:bg-muted text-foreground'
+                          ? 'bg-primary/10 font-medium text-primary'
+                          : 'text-foreground hover:bg-muted'
                       }`}
                     >
                       <div className='flex items-center gap-2.5 truncate'>
@@ -150,14 +158,14 @@ export function MoveDocDialog({
                           <img
                             src={proj.logoUrl}
                             alt={proj.name}
-                            className='size-7 rounded-md object-cover border border-border/80'
+                            className='size-7 rounded-md border border-border/80 object-cover'
                           />
                         ) : (
                           <div className='flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary'>
                             <Folder className='size-3.5' />
                           </div>
                         )}
-                        <div className='text-left truncate'>
+                        <div className='truncate text-left'>
                           <p className='truncate font-medium'>{proj.name}</p>
                           <p className='text-[10px] text-muted-foreground'>
                             {proj.documentIds.length} documents
@@ -206,8 +214,14 @@ export function MoveDocDialog({
         title='Move document to another project?'
         desc={
           <span>
-            This document currently belongs to <strong>&ldquo;{currentProject?.name}&rdquo;</strong>.
-            Moving it to {selectedProjectId ? <strong>&ldquo;{targetProject?.name}&rdquo;</strong> : 'Drafts'} will transfer its ownership. Are you sure you want to continue?
+            This document currently belongs to{' '}
+            <strong>&ldquo;{currentProject?.name}&rdquo;</strong>. Moving it to{' '}
+            {selectedProjectId ? (
+              <strong>&ldquo;{targetProject?.name}&rdquo;</strong>
+            ) : (
+              'Drafts'
+            )}{' '}
+            will transfer its ownership. Are you sure you want to continue?
           </span>
         }
         confirmText='Yes, Move Document'

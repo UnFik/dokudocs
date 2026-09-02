@@ -23,8 +23,10 @@ export function SidebarSearch() {
           <Search className='size-3.5 shrink-0 opacity-70' />
           {!isCollapsed && (
             <>
-              <span className='truncate text-xs font-normal'>Search docs & diagrams...</span>
-              <kbd className='pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden h-4.5 items-center gap-0.5 rounded border border-sidebar-border bg-background/80 px-1 font-mono text-[9px] font-medium text-muted-foreground/80 sm:inline-flex'>
+              <span className='truncate text-xs font-normal'>
+                Search docs & diagrams...
+              </span>
+              <kbd className='pointer-events-none absolute top-1/2 right-2 hidden h-4.5 -translate-y-1/2 items-center gap-0.5 rounded border border-sidebar-border bg-background/80 px-1 font-mono text-[9px] font-medium text-muted-foreground/80 sm:inline-flex'>
                 ⌘K
               </kbd>
             </>

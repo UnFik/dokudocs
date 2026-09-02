@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { Database, FileText, GitFork } from 'lucide-react'
 import { DocumentItem } from '@/types/dokudocs'
+import { Database, FileText, GitFork } from 'lucide-react'
 import { DocThumbnailPreview } from '@/features/docs/components/doc-thumbnail-preview'
 
 interface ProjectSubCardProps {
@@ -15,9 +15,12 @@ export function ProjectSubCard({ document }: ProjectSubCardProps) {
   }
 
   const colors = {
-    markdown: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-    dbdiagram: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-    mermaid: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+    markdown:
+      'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+    dbdiagram:
+      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    mermaid:
+      'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
   }
 
   const Icon = icons[document.type] || FileText
@@ -27,15 +30,17 @@ export function ProjectSubCard({ document }: ProjectSubCardProps) {
     <Link
       to='/docs/$docId'
       params={{ docId: document.id }}
-      className='group/sub relative flex h-24 flex-col overflow-hidden rounded-lg border border-border/70 bg-background transform-gpu transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-xs will-change-transform'
+      className='group/sub relative flex h-24 transform-gpu flex-col overflow-hidden rounded-lg border border-border/70 bg-background transition-[transform,box-shadow,border-color] duration-150 ease-out will-change-transform hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-xs'
     >
-      <div className='relative flex-1 w-full border-b border-border/40 overflow-hidden bg-muted/20 min-h-0'>
+      <div className='relative min-h-0 w-full flex-1 overflow-hidden border-b border-border/40 bg-muted/20'>
         <DocThumbnailPreview
           docId={document.id}
           type={document.type}
           content={document.content}
           thumbnail={document.thumbnail || document.thumbnailPreview}
-          thumbnailDark={document.thumbnailDark || document.thumbnailPreviewDark}
+          thumbnailDark={
+            document.thumbnailDark || document.thumbnailPreviewDark
+          }
           className='h-full w-full'
         />
         <div
@@ -45,8 +50,8 @@ export function ProjectSubCard({ document }: ProjectSubCardProps) {
         </div>
       </div>
 
-      <div className='px-2 py-1.5 shrink-0 bg-background/95'>
-        <p className='truncate text-[11px] font-medium tracking-tight text-foreground/90 group-hover/sub:text-primary transition-colors'>
+      <div className='shrink-0 bg-background/95 px-2 py-1.5'>
+        <p className='truncate text-[11px] font-medium tracking-tight text-foreground/90 transition-colors group-hover/sub:text-primary'>
           {document.title}
         </p>
       </div>

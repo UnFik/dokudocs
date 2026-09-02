@@ -1,10 +1,9 @@
-import { useState, useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Check, MessageSquare, X } from 'lucide-react'
+import { useAuthStore } from '@/stores/auth-store'
+import { type CommentAuthor, useCommentStore } from '@/stores/comment-store'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { useAuthStore } from '@/stores/auth-store'
-import { useCommentStore } from '@/stores/comment-store'
-import type { CommentAuthor } from '@/stores/comment-store'
 
 interface FloatingCommentPopoverProps {
   isOpen: boolean
@@ -18,7 +17,10 @@ interface FloatingCommentPopoverProps {
     height: number
   } | null
   selectedText: string
+  blockId?: string
   blockPath?: (string | number)[]
+  from?: number
+  to?: number
   docId: string
   onWrapSelection?: (threadId: string, text: string) => void
 }
@@ -28,7 +30,10 @@ export function FloatingCommentPopover({
   onClose,
   anchorRect,
   selectedText,
+  blockId,
   blockPath,
+  from,
+  to,
   docId,
   onWrapSelection,
 }: FloatingCommentPopoverProps) {
@@ -49,10 +54,11 @@ export function FloatingCommentPopover({
   }
 
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
-  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800
+  const viewportHeight =
+    typeof window !== 'undefined' ? window.innerHeight : 800
 
   const popoverWidth = 320
-  const popoverHeight = 190
+  const popoverHeight = 180
 
   let top = anchorRect.bottom + 8
   if (top + popoverHeight > viewportHeight - 16) {
@@ -70,7 +76,10 @@ export function FloatingCommentPopover({
     const newThread = addThread({
       docId,
       selectedText,
+      blockId,
       blockPath,
+      from,
+      to,
       content: commentContent.trim(),
       author: currentUser,
     })
@@ -93,9 +102,9 @@ export function FloatingCommentPopover({
         width: `${popoverWidth}px`,
         zIndex: 60,
       }}
-      className='animate-in fade-in zoom-in-95 rounded-xl border border-border/80 bg-popover/95 p-3.5 shadow-xl backdrop-blur-md text-popover-foreground duration-150'
+      className='animate-in rounded-xl border border-border/80 bg-popover/95 p-3.5 text-popover-foreground shadow-xl backdrop-blur-md duration-150 zoom-in-95 fade-in'
     >
-      <div className='flex items-center justify-between gap-2 pb-2 border-b border-border/50'>
+      <div className='flex items-center justify-between gap-2 border-b border-border/50 pb-2'>
         <div className='flex items-center gap-1.5 text-xs font-semibold text-foreground'>
           <MessageSquare className='size-3.5 text-primary' />
           <span>Add Comment</span>
@@ -113,7 +122,7 @@ export function FloatingCommentPopover({
 
       <div className='mt-2.5 space-y-2.5'>
         {selectedText && (
-          <div className='rounded-md border border-border/50 bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground line-clamp-2 italic'>
+          <div className='line-clamp-2 rounded-md border border-border/50 bg-muted/40 px-2.5 py-1.5 text-[11px] text-muted-foreground italic'>
             “{selectedText}”
           </div>
         )}
@@ -132,7 +141,7 @@ export function FloatingCommentPopover({
                 onClose()
               }
             }}
-            className='min-h-[70px] text-xs resize-none bg-background/60'
+            className='min-h-[70px] resize-none bg-background/60 text-xs'
             autoFocus
           />
         </div>
@@ -154,7 +163,7 @@ export function FloatingCommentPopover({
               size='sm'
               onClick={handleSubmit}
               disabled={!commentContent.trim()}
-              className='h-7 px-3 text-xs gap-1 font-medium'
+              className='h-7 gap-1 px-3 text-xs font-medium'
             >
               <Check className='size-3.5' />
               <span>Comment</span>
@@ -165,3 +174,4 @@ export function FloatingCommentPopover({
     </div>
   )
 }
+

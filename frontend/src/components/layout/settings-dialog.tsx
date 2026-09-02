@@ -56,7 +56,9 @@ export function SettingsDialog({
   onOpenChange,
   user,
 }: SettingsDialogProps) {
-  const [activeTab, setActiveTab] = useState<'account' | 'notification' | 'security'>('account')
+  const [activeTab, setActiveTab] = useState<
+    'account' | 'notification' | 'security'
+  >('account')
 
   const [displayName, setDisplayName] = useState(user.name)
   const [email, setEmail] = useState(user.email)
@@ -118,13 +120,14 @@ export function SettingsDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className='sm:max-w-2xl h-[540px] flex flex-col p-0 overflow-hidden'>
+        <DialogContent className='flex h-[540px] flex-col overflow-hidden p-0 sm:max-w-2xl'>
           <DialogTitle className='sr-only'>Settings</DialogTitle>
           <DialogDescription className='sr-only'>
-            Manage account settings, notifications, and security & MCP integration.
+            Manage account settings, notifications, and security & MCP
+            integration.
           </DialogDescription>
 
-          <div className='flex items-center gap-1.5 px-6 pt-5 pb-1 shrink-0'>
+          <div className='flex shrink-0 items-center gap-1.5 px-6 pt-5 pb-1'>
             <Button
               type='button'
               variant={activeTab === 'account' ? 'secondary' : 'ghost'}
@@ -132,7 +135,7 @@ export function SettingsDialog({
               onClick={() => setActiveTab('account')}
               className={`h-8 rounded-full px-3.5 text-xs font-medium transition-all ${
                 activeTab === 'account'
-                  ? 'bg-secondary text-secondary-foreground shadow-2xs font-semibold'
+                  ? 'bg-secondary font-semibold text-secondary-foreground shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -147,7 +150,7 @@ export function SettingsDialog({
               onClick={() => setActiveTab('notification')}
               className={`h-8 rounded-full px-3.5 text-xs font-medium transition-all ${
                 activeTab === 'notification'
-                  ? 'bg-secondary text-secondary-foreground shadow-2xs font-semibold'
+                  ? 'bg-secondary font-semibold text-secondary-foreground shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -162,7 +165,7 @@ export function SettingsDialog({
               onClick={() => setActiveTab('security')}
               className={`h-8 rounded-full px-3.5 text-xs font-medium transition-all ${
                 activeTab === 'security'
-                  ? 'bg-secondary text-secondary-foreground shadow-2xs font-semibold'
+                  ? 'bg-secondary font-semibold text-secondary-foreground shadow-2xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -171,7 +174,7 @@ export function SettingsDialog({
             </Button>
           </div>
 
-          <ScrollArea className='flex-1 min-h-0 px-6 py-4'>
+          <ScrollArea className='min-h-0 flex-1 px-6 py-4'>
             {activeTab === 'account' && (
               <div className='space-y-4 py-1'>
                 <div className='flex items-center gap-4 rounded-xl border border-border/80 bg-card p-4'>
@@ -181,26 +184,33 @@ export function SettingsDialog({
                       {displayName.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div className='space-y-1 min-w-0 flex-1'>
+                  <div className='min-w-0 flex-1 space-y-1'>
                     <div className='flex items-center gap-2'>
-                      <h4 className='font-semibold text-sm text-foreground truncate'>
+                      <h4 className='truncate text-sm font-semibold text-foreground'>
                         {displayName}
                       </h4>
-                      <Badge variant='secondary' className='text-[10px] px-1.5 py-0'>
+                      <Badge
+                        variant='secondary'
+                        className='px-1.5 py-0 text-[10px]'
+                      >
                         {role}
                       </Badge>
                     </div>
-                    <p className='text-xs text-muted-foreground truncate'>
+                    <p className='truncate text-xs text-muted-foreground'>
                       {email}
                     </p>
                   </div>
                 </div>
 
-                <div className='rounded-xl border border-border/80 bg-card divide-y divide-border/60'>
+                <div className='divide-y divide-border/60 rounded-xl border border-border/80 bg-card'>
                   <div className='flex items-center justify-between p-4'>
                     <div className='space-y-0.5'>
-                      <p className='text-xs font-semibold text-muted-foreground'>Name</p>
-                      <p className='text-sm font-medium text-foreground'>{displayName}</p>
+                      <p className='text-xs font-semibold text-muted-foreground'>
+                        Name
+                      </p>
+                      <p className='text-sm font-medium text-foreground'>
+                        {displayName}
+                      </p>
                     </div>
                     <Button
                       type='button'
@@ -210,7 +220,7 @@ export function SettingsDialog({
                         setTempName(displayName)
                         setEditNameOpen(true)
                       }}
-                      className='h-7 text-xs px-3'
+                      className='h-7 px-3 text-xs'
                     >
                       Change name
                     </Button>
@@ -218,8 +228,12 @@ export function SettingsDialog({
 
                   <div className='flex items-center justify-between p-4'>
                     <div className='space-y-0.5'>
-                      <p className='text-xs font-semibold text-muted-foreground'>Email</p>
-                      <p className='text-sm font-medium text-foreground'>{email}</p>
+                      <p className='text-xs font-semibold text-muted-foreground'>
+                        Email
+                      </p>
+                      <p className='text-sm font-medium text-foreground'>
+                        {email}
+                      </p>
                       <p className='text-[11px] text-muted-foreground/80'>
                         Managed by Google OAuth
                       </p>
@@ -232,7 +246,7 @@ export function SettingsDialog({
                         setTempEmail(email)
                         setEditEmailOpen(true)
                       }}
-                      className='h-7 text-xs px-3'
+                      className='h-7 px-3 text-xs'
                     >
                       Change email
                     </Button>
@@ -240,8 +254,12 @@ export function SettingsDialog({
 
                   <div className='flex items-center justify-between p-4'>
                     <div className='space-y-0.5'>
-                      <p className='text-xs font-semibold text-muted-foreground'>Role</p>
-                      <p className='text-sm font-medium text-foreground'>{role}</p>
+                      <p className='text-xs font-semibold text-muted-foreground'>
+                        Role
+                      </p>
+                      <p className='text-sm font-medium text-foreground'>
+                        {role}
+                      </p>
                     </div>
                     <Button
                       type='button'
@@ -251,7 +269,7 @@ export function SettingsDialog({
                         setTempRole(role)
                         setEditRoleOpen(true)
                       }}
-                      className='h-7 text-xs px-3'
+                      className='h-7 px-3 text-xs'
                     >
                       Change role
                     </Button>
@@ -262,17 +280,18 @@ export function SettingsDialog({
 
             {activeTab === 'notification' && (
               <div className='space-y-4 py-1'>
-                <div className='rounded-xl border border-border/80 bg-card divide-y divide-border/60'>
+                <div className='divide-y divide-border/60 rounded-xl border border-border/80 bg-card'>
                   <div className='flex items-center justify-between p-4'>
                     <div className='space-y-0.5 pr-4'>
                       <div className='flex items-center gap-2'>
                         <Mail className='size-3.5 text-primary' />
-                        <Label className='text-xs font-semibold cursor-pointer'>
+                        <Label className='cursor-pointer text-xs font-semibold'>
                           Email Activity Digest
                         </Label>
                       </div>
                       <p className='text-[11px] text-muted-foreground'>
-                        Receive periodic summary of changes and updates on your documents.
+                        Receive periodic summary of changes and updates on your
+                        documents.
                       </p>
                     </div>
                     <Switch
@@ -285,12 +304,13 @@ export function SettingsDialog({
                     <div className='space-y-0.5 pr-4'>
                       <div className='flex items-center gap-2'>
                         <Bell className='size-3.5 text-primary' />
-                        <Label className='text-xs font-semibold cursor-pointer'>
+                        <Label className='cursor-pointer text-xs font-semibold'>
                           Document Changes & Edits
                         </Label>
                       </div>
                       <p className='text-[11px] text-muted-foreground'>
-                        Get notified when team members edit or publish shared documents.
+                        Get notified when team members edit or publish shared
+                        documents.
                       </p>
                     </div>
                     <Switch
@@ -303,12 +323,13 @@ export function SettingsDialog({
                     <div className='space-y-0.5 pr-4'>
                       <div className='flex items-center gap-2'>
                         <Sparkles className='size-3.5 text-primary' />
-                        <Label className='text-xs font-semibold cursor-pointer'>
+                        <Label className='cursor-pointer text-xs font-semibold'>
                           Comments & Mentions
                         </Label>
                       </div>
                       <p className='text-[11px] text-muted-foreground'>
-                        Immediate alerts when you are tagged in document discussions.
+                        Immediate alerts when you are tagged in document
+                        discussions.
                       </p>
                     </div>
                     <Switch
@@ -321,12 +342,13 @@ export function SettingsDialog({
                     <div className='space-y-0.5 pr-4'>
                       <div className='flex items-center gap-2'>
                         <Globe className='size-3.5 text-primary' />
-                        <Label className='text-xs font-semibold cursor-pointer'>
+                        <Label className='cursor-pointer text-xs font-semibold'>
                           Product Updates & Releases
                         </Label>
                       </div>
                       <p className='text-[11px] text-muted-foreground'>
-                        Stay up to date with new features, architecture tools, and plugins.
+                        Stay up to date with new features, architecture tools,
+                        and plugins.
                       </p>
                     </div>
                     <Switch
@@ -340,7 +362,7 @@ export function SettingsDialog({
 
             {activeTab === 'security' && (
               <div className='space-y-5 py-1'>
-                <div className='rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3'>
+                <div className='space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4'>
                   <div className='flex items-center justify-between'>
                     <div className='flex items-center gap-2'>
                       <div className='flex size-7 items-center justify-center rounded-lg bg-primary/20 text-primary'>
@@ -351,7 +373,8 @@ export function SettingsDialog({
                           Model Context Protocol (MCP) Integration
                         </h4>
                         <p className='text-[11px] text-muted-foreground'>
-                          Enable local/remote AI coding agents to inspect architecture and generate diagrams.
+                          Enable local/remote AI coding agents to inspect
+                          architecture and generate diagrams.
                         </p>
                       </div>
                     </div>
@@ -362,9 +385,12 @@ export function SettingsDialog({
                   </div>
 
                   {mcpEnabled && (
-                    <div className='space-y-3 pt-2 border-t border-border/50'>
+                    <div className='space-y-3 border-t border-border/50 pt-2'>
                       <div className='space-y-1.5'>
-                        <Label htmlFor='mcpUrl' className='text-xs font-medium flex items-center gap-1.5'>
+                        <Label
+                          htmlFor='mcpUrl'
+                          className='flex items-center gap-1.5 text-xs font-medium'
+                        >
                           <Server className='size-3 text-muted-foreground' />
                           MCP Server Endpoint (SSE / HTTP)
                         </Label>
@@ -373,12 +399,15 @@ export function SettingsDialog({
                           value={mcpServerUrl}
                           onChange={(e) => setMcpServerUrl(e.target.value)}
                           placeholder='http://localhost:3000/sse'
-                          className='h-8 text-xs font-mono'
+                          className='h-8 font-mono text-xs'
                         />
                       </div>
 
                       <div className='space-y-1.5'>
-                        <Label htmlFor='mcpKey' className='text-xs font-medium flex items-center gap-1.5'>
+                        <Label
+                          htmlFor='mcpKey'
+                          className='flex items-center gap-1.5 text-xs font-medium'
+                        >
                           <Key className='size-3 text-muted-foreground' />
                           MCP Access Token / Key
                         </Label>
@@ -389,12 +418,12 @@ export function SettingsDialog({
                             value={mcpApiKey}
                             onChange={(e) => setMcpApiKey(e.target.value)}
                             placeholder='mcp_sk_...'
-                            className='h-8 pr-8 text-xs font-mono'
+                            className='h-8 pr-8 font-mono text-xs'
                           />
                           <button
                             type='button'
                             onClick={() => setShowApiKey(!showApiKey)}
-                            className='absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground'
+                            className='absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground'
                           >
                             {showApiKey ? (
                               <EyeOff className='size-3.5' />
@@ -410,32 +439,45 @@ export function SettingsDialog({
                           Allowed MCP Tools & Capabilities
                         </Label>
                         <div className='space-y-1.5 rounded-lg border border-border/80 bg-background/80 p-2.5'>
-                          <label className='flex items-center gap-2 text-xs text-foreground cursor-pointer'>
+                          <label className='flex cursor-pointer items-center gap-2 text-xs text-foreground'>
                             <input
                               type='checkbox'
                               checked={allowDocRead}
-                              onChange={(e) => setAllowDocRead(e.target.checked)}
+                              onChange={(e) =>
+                                setAllowDocRead(e.target.checked)
+                              }
                               className='size-3.5 rounded border-border text-primary'
                             />
-                            <span>Read workspace specifications & Markdown</span>
+                            <span>
+                              Read workspace specifications & Markdown
+                            </span>
                           </label>
-                          <label className='flex items-center gap-2 text-xs text-foreground cursor-pointer'>
+                          <label className='flex cursor-pointer items-center gap-2 text-xs text-foreground'>
                             <input
                               type='checkbox'
                               checked={allowDiagramGen}
-                              onChange={(e) => setAllowDiagramGen(e.target.checked)}
+                              onChange={(e) =>
+                                setAllowDiagramGen(e.target.checked)
+                              }
                               className='size-3.5 rounded border-border text-primary'
                             />
-                            <span>Automated Mermaid flowchart & DBML schema generation</span>
+                            <span>
+                              Automated Mermaid flowchart & DBML schema
+                              generation
+                            </span>
                           </label>
-                          <label className='flex items-center gap-2 text-xs text-foreground cursor-pointer'>
+                          <label className='flex cursor-pointer items-center gap-2 text-xs text-foreground'>
                             <input
                               type='checkbox'
                               checked={allowSearchIndex}
-                              onChange={(e) => setAllowSearchIndex(e.target.checked)}
+                              onChange={(e) =>
+                                setAllowSearchIndex(e.target.checked)
+                              }
                               className='size-3.5 rounded border-border text-primary'
                             />
-                            <span>Semantic indexing & cross-project document search</span>
+                            <span>
+                              Semantic indexing & cross-project document search
+                            </span>
                           </label>
                         </div>
                       </div>
@@ -443,17 +485,18 @@ export function SettingsDialog({
                   )}
                 </div>
 
-                <div className='rounded-xl border border-border/80 bg-card p-4 space-y-3'>
+                <div className='space-y-3 rounded-xl border border-border/80 bg-card p-4'>
                   <div className='flex items-center justify-between'>
                     <div className='space-y-0.5'>
                       <div className='flex items-center gap-2'>
                         <Lock className='size-3.5 text-primary' />
-                        <Label className='text-xs font-semibold cursor-pointer'>
+                        <Label className='cursor-pointer text-xs font-semibold'>
                           Two-Factor Authentication (2FA)
                         </Label>
                       </div>
                       <p className='text-[11px] text-muted-foreground'>
-                        Enforce authenticator app token on every sign in attempt.
+                        Enforce authenticator app token on every sign in
+                        attempt.
                       </p>
                     </div>
                     <Switch
@@ -472,12 +515,15 @@ export function SettingsDialog({
       <Dialog open={editNameOpen} onOpenChange={setEditNameOpen}>
         <DialogContent className='sm:max-w-md'>
           <DialogHeader>
-            <DialogTitle className='text-base font-semibold'>Change Name</DialogTitle>
+            <DialogTitle className='text-base font-semibold'>
+              Change Name
+            </DialogTitle>
             <DialogDescription className='text-xs'>
-              Enter your full display name as you would like it to appear in Dokudocs.
+              Enter your full display name as you would like it to appear in
+              Dokudocs.
             </DialogDescription>
           </DialogHeader>
-          <div className='py-2 space-y-2'>
+          <div className='space-y-2 py-2'>
             <Label htmlFor='nameInput' className='text-xs font-medium'>
               Full Name
             </Label>
@@ -516,12 +562,15 @@ export function SettingsDialog({
       <Dialog open={editEmailOpen} onOpenChange={setEditEmailOpen}>
         <DialogContent className='sm:max-w-md'>
           <DialogHeader>
-            <DialogTitle className='text-base font-semibold'>Change Email</DialogTitle>
+            <DialogTitle className='text-base font-semibold'>
+              Change Email
+            </DialogTitle>
             <DialogDescription className='text-xs'>
-              Your email is managed by your authentication provider. You will receive a verification link to confirm this update.
+              Your email is managed by your authentication provider. You will
+              receive a verification link to confirm this update.
             </DialogDescription>
           </DialogHeader>
-          <div className='py-2 space-y-2'>
+          <div className='space-y-2 py-2'>
             <Label htmlFor='emailInput' className='text-xs font-medium'>
               New Email Address
             </Label>
@@ -561,12 +610,14 @@ export function SettingsDialog({
       <Dialog open={editRoleOpen} onOpenChange={setEditRoleOpen}>
         <DialogContent className='sm:max-w-md'>
           <DialogHeader>
-            <DialogTitle className='text-base font-semibold'>Change Role</DialogTitle>
+            <DialogTitle className='text-base font-semibold'>
+              Change Role
+            </DialogTitle>
             <DialogDescription className='text-xs'>
               Select or type your primary workspace role and title.
             </DialogDescription>
           </DialogHeader>
-          <div className='py-2 space-y-3'>
+          <div className='space-y-3 py-2'>
             <div className='space-y-1.5'>
               <Label htmlFor='roleInput' className='text-xs font-medium'>
                 Role Title
@@ -590,10 +641,10 @@ export function SettingsDialog({
                     key={r}
                     type='button'
                     onClick={() => setTempRole(r)}
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-colors cursor-pointer ${
+                    className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                       tempRole === r
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'border-border bg-muted/40 hover:bg-muted text-foreground'
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-muted/40 text-foreground hover:bg-muted'
                     }`}
                   >
                     {r}

@@ -8,9 +8,7 @@ interface ProjectsSectionProps {
   onAddDocToProject?: (projectId: string) => void
 }
 
-export function ProjectsSection({
-  onAddDocToProject,
-}: ProjectsSectionProps) {
+export function ProjectsSection({ onAddDocToProject }: ProjectsSectionProps) {
   const { projectsWithDocs } = useDokudocs()
 
   return (
@@ -35,8 +33,8 @@ export function ProjectsSection({
       </div>
 
       {projectsWithDocs.length === 0 ? (
-        <div className='flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-8 text-center bg-card/40'>
-          <div className='flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground mb-2'>
+        <div className='flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/40 py-8 text-center'>
+          <div className='mb-2 flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground'>
             <FolderPlus className='size-5' />
           </div>
           <p className='text-xs text-muted-foreground'>

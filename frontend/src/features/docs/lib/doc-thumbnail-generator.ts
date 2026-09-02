@@ -1,5 +1,5 @@
-import mermaid from 'mermaid'
 import { DocType } from '@/types/dokudocs'
+import mermaid from 'mermaid'
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -62,7 +62,10 @@ const MAX_THUMBNAIL_FLOWCHART_NODES = 8
 const MAX_THUMBNAIL_PARTICIPANTS = 4
 const MAX_THUMBNAIL_MESSAGES = 6
 
-function calculateTableHeight(table: ParsedTable, maxCols = MAX_THUMBNAIL_COLUMNS): number {
+function calculateTableHeight(
+  table: ParsedTable,
+  maxCols = MAX_THUMBNAIL_COLUMNS
+): number {
   const count = Math.min(table.columns.length, maxCols)
   const hasMore = table.columns.length > maxCols
   return HEADER_HEIGHT + count * ROW_HEIGHT + (hasMore ? 22 : 0) + 6
@@ -164,7 +167,13 @@ export function generateDbmlThumbnail(
     const lines = body.split('\n')
     for (const rawLine of lines) {
       const line = rawLine.trim()
-      if (!line || line.startsWith('//') || line.startsWith('indexes') || line.startsWith('Note:')) continue
+      if (
+        !line ||
+        line.startsWith('//') ||
+        line.startsWith('indexes') ||
+        line.startsWith('Note:')
+      )
+        continue
 
       const colMatch = line.match(/^([\w."]+)\s+([\w()]+)(?:\s*\[([^\]]*)\])?/)
       if (colMatch) {
@@ -394,8 +403,14 @@ export function generateDbmlThumbnail(
       (c) => c.name.toLowerCase() === rel.toColumn.toLowerCase()
     )
 
-    const fromColDisplay = Math.min(fromColIdx >= 0 ? fromColIdx : 0, MAX_THUMBNAIL_COLUMNS - 1)
-    const toColDisplay = Math.min(toColIdx >= 0 ? toColIdx : 0, MAX_THUMBNAIL_COLUMNS - 1)
+    const fromColDisplay = Math.min(
+      fromColIdx >= 0 ? fromColIdx : 0,
+      MAX_THUMBNAIL_COLUMNS - 1
+    )
+    const toColDisplay = Math.min(
+      toColIdx >= 0 ? toColIdx : 0,
+      MAX_THUMBNAIL_COLUMNS - 1
+    )
 
     const fromY =
       fromPos.y + HEADER_HEIGHT + fromColDisplay * ROW_HEIGHT + ROW_HEIGHT / 2
@@ -494,7 +509,8 @@ function parseFlowchart(content: string) {
   const links: MermaidLink[] = []
   let direction = 'TD'
 
-  const firstLine = lines.find((l) => l.trim() && !l.trim().startsWith('%%')) || ''
+  const firstLine =
+    lines.find((l) => l.trim() && !l.trim().startsWith('%%')) || ''
   const dirMatch = firstLine.match(/(?:flowchart|graph)\s+([A-Z]{2})/i)
   if (dirMatch) {
     direction = dirMatch[1].toUpperCase()
@@ -502,12 +518,19 @@ function parseFlowchart(content: string) {
 
   lines.forEach((line) => {
     const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('%%') || trimmed.startsWith('flowchart') || trimmed.startsWith('graph')) {
+    if (
+      !trimmed ||
+      trimmed.startsWith('%%') ||
+      trimmed.startsWith('flowchart') ||
+      trimmed.startsWith('graph')
+    ) {
       return
     }
 
     const nodeDeclMatches = Array.from(
-      trimmed.matchAll(/([a-zA-Z0-9_-]+)(?:(\(\[(.*?)\]\))|(\{(.*?)\})|(\(\((.*?)\)\))|(\{\{(.*?)\}\})|(\[\((.*?)\)\])|(\[(.*?)\]))/g)
+      trimmed.matchAll(
+        /([a-zA-Z0-9_-]+)(?:(\(\[(.*?)\]\))|(\{(.*?)\})|(\(\((.*?)\)\))|(\{\{(.*?)\}\})|(\[\((.*?)\)\])|(\[(.*?)\]))/g
+      )
     )
 
     nodeDeclMatches.forEach((nm) => {
@@ -607,11 +630,17 @@ function renderFlowchartSvg(content: string, isDark = false): string {
       }
     })
 
-    while (queue.length > 0 && selectedIds.size < MAX_THUMBNAIL_FLOWCHART_NODES) {
+    while (
+      queue.length > 0 &&
+      selectedIds.size < MAX_THUMBNAIL_FLOWCHART_NODES
+    ) {
       const curr = queue.shift()!
       const neighbors = adj.get(curr) || []
       for (const nxt of neighbors) {
-        if (!selectedIds.has(nxt) && selectedIds.size < MAX_THUMBNAIL_FLOWCHART_NODES) {
+        if (
+          !selectedIds.has(nxt) &&
+          selectedIds.size < MAX_THUMBNAIL_FLOWCHART_NODES
+        ) {
           selectedIds.add(nxt)
           queue.push(nxt)
         }
@@ -626,10 +655,13 @@ function renderFlowchartSvg(content: string, isDark = false): string {
     }
 
     nodes = allNodes.filter((n) => selectedIds.has(n.id))
-    links = allLinks.filter((l) => selectedIds.has(l.from) && selectedIds.has(l.to))
+    links = allLinks.filter(
+      (l) => selectedIds.has(l.from) && selectedIds.has(l.to)
+    )
   }
 
-  const isVertical = direction === 'TD' || direction === 'TB' || direction === 'BT'
+  const isVertical =
+    direction === 'TD' || direction === 'TB' || direction === 'BT'
 
   const inDegree = new Map<string, number>()
   const adj = new Map<string, string[]>()
@@ -684,7 +716,10 @@ function renderFlowchartSvg(content: string, isDark = false): string {
     rankGroups.get(r)!.push(n)
   })
 
-  const nodePositions = new Map<string, { x: number; y: number; width: number; height: number }>()
+  const nodePositions = new Map<
+    string,
+    { x: number; y: number; width: number; height: number }
+  >()
 
   const nodeW = 110
   const nodeH = 42
@@ -828,7 +863,12 @@ function renderFlowchartSvg(content: string, isDark = false): string {
 function renderSequenceSvg(content: string, isDark = false): string {
   const lines = content.split('\n')
   const allParticipants: { id: string; label: string }[] = []
-  const allMessages: { from: string; to: string; text: string; isReply?: boolean }[] = []
+  const allMessages: {
+    from: string
+    to: string
+    text: string
+    isReply?: boolean
+  }[] = []
   let autoNumber = false
 
   lines.forEach((line) => {
@@ -840,7 +880,9 @@ function renderSequenceSvg(content: string, isDark = false): string {
       return
     }
 
-    const partMatch = trimmed.match(/(?:participant|actor)\s+([a-zA-Z0-9_-]+)(?:\s+as\s+(.*))?/)
+    const partMatch = trimmed.match(
+      /(?:participant|actor)\s+([a-zA-Z0-9_-]+)(?:\s+as\s+(.*))?/
+    )
     if (partMatch) {
       allParticipants.push({
         id: partMatch[1],
@@ -849,7 +891,9 @@ function renderSequenceSvg(content: string, isDark = false): string {
       return
     }
 
-    const msgMatch = trimmed.match(/([a-zA-Z0-9_-]+)\s*(-->>|->>|-x|-\))\s*([a-zA-Z0-9_-]+)\s*:\s*(.*)/)
+    const msgMatch = trimmed.match(
+      /([a-zA-Z0-9_-]+)\s*(-->>|->>|-x|-\))\s*([a-zA-Z0-9_-]+)\s*:\s*(.*)/
+    )
     if (msgMatch) {
       const from = msgMatch[1]
       const arrow = msgMatch[2]
@@ -889,8 +933,10 @@ function renderSequenceSvg(content: string, isDark = false): string {
   const padY = 26
   const stepHeight = 38
 
-  const totalWidth = padX * 2 + Math.max(1, participants.length - 1) * spacingX + partWidth
-  const totalHeight = padY * 2 + partHeight * 2 + Math.max(2, messages.length) * stepHeight + 30
+  const totalWidth =
+    padX * 2 + Math.max(1, participants.length - 1) * spacingX + partWidth
+  const totalHeight =
+    padY * 2 + partHeight * 2 + Math.max(2, messages.length) * stepHeight + 30
 
   const partPositions = new Map<string, number>()
   participants.forEach((p, idx) => {
@@ -963,7 +1009,10 @@ function renderSequenceSvg(content: string, isDark = false): string {
   return `<svg viewBox="0 0 ${totalWidth} ${totalHeight}" preserveAspectRatio="xMidYMid meet" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">${svgElements.join('')}</svg>`
 }
 
-export function generateMermaidThumbnail(content: string, isDark = false): string {
+export function generateMermaidThumbnail(
+  content: string,
+  isDark = false
+): string {
   const trimmed = content.trim()
   if (!trimmed) return ''
 
@@ -997,7 +1046,10 @@ export async function generateMermaidThumbnailAsync(
 
       let clean = svg
       if (!clean.includes('preserveAspectRatio')) {
-        clean = clean.replace('<svg ', '<svg preserveAspectRatio="xMidYMid meet" ')
+        clean = clean.replace(
+          '<svg ',
+          '<svg preserveAspectRatio="xMidYMid meet" '
+        )
       }
       return clean
     } catch {
@@ -1015,7 +1067,11 @@ export function svgToRasterThumbnail(
   backgroundColor = '#ffffff'
 ): Promise<string> {
   return new Promise((resolve) => {
-    if (typeof window === 'undefined' || typeof document === 'undefined' || !svgString) {
+    if (
+      typeof window === 'undefined' ||
+      typeof document === 'undefined' ||
+      !svgString
+    ) {
       resolve(svgString)
       return
     }

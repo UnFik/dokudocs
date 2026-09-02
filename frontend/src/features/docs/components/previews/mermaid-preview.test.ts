@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { getMermaidSuggestions } from '../../lib/mermaid-intellisense'
-import { highlightMermaidCode } from '../../lib/mermaid-tokenizer'
 import {
   generateDbmlThumbnail,
   generateDualThumbnailsAsync,
   generateMermaidThumbnail,
   generateThumbnailAsync,
 } from '../../lib/doc-thumbnail-generator'
+import { getMermaidSuggestions } from '../../lib/mermaid-intellisense'
+import { highlightMermaidCode } from '../../lib/mermaid-tokenizer'
 
 describe('Mermaid Tokenizer & Syntax Highlighter', () => {
   it('correctly tokenizes and highlights sequence diagram keywords and arrows', () => {
@@ -38,7 +38,9 @@ Note over App, Tuya: 2. Execute Authenticated API Request`
 describe('Mermaid IntelliSense', () => {
   it('suggests diagram types and keywords', () => {
     const result = getMermaidSuggestions('seq', 3)
-    expect(result.suggestions.some((s) => s.label === 'sequenceDiagram')).toBe(true)
+    expect(result.suggestions.some((s) => s.label === 'sequenceDiagram')).toBe(
+      true
+    )
   })
 
   it('extracts declared participants for autocomplete', () => {
@@ -138,8 +140,18 @@ describe('Mermaid & Flowchart Thumbnail Generator', () => {
   it('generates thumbnail asynchronously via generateThumbnailAsync for dark and light', async () => {
     const code = `flowchart LR
     A[Step 1] --> B[Step 2]`
-    const lightThumb = await generateThumbnailAsync('mermaid', code, undefined, false)
-    const darkThumb = await generateThumbnailAsync('mermaid', code, undefined, true)
+    const lightThumb = await generateThumbnailAsync(
+      'mermaid',
+      code,
+      undefined,
+      false
+    )
+    const darkThumb = await generateThumbnailAsync(
+      'mermaid',
+      code,
+      undefined,
+      true
+    )
 
     expect(lightThumb).toBeTruthy()
     expect(darkThumb).toBeTruthy()
@@ -166,9 +178,15 @@ describe('Markdown Preview Heading Extraction & Slug IDs', () => {
   }
 
   it('generates consistent and clean slug IDs for heading strings', () => {
-    expect(generateSlug('Heading 1: Getting Started')).toBe('heading-1-getting-started')
-    expect(generateSlug('What is Dokudocs? (Overview)')).toBe('what-is-dokudocs-overview')
-    expect(generateSlug('   Leading & Trailing Spaces   ')).toBe('leading-trailing-spaces')
+    expect(generateSlug('Heading 1: Getting Started')).toBe(
+      'heading-1-getting-started'
+    )
+    expect(generateSlug('What is Dokudocs? (Overview)')).toBe(
+      'what-is-dokudocs-overview'
+    )
+    expect(generateSlug('   Leading & Trailing Spaces   ')).toBe(
+      'leading-trailing-spaces'
+    )
     expect(generateSlug('Special @#$% Characters!')).toBe('special-characters')
   })
 
@@ -288,4 +306,43 @@ describe('Mermaid Syntax Validation & Error Handling', () => {
     expect(typeof thumbnail).toBe('string')
   })
 })
+
+describe('Mermaid Dark Mode SVG Enhancement & Theme Configuration', () => {
+  it('converts bright rect fills to dark tints in dark mode', async () => {
+    const { enhanceMermaidSvgForDarkMode } = await import(
+      '../../hooks/use-mermaid-render'
+    )
+
+    const rawSvg = `<svg><rect class="rect" fill="rgb(240, 255, 240)" width="200" height="100"></rect><rect fill="#ffffff"></rect></svg>`
+    const enhanced = enhanceMermaidSvgForDarkMode(rawSvg, true)
+
+    expect(enhanced).not.toContain('fill="rgb(240, 255, 240)"')
+    expect(enhanced).toContain('fill-opacity="0.88"')
+    expect(enhanced).toContain('stroke=')
+  })
+
+  it('preserves SVG as-is when isDark is false', async () => {
+    const { enhanceMermaidSvgForDarkMode } = await import(
+      '../../hooks/use-mermaid-render'
+    )
+
+    const rawSvg = `<svg><rect class="rect" fill="rgb(240, 255, 240)" width="200" height="100"></rect></svg>`
+    const result = enhanceMermaidSvgForDarkMode(rawSvg, false)
+
+    expect(result).toBe(rawSvg)
+  })
+
+  it('provides dark theme variables with high contrast in dark mode', async () => {
+    const { getMermaidConfig } = await import('../../hooks/use-mermaid-render')
+
+    const darkConfig = getMermaidConfig(true)
+    expect(darkConfig.theme).toBe('dark')
+    expect(darkConfig.themeVariables?.darkMode).toBe(true)
+    expect(darkConfig.themeVariables?.signalTextColor).toBe('#ffffff')
+
+    const lightConfig = getMermaidConfig(false)
+    expect(lightConfig.theme).toBe('default')
+  })
+})
+
 

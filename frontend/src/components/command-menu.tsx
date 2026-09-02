@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { DocType } from '@/types/dokudocs'
 import {
   Clock,
   Database,
@@ -14,10 +15,9 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { DocType } from '@/types/dokudocs'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { getDocCategories } from '@/lib/doc-category-utils'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { useSearch } from '@/context/search-provider'
 import { useTheme } from '@/context/theme-provider'
 import {
@@ -70,7 +70,9 @@ export function CommandMenu() {
         <CommandInput placeholder='Search documents, projects, commands (⌘K)...' />
         <CommandList>
           <ScrollArea type='hover' className='h-80 pe-1'>
-            <CommandEmpty>No matching documents or projects found.</CommandEmpty>
+            <CommandEmpty>
+              No matching documents or projects found.
+            </CommandEmpty>
 
             {documents.length > 0 && (
               <CommandGroup heading='Documents'>
@@ -78,8 +80,9 @@ export function CommandMenu() {
                   const project = projects.find((p) => p.id === doc.projectId)
                   const docCats = getDocCategories(doc)
 
-                  const uniqueValue = `doc-${doc.id}-${idx}-${doc.title}-${doc.projectName || 'draft'
-                    }-${docCats.join('-')}-${doc.type}`
+                  const uniqueValue = `doc-${doc.id}-${idx}-${doc.title}-${
+                    doc.projectName || 'draft'
+                  }-${docCats.join('-')}-${doc.type}`
 
                   return (
                     <CommandItem
@@ -96,7 +99,7 @@ export function CommandMenu() {
                       }}
                       className='flex items-center justify-between py-2'
                     >
-                      <div className='flex items-center gap-2.5 min-w-0 flex-1'>
+                      <div className='flex min-w-0 flex-1 items-center gap-2.5'>
                         <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-foreground'>
                           {doc.type === 'markdown' && (
                             <FileText className='size-3.5 text-blue-500' />
@@ -108,41 +111,48 @@ export function CommandMenu() {
                             <GitFork className='size-3.5 text-purple-500' />
                           )}
                         </div>
-                        <div className='flex flex-col min-w-0 truncate'>
+                        <div className='flex min-w-0 flex-col truncate'>
                           <span className='truncate text-xs font-semibold text-foreground'>
                             {doc.title}
                           </span>
                           <span className='truncate text-[10px] text-muted-foreground'>
-                            {doc.projectName ? doc.projectName : 'Personal Draft'}
+                            {doc.projectName
+                              ? doc.projectName
+                              : 'Personal Draft'}
                           </span>
                         </div>
                       </div>
 
-                      <div className='flex items-center gap-1 shrink-0'>
-                        {docCats.length > 0 && (() => {
-                          const firstCat = docCats[0]
-                          const colorId = project?.categoryColors?.[firstCat]
-                          const palette = getCategoryPalette(firstCat, colorId, 0)
-                          const remainingCount = docCats.length - 1
+                      <div className='flex shrink-0 items-center gap-1'>
+                        {docCats.length > 0 &&
+                          (() => {
+                            const firstCat = docCats[0]
+                            const colorId = project?.categoryColors?.[firstCat]
+                            const palette = getCategoryPalette(
+                              firstCat,
+                              colorId,
+                              0
+                            )
+                            const remainingCount = docCats.length - 1
 
-                          return (
-                            <>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[9px] font-medium border ${palette.bg} ${palette.text} ${palette.border}`}
-                              >
-                                {firstCat}
-                              </span>
-                              {remainingCount > 0 && (
+                            return (
+                              <>
                                 <span
-                                  title={docCats.slice(1).join(', ')}
-                                  className='rounded-full px-1.5 py-0.5 text-[9px] font-medium border border-border/80 bg-muted/60 text-muted-foreground'
+                                  className={`rounded-full border px-2 py-0.5 text-[9px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
                                 >
-                                  +{remainingCount}
+                                  {firstCat}
                                 </span>
-                              )}
-                            </>
-                          )
-                        })()}
+                                {remainingCount > 0 && (
+                                  <span
+                                    title={docCats.slice(1).join(', ')}
+                                    className='rounded-full border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
+                                  >
+                                    +{remainingCount}
+                                  </span>
+                                )}
+                              </>
+                            )
+                          })()}
                       </div>
                     </CommandItem>
                   )
@@ -155,8 +165,9 @@ export function CommandMenu() {
                 <CommandSeparator />
                 <CommandGroup heading='Projects'>
                   {projects.map((proj, idx) => {
-                    const uniqueValue = `proj-${proj.id}-${idx}-${proj.name}-${proj.description || ''
-                      }`
+                    const uniqueValue = `proj-${proj.id}-${idx}-${proj.name}-${
+                      proj.description || ''
+                    }`
 
                     return (
                       <CommandItem
@@ -172,19 +183,19 @@ export function CommandMenu() {
                         }}
                         className='flex items-center justify-between py-2'
                       >
-                        <div className='flex items-center gap-2.5 min-w-0 flex-1'>
+                        <div className='flex min-w-0 flex-1 items-center gap-2.5'>
                           {proj.logoUrl ? (
                             <img
                               src={proj.logoUrl}
                               alt={proj.name}
-                              className='size-6 shrink-0 rounded-md object-cover border border-border shadow-2xs'
+                              className='size-6 shrink-0 rounded-md border border-border object-cover shadow-2xs'
                             />
                           ) : (
                             <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary'>
                               <Folder className='size-3.5' />
                             </div>
                           )}
-                          <div className='flex flex-col min-w-0 truncate'>
+                          <div className='flex min-w-0 flex-col truncate'>
                             <span className='truncate text-xs font-semibold text-foreground'>
                               {proj.name}
                             </span>
@@ -194,7 +205,7 @@ export function CommandMenu() {
                             </span>
                           </div>
                         </div>
-                        <span className='text-[10px] font-mono text-muted-foreground shrink-0'>
+                        <span className='shrink-0 font-mono text-[10px] text-muted-foreground'>
                           {proj.documentIds.length} docs
                         </span>
                       </CommandItem>
@@ -331,10 +342,7 @@ export function CommandMenu() {
         defaultType={createDocType}
       />
 
-      <ImportDocDialog
-        open={importDocOpen}
-        onOpenChange={setImportDocOpen}
-      />
+      <ImportDocDialog open={importDocOpen} onOpenChange={setImportDocOpen} />
 
       <CreateProjectDialog
         open={createProjectOpen}

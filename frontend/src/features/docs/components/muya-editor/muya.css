@@ -188,63 +188,58 @@
 }
 
 .mu-editor.mu-read-only,
+.muya-editor-root.mu-read-only,
 .muya-container.mu-read-only {
   user-select: text;
   cursor: default;
+  -webkit-user-drag: none;
+}
+
+.mu-editor.mu-read-only *,
+.muya-editor-root.mu-read-only *,
+.muya-container.mu-read-only * {
+  -webkit-user-drag: none !important;
 }
 
 .mu-editor.mu-read-only .mu-paragraph-placeholder,
 .mu-editor.mu-read-only .mu-front-button,
-.mu-editor.mu-read-only .mu-table-drag-bar {
+.mu-editor.mu-read-only .mu-front-button-wrapper,
+.mu-editor.mu-read-only .mu-table-drag-bar,
+.mu-editor.mu-read-only .mu-table-drag-container,
+.muya-editor-root.mu-read-only .mu-front-button-wrapper,
+.muya-editor-root.mu-read-only .mu-table-drag-container {
   display: none !important;
+  pointer-events: none !important;
 }
 
-del.doc-suggestion-del,
-del[data-suggestion-id],
-.doc-suggestion-del {
-  color: #ef4444 !important;
-  background-color: rgba(239, 68, 68, 0.14) !important;
-  text-decoration: line-through !important;
-  border-radius: 3px;
-  padding: 1px 3px;
-  margin: 0 1px;
-  cursor: pointer;
-}
-
-ins.doc-suggestion-ins,
-ins[data-suggestion-id],
-.doc-suggestion-ins {
-  color: #10b981 !important;
-  background-color: rgba(16, 185, 129, 0.14) !important;
-  text-decoration: underline !important;
-  border-radius: 3px;
-  padding: 1px 3px;
-  margin: 0 1px;
-  cursor: pointer;
-}
-
+span.doc-comment-highlight,
 mark.doc-comment-highlight,
 mark[data-thread-id],
 .doc-comment-highlight {
-  background-color: rgba(234, 179, 8, 0.22) !important;
+  background-color: rgba(234, 179, 8, 0.25) !important;
   color: inherit !important;
   border-radius: 2px;
   padding: 1px 3px;
   margin: 0 1px;
   cursor: pointer;
+  border-bottom: 2px solid rgba(234, 179, 8, 0.7) !important;
   transition: background-color 0.15s ease;
 }
 
+span.doc-comment-highlight:hover,
 mark.doc-comment-highlight:hover,
 mark[data-thread-id]:hover,
 .doc-comment-highlight:hover {
-  background-color: rgba(234, 179, 8, 0.38) !important;
+  background-color: rgba(234, 179, 8, 0.42) !important;
 }
 
+span.doc-comment-highlight.is-active,
 mark.doc-comment-highlight.is-active,
-mark[data-thread-id].is-active {
-  background-color: rgba(234, 179, 8, 0.5) !important;
-  outline: 2px solid rgba(234, 179, 8, 0.8);
+mark[data-thread-id].is-active,
+.doc-comment-highlight.is-active {
+  background-color: rgba(234, 179, 8, 0.55) !important;
+  outline: 2px solid rgba(234, 179, 8, 0.9);
+  border-bottom: 2px solid rgba(234, 179, 8, 1) !important;
 }
 
 .mu-line-indicators-container {
@@ -268,6 +263,3 @@ mark[data-thread-id].is-active {
   transition: all 0.15s ease;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
-
-
-

@@ -22,11 +22,12 @@ export function TrashPage() {
   const [emptyDialogOpen, setEmptyDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const filteredTrash = trash.filter((item) =>
-    item.document.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (item.document.projectName?.toLowerCase() || '').includes(
-      searchQuery.toLowerCase()
-    )
+  const filteredTrash = trash.filter(
+    (item) =>
+      item.document.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.document.projectName?.toLowerCase() || '').includes(
+        searchQuery.toLowerCase()
+      )
   )
 
   const handleConfirmEmpty = () => {
@@ -37,7 +38,7 @@ export function TrashPage() {
 
   return (
     <div className='flex flex-1 flex-col gap-6 p-6'>
-      <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5'>
+      <div className='flex flex-col justify-between gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-center'>
         <div>
           <div className='flex items-center gap-2.5'>
             <div className='flex size-8 items-center justify-center rounded-lg bg-destructive/10 text-destructive'>
@@ -51,7 +52,8 @@ export function TrashPage() {
             </span>
           </div>
           <p className='mt-1 text-xs text-muted-foreground'>
-            Items in trash will be permanently deleted automatically after 30 days.
+            Items in trash will be permanently deleted automatically after 30
+            days.
           </p>
         </div>
 
@@ -61,7 +63,7 @@ export function TrashPage() {
               variant='outline'
               size='sm'
               onClick={() => setEmptyDialogOpen(true)}
-              className='h-8 text-xs gap-1.5 text-destructive border-destructive/30 hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors'
+              className='hover:text-destructive-foreground h-8 gap-1.5 border-destructive/30 text-xs text-destructive transition-colors hover:border-destructive hover:bg-destructive'
             >
               <Trash2 className='size-3.5' />
               <span>Empty Trash</span>
@@ -73,7 +75,7 @@ export function TrashPage() {
       {trash.length > 0 && (
         <div className='flex items-center justify-between gap-4'>
           <div className='relative w-full max-w-sm'>
-            <Search className='absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground' />
+            <Search className='absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground' />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -103,20 +105,20 @@ export function TrashPage() {
       <AlertDialog open={emptyDialogOpen} onOpenChange={setEmptyDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className='text-destructive flex items-center gap-2'>
+            <AlertDialogTitle className='flex items-center gap-2 text-destructive'>
               <Trash2 className='size-4' />
               Empty Entire Trash?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to permanently delete all {trash.length} items
-              in the trash? This action cannot be undone.
+              Are you sure you want to permanently delete all {trash.length}{' '}
+              items in the trash? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmEmpty}
-              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
+              className='text-destructive-foreground bg-destructive hover:bg-destructive/90'
             >
               Empty Trash
             </AlertDialogAction>

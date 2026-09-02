@@ -1,24 +1,24 @@
-import { EXPORT_DOMPURIFY_CONFIG } from '../config';
-import { sanitize } from '../utils';
-import { getHighlightHtml } from '../utils/marked';
-import { transformFootnotes } from './transformFootnotes';
+import { EXPORT_DOMPURIFY_CONFIG } from '../config'
+import { sanitize } from '../utils'
+import { getHighlightHtml } from '../utils/marked'
+import { transformFootnotes } from './transformFootnotes'
 
 export interface IRenderToStaticHTMLOptions {
-    footnote?: boolean;
-    math?: boolean;
-    isGitlabCompatibilityEnabled?: boolean;
-    superSubScript?: boolean;
-    frontMatter?: boolean;
-    /**
-     * Skip DOMPurify sanitization. **Unsafe with untrusted input** — drops
-     * the XSS guarantees of the default export path. Only intended for
-     * CommonMark / GFM spec compliance runners, which need to compare
-     * against the parser's raw output (the spec includes "raw HTML
-     * allowance" examples that DOMPurify would otherwise rewrite).
-     *
-     * @default true
-     */
-    sanitize?: boolean;
+  footnote?: boolean
+  math?: boolean
+  isGitlabCompatibilityEnabled?: boolean
+  superSubScript?: boolean
+  frontMatter?: boolean
+  /**
+   * Skip DOMPurify sanitization. **Unsafe with untrusted input** — drops
+   * the XSS guarantees of the default export path. Only intended for
+   * CommonMark / GFM spec compliance runners, which need to compare
+   * against the parser's raw output (the spec includes "raw HTML
+   * allowance" examples that DOMPurify would otherwise rewrite).
+   *
+   * @default true
+   */
+  sanitize?: boolean
 }
 
 /**
@@ -41,32 +41,29 @@ export interface IRenderToStaticHTMLOptions {
  * case it.
  */
 export function renderToStaticHTML(
-    markdown: string,
-    options: IRenderToStaticHTMLOptions = {},
+  markdown: string,
+  options: IRenderToStaticHTMLOptions = {}
 ): string {
-    if (!markdown)
-        return '';
+  if (!markdown) return ''
 
-    const footnote = options.footnote ?? false;
+  const footnote = options.footnote ?? false
 
-    let html = getHighlightHtml(markdown, {
-        footnote,
-        math: options.math ?? true,
-        isGitlabCompatibilityEnabled: options.isGitlabCompatibilityEnabled ?? true,
-        superSubScript: options.superSubScript ?? true,
-        frontMatter: options.frontMatter ?? false,
-    });
+  let html = getHighlightHtml(markdown, {
+    footnote,
+    math: options.math ?? true,
+    isGitlabCompatibilityEnabled: options.isGitlabCompatibilityEnabled ?? true,
+    superSubScript: options.superSubScript ?? true,
+    frontMatter: options.frontMatter ?? false,
+  })
 
-    // Post-process footnotes into the standard GFM / pandoc shape (inline
-    // numbered <sup> + bottom <section class="footnotes"> with backrefs).
-    // Must run before DOMPurify so the `data-identifier` marker emitted by
-    // the marked footnote extension is still readable; the default config
-    // strips `data-*` attributes.
-    if (footnote)
-        html = transformFootnotes(html);
+  // Post-process footnotes into the standard GFM / pandoc shape (inline
+  // numbered <sup> + bottom <section class="footnotes"> with backrefs).
+  // Must run before DOMPurify so the `data-identifier` marker emitted by
+  // the marked footnote extension is still readable; the default config
+  // strips `data-*` attributes.
+  if (footnote) html = transformFootnotes(html)
 
-    if (options.sanitize === false)
-        return html;
+  if (options.sanitize === false) return html
 
-    return sanitize(html, EXPORT_DOMPURIFY_CONFIG, false) as string;
+  return sanitize(html, EXPORT_DOMPURIFY_CONFIG, false) as string
 }

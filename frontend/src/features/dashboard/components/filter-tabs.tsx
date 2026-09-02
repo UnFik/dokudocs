@@ -1,7 +1,7 @@
-import { Star } from 'lucide-react'
 import { DocFilterTab } from '@/types/dokudocs'
-import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
+import { Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 
 export function FilterTabs() {
   const { documents, filterTab, setFilterTab, activeOrgId } = useDokudocs()
@@ -17,9 +17,18 @@ export function FilterTabs() {
     starred: orgDocs.filter((d) => d.isStarred).length,
   }
 
-  const tabs: { id: DocFilterTab; label: string; count: number; icon?: boolean }[] = [
+  const tabs: {
+    id: DocFilterTab
+    label: string
+    count: number
+    icon?: boolean
+  }[] = [
     { id: 'all', label: 'All', count: counts.all },
-    { id: 'created_by_me', label: 'Created by me', count: counts.created_by_me },
+    {
+      id: 'created_by_me',
+      label: 'Created by me',
+      count: counts.created_by_me,
+    },
     { id: 'shared', label: 'Shared with me', count: counts.shared },
     { id: 'starred', label: 'Starred', count: counts.starred, icon: true },
   ]
@@ -36,7 +45,7 @@ export function FilterTabs() {
             onClick={() => setFilterTab(tab.id)}
             className={`h-8 rounded-full px-3 text-xs font-medium transition-all ${
               isActive
-                ? 'bg-secondary text-secondary-foreground shadow-2xs font-semibold'
+                ? 'bg-secondary font-semibold text-secondary-foreground shadow-2xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -49,9 +58,9 @@ export function FilterTabs() {
             )}
             <span>{tab.label}</span>
             <span
-              className={`ml-1.5 rounded-full px-1.5 py-0.2 text-[10px] ${
+              className={`py-0.2 ml-1.5 rounded-full px-1.5 text-[10px] ${
                 isActive
-                  ? 'bg-background/80 text-foreground font-bold'
+                  ? 'bg-background/80 font-bold text-foreground'
                   : 'bg-muted text-muted-foreground'
               }`}
             >
