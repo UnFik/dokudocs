@@ -13,6 +13,7 @@ interface EditorState {
 
 export function useDocEditor(docId: string) {
   const updateDocument = useDokudocsStore((s) => s.updateDocument)
+  const recordAutoRevision = useDokudocsStore((s) => s.recordAutoRevision)
   const updateDocumentThumbnail = useDokudocsStore(
     (s) => s.updateDocumentThumbnail
   )
@@ -92,6 +93,7 @@ export function useDocEditor(docId: string) {
             thumbnail: currentDoc.thumbnail,
             thumbnailDark: currentDoc.thumbnailDark,
           })
+          store.recordAutoRevision(currentDoc.id, stateToSave.content)
         }
       }
     }
@@ -121,12 +123,13 @@ export function useDocEditor(docId: string) {
         thumbnail: thumb.thumbnail || doc.thumbnail,
         thumbnailDark: thumb.thumbnailDark || doc.thumbnailDark,
       })
+      recordAutoRevision(doc.id, stateToSave.content)
       setIsSaving(false)
       setIsDirty(false)
       isDirtyRef.current = false
       setLastSaved(new Date())
     },
-    [doc, projects, updateDocument]
+    [doc, projects, updateDocument, recordAutoRevision]
   )
 
   const triggerAutoSave = useCallback(

@@ -15,3 +15,33 @@ type AuthUser struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+type UserProfile struct {
+	ID          uuid.UUID `json:"id"`
+	AccountNo   string    `json:"accountNo"`
+	Email       string    `json:"email"`
+	FullName    string    `json:"fullName"`
+	PhoneNumber string    `json:"phoneNumber"`
+	Bio         string    `json:"bio"`
+	AvatarURL   string    `json:"avatarUrl"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type UserSettings struct {
+	UserID            uuid.UUID `json:"userId"`
+	Theme             string    `json:"theme"`
+	FontFamily        string    `json:"fontFamily"`
+	Direction         string    `json:"direction"`
+	Language          string    `json:"language"`
+	NotificationPrefs string    `json:"notificationPrefs"` // JSON string
+	EditorPrefs       string    `json:"editorPrefs"`       // JSON string
+	UpdatedAt         time.Time `json:"updatedAt"`
+}
+
+type UserSummary struct {
+	ID        uuid.UUID `json:"id"`
+	Email     string    `json:"email"`
+	FullName  string    `json:"fullName"`
+	AvatarURL string    `json:"avatarUrl"`
+}

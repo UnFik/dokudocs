@@ -6,12 +6,14 @@ import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { DocEditor } from './doc-editor'
 
 let currentDocId = 'doc-1'
+const mockNavigate = vi.fn()
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
     useParams: () => ({ docId: currentDocId }),
+    useNavigate: () => mockNavigate,
     Link: ({
       children,
       to,
@@ -201,5 +203,17 @@ describe('DocEditor component', () => {
       .element(page.getByRole('button', { name: /^MMD$/i }))
       .toBeInTheDocument()
   })
-})
 
+  it('navigates to project page when clicking back button', async () => {
+    currentDocId = 'doc-1'
+    const screen = await render(<DocEditor />)
+
+    const backBtn = screen.getByRole('button', { name: 'Back' })
+    await userEvent.click(backBtn)
+
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/projects/$projectId',
+      params: { projectId: 'proj-1' },
+    })
+  })
+})

@@ -21,12 +21,14 @@ import {
 } from '@/lib/category-palette'
 import { Button } from '@/components/ui/button'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from '@/components/ui/command'
 import {
   Form,
   FormControl,
@@ -80,6 +82,8 @@ export function ProjectCategoryFilter({
   } = useDokudocsStore()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [filterMode, setFilterMode] = useState<'normal' | 'edit' | 'delete'>(
     'normal'
   )
@@ -183,12 +187,21 @@ export function ProjectCategoryFilter({
       <div className='flex w-full flex-col justify-between gap-2.5 py-1 sm:flex-row sm:items-center'>
         <div className='flex min-w-0 flex-1 items-center gap-2'>
           <div className='shrink-0'>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <Popover
+              open={filterDropdownOpen}
+              onOpenChange={(open) => {
+                setFilterDropdownOpen(open)
+                if (!open) {
+                  setSearchQuery('')
+                }
+              }}
+            >
+              <PopoverTrigger asChild>
                 <Button
                   variant='outline'
                   size='sm'
                   className='h-8 gap-1.5 text-xs'
+                  disabled={filterMode !== 'normal'}
                 >
                   <Tag className='size-3.5 text-muted-foreground' />
                   <span className='max-w-28 truncate'>
@@ -199,42 +212,64 @@ export function ProjectCategoryFilter({
                         : `${selectedCategories.length} Categories`}
                   </span>
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align='start' className='w-52'>
-                <DropdownMenuItem
-                  onClick={onClearCategories}
-                  className='flex items-center justify-between'
-                >
-                  <span>All Categories ({totalDocsCount})</span>
-                  {isAllSelected && <Check className='size-3.5' />}
-                </DropdownMenuItem>
-                {safeCategories.length > 0 && <DropdownMenuSeparator />}
-                {safeCategories.map((cat, idx) => {
-                  const colorId = categoryColors[cat]
-                  const palette = getCategoryPalette(cat, colorId, idx)
-                  const isChecked = selectedCategories.includes(cat)
+              </PopoverTrigger>
+              <PopoverContent align='start' className='w-56 p-0'>
+                <Command>
+                  <CommandInput
+                    placeholder='Search categories...'
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                  />
+                  <CommandList>
+                    <CommandEmpty className='py-3 text-center text-xs text-muted-foreground'>
+                      No categories found.
+                    </CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value='all categories'
+                        onSelect={() => onClearCategories()}
+                        className='flex cursor-pointer items-center justify-between text-xs'
+                      >
+                        <span>All Categories ({totalDocsCount})</span>
+                        {isAllSelected && <Check className='size-3.5' />}
+                      </CommandItem>
+                    </CommandGroup>
+                    {safeCategories.length > 0 && <CommandSeparator />}
+                    {safeCategories.length > 0 && (
+                      <CommandGroup>
+                        {safeCategories.map((cat, idx) => {
+                          const colorId = categoryColors[cat]
+                          const palette = getCategoryPalette(cat, colorId, idx)
+                          const isChecked = selectedCategories.includes(cat)
 
-                  return (
-                    <DropdownMenuItem
-                      key={cat}
-                      onClick={() => onToggleCategory(cat)}
-                      className='flex items-center justify-between'
-                    >
-                      <div className='flex items-center gap-2 truncate'>
-                        <div className={`size-2 rounded-full ${palette.dot}`} />
-                        <span className='truncate'>{cat}</span>
-                      </div>
-                      <div className='flex items-center gap-2'>
-                        <span className='font-mono text-[10px] text-muted-foreground'>
-                          {docCountsByCategory[cat] || 0}
-                        </span>
-                        {isChecked && <Check className='size-3.5' />}
-                      </div>
-                    </DropdownMenuItem>
-                  )
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                          return (
+                            <CommandItem
+                              key={cat}
+                              value={cat}
+                              onSelect={() => onToggleCategory(cat)}
+                              className='flex cursor-pointer items-center justify-between text-xs'
+                            >
+                              <div className='flex min-w-0 items-center gap-2 truncate'>
+                                <div
+                                  className={`size-2 shrink-0 rounded-full ${palette.dot}`}
+                                />
+                                <span className='truncate'>{cat}</span>
+                              </div>
+                              <div className='flex shrink-0 items-center gap-2'>
+                                <span className='font-mono text-[10px] text-muted-foreground'>
+                                  {docCountsByCategory[cat] || 0}
+                                </span>
+                                {isChecked && <Check className='size-3.5' />}
+                              </div>
+                            </CommandItem>
+                          )
+                        })}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className='relative flex min-w-0 flex-1 items-center overflow-hidden'>

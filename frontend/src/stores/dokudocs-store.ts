@@ -1,13 +1,19 @@
 import {
   DocFilterTab,
   DocType,
+  DocumentAccessItem,
+  DocumentAccessLevel,
   DocumentItem,
+  DocumentRevision,
   OrganizationItem,
   ProjectItem,
+  ProjectMemberItem,
+  ProjectMemberRole,
   SortField,
   SortOrder,
   TrashItem,
   ViewMode,
+  WorkspaceItem,
 } from '@/types/dokudocs'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -16,7 +22,7 @@ import { mockDocuments } from '@/features/docs/data/mock-docs'
 import { mockProjects } from '@/features/projects/data/mock-projects'
 import { mockTrash } from '@/features/trash/data/mock-trash'
 
-export const defaultOrganizations: OrganizationItem[] = [
+export const defaultWorkspaces: WorkspaceItem[] = [
   {
     id: 'org-1',
     name: 'Dokudocs Workspace',
@@ -37,12 +43,18 @@ export const defaultOrganizations: OrganizationItem[] = [
   },
 ]
 
+/** @deprecated Use defaultWorkspaces to match Dokudocs domain ubiquitous language (CONTEXT.md) */
+export const defaultOrganizations: OrganizationItem[] = defaultWorkspaces
+
 interface DokudocsState {
   activeOrgId: string
-  organizations: OrganizationItem[]
+  organizations: WorkspaceItem[]
   projects: ProjectItem[]
   documents: DocumentItem[]
   trash: TrashItem[]
+  revisions: Record<string, DocumentRevision[]>
+  documentAccesses: Record<string, DocumentAccessItem[]>
+  projectMembers: Record<string, ProjectMemberItem[]>
 
   viewMode: ViewMode
   filterTab: DocFilterTab
@@ -51,8 +63,8 @@ interface DokudocsState {
   sortOrder: SortOrder
 
   setActiveOrgId: (orgId: string) => void
-  createOrganization: (name: string, plan?: string) => OrganizationItem
-  updateOrganization: (id: string, updates: Partial<OrganizationItem>) => void
+  createOrganization: (name: string, plan?: string) => WorkspaceItem
+  updateOrganization: (id: string, updates: Partial<WorkspaceItem>) => void
   deleteOrganization: (id: string) => void
   setViewMode: (mode: ViewMode) => void
   setFilterTab: (tab: DocFilterTab) => void
@@ -105,6 +117,31 @@ interface DokudocsState {
     colorId?: string
   ) => void
   reorderProjectCategories: (projectId: string, newCategories: string[]) => void
+
+  getDocRevisions: (docId: string) => DocumentRevision[]
+  createRevisionSnapshot: (
+    docId: string,
+    title?: string
+  ) => DocumentRevision | null
+  recordAutoRevision: (docId: string, content: string) => void
+  renameRevision: (docId: string, revisionId: string, title: string) => void
+  restoreRevision: (docId: string, revisionId: string) => void
+
+  getDocAccesses: (docId: string) => DocumentAccessItem[]
+  setDocumentAccess: (
+    docId: string,
+    email: string,
+    accessLevel: DocumentAccessLevel
+  ) => void
+  removeDocumentAccess: (docId: string, accessId: string) => void
+
+  getProjectMembers: (projectId: string) => ProjectMemberItem[]
+  setProjectMember: (
+    projectId: string,
+    email: string,
+    role: ProjectMemberRole
+  ) => void
+  removeProjectMember: (projectId: string, memberId: string) => void
 }
 
 const defaultTemplates: Record<DocType, string> = {
@@ -143,6 +180,118 @@ function generateUniqueId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+const defaultRevisions: Record<string, DocumentRevision[]> = {
+  'doc-1': [
+    {
+      id: 'rev-2',
+      documentId: 'doc-1',
+      versionNumber: 2,
+      title: 'Order Processing FSD (v2 Requirements Added)',
+      isNamed: true,
+      content: `# Functional Specification: Order Processing Service\n\n## 1. Overview\nThe Order Processing Service manages cart validation, inventory reservation, payment authorization, and fulfillment dispatch.\n\n## 2. Order States\n- **PENDING**: Order placed.\n- **PAID**: Payment verified.`,
+      author: {
+        id: 'usr-1',
+        name: 'Fikri',
+        email: 'fikri@dokudocs.app',
+        avatar: '/avatars/01.png',
+      },
+      createdAt: '2026-08-18T14:20:00.000Z',
+      updatedAt: '2026-08-18T14:20:00.000Z',
+    },
+    {
+      id: 'rev-1',
+      documentId: 'doc-1',
+      versionNumber: 1,
+      title: 'Order Processing FSD (v1 Initial Draft)',
+      isNamed: true,
+      content: `# Functional Specification: Order Processing Service\n\n## 1. Overview\nDraft initial service definition.`,
+      author: {
+        id: 'usr-1',
+        name: 'Fikri',
+        email: 'fikri@dokudocs.app',
+        avatar: '/avatars/01.png',
+      },
+      createdAt: '2026-08-16T11:00:00.000Z',
+      updatedAt: '2026-08-16T11:00:00.000Z',
+    },
+  ],
+}
+
+const defaultDocumentAccesses: Record<string, DocumentAccessItem[]> = {
+  'doc-1': [
+    {
+      id: 'acc-1',
+      documentId: 'doc-1',
+      userId: 'usr-2',
+      user: {
+        id: 'usr-2',
+        name: 'Sarah',
+        email: 'sarah@dokudocs.app',
+        avatar: '/avatars/02.png',
+      },
+      accessLevel: 'edit',
+      createdAt: '2026-08-17T10:00:00.000Z',
+    },
+    {
+      id: 'acc-2',
+      documentId: 'doc-1',
+      userId: 'usr-3',
+      user: {
+        id: 'usr-3',
+        name: 'Alex',
+        email: 'alex@dokudocs.app',
+        avatar: '/avatars/03.png',
+      },
+      accessLevel: 'comment',
+      createdAt: '2026-08-18T11:30:00.000Z',
+    },
+  ],
+}
+
+const defaultProjectMembers: Record<string, ProjectMemberItem[]> = {
+  'proj-1': [
+    {
+      id: 'pm-1',
+      projectId: 'proj-1',
+      userId: 'usr-1',
+      user: {
+        id: 'usr-1',
+        name: 'Fikri',
+        email: 'fikri@dokudocs.app',
+        avatar: '/avatars/01.png',
+      },
+      role: 'manager',
+      createdAt: '2026-08-10T10:00:00.000Z',
+    },
+    {
+      id: 'pm-2',
+      projectId: 'proj-1',
+      userId: 'usr-2',
+      user: {
+        id: 'usr-2',
+        name: 'Sarah',
+        email: 'sarah@dokudocs.app',
+        avatar: '/avatars/02.png',
+      },
+      role: 'editor',
+      createdAt: '2026-08-12T14:30:00.000Z',
+    },
+    {
+      id: 'pm-3',
+      projectId: 'proj-1',
+      userId: 'usr-3',
+      user: {
+        id: 'usr-3',
+        name: 'Alex',
+        email: 'alex@dokudocs.app',
+        avatar: '/avatars/03.png',
+      },
+      role: 'viewer',
+      createdAt: '2026-08-14T09:15:00.000Z',
+    },
+  ],
+}
+
 export const useDokudocsStore = create<DokudocsState>()(
   persist(
     (set, get) => ({
@@ -151,6 +300,9 @@ export const useDokudocsStore = create<DokudocsState>()(
       projects: mockProjects,
       documents: mockDocuments,
       trash: mockTrash,
+      revisions: defaultRevisions,
+      documentAccesses: defaultDocumentAccesses,
+      projectMembers: defaultProjectMembers,
 
       viewMode: 'grid',
       filterTab: 'all',
@@ -160,7 +312,7 @@ export const useDokudocsStore = create<DokudocsState>()(
 
       setActiveOrgId: (orgId) => set({ activeOrgId: orgId }),
       createOrganization: (name, plan = 'Free') => {
-        const newOrg: OrganizationItem = {
+        const newOrg: WorkspaceItem = {
           id: `org-${Date.now()}`,
           name: name.trim(),
           plan,
@@ -605,6 +757,246 @@ export const useDokudocsStore = create<DokudocsState>()(
               updatedAt: 'Just now',
             }
           }),
+        }))
+      },
+
+      getDocRevisions: (docId) => {
+        return get().revisions[docId] || []
+      },
+      createRevisionSnapshot: (docId, title) => {
+        const doc = (get().documents || []).find((d) => d.id === docId)
+        if (!doc) return null
+        const currentRevisions = get().revisions[docId] || []
+        const nextVersion = currentRevisions.length + 1
+        const nowIso = new Date().toISOString()
+        const newRev: DocumentRevision = {
+          id: generateUniqueId('rev'),
+          documentId: docId,
+          versionNumber: nextVersion,
+          title: title?.trim() || `${doc.title} (v${nextVersion})`,
+          isNamed: true,
+          content: doc.content,
+          author: doc.author,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        }
+        set((state) => ({
+          revisions: {
+            ...state.revisions,
+            [docId]: [newRev, ...(state.revisions[docId] || [])],
+          },
+        }))
+        return newRev
+      },
+
+      recordAutoRevision: (docId, content) => {
+        const doc = (get().documents || []).find((d) => d.id === docId)
+        if (!doc) return
+        const currentRevisions = get().revisions[docId] || []
+        const latest = currentRevisions[0]
+        const now = new Date()
+        const nowIso = now.toISOString()
+        const SESSION_WINDOW_MS = 10 * 60 * 1000 // 10 minutes
+
+        // Coalesce in-place if latest revision is an unnamed auto-save within 10 min window
+        if (latest && !latest.isNamed) {
+          const lastTime = new Date(latest.updatedAt || latest.createdAt).getTime()
+          if (now.getTime() - lastTime < SESSION_WINDOW_MS) {
+            set((state) => ({
+              revisions: {
+                ...state.revisions,
+                [docId]: (state.revisions[docId] || []).map((r, i) =>
+                  i === 0 ? { ...r, content, updatedAt: nowIso } : r
+                ),
+              },
+            }))
+            return
+          }
+        }
+
+        // Avoid duplicate revision if content hasn't changed from latest
+        if (latest && latest.content === content) {
+          return
+        }
+
+        // Otherwise create new revision entry for this editing session
+        const nextVersion = currentRevisions.length + 1
+        const newRev: DocumentRevision = {
+          id: generateUniqueId('rev'),
+          documentId: docId,
+          versionNumber: nextVersion,
+          title: null,
+          isNamed: false,
+          content,
+          author: doc.author,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        }
+        set((state) => ({
+          revisions: {
+            ...state.revisions,
+            [docId]: [newRev, ...(state.revisions[docId] || [])],
+          },
+        }))
+      },
+
+      renameRevision: (docId, revisionId, title) => {
+        const cleanTitle = title.trim()
+        set((state) => ({
+          revisions: {
+            ...state.revisions,
+            [docId]: (state.revisions[docId] || []).map((r) =>
+              r.id === revisionId
+                ? {
+                    ...r,
+                    title: cleanTitle || null,
+                    isNamed: Boolean(cleanTitle),
+                  }
+                : r
+            ),
+          },
+        }))
+      },
+
+      restoreRevision: (docId, revisionId) => {
+        const doc = (get().documents || []).find((d) => d.id === docId)
+        const rev = (get().revisions[docId] || []).find((r) => r.id === revisionId)
+        if (!doc || !rev) return
+
+        const currentRevisions = get().revisions[docId] || []
+        const nowIso = new Date().toISOString()
+        const nextVersion = currentRevisions.length + 1
+
+        const restoredRev: DocumentRevision = {
+          id: generateUniqueId('rev'),
+          documentId: docId,
+          versionNumber: nextVersion,
+          title: `Restored to v${rev.versionNumber}`,
+          isNamed: true,
+          content: rev.content,
+          author: doc.author,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        }
+
+        set((state) => ({
+          documents: (state.documents || []).map((d) =>
+            d.id === docId
+              ? {
+                  ...d,
+                  content: rev.content,
+                  updatedAt: nowIso,
+                }
+              : d
+          ),
+          revisions: {
+            ...state.revisions,
+            [docId]: [restoredRev, ...(state.revisions[docId] || [])],
+          },
+        }))
+      },
+
+      getDocAccesses: (docId) => {
+        return get().documentAccesses[docId] || []
+      },
+      setDocumentAccess: (docId, email, accessLevel) => {
+        const trimmed = email.trim().toLowerCase()
+        if (!trimmed) return
+        const existing = get().documentAccesses[docId] || []
+        const found = existing.find((a) => a.user.email.toLowerCase() === trimmed)
+        if (found) {
+          set((state) => ({
+            documentAccesses: {
+              ...state.documentAccesses,
+              [docId]: existing.map((a) =>
+                a.id === found.id ? { ...a, accessLevel } : a
+              ),
+            },
+          }))
+          return
+        }
+        const namePart = trimmed.split('@')[0]
+        const displayName = namePart.charAt(0).toUpperCase() + namePart.slice(1)
+        const newAccess: DocumentAccessItem = {
+          id: generateUniqueId('acc'),
+          documentId: docId,
+          userId: generateUniqueId('usr'),
+          user: {
+            id: generateUniqueId('usr'),
+            name: displayName,
+            email: trimmed,
+            avatar: `/avatars/0${(existing.length % 5) + 1}.png`,
+          },
+          accessLevel,
+          createdAt: new Date().toISOString(),
+        }
+        set((state) => ({
+          documentAccesses: {
+            ...state.documentAccesses,
+            [docId]: [...existing, newAccess],
+          },
+        }))
+      },
+      removeDocumentAccess: (docId, accessId) => {
+        set((state) => ({
+          documentAccesses: {
+            ...state.documentAccesses,
+            [docId]: (state.documentAccesses[docId] || []).filter(
+              (a) => a.id !== accessId
+            ),
+          },
+        }))
+      },
+
+      getProjectMembers: (projectId) => {
+        return get().projectMembers[projectId] || []
+      },
+      setProjectMember: (projectId, email, role) => {
+        const trimmed = email.trim().toLowerCase()
+        if (!trimmed) return
+        const existing = get().projectMembers[projectId] || []
+        const found = existing.find((m) => m.user.email.toLowerCase() === trimmed)
+        if (found) {
+          set((state) => ({
+            projectMembers: {
+              ...state.projectMembers,
+              [projectId]: existing.map((m) =>
+                m.id === found.id ? { ...m, role } : m
+              ),
+            },
+          }))
+          return
+        }
+        const namePart = trimmed.split('@')[0]
+        const displayName = namePart.charAt(0).toUpperCase() + namePart.slice(1)
+        const newMember: ProjectMemberItem = {
+          id: generateUniqueId('pm'),
+          projectId,
+          userId: generateUniqueId('usr'),
+          user: {
+            id: generateUniqueId('usr'),
+            name: displayName,
+            email: trimmed,
+            avatar: `/avatars/0${(existing.length % 5) + 1}.png`,
+          },
+          role,
+          createdAt: new Date().toISOString(),
+        }
+        set((state) => ({
+          projectMembers: {
+            ...state.projectMembers,
+            [projectId]: [...existing, newMember],
+          },
+        }))
+      },
+      removeProjectMember: (projectId, memberId) => {
+        set((state) => ({
+          projectMembers: {
+            ...state.projectMembers,
+            [projectId]: (state.projectMembers[projectId] || []).filter(
+              (m) => m.id !== memberId
+            ),
+          },
         }))
       },
     }),

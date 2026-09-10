@@ -3,17 +3,17 @@ package main
 import (
 	"context"
 
+	"backend/internal/config"
 	"backend/internal/infrastructure/api"
 	"backend/internal/infrastructure/logger"
 	"backend/internal/infrastructure/postgres"
-	"backend/internal/infrastructure/runtime"
 	"backend/internal/infrastructure/runtime/container"
 	"backend/internal/infrastructure/validator"
 )
 
 func main() {
 	log := logger.New()
-	cfg, err := runtime.LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}

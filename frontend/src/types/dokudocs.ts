@@ -24,6 +24,7 @@ export interface DocumentItem {
   projectName?: string | null
   category?: string | null
   categories?: string[]
+  workspaceId?: string
   orgId: string
   author: UserAuthor
   isStarred: boolean
@@ -48,6 +49,7 @@ export interface ProjectItem {
   logoUrl?: string
   categories?: string[]
   categoryColors?: Record<string, string>
+  workspaceId?: string
   orgId: string
   colorBadge?: string
   isStarred?: boolean
@@ -62,7 +64,7 @@ export interface ProjectWithDocuments extends ProjectItem {
   totalDocsCount: number
 }
 
-export interface OrganizationItem {
+export interface WorkspaceItem {
   id: string
   name: string
   plan: string
@@ -70,6 +72,9 @@ export interface OrganizationItem {
   type?: string
   role: 'owner' | 'admin' | 'member'
 }
+
+/** @deprecated Use WorkspaceItem to match Dokudocs domain ubiquitous language (CONTEXT.md) */
+export type OrganizationItem = WorkspaceItem
 
 export interface TrashItem {
   id: string
@@ -79,3 +84,38 @@ export interface TrashItem {
   deletedBy: UserAuthor
   daysRemaining: number
 }
+
+export interface DocumentRevision {
+  id: string
+  documentId: string
+  versionNumber: number
+  title?: string | null
+  isNamed?: boolean
+  content: string
+  author: UserAuthor
+  createdAt: string
+  updatedAt?: string
+}
+
+export type DocumentAccessLevel = 'owner' | 'edit' | 'comment' | 'view'
+
+export interface DocumentAccessItem {
+  id: string
+  documentId: string
+  userId: string
+  user: UserAuthor
+  accessLevel: DocumentAccessLevel
+  createdAt: string
+}
+
+export type ProjectMemberRole = 'manager' | 'editor' | 'viewer'
+
+export interface ProjectMemberItem {
+  id: string
+  projectId: string
+  userId: string
+  user: UserAuthor
+  role: ProjectMemberRole
+  createdAt: string
+}
+

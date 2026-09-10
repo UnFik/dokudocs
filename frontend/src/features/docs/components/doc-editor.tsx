@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { useCommentStore } from '@/stores/comment-store'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { useTheme } from '@/context/theme-provider'
 import { Button } from '@/components/ui/button'
 import { useDocEditor } from '../hooks/use-doc-editor'
@@ -10,6 +11,8 @@ import { EditorHeader } from './editor-header'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
 import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
+import { ShareDocDialog } from './dialogs/share-doc-dialog'
+import { VersionHistorySidebar } from './version-history-sidebar'
 
 export function DocEditor() {
   const { docId } = useParams({ from: '/docs/$docId' })
@@ -30,12 +33,21 @@ export function DocEditor() {
   } = useDocEditor(docId)
 
   const [isMermaidExportOpen, setIsMermaidExportOpen] = useState(false)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [isShareOpen, setIsShareOpen] = useState(false)
 
+  const toggleStarDocument = useDokudocsStore((state) => state.toggleStarDocument)
   const isSidebarOpen = useCommentStore((state) => state.isSidebarOpen)
   const toggleSidebar = useCommentStore((state) => state.toggleSidebar)
   const unresolvedCount = useCommentStore((state) =>
     doc ? state.getDocUnresolvedCount(doc.id) : 0
   )
+
+  const handleToggleStar = () => {
+    if (!doc) return
+    toggleStarDocument(doc.id)
+    toast.success(doc.isStarred ? 'Document unstarred' : 'Document starred')
+  }
 
   if (!doc) {
     return (
@@ -151,6 +163,11 @@ export function DocEditor() {
         onToggleComments={doc.type === 'markdown' ? toggleSidebar : undefined}
         isCommentsOpen={isSidebarOpen}
         commentsCount={doc.type === 'markdown' ? unresolvedCount : undefined}
+        onToggleHistory={() => setIsHistoryOpen(!isHistoryOpen)}
+        isHistoryOpen={isHistoryOpen}
+        onOpenShare={() => setIsShareOpen(true)}
+        isStarred={doc.isStarred}
+        onToggleStar={handleToggleStar}
       />
 
       <div className='flex-1 overflow-hidden'>
@@ -172,6 +189,19 @@ export function DocEditor() {
           />
         )}
       </div>
+
+      <VersionHistorySidebar
+        docId={doc.id}
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onRestoreContent={setContent}
+      />
+
+      <ShareDocDialog
+        open={isShareOpen}
+        onOpenChange={setIsShareOpen}
+        document={doc}
+      />
 
       {doc.type === 'mermaid' && (
         <MermaidExportDialog

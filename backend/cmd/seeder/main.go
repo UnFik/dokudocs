@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"backend/database/seeders"
+	"backend/internal/config"
 	"backend/internal/infrastructure/logger"
 	"backend/internal/infrastructure/postgres"
-	"backend/internal/infrastructure/runtime"
 )
 
 func main() {
 	log := logger.New()
-	cfg, err := runtime.LoadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}

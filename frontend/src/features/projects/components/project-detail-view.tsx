@@ -11,6 +11,7 @@ import {
   Search,
   Star,
   Upload,
+  Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
@@ -27,6 +28,7 @@ import { DocListRow } from '@/features/docs/components/doc-list-row'
 import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
 import { EditProjectDialog } from './edit-project-dialog'
 import { ProjectCategoryFilter } from './project-category-filter'
+import { ProjectMembersDialog } from './project-members-dialog'
 
 const route = getRouteApi('/_authenticated/projects/$projectId')
 
@@ -42,6 +44,7 @@ export function ProjectDetailView() {
   const [createDocOpen, setCreateDocOpen] = useState(false)
   const [importDocOpen, setImportDocOpen] = useState(false)
   const [editProjectOpen, setEditProjectOpen] = useState(false)
+  const [projectMembersOpen, setProjectMembersOpen] = useState(false)
 
   const handleToggleCategory = (cat: string) => {
     const nextCategories = categories.includes(cat)
@@ -226,15 +229,27 @@ export function ProjectDetailView() {
               </div>
             </div>
 
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={() => setEditProjectOpen(true)}
-              className='h-8 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground'
-            >
-              <Pencil className='size-3.5' />
-              <span className='hidden sm:inline'>Edit Project</span>
-            </Button>
+            <div className='flex items-center gap-2'>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => setProjectMembersOpen(true)}
+                className='h-8 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground'
+              >
+                <Users className='size-3.5' />
+                <span className='hidden sm:inline'>Members</span>
+              </Button>
+
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => setEditProjectOpen(true)}
+                className='h-8 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground'
+              >
+                <Pencil className='size-3.5' />
+                <span className='hidden sm:inline'>Edit Project</span>
+              </Button>
+            </div>
           </div>
 
           <div className='mt-2 flex flex-wrap items-center justify-between gap-3'>
@@ -338,6 +353,12 @@ export function ProjectDetailView() {
       <EditProjectDialog
         open={editProjectOpen}
         onOpenChange={setEditProjectOpen}
+        project={project}
+      />
+
+      <ProjectMembersDialog
+        open={projectMembersOpen}
+        onOpenChange={setProjectMembersOpen}
         project={project}
       />
     </>

@@ -1,4 +1,4 @@
-import { Shield, UserCheck, Users, CreditCard } from 'lucide-react'
+import { Shield, UserCheck, Users, User } from 'lucide-react'
 import { type UserStatus } from './schema'
 
 export const callTypes = new Map<UserStatus, string>([
@@ -28,8 +28,8 @@ export const roles = [
     icon: Users,
   },
   {
-    label: 'Cashier',
-    value: 'cashier',
-    icon: CreditCard,
+    label: 'Member',
+    value: 'member',
+    icon: User,
   },
 ] as const

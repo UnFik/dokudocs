@@ -1,4 +1,4 @@
-FROM oven/bun:1-alpine AS dev
+FROM oven/bun:1 AS dev
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ EXPOSE 5173
 
 CMD ["bun", "run", "dev", "--host"]
 
-FROM oven/bun:1-alpine AS builder
+FROM oven/bun:1 AS builder
 
 WORKDIR /app
 

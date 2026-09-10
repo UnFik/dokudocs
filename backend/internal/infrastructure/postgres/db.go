@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"time"
 
+	"backend/internal/config"
 	"backend/internal/infrastructure/database"
-	"backend/internal/infrastructure/runtime"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func Open(cfg runtime.Config) (database.DB, error) {
+func Open(cfg config.Config) (database.DB, error) {
 	db, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {
 		return nil, err

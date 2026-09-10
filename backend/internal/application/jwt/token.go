@@ -34,6 +34,7 @@ func (m *Manager) SetNow(now func() time.Time) {
 func (m *Manager) Issue(user model.AuthUser) (dto.LoginResponse, error) {
 	expiresAt := m.now().Add(m.ttl)
 	responseUser := dto.ResponseUser{
+		ID:        user.ID.String(),
 		AccountNo: user.AccountNo,
 		Email:     user.Email,
 		Role:      user.Roles,
@@ -70,6 +71,7 @@ func (m *Manager) Verify(tokenString string) (dto.ResponseUser, error) {
 		return dto.ResponseUser{}, constant.ErrInvalidToken
 	}
 	return dto.ResponseUser{
+		ID:        claims.Subject,
 		AccountNo: claims.AccountNo,
 		Email:     claims.Email,
 		Role:      claims.Role,

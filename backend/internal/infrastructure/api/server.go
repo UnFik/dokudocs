@@ -8,21 +8,27 @@ import (
 	"os/signal"
 	"syscall"
 
-	"backend/internal/infrastructure/runtime"
+	"backend/internal/config"
+	"backend/internal/infrastructure/api/routes"
+	"backend/internal/infrastructure/middleware"
 	"backend/internal/infrastructure/runtime/container"
 )
 
-func RunHTTPServer(ctx context.Context, cfg runtime.Config, c *container.Container) error {
-	router := Routes(c, cfg)
+// Routes initializes application routes via routes package.
+func Routes(c *container.Container, cfg config.Config) http.Handler {
+	return routes.InitRoutes(c, cfg)
+}
+
+func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Container) error {
+	handler := Routes(c, cfg)
+	handler = middleware.Logger(c.Logger)(handler)
+	handler = middleware.Recover(c.Logger)(handler)
+	handler = middleware.CORS(cfg.AllowedOrigin)(handler)
+	handler = middleware.Timeout(cfg.ReadTimeout)(handler)
+
 	server := &http.Server{
-		Addr: cfg.Addr,
-		Handler: Chain(
-			router,
-			Timeout(cfg.ReadTimeout),
-			CORS(cfg.AllowedOrigin),
-			Recover(c.Logger),
-			Logger(c.Logger),
-		),
+		Addr:         cfg.Addr,
+		Handler:      handler,
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		IdleTimeout:  cfg.IdleTimeout,

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 
 interface UseCanvasPanZoomOptions {
   docId?: string
@@ -14,10 +15,6 @@ export function useCanvasPanZoom({
   storagePrefix = 'dokudocs_canvas_layout_',
 }: UseCanvasPanZoomOptions = {}) {
   const viewportRef = useRef<HTMLDivElement>(null)
-  const canvasLayerRef = useRef<HTMLDivElement>(null)
-  const zoomBadgeRef = useRef<HTMLSpanElement>(null)
-
-  const [isPanning, setIsPanning] = useState(false)
   const isPanningRef = useRef(false)
 
   const initialPanValue = useMemo(() => {
@@ -35,7 +32,7 @@ export function useCanvasPanZoom({
       }
     }
     return initialPan
-  }, [docId, storagePrefix, initialPan])
+  }, [docId, storagePrefix, initialPan.x, initialPan.y])
 
   const initialZoomValue = useMemo(() => {
     if (docId) {
@@ -57,6 +54,16 @@ export function useCanvasPanZoom({
   const panRef = useRef<{ x: number; y: number }>(initialPanValue)
   const zoomRef = useRef<number>(initialZoomValue)
 
+  const prevDocIdRef = useRef(docId)
+  if (prevDocIdRef.current !== docId) {
+    prevDocIdRef.current = docId
+    panRef.current = initialPanValue
+    zoomRef.current = initialZoomValue
+  }
+
+  const canvasLayerNodeRef = useRef<HTMLDivElement | null>(null)
+  const zoomBadgeNodeRef = useRef<HTMLSpanElement | null>(null)
+
   const wheelRafRef = useRef<number | null>(null)
   const mouseMoveRafRef = useRef<number | null>(null)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -69,15 +76,62 @@ export function useCanvasPanZoom({
 
   const applyCanvasTransform = useCallback(
     (currentPan: { x: number; y: number }, currentZoom: number) => {
-      if (canvasLayerRef.current) {
-        canvasLayerRef.current.style.transform = `translate3d(${currentPan.x}px, ${currentPan.y}px, 0) scale(${currentZoom})`
+      if (canvasLayerNodeRef.current) {
+        canvasLayerNodeRef.current.style.transform = `translate3d(${currentPan.x}px, ${currentPan.y}px, 0) scale(${currentZoom})`
       }
-      if (zoomBadgeRef.current) {
-        zoomBadgeRef.current.textContent = `${Math.round(currentZoom * 100)}%`
+      if (zoomBadgeNodeRef.current) {
+        zoomBadgeNodeRef.current.textContent = `${Math.round(currentZoom * 100)}%`
       }
     },
     []
   )
+
+  const applyCanvasTransformRef = useRef(applyCanvasTransform)
+  applyCanvasTransformRef.current = applyCanvasTransform
+
+  const canvasLayerRef = useCallback((node: HTMLDivElement | null) => {
+    canvasLayerNodeRef.current = node
+    if (node) {
+      node.style.transform = `translate3d(${panRef.current.x}px, ${panRef.current.y}px, 0) scale(${zoomRef.current})`
+    }
+  }, []) as unknown as React.RefCallback<HTMLDivElement> & {
+    current: HTMLDivElement | null
+  }
+
+  Object.defineProperty(canvasLayerRef, 'current', {
+    get() {
+      return canvasLayerNodeRef.current
+    },
+    set(node: HTMLDivElement | null) {
+      canvasLayerNodeRef.current = node
+      if (node) {
+        node.style.transform = `translate3d(${panRef.current.x}px, ${panRef.current.y}px, 0) scale(${zoomRef.current})`
+      }
+    },
+    configurable: true,
+  })
+
+  const zoomBadgeRef = useCallback((node: HTMLSpanElement | null) => {
+    zoomBadgeNodeRef.current = node
+    if (node) {
+      node.textContent = `${Math.round(zoomRef.current * 100)}%`
+    }
+  }, []) as unknown as React.RefCallback<HTMLSpanElement> & {
+    current: HTMLSpanElement | null
+  }
+
+  Object.defineProperty(zoomBadgeRef, 'current', {
+    get() {
+      return zoomBadgeNodeRef.current
+    },
+    set(node: HTMLSpanElement | null) {
+      zoomBadgeNodeRef.current = node
+      if (node) {
+        node.textContent = `${Math.round(zoomRef.current * 100)}%`
+      }
+    },
+    configurable: true,
+  })
 
   const saveLayout = useCallback(() => {
     if (docId) {
@@ -98,6 +152,9 @@ export function useCanvasPanZoom({
       }
     }
   }, [docId, storagePrefix])
+
+  const saveLayoutRef = useRef(saveLayout)
+  saveLayoutRef.current = saveLayout
 
   const setPanAndZoom = useCallback(
     (nextPan: { x: number; y: number }, nextZoom: number) => {
@@ -162,10 +219,16 @@ export function useCanvasPanZoom({
       origPanY: panRef.current.y,
     }
     isPanningRef.current = true
-    setIsPanning(true)
+    if (viewportRef.current) {
+      viewportRef.current.dataset.panning = 'true'
+      viewportRef.current.classList.add('cursor-grabbing')
+      viewportRef.current.classList.remove('cursor-grab')
+    }
   }, [])
 
-  useEffect(() => {
+  useMountEffect(() => {
+    applyCanvasTransformRef.current(panRef.current, zoomRef.current)
+
     const viewport = viewportRef.current
     if (!viewport) return
 
@@ -199,7 +262,7 @@ export function useCanvasPanZoom({
 
       if (wheelRafRef.current === null) {
         wheelRafRef.current = requestAnimationFrame(() => {
-          applyCanvasTransform(panRef.current, zoomRef.current)
+          applyCanvasTransformRef.current(panRef.current, zoomRef.current)
           wheelRafRef.current = null
         })
       }
@@ -208,7 +271,7 @@ export function useCanvasPanZoom({
         clearTimeout(idleTimerRef.current)
       }
       idleTimerRef.current = setTimeout(() => {
-        saveLayout()
+        saveLayoutRef.current()
         idleTimerRef.current = null
       }, 150)
     }
@@ -224,7 +287,7 @@ export function useCanvasPanZoom({
 
       if (mouseMoveRafRef.current === null) {
         mouseMoveRafRef.current = requestAnimationFrame(() => {
-          applyCanvasTransform(panRef.current, zoomRef.current)
+          applyCanvasTransformRef.current(panRef.current, zoomRef.current)
           mouseMoveRafRef.current = null
         })
       }
@@ -233,13 +296,17 @@ export function useCanvasPanZoom({
     const handleWindowMouseUp = () => {
       if (!isPanningRef.current) return
       isPanningRef.current = false
-      setIsPanning(false)
+      if (viewportRef.current) {
+        delete viewportRef.current.dataset.panning
+        viewportRef.current.classList.remove('cursor-grabbing')
+        viewportRef.current.classList.add('cursor-grab')
+      }
       dragStartRef.current = null
       if (mouseMoveRafRef.current !== null) {
         cancelAnimationFrame(mouseMoveRafRef.current)
         mouseMoveRafRef.current = null
       }
-      saveLayout()
+      saveLayoutRef.current()
     }
 
     viewport.addEventListener('wheel', handleWheel, { passive: false })
@@ -263,13 +330,13 @@ export function useCanvasPanZoom({
         idleTimerRef.current = null
       }
     }
-  }, [applyCanvasTransform, saveLayout])
+  })
 
   return {
     viewportRef,
     canvasLayerRef,
     zoomBadgeRef,
-    isPanning,
+    isPanning: false,
     initialPan: initialPanValue,
     initialZoom: initialZoomValue,
     panRef,

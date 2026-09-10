@@ -7,6 +7,7 @@ import (
 )
 
 type AuthUseCase interface {
-	Login(ctx context.Context, req dto.LoginRequest) (dto.LoginResponse, error)
-	VerifyToken(tokenString string) (dto.ResponseUser, error)
+	Login(ctx context.Context, req dto.LoginRequest) (data dto.LoginResponse, err error)
+	Register(ctx context.Context, req dto.RegisterRequest) (data dto.LoginResponse, err error)
+	VerifyToken(tokenString string) (data dto.ResponseUser, err error)
 }

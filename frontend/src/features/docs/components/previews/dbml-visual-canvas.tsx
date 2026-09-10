@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import {
   Copy,
   Database,
@@ -14,6 +14,7 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useCanvasPanZoom } from '../../hooks/use-canvas-pan-zoom'
 
 export interface DbmlVisualCanvasProps {
   docId?: string
@@ -458,72 +460,35 @@ function calculateTableHeight(table: ParsedTable): number {
   return height
 }
 
+const DEFAULT_INITIAL_PAN = { x: 60, y: 60 }
+
 export function DbmlVisualCanvas({
   docId,
   content,
   onNavigateToSource,
 }: DbmlVisualCanvasProps) {
-  const viewportRef = useRef<HTMLDivElement>(null)
-  const canvasLayerRef = useRef<HTMLDivElement>(null)
-  const zoomBadgeRef = useRef<HTMLSpanElement>(null)
+  const {
+    viewportRef,
+    canvasLayerRef,
+    zoomBadgeRef,
+    panRef,
+    zoomRef,
+    handleZoomIn,
+    handleZoomOut,
+    handleResetView,
+    handleMouseDownBackground,
+  } = useCanvasPanZoom({
+    docId,
+    initialPan: DEFAULT_INITIAL_PAN,
+    initialZoom: 1,
+    storagePrefix: 'dokudocs_dbml_layout_',
+  })
+
+  const mouseMoveRafRef = useRef<number | null>(null)
 
   const [viewingRecordsTable, setViewingRecordsTable] =
     useState<ParsedRecordSet | null>(null)
   const [recordSearchQuery, setRecordSearchQuery] = useState('')
-
-  const initialPan = useMemo(() => {
-    if (docId) {
-      try {
-        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          if (parsed.pan && typeof parsed.pan.x === 'number') {
-            return parsed.pan
-          }
-        }
-      } catch (e) {}
-    }
-    return { x: 60, y: 60 }
-  }, [docId])
-
-  const initialZoom = useMemo(() => {
-    if (docId) {
-      try {
-        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          if (typeof parsed.zoom === 'number') {
-            return parsed.zoom
-          }
-        }
-      } catch (e) {}
-    }
-    return 1
-  }, [docId])
-
-  const zoomRef = useRef<number>(initialZoom)
-  const panRef = useRef<{ x: number; y: number }>(initialPan)
-  const wheelRafRef = useRef<number | null>(null)
-  const mouseMoveRafRef = useRef<number | null>(null)
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const applyCanvasTransform = useCallback(
-    (currentPan: { x: number; y: number }, currentZoom: number) => {
-      if (canvasLayerRef.current) {
-        canvasLayerRef.current.style.transform = `translate3d(${currentPan.x}px, ${currentPan.y}px, 0) scale(${currentZoom})`
-      }
-      if (zoomBadgeRef.current) {
-        zoomBadgeRef.current.textContent = `${Math.round(currentZoom * 100)}%`
-      }
-    },
-    []
-  )
-
-  useEffect(() => {
-    zoomRef.current = initialZoom
-    panRef.current = initialPan
-    applyCanvasTransform(initialPan, initialZoom)
-  }, [initialPan, initialZoom, applyCanvasTransform])
 
   const [tablePositions, setTablePositions] = useState<
     Record<string, TablePosition>
@@ -559,34 +524,12 @@ export function DbmlVisualCanvas({
     }
   )
 
-  const [draggingJoint, setDraggingJoint] = useState<{
+  const [activeDraggingJoint, setActiveDraggingJoint] = useState<{
     relKey: string
     jointIndex: number
-    startX: number
-    startY: number
-    initialJoints: JointPoint[]
-    axis: 'x' | 'y'
-    hasMoved: boolean
-    isGhost?: boolean
   } | null>(null)
 
   const [ghostJoint, setGhostJoint] = useState<GhostJoint | null>(null)
-
-  const [draggingTable, setDraggingTable] = useState<{
-    id: string
-    startX: number
-    startY: number
-    origX: number
-    origY: number
-    hasMoved: boolean
-  } | null>(null)
-
-  const [canvasPanning, setCanvasPanning] = useState<{
-    startX: number
-    startY: number
-    origPanX: number
-    origPanY: number
-  } | null>(null)
 
   const [hoveredTable, setHoveredTable] = useState<string | null>(null)
   const [hoveredField, setHoveredField] = useState<{
@@ -602,7 +545,7 @@ export function DbmlVisualCanvas({
   } | null>(null)
   const [selectedRelation, setSelectedRelation] = useState<string | null>(null)
 
-  useEffect(() => {
+  useMountEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setSelectedTable(null)
@@ -612,7 +555,7 @@ export function DbmlVisualCanvas({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  })
 
   const filteredRows = useMemo(() => {
     if (!viewingRecordsTable) return []
@@ -968,47 +911,27 @@ export function DbmlVisualCanvas({
     []
   )
 
-  useEffect(() => {
-    setTablePositions((prev) => {
-      let hasMissing = false
-      parsedTables.forEach((t) => {
-        if (!prev[t.name]) {
-          hasMissing = true
-        }
-      })
-
-      if (!hasMissing && Object.keys(prev).length > 0) {
-        return prev
+  const effectiveTablePositions = useMemo(() => {
+    let hasMissing = false
+    for (const t of parsedTables) {
+      if (!tablePositions[t.name]) {
+        hasMissing = true
+        break
       }
+    }
+    if (!hasMissing && Object.keys(tablePositions).length > 0) {
+      return tablePositions
+    }
 
-      const auto = calculateAutoLayout(parsedTables, parsedTableGroups)
-      const merged = { ...auto, ...prev }
-      parsedTables.forEach((t) => {
-        if (!merged[t.name]) {
-          merged[t.name] = auto[t.name] || { x: 60, y: 60 }
-        }
-      })
-
-      if (docId) {
-        try {
-          const storageKey = `dokudocs_dbml_layout_${docId}`
-          const saved = localStorage.getItem(storageKey)
-          const storedLayout = saved ? JSON.parse(saved) : {}
-          localStorage.setItem(
-            storageKey,
-            JSON.stringify({
-              ...storedLayout,
-              tablePositions: merged,
-              zoom: zoomRef.current,
-              pan: panRef.current,
-            })
-          )
-        } catch (e) {}
+    const auto = calculateAutoLayout(parsedTables, parsedTableGroups)
+    const merged = { ...auto, ...tablePositions }
+    for (const t of parsedTables) {
+      if (!merged[t.name]) {
+        merged[t.name] = auto[t.name] || { x: 60, y: 60 }
       }
-
-      return merged
-    })
-  }, [parsedTables, parsedTableGroups, calculateAutoLayout, docId])
+    }
+    return merged
+  }, [parsedTables, parsedTableGroups, tablePositions, calculateAutoLayout])
 
   const handleApplyAutoLayout = () => {
     const layout = calculateAutoLayout(parsedTables, parsedTableGroups)
@@ -1016,9 +939,12 @@ export function DbmlVisualCanvas({
     setEdgeJoints({})
     if (docId) {
       try {
+        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+        const parsed = saved ? JSON.parse(saved) : {}
         localStorage.setItem(
           `dokudocs_dbml_layout_${docId}`,
           JSON.stringify({
+            ...parsed,
             tablePositions: layout,
             edgeJoints: {},
             zoom: zoomRef.current,
@@ -1029,223 +955,57 @@ export function DbmlVisualCanvas({
     }
   }
 
-  useEffect(() => {
-    const viewport = viewportRef.current
-    if (!viewport) return
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault()
-
+  const getCanvasCoords = useCallback(
+    (clientX: number, clientY: number) => {
+      const viewport = viewportRef.current
+      if (!viewport) return { x: 0, y: 0 }
       const rect = viewport.getBoundingClientRect()
-      const mouseX = e.clientX - rect.left
-      const mouseY = e.clientY - rect.top
+      const worldX = (clientX - rect.left - panRef.current.x) / zoomRef.current
+      const worldY = (clientY - rect.top - panRef.current.y) / zoomRef.current
+      return { x: worldX, y: worldY }
+    },
+    [viewportRef, panRef, zoomRef]
+  )
 
-      const currentZoom = zoomRef.current
-      const currentPan = panRef.current
+  const handleMouseDownTable = (tableName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setGhostJoint(null)
+    const cur = effectiveTablePositions[tableName] || { x: 60, y: 60 }
+    const startX = e.clientX
+    const startY = e.clientY
+    const origX = cur.x
+    const origY = cur.y
+    let hasMoved = false
 
-      if (e.ctrlKey || e.metaKey) {
-        const zoomFactor = Math.exp(-e.deltaY * 0.0025)
-        const newZoom = Math.min(Math.max(currentZoom * zoomFactor, 0.2), 3)
-
-        const worldX = (mouseX - currentPan.x) / currentZoom
-        const worldY = (mouseY - currentPan.y) / currentZoom
-
-        const newPanX = mouseX - worldX * newZoom
-        const newPanY = mouseY - worldY * newZoom
-
-        zoomRef.current = newZoom
-        panRef.current = { x: newPanX, y: newPanY }
-      } else {
-        const newPanX = currentPan.x - e.deltaX
-        const newPanY = currentPan.y - e.deltaY
-        panRef.current = { x: newPanX, y: newPanY }
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const curZoom = zoomRef.current || 1
+      const dx = (moveEvent.clientX - startX) / curZoom
+      const dy = (moveEvent.clientY - startY) / curZoom
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+        hasMoved = true
       }
-
-      if (wheelRafRef.current === null) {
-        wheelRafRef.current = requestAnimationFrame(() => {
-          applyCanvasTransform(panRef.current, zoomRef.current)
-          wheelRafRef.current = null
+      if (mouseMoveRafRef.current === null) {
+        mouseMoveRafRef.current = requestAnimationFrame(() => {
+          setTablePositions((prev) => ({
+            ...prev,
+            [tableName]: {
+              x: origX + dx,
+              y: origY + dy,
+            },
+          }))
+          mouseMoveRafRef.current = null
         })
       }
-
-      if (idleTimerRef.current) {
-        clearTimeout(idleTimerRef.current)
-      }
-      idleTimerRef.current = setTimeout(() => {
-        if (docId) {
-          try {
-            const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
-            const parsed = saved ? JSON.parse(saved) : {}
-            localStorage.setItem(
-              `dokudocs_dbml_layout_${docId}`,
-              JSON.stringify({
-                ...parsed,
-                zoom: zoomRef.current,
-                pan: panRef.current,
-              })
-            )
-          } catch (err) {}
-        }
-        idleTimerRef.current = null
-      }, 150)
     }
 
-    viewport.addEventListener('wheel', handleWheel, { passive: false })
-    return () => {
-      viewport.removeEventListener('wheel', handleWheel)
-      if (wheelRafRef.current !== null) {
-        cancelAnimationFrame(wheelRafRef.current)
-        wheelRafRef.current = null
-      }
-      if (idleTimerRef.current) {
-        clearTimeout(idleTimerRef.current)
-        idleTimerRef.current = null
-      }
-    }
-  }, [applyCanvasTransform, docId])
-
-  const getCanvasCoords = useCallback((clientX: number, clientY: number) => {
-    const viewport = viewportRef.current
-    if (!viewport) return { x: 0, y: 0 }
-    const rect = viewport.getBoundingClientRect()
-    const worldX = (clientX - rect.left - panRef.current.x) / zoomRef.current
-    const worldY = (clientY - rect.top - panRef.current.y) / zoomRef.current
-    return { x: worldX, y: worldY }
-  }, [])
-
-  useEffect(() => {
-    if (!draggingTable && !canvasPanning && !draggingJoint) return
-
-    const handleWindowMouseMove = (e: MouseEvent) => {
-      if (draggingJoint) {
-        const dx = (e.clientX - draggingJoint.startX) / zoomRef.current
-        const dy = (e.clientY - draggingJoint.startY) / zoomRef.current
-        const activationDistance = draggingJoint.isGhost ? 3 : 1
-        if (
-          !draggingJoint.hasMoved &&
-          Math.hypot(
-            e.clientX - draggingJoint.startX,
-            e.clientY - draggingJoint.startY
-          ) <= activationDistance
-        )
-          return
-        draggingJoint.hasMoved = true
-        const target = draggingJoint.initialJoints[draggingJoint.jointIndex]
-        const axis = draggingJoint.axis
-
-        let newX = target.x
-        let newY = target.y
-
-        const snapThreshold = 6
-        const joints = draggingJoint.initialJoints
-        const jIdx = draggingJoint.jointIndex
-
-        const snapTargets: JointPoint[] = []
-        if (jIdx > 0) snapTargets.push(joints[jIdx - 1])
-        if (jIdx < joints.length - 1) snapTargets.push(joints[jIdx + 1])
-
-        if (axis === 'x') {
-          newX = Math.round(target.x + dx)
-          for (const st of snapTargets) {
-            if (Math.abs(newX - st.x) <= snapThreshold) {
-              newX = st.x
-            }
-          }
-        } else {
-          newY = Math.round(target.y + dy)
-          for (const st of snapTargets) {
-            if (Math.abs(newY - st.y) <= snapThreshold) {
-              newY = st.y
-            }
-          }
-        }
-
-        const nextJoints: JointPoint[] = joints.map((j, i) =>
-          i === jIdx ? { ...j, x: newX, y: newY, axis } : { ...j }
-        )
-
-        if (mouseMoveRafRef.current === null) {
-          mouseMoveRafRef.current = requestAnimationFrame(() => {
-            setEdgeJoints((prev) => ({
-              ...prev,
-              [draggingJoint.relKey]: nextJoints,
-            }))
-            mouseMoveRafRef.current = null
-          })
-        }
-      } else if (draggingTable) {
-        const dx = (e.clientX - draggingTable.startX) / zoomRef.current
-        const dy = (e.clientY - draggingTable.startY) / zoomRef.current
-        if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-          draggingTable.hasMoved = true
-        }
-        if (mouseMoveRafRef.current === null) {
-          mouseMoveRafRef.current = requestAnimationFrame(() => {
-            setTablePositions((prev) => ({
-              ...prev,
-              [draggingTable.id]: {
-                x: draggingTable.origX + dx,
-                y: draggingTable.origY + dy,
-              },
-            }))
-            mouseMoveRafRef.current = null
-          })
-        }
-      } else if (canvasPanning) {
-        const dx = e.clientX - canvasPanning.startX
-        const dy = e.clientY - canvasPanning.startY
-        const nextPan = {
-          x: canvasPanning.origPanX + dx,
-          y: canvasPanning.origPanY + dy,
-        }
-        panRef.current = nextPan
-        if (mouseMoveRafRef.current === null) {
-          mouseMoveRafRef.current = requestAnimationFrame(() => {
-            applyCanvasTransform(panRef.current, zoomRef.current)
-            mouseMoveRafRef.current = null
-          })
-        }
-      }
-    }
-
-    const handleWindowMouseUp = () => {
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
       if (mouseMoveRafRef.current !== null) {
         cancelAnimationFrame(mouseMoveRafRef.current)
         mouseMoveRafRef.current = null
       }
-      if (canvasPanning && docId) {
-        try {
-          const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
-          const parsed = saved ? JSON.parse(saved) : {}
-          localStorage.setItem(
-            `dokudocs_dbml_layout_${docId}`,
-            JSON.stringify({
-              ...parsed,
-              zoom: zoomRef.current,
-              pan: panRef.current,
-            })
-          )
-        } catch (e) {}
-      }
-      if (draggingJoint && draggingJoint.hasMoved && docId) {
-        setEdgeJoints((current) => {
-          try {
-            const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
-            const parsed = saved ? JSON.parse(saved) : {}
-            localStorage.setItem(
-              `dokudocs_dbml_layout_${docId}`,
-              JSON.stringify({
-                ...parsed,
-                edgeJoints: current,
-                zoom: zoomRef.current,
-                pan: panRef.current,
-              })
-            )
-          } catch (e) {}
-          return current
-        })
-      }
-      if (draggingTable && draggingTable.hasMoved && docId) {
+      if (hasMoved && docId) {
         setTablePositions((current) => {
           try {
             const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
@@ -1263,50 +1023,113 @@ export function DbmlVisualCanvas({
           return current
         })
       }
-      setDraggingJoint(null)
-      setDraggingTable(null)
-      setCanvasPanning(null)
     }
 
-    window.addEventListener('mousemove', handleWindowMouseMove)
-    window.addEventListener('mouseup', handleWindowMouseUp)
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }
 
-    return () => {
-      window.removeEventListener('mousemove', handleWindowMouseMove)
-      window.removeEventListener('mouseup', handleWindowMouseUp)
+  const startJointDrag = (
+    e: React.MouseEvent,
+    relKey: string,
+    jointIndex: number,
+    initialJoints: JointPoint[],
+    axis: 'x' | 'y',
+    isGhost = false
+  ) => {
+    e.stopPropagation()
+    setGhostJoint(null)
+    const startX = e.clientX
+    const startY = e.clientY
+    const activationDistance = isGhost ? 3 : 1
+    const target = initialJoints[jointIndex]
+    const snapThreshold = 6
+    let hasMoved = false
+
+    setActiveDraggingJoint({ relKey, jointIndex })
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const curZoom = zoomRef.current || 1
+      const dx = (moveEvent.clientX - startX) / curZoom
+      const dy = (moveEvent.clientY - startY) / curZoom
+      if (
+        !hasMoved &&
+        Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) <=
+          activationDistance
+      ) {
+        return
+      }
+      hasMoved = true
+
+      let newX = target.x
+      let newY = target.y
+
+      const snapTargets: JointPoint[] = []
+      if (jointIndex > 0) snapTargets.push(initialJoints[jointIndex - 1])
+      if (jointIndex < initialJoints.length - 1)
+        snapTargets.push(initialJoints[jointIndex + 1])
+
+      if (axis === 'x') {
+        newX = Math.round(target.x + dx)
+        for (const st of snapTargets) {
+          if (Math.abs(newX - st.x) <= snapThreshold) {
+            newX = st.x
+          }
+        }
+      } else {
+        newY = Math.round(target.y + dy)
+        for (const st of snapTargets) {
+          if (Math.abs(newY - st.y) <= snapThreshold) {
+            newY = st.y
+          }
+        }
+      }
+
+      const nextJoints: JointPoint[] = initialJoints.map((j, i) =>
+        i === jointIndex ? { ...j, x: newX, y: newY, axis } : { ...j }
+      )
+
+      if (mouseMoveRafRef.current === null) {
+        mouseMoveRafRef.current = requestAnimationFrame(() => {
+          setEdgeJoints((prev) => ({
+            ...prev,
+            [relKey]: nextJoints,
+          }))
+          mouseMoveRafRef.current = null
+        })
+      }
+    }
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
       if (mouseMoveRafRef.current !== null) {
         cancelAnimationFrame(mouseMoveRafRef.current)
         mouseMoveRafRef.current = null
       }
+      setActiveDraggingJoint(null)
+      if (hasMoved && docId) {
+        setEdgeJoints((current) => {
+          try {
+            const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+            const parsed = saved ? JSON.parse(saved) : {}
+            localStorage.setItem(
+              `dokudocs_dbml_layout_${docId}`,
+              JSON.stringify({
+                ...parsed,
+                edgeJoints: current,
+                zoom: zoomRef.current,
+                pan: panRef.current,
+              })
+            )
+          } catch (e) {}
+          return current
+        })
+      }
     }
-  }, [draggingTable, canvasPanning, draggingJoint, docId])
 
-  const handleMouseDownBackground = (e: React.MouseEvent) => {
-    if (e.button !== 0 && e.button !== 1) return
-    setSelectedTable(null)
-    setSelectedField(null)
-    setSelectedRelation(null)
-    setGhostJoint(null)
-    setCanvasPanning({
-      startX: e.clientX,
-      startY: e.clientY,
-      origPanX: panRef.current.x,
-      origPanY: panRef.current.y,
-    })
-  }
-
-  const handleMouseDownTable = (tableName: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setGhostJoint(null)
-    const cur = tablePositions[tableName] || { x: 60, y: 60 }
-    setDraggingTable({
-      id: tableName,
-      startX: e.clientX,
-      startY: e.clientY,
-      origX: cur.x,
-      origY: cur.y,
-      hasMoved: false,
-    })
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
   }
 
   const handleJointMouseDown = (
@@ -1315,19 +1138,16 @@ export function DbmlVisualCanvas({
     jointIndex: number,
     joints: JointPoint[]
   ) => {
-    e.stopPropagation()
-    setGhostJoint(null)
     const target = joints[jointIndex]
     const axis = target?.axis || 'x'
-    setDraggingJoint({
+    startJointDrag(
+      e,
       relKey,
       jointIndex,
-      startX: e.clientX,
-      startY: e.clientY,
-      initialJoints: joints.map((j) => ({ ...j })),
+      joints.map((j) => ({ ...j })),
       axis,
-      hasMoved: false,
-    })
+      false
+    )
   }
 
   const handleGhostJointMouseDown = (
@@ -1335,26 +1155,20 @@ export function DbmlVisualCanvas({
     ghost: GhostJoint,
     currentJoints: JointPoint[]
   ) => {
-    e.stopPropagation()
     const nextJoints = [...currentJoints]
     nextJoints.splice(ghost.insertIndex, 0, {
       x: ghost.x,
       y: ghost.y,
       axis: ghost.axis,
     })
-
-    setDraggingJoint({
-      relKey: ghost.relKey,
-      jointIndex: ghost.insertIndex,
-      startX: e.clientX,
-      startY: e.clientY,
-      initialJoints: nextJoints,
-      axis: ghost.axis,
-      hasMoved: false,
-      isGhost: true,
-    })
-
-    setGhostJoint(null)
+    startJointDrag(
+      e,
+      ghost.relKey,
+      ghost.insertIndex,
+      nextJoints,
+      ghost.axis,
+      true
+    )
   }
 
   const handleResetEdgeJoints = (e: React.MouseEvent, relKey: string) => {
@@ -1372,6 +1186,8 @@ export function DbmlVisualCanvas({
             JSON.stringify({
               ...parsed,
               edgeJoints: next,
+              zoom: zoomRef.current,
+              pan: panRef.current,
             })
           )
         } catch (err) {}
@@ -1416,7 +1232,7 @@ export function DbmlVisualCanvas({
     relKey: string,
     candidates: Omit<GhostJoint, 'relKey'>[]
   ) => {
-    if (draggingJoint) return
+    if (activeDraggingJoint) return
     const { x: mouseX, y: mouseY } = getCanvasCoords(e.clientX, e.clientY)
 
     const candidate = candidates
@@ -1455,7 +1271,7 @@ export function DbmlVisualCanvas({
         let maxY = -Infinity
 
         members.forEach((t) => {
-          const pos = tablePositions[t.name] || { x: 60, y: 60 }
+          const pos = effectiveTablePositions[t.name] || { x: 60, y: 60 }
           const tHeight = calculateTableHeight(t)
           minX = Math.min(minX, pos.x)
           minY = Math.min(minY, pos.y)
@@ -1476,7 +1292,7 @@ export function DbmlVisualCanvas({
         }
       })
       .filter(Boolean)
-  }, [parsedTableGroups, parsedTables, tablePositions])
+  }, [parsedTableGroups, parsedTables, effectiveTablePositions])
 
   const relationGeometries = useMemo(() => {
     return parsedRelations
@@ -1490,8 +1306,11 @@ export function DbmlVisualCanvas({
 
         if (!fromTable || !toTable) return null
 
-        const fromPos = tablePositions[fromTable.name] || { x: 60, y: 60 }
-        const toPos = tablePositions[toTable.name] || { x: 400, y: 60 }
+        const fromPos = effectiveTablePositions[fromTable.name] || {
+          x: 60,
+          y: 60,
+        }
+        const toPos = effectiveTablePositions[toTable.name] || { x: 400, y: 60 }
 
         const fromColIdx = fromTable.columns.findIndex(
           (c) => c.name.toLowerCase() === rel.fromColumn.toLowerCase()
@@ -1572,7 +1391,7 @@ export function DbmlVisualCanvas({
         }
       })
       .filter(Boolean)
-  }, [parsedRelations, parsedTables, tablePositions, edgeJoints])
+  }, [parsedRelations, parsedTables, effectiveTablePositions, edgeJoints])
 
   const relationLines = useMemo(() => {
     return relationGeometries.map((geo) => {
@@ -1604,7 +1423,7 @@ export function DbmlVisualCanvas({
       const isActive = isHovered || isSelected
 
       const isDirectlyActive =
-        selectedRelation === relKey || draggingJoint?.relKey === relKey
+        selectedRelation === relKey || activeDraggingJoint?.relKey === relKey
 
       return {
         ...geo,
@@ -1622,100 +1441,8 @@ export function DbmlVisualCanvas({
     selectedRelation,
     selectedTable,
     selectedField,
-    draggingJoint?.relKey,
+    activeDraggingJoint?.relKey,
   ])
-
-  const handleResetView = () => {
-    zoomRef.current = 1
-    panRef.current = { x: 60, y: 60 }
-    applyCanvasTransform(panRef.current, zoomRef.current)
-    if (docId) {
-      try {
-        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
-        const parsed = saved ? JSON.parse(saved) : {}
-        localStorage.setItem(
-          `dokudocs_dbml_layout_${docId}`,
-          JSON.stringify({
-            ...parsed,
-            zoom: 1,
-            pan: { x: 60, y: 60 },
-          })
-        )
-      } catch (e) {}
-    }
-  }
-
-  const handleZoomIn = () => {
-    const viewport = viewportRef.current
-    if (!viewport) return
-    const rect = viewport.getBoundingClientRect()
-    const centerX = rect.width / 2
-    const centerY = rect.height / 2
-
-    const currentZoom = zoomRef.current
-    const currentPan = panRef.current
-    const newZoom = Math.min(currentZoom * 1.15, 3)
-
-    const worldX = (centerX - currentPan.x) / currentZoom
-    const worldY = (centerY - currentPan.y) / currentZoom
-
-    const newPanX = centerX - worldX * newZoom
-    const newPanY = centerY - worldY * newZoom
-
-    zoomRef.current = newZoom
-    panRef.current = { x: newPanX, y: newPanY }
-    applyCanvasTransform(panRef.current, zoomRef.current)
-    if (docId) {
-      try {
-        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
-        const parsed = saved ? JSON.parse(saved) : {}
-        localStorage.setItem(
-          `dokudocs_dbml_layout_${docId}`,
-          JSON.stringify({
-            ...parsed,
-            zoom: newZoom,
-            pan: { x: newPanX, y: newPanY },
-          })
-        )
-      } catch (e) {}
-    }
-  }
-
-  const handleZoomOut = () => {
-    const viewport = viewportRef.current
-    if (!viewport) return
-    const rect = viewport.getBoundingClientRect()
-    const centerX = rect.width / 2
-    const centerY = rect.height / 2
-
-    const currentZoom = zoomRef.current
-    const currentPan = panRef.current
-    const newZoom = Math.max(currentZoom * 0.85, 0.2)
-
-    const worldX = (centerX - currentPan.x) / currentZoom
-    const worldY = (centerY - currentPan.y) / currentZoom
-
-    const newPanX = centerX - worldX * newZoom
-    const newPanY = centerY - worldY * newZoom
-
-    zoomRef.current = newZoom
-    panRef.current = { x: newPanX, y: newPanY }
-    applyCanvasTransform(panRef.current, zoomRef.current)
-    if (docId) {
-      try {
-        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
-        const parsed = saved ? JSON.parse(saved) : {}
-        localStorage.setItem(
-          `dokudocs_dbml_layout_${docId}`,
-          JSON.stringify({
-            ...parsed,
-            zoom: newZoom,
-            pan: { x: newPanX, y: newPanY },
-          })
-        )
-      } catch (e) {}
-    }
-  }
 
   return (
     <div className='relative flex h-full w-full flex-col overflow-hidden bg-muted/15 select-none'>
@@ -1771,9 +1498,7 @@ export function DbmlVisualCanvas({
         <span
           ref={zoomBadgeRef}
           className='min-w-10 px-1 text-center font-mono text-[10px] font-semibold text-muted-foreground'
-        >
-          {Math.round(zoomRef.current * 100)}%
-        </span>
+        />
         <Button
           variant='ghost'
           size='icon'
@@ -1802,9 +1527,7 @@ export function DbmlVisualCanvas({
           setSelectedField(null)
           setSelectedRelation(null)
         }}
-        className={`relative flex-1 overflow-hidden ${
-          canvasPanning ? 'cursor-grabbing' : 'cursor-default'
-        }`}
+        className='relative flex-1 cursor-grab overflow-hidden active:cursor-grabbing'
       >
         {parsedTables.length === 0 ? (
           <div className='flex h-full min-h-[300px] flex-col items-center justify-center text-xs text-muted-foreground'>
@@ -1816,7 +1539,6 @@ export function DbmlVisualCanvas({
             ref={canvasLayerRef}
             className='absolute inset-0 size-full overflow-visible'
             style={{
-              transform: `translate3d(${panRef.current.x}px, ${panRef.current.y}px, 0) scale(${zoomRef.current})`,
               transformOrigin: '0 0',
               willChange: 'transform',
             }}
@@ -1864,7 +1586,9 @@ export function DbmlVisualCanvas({
                 if (!line) return null
 
                 const hasGhostOnThisLine =
-                  ghostJoint && ghostJoint.relKey === line.id && !draggingJoint
+                  ghostJoint &&
+                  ghostJoint.relKey === line.id &&
+                  !activeDraggingJoint
                 const lineCursorClass = hasGhostOnThisLine
                   ? ghostJoint.axis === 'x'
                     ? 'cursor-ew-resize'
@@ -1990,8 +1714,8 @@ export function DbmlVisualCanvas({
                         const interiorIndex = jIdx - 1
                         const isThisJointDragging =
                           !isEndpoint &&
-                          draggingJoint?.relKey === line.id &&
-                          draggingJoint?.jointIndex === interiorIndex
+                          activeDraggingJoint?.relKey === line.id &&
+                          activeDraggingJoint?.jointIndex === interiorIndex
                         const axis = joint.axis || 'x'
                         const cursorClass = isEndpoint
                           ? 'pointer-events-none'
@@ -2124,7 +1848,10 @@ export function DbmlVisualCanvas({
             </svg>
 
             {parsedTables.map((table) => {
-              const pos = tablePositions[table.name] || { x: 60, y: 60 }
+              const pos = effectiveTablePositions[table.name] || {
+                x: 60,
+                y: 60,
+              }
               const isSelected = selectedTable === table.name
               const isHovered = hoveredTable === table.name
               const recordSet = parsedRecords[table.name.toLowerCase()]

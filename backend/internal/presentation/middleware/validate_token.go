@@ -43,3 +43,7 @@ func UserFromContext(ctx context.Context) (dto.ResponseUser, bool) {
 	user, ok := ctx.Value(userContextKey).(dto.ResponseUser)
 	return user, ok
 }
+
+func ContextWithUser(ctx context.Context, user dto.ResponseUser) context.Context {
+	return context.WithValue(ctx, userContextKey, user)
+}

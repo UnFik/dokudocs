@@ -43,3 +43,7 @@ migrate-status: db-up
 
 seed: migrate-up
 	$(DOCKER_COMPOSE) run --rm api go run ./cmd/seeder
+
+test-e2e:
+	cd ../e2e && bunx playwright test
+

@@ -1,8 +1,8 @@
+/* eslint-disable react-hooks/rules-of-hooks */
 import { test as baseTest, expect } from '@playwright/test'
 import { LoginPage } from '../pages/login.page'
 import { DashboardPage } from '../pages/dashboard.page'
 import { DocEditorPage } from '../pages/doc-editor.page'
-import { TasksPage } from '../pages/tasks.page'
 import { UsersPage } from '../pages/users.page'
 import { SettingsPage } from '../pages/settings.page'
 import { setAuthenticatedState, setupAuthMockRoutes } from './auth.fixture'
@@ -11,7 +11,6 @@ type AppFixtures = {
   loginPage: LoginPage
   dashboardPage: DashboardPage
   docEditorPage: DocEditorPage
-  tasksPage: TasksPage
   usersPage: UsersPage
   settingsPage: SettingsPage
   authedTest: void
@@ -26,9 +25,6 @@ export const test = baseTest.extend<AppFixtures>({
   },
   docEditorPage: async ({ page }, use) => {
     await use(new DocEditorPage(page))
-  },
-  tasksPage: async ({ page }, use) => {
-    await use(new TasksPage(page))
   },
   usersPage: async ({ page }, use) => {
     await use(new UsersPage(page))

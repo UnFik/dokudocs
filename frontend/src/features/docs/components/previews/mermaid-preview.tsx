@@ -17,6 +17,8 @@ interface MermaidPreviewProps {
   content: string
 }
 
+const DEFAULT_INITIAL_PAN = { x: 40, y: 40 }
+
 export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
@@ -30,9 +32,6 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
     viewportRef,
     canvasLayerRef,
     zoomBadgeRef,
-    isPanning,
-    initialPan,
-    initialZoom,
     zoomRef,
     handleZoomIn,
     handleZoomOut,
@@ -41,7 +40,7 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
     setPanAndZoom,
   } = useCanvasPanZoom({
     docId,
-    initialPan: { x: 40, y: 40 },
+    initialPan: DEFAULT_INITIAL_PAN,
     initialZoom: 1,
     storagePrefix: 'dokudocs_mermaid_layout_',
   })
@@ -79,7 +78,7 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
     : ''
 
   return (
-    <div className='relative flex h-full w-full flex-col overflow-hidden bg-background select-none [background-size:24px_24px] [background-image:radial-gradient(circle,rgba(0,0,0,0.06)_1.5px,transparent_1.5px)] dark:[background-image:radial-gradient(circle,rgba(255,255,255,0.07)_1.5px,transparent_1.5px)]'>
+    <div className='relative flex h-full w-full flex-col overflow-hidden bg-background [background-image:radial-gradient(circle,rgba(0,0,0,0.06)_1.5px,transparent_1.5px)] [background-size:24px_24px] select-none dark:[background-image:radial-gradient(circle,rgba(255,255,255,0.07)_1.5px,transparent_1.5px)]'>
       <div className='absolute top-3 right-3 z-30 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 p-1 shadow-md backdrop-blur-md'>
         {isRendering && (
           <>
@@ -113,9 +112,7 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
         <span
           ref={zoomBadgeRef}
           className='min-w-10 px-1 text-center font-mono text-[10px] font-semibold text-muted-foreground'
-        >
-          {Math.round(initialZoom * 100)}%
-        </span>
+        />
         <Button
           variant='ghost'
           size='icon'
@@ -159,9 +156,7 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
       <div
         ref={viewportRef}
         onMouseDown={handleMouseDownBackground}
-        className={`relative flex-1 overflow-hidden ${
-          isPanning ? 'cursor-grabbing' : 'cursor-grab'
-        }`}
+        className='relative flex-1 cursor-grab overflow-hidden active:cursor-grabbing'
       >
         {!content.trim() ? (
           <div className='flex h-full min-h-[300px] flex-col items-center justify-center gap-3 p-6 text-center text-xs text-muted-foreground'>
@@ -206,13 +201,12 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
             id='mermaid-canvas-layer'
             className='absolute inset-0 size-full overflow-visible p-8'
             style={{
-              transform: `translate3d(${initialPan.x}px, ${initialPan.y}px, 0) scale(${initialZoom})`,
               transformOrigin: '0 0',
               willChange: 'transform',
             }}
           >
             <div
-              className={`pointer-events-auto inline-block transition-opacity duration-200 select-text [&_svg]:h-auto [&_svg]:max-w-none dark:[&_text.messageText]:fill-slate-100 dark:[&_text.actor]:fill-slate-100 dark:[&_text.labelText]:fill-slate-100 dark:[&_text.loopText]:fill-slate-100 dark:[&_line.messageLine0]:stroke-slate-300 dark:[&_line.messageLine1]:stroke-slate-300 dark:[&_path.messageLine0]:stroke-slate-300 dark:[&_path.messageLine1]:stroke-slate-300 dark:[&_.sequenceNumber]:fill-slate-100 ${
+              className={`pointer-events-auto inline-block transition-opacity duration-200 select-text dark:[&_.sequenceNumber]:fill-slate-100 dark:[&_line.messageLine0]:stroke-slate-300 dark:[&_line.messageLine1]:stroke-slate-300 dark:[&_path.messageLine0]:stroke-slate-300 dark:[&_path.messageLine1]:stroke-slate-300 [&_svg]:h-auto [&_svg]:max-w-none dark:[&_text.actor]:fill-slate-100 dark:[&_text.labelText]:fill-slate-100 dark:[&_text.loopText]:fill-slate-100 dark:[&_text.messageText]:fill-slate-100 ${
                 !isValid ? 'opacity-70' : 'opacity-100'
               }`}
               dangerouslySetInnerHTML={{ __html: svg }}

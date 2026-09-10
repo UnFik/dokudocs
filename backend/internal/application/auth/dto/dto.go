@@ -6,13 +6,20 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	AccessToken string       `json:"accessToken"`
-	User        ResponseUser `json:"user"`
+	AccessToken string
+	User        ResponseUser
 }
 
 type ResponseUser struct {
-	AccountNo string   `json:"accountNo"`
-	Email     string   `json:"email"`
-	Role      []string `json:"role"`
-	Exp       int64    `json:"exp"`
+	ID        string
+	AccountNo string
+	Email     string
+	Role      []string
+	Exp       int64
+}
+
+type RegisterRequest struct {
+	Email    string
+	Password string
+	FullName string
 }

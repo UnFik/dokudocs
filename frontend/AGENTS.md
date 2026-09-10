@@ -4,7 +4,7 @@
 
 - This repo is Vite + React 19 admin-style app, customized from `shadcn-admin`.
 - UI stack: TanStack Router, TanStack Query, Tailwind CSS v4, Radix/shadcn UI, Zustand, Sonner, Vitest browser tests.
-- Many screens are feature-sliced dashboard pages such as dashboard, apps, chats, tasks, users, and settings. Some areas use static or mock-style data sources; inspect feature-local `data/**` before assuming backend integration exists.
+- Many screens are feature-sliced dashboard pages such as dashboard, apps, chats, users, and settings. Some areas use static or mock-style data sources; inspect feature-local `data/**` before assuming backend integration exists.
 - Goal when editing: keep route files thin, keep feature UI inside `src/features/**`, keep shared primitives reusable.
 
 ## Commands & Package Management
@@ -28,6 +28,11 @@
   - `bun run test:watch`
   - `bun run test:ui`
   - `bun run test:coverage`
+- Docker development commands:
+  - `docker compose up -d --build` (builds and starts dev container in background)
+  - `docker compose ps` (checks container status and port mapping)
+  - `docker compose logs -f frontend` (streams runtime logs)
+  - `docker compose down` (stops and removes container)
 - No standalone `typecheck` script; `bun run build` runs `tsc -b && vite build`.
 - Tests run in Vitest browser mode with Playwright Chromium. If browser deps are missing, run `bun run test:browser:install` before `bun run test`.
 - For focused tests, pass file to Vitest through bun, example: `bun run test src/lib/utils.test.ts`.
@@ -120,6 +125,40 @@
   2. run `bun run test` if change affects behavior across feature boundaries
   3. run `bun run build` if change affects routing, types, imports, or app-wide wiring
 - If task changes only docs like this file, test run not needed.
+
+## Docker Verification
+
+When verifying containerized runtime and build consistency:
+
+1. **Execute Build and Run**:
+   ```bash
+   docker compose up -d --build -V
+   ```
+   - **Note**: The `-V` (`--renew-anon-volumes`) flag is important when new dependencies are added to recreate the anonymous `/app/node_modules` volume. Alternatively, run `docker compose exec frontend bun install`.
+   - **Expected Result**: Multi-stage `dev` target in `Dockerfile` builds cleanly using `oven/bun:1-alpine`, runs `bun install --frozen-lockfile`, starts container `dokudocs-frontend`, and exits with code 0.
+
+2. **Verify Container Health & Port Binding**:
+   ```bash
+   docker compose ps
+   ```
+   - **Expected Result**: Service `dokudocs-frontend` reports status `Up` with active port forwarding `0.0.0.0:5173->5173/tcp`.
+
+3. **Verify Runtime Logs**:
+   ```bash
+   docker compose logs --tail=50 frontend
+   ```
+   - **Expected Result**: Vite development server logs show `VITE v... ready in ... ms` and `➜ Local: http://localhost:5173/` with no fatal startup errors.
+
+4. **Verify HTTP Endpoint**:
+   ```bash
+   curl -I http://localhost:5173/
+   ```
+   - **Expected Result**: Returns `HTTP/1.1 200 OK`.
+
+5. **Teardown**:
+   ```bash
+   docker compose down
+   ```
 
 ## Safe And Unsafe Edits
 

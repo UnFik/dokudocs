@@ -1,18 +1,21 @@
 import { useState } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import type { DocType } from '@/types/dokudocs'
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   Code,
   Copy,
   Download,
   FileCode,
   Folder,
+  History,
   Image as ImageIcon,
   Loader2,
   MessageSquare,
   Share2,
+  Star,
   Tag,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -27,6 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { DocTypeBadge } from './doc-type-badge'
+import { ProjectDocsHoverCard } from './project-docs-hover-card'
 
 interface EditorHeaderProps {
   docId: string
@@ -47,6 +51,11 @@ interface EditorHeaderProps {
   onToggleComments?: () => void
   isCommentsOpen?: boolean
   commentsCount?: number
+  onToggleHistory?: () => void
+  isHistoryOpen?: boolean
+  onOpenShare?: () => void
+  isStarred?: boolean
+  onToggleStar?: () => void
 }
 
 export function EditorHeader({
@@ -68,6 +77,11 @@ export function EditorHeader({
   onToggleComments,
   isCommentsOpen,
   commentsCount,
+  onToggleHistory,
+  isHistoryOpen,
+  onOpenShare,
+  isStarred,
+  onToggleStar,
 }: EditorHeaderProps) {
   const navigate = useNavigate()
   const { projects } = useDokudocsStore()
@@ -96,9 +110,7 @@ export function EditorHeader({
   }
 
   const handleBack = () => {
-    if (window.history.length > 1 && window.history.state?.idx !== 0) {
-      window.history.back()
-    } else if (activeProject) {
+    if (activeProject) {
       navigate({
         to: '/projects/$projectId',
         params: { projectId: activeProject.id },
@@ -116,6 +128,7 @@ export function EditorHeader({
           size='icon'
           className='size-8 shrink-0'
           onClick={handleBack}
+          aria-label='Back'
         >
           <ArrowLeft className='size-4' />
         </Button>
@@ -177,18 +190,23 @@ export function EditorHeader({
 
       <div className='flex items-center gap-2 text-xs text-muted-foreground'>
         {activeProject ? (
-          <Link
-            to='/projects/$projectId'
-            params={{ projectId: activeProject.id }}
-            className='hidden items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground xl:flex'
+          <ProjectDocsHoverCard
+            projectId={activeProject.id}
+            currentDocId={docId}
           >
-            <Folder className='size-3.5 shrink-0 text-muted-foreground/70' />
-            <span className='max-w-36 truncate font-medium'>
-              {activeProject.name}
-            </span>
-          </Link>
+            <button
+              type='button'
+              className='hidden cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground md:flex'
+            >
+              <Folder className='size-3.5 shrink-0 text-muted-foreground/70' />
+              <span className='max-w-36 truncate font-medium'>
+                {activeProject.name}
+              </span>
+              <ChevronDown className='size-3 shrink-0 opacity-60' />
+            </button>
+          </ProjectDocsHoverCard>
         ) : (
-          <span className='hidden items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/80 xl:flex'>
+          <span className='hidden items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/80 md:flex'>
             <Folder className='size-3.5 shrink-0' />
             <span>Draft</span>
           </span>
@@ -245,10 +263,46 @@ export function EditorHeader({
           </Button>
         )}
 
+        {onToggleStar && (
+          <Button
+            variant='outline'
+            size='icon'
+            onClick={onToggleStar}
+            className='size-8 shrink-0'
+            title={isStarred ? 'Unstar Document' : 'Star Document'}
+            aria-label={isStarred ? 'Unstar Document' : 'Star Document'}
+          >
+            <Star
+              className={`size-3.5 ${
+                isStarred
+                  ? 'fill-amber-400 text-amber-500'
+                  : 'text-muted-foreground/70'
+              }`}
+            />
+          </Button>
+        )}
+
+        {onToggleHistory && (
+          <Button
+            variant={isHistoryOpen ? 'secondary' : 'outline'}
+            size='icon'
+            onClick={onToggleHistory}
+            className={`size-8 shrink-0 ${
+              isHistoryOpen
+                ? 'border-primary/30 bg-primary/10 font-medium text-primary'
+                : ''
+            }`}
+            title='Version History'
+            aria-label='Version History'
+          >
+            <History className='size-3.5' />
+          </Button>
+        )}
+
         <Button
           variant='outline'
           size='sm'
-          onClick={handleShare}
+          onClick={onOpenShare || handleShare}
           className='h-8 gap-1.5 text-xs'
         >
           <Share2 className='size-3.5' />
@@ -292,13 +346,19 @@ export function EditorHeader({
                 </DropdownMenuItem>
               )}
               {onExportSvg && (
-                <DropdownMenuItem onClick={onExportSvg} className='gap-2 text-xs'>
+                <DropdownMenuItem
+                  onClick={onExportSvg}
+                  className='gap-2 text-xs'
+                >
                   <FileCode className='size-3.5 text-blue-500' />
                   <span>Download as SVG</span>
                 </DropdownMenuItem>
               )}
               {onExportPng && (
-                <DropdownMenuItem onClick={onExportPng} className='gap-2 text-xs'>
+                <DropdownMenuItem
+                  onClick={onExportPng}
+                  className='gap-2 text-xs'
+                >
                   <ImageIcon className='size-3.5 text-emerald-500' />
                   <span>Download as PNG</span>
                 </DropdownMenuItem>
