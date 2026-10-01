@@ -72,6 +72,7 @@ export class MarkdownToState {
     const states: TState[] = []
     let token: TBlockToken | undefined
     let pendingSourceGap = ''
+    let previousTokenType: string | undefined
     const parentList: TState[][] = [states]
     const sourceGapByToken = new WeakMap<object, string>()
 
@@ -106,12 +107,17 @@ export class MarkdownToState {
         } else if (
           previousLength > 0 &&
           sourceGap === '' &&
-          !sourceGapByToken.has(token)
+          !sourceGapByToken.has(token) &&
+          token.type !== 'list_item' &&
+          // The frontmatter token already swallowed its trailing blank line,
+          // so an empty gap here does not mean the blocks were glued together.
+          previousTokenType !== 'frontmatter'
         ) {
           siblings[siblings.length - 1]!.sourceGap = ''
         }
         pendingSourceGap = ''
       }
+      previousTokenType = token.type
     }
 
     return states.length ? states : [{ name: 'paragraph', text: '' }]
@@ -206,8 +212,10 @@ export class MarkdownToState {
           const previousItem = items[index - 1]!
           if (!('raw' in previousItem)) return
           const sourceGap = previousItem.raw.match(/[ \t\r\n]+$/)?.[0]
+          const lineBreaks = sourceGap?.match(/\r\n|\r|\n/g)?.length ?? 0
           if (isNonCanonicalSourceGap(sourceGap))
             sourceGapByToken.set(item, sourceGap)
+          else if (lineBreaks < 2) sourceGapByToken.set(item, '')
         })
         tokens.unshift(...items)
         break

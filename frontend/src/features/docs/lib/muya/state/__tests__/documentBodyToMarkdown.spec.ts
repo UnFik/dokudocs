@@ -306,6 +306,11 @@ describe('documentBodyToMarkdown', () => {
   })
 })
 
+// The root's sourceGaps and sourceTables keys must be UUIDs, as the Go importer emits.
+function bodyNodeID(index: number) {
+  return `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`
+}
+
 function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
   const nodes: DocumentBodyNode[] = [
     {
@@ -317,12 +322,16 @@ function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
       attributes: {},
     },
   ]
+  const sourceGaps: Record<string, string> = {}
+  const sourceTables: Record<string, string> = {}
   let nextID = 0
 
   function addStates(states: MuyaBodyImportState[], parentID: string) {
     for (let order = 0; order < states.length; order++) {
       const state = states[order]!
-      const nodeID = `node-${nextID++}`
+      const nodeID = bodyNodeID(nextID++)
+      if (state.sourceGap !== undefined) sourceGaps[nodeID] = state.sourceGap
+      if (state.sourceMarkdown) sourceTables[nodeID] = state.sourceMarkdown
       nodes.push({
         nodeID,
         parentID,
@@ -338,7 +347,7 @@ function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
       ) {
         const inline = state.inline![inlineOrder]!
         nodes.push({
-          nodeID: `node-${nextID++}`,
+          nodeID: bodyNodeID(nextID++),
           parentID: nodeID,
           siblingOrder: inlineOrder,
           type: inline.type,
@@ -351,6 +360,10 @@ function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
   }
 
   addStates(states, 'root')
+  nodes[0]!.attributes = {
+    ...(Object.keys(sourceGaps).length ? { sourceGaps } : {}),
+    ...(Object.keys(sourceTables).length ? { sourceTables } : {}),
+  }
   return nodes
 }
 

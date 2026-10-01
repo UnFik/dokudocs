@@ -165,9 +165,11 @@ describe('serializeTable — column alignment', () => {
     const firstPass = new ExportMarkdown().generate(gen(md))
     const secondPass = new ExportMarkdown().generate(gen(firstPass))
 
-    // The parsed aligns survive serialization with the expected markers.
+    // An unedited table keeps its source bytes, so the delimiter row stays
+    // exactly as authored; canonical formatting only applies to edited tables.
     const delimiterRow = firstPass.split('\n')[1]
-    expect(delimiterRow).toBe('|:--- |:---:| ---:|')
+    expect(firstPass).toBe(md)
+    expect(delimiterRow).toBe('| :--- | :---: | ---: |')
     expect(delimiterRow).toContain(':---')
     expect(delimiterRow).toContain(':---:')
     expect(delimiterRow).toContain('---:')

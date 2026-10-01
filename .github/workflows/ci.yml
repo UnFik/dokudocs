@@ -2,8 +2,15 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -53,17 +60,29 @@ jobs:
           src/components/layout/create-workspace-dialog.test.tsx
           src/features/docs/components/create-doc-dialog.test.tsx
 
+      - name: Frontend Markdown state serializer tests
+        working-directory: frontend
+        run: bun run test -- --no-file-parallelism src/features/docs/lib/muya/state
+
+      - name: Frontend collaborative editor tests
+        working-directory: frontend
+        run: bun run test -- src/features/docs/lib/prosemirror
+          src/features/docs/lib/collaboration-provider.spec.ts
+          src/features/docs/lib/collaboration-rebase.spec.ts
+          src/features/docs/lib/collaboration-rebase-yjs.spec.ts
+          src/features/docs/lib/collaboration-socket.spec.ts
+
       - name: Full frontend browser suite (baseline advisory)
         continue-on-error: true
         working-directory: frontend
-        run: bun run test
+        run: bun run test -- --no-file-parallelism
 
       - name: Frontend build
         working-directory: frontend
         run: bun run build
 
   e2e-smoke:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
