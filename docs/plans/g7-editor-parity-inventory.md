@@ -79,3 +79,5 @@ Not done in #30, and why. [ADR 0012](../adr/0012-movenode-owns-existing-node-str
 - `# ` in an empty paragraph: removing the marker empties the only run, and `wouldRemoveInlineRun` blocks it.
 
 A way forward is a server `ConvertBlock` command (change a block's type and wrap or unwrap it while keeping descendant IDs), or sequencing existing `MoveNode` calls with the editor paused. Either needs an ADR. The server also requires per-type attributes (`marker`, `loose`, `start`, `delimiter`, `checked`, `level`), so any new block command must write them.
+
+Update: code block and horizontal rule are available as insert-new-sibling commands (`Ctrl/Cmd+Alt+C`, `Ctrl/Cmd+Alt+-`), which add a node under an existing parent and need no server command. Wrap, indent, outdent, and convert-in-place need new server commands, proposed in [ADR 0021](../adr/0021-proposal-block-conversion-commands.md). The two-client E2E for #28 is `e2e/ui/specs/smoke/markdown-undo.spec.ts`.
