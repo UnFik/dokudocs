@@ -430,6 +430,65 @@ export class IndexedDBCollaborationStore implements CollaborationStore {
     )
   }
 
+  /** Documents of one user that still hold unsynced updates or commands. */
+  async listPendingDocuments(
+    userID: string
+  ): Promise<{ documentID: string; count: number }[]> {
+    if (!userID) throw new Error('collaboration storage scope is required')
+    const db = await this.open()
+    const prefix = `${userID}:`
+    const rows = await transaction(
+      db,
+      [updateStore, deleteCommandStore, moveCommandStore],
+      'readonly',
+      (tx) =>
+        Promise.all(
+          [updateStore, deleteCommandStore, moveCommandStore].map((name) =>
+            requestValue(
+              tx.objectStore(name).getAll() as IDBRequest<{ scope: string }[]>
+            )
+          )
+        )
+    )
+    const counts = new Map<string, number>()
+    for (const row of rows.flat()) {
+      if (!row.scope.startsWith(prefix)) continue
+      const documentID = row.scope.slice(prefix.length)
+      counts.set(documentID, (counts.get(documentID) ?? 0) + 1)
+    }
+    return [...counts].map(([documentID, count]) => ({ documentID, count }))
+  }
+
+  /** Removes every cached body, pending update, and command of one user. */
+  async clearUser(userID: string): Promise<void> {
+    if (!userID) throw new Error('collaboration storage scope is required')
+    const db = await this.open()
+    const prefix = `${userID}:`
+    await transaction(
+      db,
+      [snapshotStore, updateStore, deleteCommandStore, moveCommandStore],
+      'readwrite',
+      (tx) => {
+        for (const name of [
+          snapshotStore,
+          updateStore,
+          deleteCommandStore,
+          moveCommandStore,
+        ]) {
+          const store = tx.objectStore(name)
+          const cursor = store.openCursor()
+          cursor.onsuccess = () => {
+            const current = cursor.result
+            if (!current) return
+            if ((current.value as { scope: string }).scope.startsWith(prefix))
+              current.delete()
+            current.continue()
+          }
+        }
+      }
+    )
+  }
+
   private open(): Promise<IDBDatabase> {
     if (!this.database) {
       this.database = new Promise<IDBDatabase>((resolve, reject) => {
