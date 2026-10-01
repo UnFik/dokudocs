@@ -274,3 +274,39 @@ func TestFanOutDeliversCommitsInVersionOrderWhenTheyFinishOutOfOrder(t *testing.
 		t.Fatalf("in-order delivery still read the full body %d times, want 0", full-fullBefore)
 	}
 }
+
+func TestAuthorIsNotSentItsOwnCommitBackAsAFullResync(t *testing.T) {
+	users := map[string]uuid.UUID{"author": uuid.New(), "peer": uuid.New()}
+	reader := &roomReaderFake{version: 1}
+	server := newRoomServer(t, users, reader)
+	documentID, workspaceID := uuid.New(), uuid.New()
+	clients := connectUsers(t, server, documentID, workspaceID, "author", "peer")
+	author, peer := clients[0], clients[1]
+	fullBefore, _ := reader.counts()
+
+	reader.mu.Lock()
+	reader.version = 2 // the fake writer commits version 2
+	reader.mu.Unlock()
+	updateID := uuid.New()
+	if err := ws.JSON.Send(author.conn, map[string]any{
+		"type": "update", "updateID": updateID, "bodyEpoch": 1, "bodySchemaVersion": 1, "update": []byte("u"),
+	}); err != nil {
+		t.Fatalf("send update: %v", err)
+	}
+
+	if ack := author.next(2 * time.Second); ack.Type != "ack" || ack.UpdateID != updateID {
+		t.Fatalf("author got %+v, want its ack", ack)
+	}
+	if frame := peer.next(2 * time.Second); frame.Type != "update" || frame.UpdateID != updateID {
+		t.Fatalf("peer got %+v, want the update", frame)
+	}
+	_ = author.conn.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+	var extra serverMessage
+	if err := ws.JSON.Receive(author.conn, &extra); err == nil && extra.Type != "presence" &&
+		(extra.Type != "update" || extra.UpdateID != updateID) {
+		t.Fatalf("author received %+v after its ack, want nothing or its own update", extra)
+	}
+	if full, _ := reader.counts(); full != fullBefore {
+		t.Fatalf("fan-out read the full body %d times for a plain commit, want 0", full-fullBefore)
+	}
+}

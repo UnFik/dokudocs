@@ -378,7 +378,10 @@ func (p *peer) readLoop(ctx context.Context) {
 		if err := p.sendAndWait(ack); err != nil {
 			return
 		}
-		p.advance(receipt.BodyVersion, receipt.BodyEpoch)
+		// The author's version is not advanced by its own ACK: commits from
+		// other writers below this one may not have reached it yet, and moving
+		// ahead would make their fan-out look already covered. Its own update
+		// comes back as an ordinary fan-out frame, which Yjs applies idempotently.
 		_ = p.server.updates.PublishAfterAck(ctx, receipt, update)
 	}
 }
@@ -443,7 +446,9 @@ func (p *peer) writeLoop() {
 				_ = p.conn.Close()
 				return
 			}
-			p.advance(item.message.BodyVersion, item.message.BodyEpoch)
+			if item.message.Type == "update" || item.message.Type == "resync" {
+				p.advance(item.message.BodyVersion, item.message.BodyEpoch)
+			}
 		}
 	}
 }
