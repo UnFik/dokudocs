@@ -1,5 +1,5 @@
-import { EditorState, type Transaction } from 'prosemirror-state'
-import { EditorView } from 'prosemirror-view'
+import { EditorState, type Plugin, type Transaction } from 'prosemirror-state'
+import { EditorView, type EditorProps } from 'prosemirror-view'
 import {
   absolutePositionToRelativePosition,
   redo as redoYjs,
@@ -36,6 +36,9 @@ export function createDocumentBodyEditor(
   ydoc: Y.Doc,
   options: {
     readOnly?: boolean
+    plugins?: Plugin[]
+    nodeViews?: EditorProps['nodeViews']
+    onEditorReady?: (view: EditorView) => void
     onBodyChange?: (body: DocumentBodyNode[]) => void
     onDeleteNode?: (nodeID: string) => void | Promise<void>
     onDeleteNodeQueued?: (nodeID: string) => void
@@ -49,7 +52,7 @@ export function createDocumentBodyEditor(
   let structuralCommandPending = false
   let state = EditorState.create({
     doc: yXmlFragmentToProseMirrorRootNode(fragment, documentBodySchema),
-    plugins: [ySyncPlugin(fragment), yUndoPlugin()],
+    plugins: [ySyncPlugin(fragment), yUndoPlugin(), ...(options.plugins ?? [])],
   })
   const viewHolder: { current?: EditorView } = {}
   const queueDeleteNode = (nodeID: string) => {
@@ -117,10 +120,13 @@ export function createDocumentBodyEditor(
 
   const view = new EditorView(mount, {
     state,
+    nodeViews: options.nodeViews,
     dispatchTransaction,
     editable: () => !readOnly && !structuralCommandPending,
     handleKeyDown: (editorView, event) => {
-      if (readOnly || structuralCommandPending) return false
+      // Keys pressed during IME composition belong to the input method.
+      if (readOnly || structuralCommandPending || event.isComposing)
+        return false
       if (
         !event.altKey &&
         !event.ctrlKey &&
@@ -170,6 +176,7 @@ export function createDocumentBodyEditor(
     },
   })
   viewHolder.current = view
+  options.onEditorReady?.(view)
   if (view.state !== state) view.updateState(state)
 
   return {
