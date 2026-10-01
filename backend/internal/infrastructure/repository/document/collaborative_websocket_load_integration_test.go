@@ -60,6 +60,7 @@ type loadResult struct {
 	LaggingSockets int            `json:"socketsNotAtFinalVersion"`
 	Errors         []string       `json:"errors,omitempty"`
 	Environment    string         `json:"environment"`
+	LoadAvg        string         `json:"loadAvgAtEnd"`
 }
 
 type latencySummary struct {
@@ -396,7 +397,9 @@ func runWebSocketLoad(t *testing.T, sc loadScenario, cfg loadConfig) loadResult 
 	if len(ackSamples) != commits {
 		errs = append(errs, fmt.Sprintf("received %d ACKs for %d commits", len(ackSamples), commits))
 	}
+	loadAvg, _ := os.ReadFile("/proc/loadavg")
 	return loadResult{
+		LoadAvg:  strings.TrimSpace(string(loadAvg)),
 		Scenario: sc, Config: cfg, Nodes: cfg.Paragraphs*2 + 1, Commits: commits, Sockets: total,
 		CommitsPerSec: float64(commits) / elapsed.Seconds(),
 		Ack:           summarizeMS(ackSamples), PeerReceive: summarizeMS(peerSample),
