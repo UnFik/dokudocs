@@ -93,15 +93,13 @@ describe('block handle', () => {
   it('does nothing for ArrowUp on the first block', () => {
     const { view, host, errors } = mount()
     hover(view, 0)
-    host
-      .querySelector<HTMLElement>('.dd-handle')!
-      .dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'ArrowUp',
-          bubbles: true,
-          cancelable: true,
-        })
-      )
+    host.querySelector<HTMLElement>('.dd-handle')!.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowUp',
+        bubbles: true,
+        cancelable: true,
+      })
+    )
     expect(errors).toHaveLength(0)
   })
 })
