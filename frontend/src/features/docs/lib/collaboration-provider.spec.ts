@@ -2075,6 +2075,35 @@ describe('CollaborativeDocumentProvider access loss and session expiry', () => {
     provider.stop()
   })
 
+  it('reports drained once every pending update is acknowledged, and not before', async () => {
+    const { provider, document, sockets } = await connectedProvider()
+    document.getText('body').insert(4, ' edit')
+    await wait(60)
+    const [sent] = sentUpdates(sockets[0]!)
+
+    expect(await provider.whenDrained(50)).toBe(false)
+
+    sockets[0]!.receive({
+      type: 'ack',
+      updateID: sent.updateID,
+      bodyVersion: 2,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+    })
+    expect(await provider.whenDrained(1000)).toBe(true)
+    provider.stop()
+  })
+
+  it('gives up draining while offline instead of waiting forever', async () => {
+    const { provider, document, store, sockets } = await connectedProvider()
+    sockets[0]!.close()
+    document.getText('body').insert(4, ' offline')
+    await wait(60)
+    expect(await provider.whenDrained(100)).toBe(false)
+    expect(store.updates.size).toBe(1)
+    provider.stop()
+  })
+
   it('sends the token the app holds at reconnect time, so a refreshed session resumes sync', async () => {
     let token = 'old-jwt'
     const { provider, document, store, sockets } = await connectedProvider({

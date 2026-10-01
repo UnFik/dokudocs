@@ -85,6 +85,13 @@ export type CollaborativeDocumentProviderOptions = Omit<
   ) => void
 }
 
+const activeProviders = new Map<string, CollaborativeDocumentProvider>()
+
+/** The running provider for this user and document, if the editor is open. */
+export function activeProviderFor(scope: CollaborationScope) {
+  return activeProviders.get(`${scope.userID}:${scope.documentID}`)
+}
+
 export class CollaborativeDocumentProvider {
   private readonly scope: CollaborationScope
   private readonly store: CollaborationStore
@@ -170,6 +177,7 @@ export class CollaborativeDocumentProvider {
     if (this.started || this.stopped || this.socket || this.storageFailed)
       return
     this.started = true
+    activeProviders.set(`${this.scope.userID}:${this.scope.documentID}`, this)
     this.setStatus('connecting')
     try {
       const stored = await this.store.load(this.scope)
@@ -270,10 +278,39 @@ export class CollaborativeDocumentProvider {
     }
   }
 
+  /**
+   * Resolves true once every pending update and command is acknowledged and
+   * stored, false if the connection cannot get there within the timeout or
+   * the provider stopped, was refused, or needs recovery.
+   */
+  async whenDrained(timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs
+    for (;;) {
+      if (this.stopped || this.terminal || this.storageFailed) return false
+      if (
+        this.started &&
+        this.pending.size === 0 &&
+        !this.hasPendingStructuralCommand()
+      ) {
+        await this.storageQueue
+        return this.pending.size === 0 && !this.hasPendingStructuralCommand()
+      }
+      if (Date.now() >= deadline) return false
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+  }
+
+  /** Resolves when queued local-storage writes have finished. */
+  settled(): Promise<void> {
+    return this.storageQueue
+  }
+
   stop() {
     if (this.stopped) return
     this.stopped = true
     this.ready = false
+    const activeKey = `${this.scope.userID}:${this.scope.documentID}`
+    if (activeProviders.get(activeKey) === this) activeProviders.delete(activeKey)
     this.options.document.off('update', this.handleYUpdate)
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     if (this.batchTimer) clearTimeout(this.batchTimer)
