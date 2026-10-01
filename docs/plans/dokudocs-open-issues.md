@@ -137,4 +137,5 @@ Keterangan kolom **Verifikasi**: *terkonfirmasi* = saya cek atau buktikan di ses
 ## G0
 
 ### 26. [G0] Inventaris dan rekonsiliasi data per environment sebelum cutover
+- **Status 2026-10-01:** alat dan runbook selesai (`cmd/ownergrants`, 9 tes integrasi). Tersisa: menjalankannya per environment dan keputusan untuk dokumen `blocked-author-not-member` dan `multipleOwners`.
 - G0 selesai untuk scope dev/test. Inventaris consumer dan rekonsiliasi data (termasuk grant owner untuk dokumen yang belum punya, 34 dokumen di dev) per environment produksi tetap prasyarat cutover terpisah.
