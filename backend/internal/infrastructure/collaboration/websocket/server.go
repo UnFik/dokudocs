@@ -1011,6 +1011,10 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 		return err
 	}
 	var firstError error
+	// Peers that must resync all resync to the same head, so the body is read
+	// once per CanEdit value and shared. Each peer was already authorized by
+	// the room head above; the body read only supplies the content.
+	fulls := map[bool]collaboration.BodySnapshot{}
 	for _, p := range peers {
 		access := head.Access[p.actor.UserID]
 		if !access.CanRead || !s.verifySession(p) {
@@ -1022,13 +1026,20 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 			BodySchemaVersion: head.BodySchemaVersion, CanEdit: access.CanEdit,
 		}
 		if p.fanoutNeedsFullSnapshot(receipt, update.BodySchemaVersion, snapshot) {
-			full, err := s.readAuthorizedSnapshot(ctx, p)
-			if err != nil {
-				p.close()
-				if firstError == nil {
-					firstError = err
+			full, shared := fulls[access.CanEdit]
+			if !shared {
+				var err error
+				full, err = s.readAuthorizedSnapshot(ctx, p)
+				if err != nil {
+					p.close()
+					if firstError == nil {
+						firstError = err
+					}
+					continue
 				}
-				continue
+				if full.CanEdit == access.CanEdit {
+					fulls[access.CanEdit] = full
+				}
 			}
 			snapshot = full
 		}

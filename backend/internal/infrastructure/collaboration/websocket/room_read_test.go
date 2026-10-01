@@ -168,3 +168,32 @@ func TestIdlePollingReadsTheRoomOncePerTickNotOncePerPeer(t *testing.T) {
 		t.Fatalf("room head reads = %d in 400 ms with 5 peers, want about one per 40 ms tick", ticks)
 	}
 }
+
+func TestFanOutReadsTheBodyOncePerRoomWhenManyPeersMustResync(t *testing.T) {
+	users := map[string]uuid.UUID{}
+	tokens := []string{"t1", "t2", "t3", "t4", "t5"}
+	for _, token := range tokens {
+		users[token] = uuid.New()
+	}
+	reader := &roomReaderFake{version: 1}
+	server := newRoomServer(t, users, reader)
+	documentID, workspaceID := uuid.New(), uuid.New()
+	clients := connectUsers(t, server, documentID, workspaceID, tokens...)
+	fullBefore, _ := reader.counts()
+
+	// Version 3 arrives while every peer is still at 1: each one has a gap and
+	// must resync, but they all resync to the same head.
+	reader.mu.Lock()
+	reader.version = 3
+	reader.mu.Unlock()
+	publishVersion(t, server, documentID, 3)
+
+	for i, client := range clients {
+		if frame := client.next(2 * time.Second); frame.Type != "resync" || frame.BodyVersion != 3 {
+			t.Fatalf("client %d got %+v, want a resync at version 3", i, frame)
+		}
+	}
+	if full, _ := reader.counts(); full-fullBefore != 1 {
+		t.Fatalf("fan-out read the full body %d times for 5 resyncing peers, want 1", full-fullBefore)
+	}
+}
