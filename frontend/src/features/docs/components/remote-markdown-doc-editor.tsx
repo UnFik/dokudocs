@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
 import { Eye, Edit3 } from 'lucide-react'
@@ -38,7 +38,13 @@ import {
 } from '../lib/muya/state/documentBodyToMarkdown'
 import {
   buildDeleteBlockSuggestion,
+  buildFormatSuggestion,
+  buildInsertParagraphSuggestion,
+  buildMoveBlockSuggestion,
   conflictReviewMessage,
+  pendingOverlay,
+  type FormatMark,
+  type SuggestionDraft,
 } from '../lib/suggestion-operations'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { EditorHeader } from './editor-header'
@@ -504,6 +510,7 @@ function CollaborativeMarkdownBody({
           documentID={documentID}
           canDecide={canEdit}
           canSuggest={Boolean(snapshot.canSuggest) && status === 'ready'}
+          getMount={() => mountRef.current}
           captureBlock={() => {
             if (!mountRef.current) throw new Error('Editor is not ready')
             return captureSelectedNodeID(mountRef.current)
@@ -590,6 +597,7 @@ function SuggestionPanel({
   canSuggest,
   captureSelection,
   captureBlock,
+  getMount,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -599,6 +607,7 @@ function SuggestionPanel({
   canSuggest: boolean
   captureSelection: () => TextSuggestionSelection
   captureBlock: () => string
+  getMount: () => HTMLElement | null
 }) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<TextSuggestionSelection | null>(null)
@@ -608,7 +617,7 @@ function SuggestionPanel({
     queryKey: ['document-suggestions', workspaceID, documentID],
     queryFn: ({ signal }) =>
       listDocumentSuggestions(workspaceID, documentID, signal),
-    enabled: open,
+    enabled: true,
     retry: false,
   })
   const decisionMutation = useMutation({
@@ -670,14 +679,17 @@ function SuggestionPanel({
     },
     onError: (error) => toast.error(error.message),
   })
-  const deleteBlockMutation = useMutation({
-    mutationFn: async (nodeID: string) => {
+  const structureMutation = useMutation({
+    mutationFn: async ({
+      nodeID,
+      build,
+    }: {
+      nodeID: string
+      build: (nodes: DocumentBodyNode[], nodeID: string) => SuggestionDraft
+    }) => {
       const latest = await getMarkdownBody(workspaceID, documentID)
       if (!latest.canSuggest) throw new Error('You cannot suggest changes here')
-      const { operations, summary } = buildDeleteBlockSuggestion(
-        latest.nodes,
-        nodeID
-      )
+      const { operations, summary } = build(latest.nodes, nodeID)
       await createDocumentSuggestion(workspaceID, documentID, {
         suggestionID: crypto.randomUUID(),
         baseBodyVersion: latest.bodyVersion,
@@ -689,6 +701,8 @@ function SuggestionPanel({
       })
     },
     onSuccess: async () => {
+      setInsertAnchor(null)
+      setInsertText('')
       await queryClient.invalidateQueries({
         queryKey: ['document-suggestions', workspaceID, documentID],
       })
@@ -696,9 +710,44 @@ function SuggestionPanel({
     },
     onError: (error) => toast.error(error.message),
   })
+  const [insertAnchor, setInsertAnchor] = useState<string | null>(null)
+  const [insertText, setInsertText] = useState('')
+  function propose(
+    build: (nodes: DocumentBodyNode[], nodeID: string) => SuggestionDraft
+  ) {
+    try {
+      structureMutation.mutate({ nodeID: captureBlock(), build })
+      onOpenChange(true)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Select a block first'
+      )
+    }
+  }
+  const suggestions = suggestionsQuery.data
+  useEffect(() => {
+    const mount = getMount()
+    if (!mount) return
+    const overlay = pendingOverlay(suggestions ?? [])
+    const apply = () => {
+      for (const element of mount.querySelectorAll('[data-suggestion]'))
+        if (!overlay.has((element as HTMLElement).dataset.nodeId ?? ''))
+          element.removeAttribute('data-suggestion')
+      for (const [nodeID, kinds] of overlay) {
+        const element = mount.querySelector(`[data-node-id="${nodeID}"]`)
+        const value = kinds.join(' ')
+        if (element && element.getAttribute('data-suggestion') !== value)
+          element.setAttribute('data-suggestion', value)
+      }
+    }
+    apply()
+    const observer = new MutationObserver(apply)
+    observer.observe(mount, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [suggestions, getMount])
   return (
     <aside className='border-t bg-muted/20'>
-      <div className='flex items-center gap-2 px-4 py-2'>
+      <div className='flex flex-wrap items-center gap-2 px-4 py-2'>
         <Button size='sm' variant='outline' onClick={() => onOpenChange(!open)}>
           {open ? 'Hide suggestions' : 'Suggestions'}
         </Button>
@@ -723,25 +772,77 @@ function SuggestionPanel({
           </Button>
         ) : null}
         {canSuggest ? (
-          <Button
-            size='sm'
-            variant='outline'
-            disabled={deleteBlockMutation.isPending}
-            onClick={() => {
-              try {
-                deleteBlockMutation.mutate(captureBlock())
-                onOpenChange(true)
-              } catch (error) {
-                toast.error(
-                  error instanceof Error
-                    ? error.message
-                    : 'Select a block first'
+          <div
+            className='flex flex-wrap items-center gap-2'
+            role='group'
+            aria-label='Propose a change to the current block'
+          >
+            {(['bold', 'italic'] as FormatMark[]).map((mark) => (
+              <Button
+                key={mark}
+                size='sm'
+                variant='outline'
+                disabled={structureMutation.isPending}
+                onClick={() =>
+                  propose((nodes, nodeID) =>
+                    buildFormatSuggestion(nodes, nodeID, mark)
+                  )
+                }
+              >
+                Suggest {mark}
+              </Button>
+            ))}
+            <Button
+              size='sm'
+              variant='outline'
+              disabled={structureMutation.isPending}
+              onClick={() =>
+                propose((nodes, nodeID) =>
+                  buildMoveBlockSuggestion(nodes, nodeID, 'up')
                 )
               }
-            }}
-          >
-            Suggest delete block
-          </Button>
+            >
+              Suggest move up
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              disabled={structureMutation.isPending}
+              onClick={() =>
+                propose((nodes, nodeID) =>
+                  buildMoveBlockSuggestion(nodes, nodeID, 'down')
+                )
+              }
+            >
+              Suggest move down
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={() => {
+                try {
+                  setInsertAnchor(captureBlock())
+                  onOpenChange(true)
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error
+                      ? error.message
+                      : 'Select a block first'
+                  )
+                }
+              }}
+            >
+              Suggest insert below
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              disabled={structureMutation.isPending}
+              onClick={() => propose(buildDeleteBlockSuggestion)}
+            >
+              Suggest delete block
+            </Button>
+          </div>
         ) : null}
         {open ? (
           <span className='text-xs text-muted-foreground'>
@@ -751,6 +852,51 @@ function SuggestionPanel({
       </div>
       {open ? (
         <div className='max-h-56 space-y-2 overflow-auto px-4 pb-3'>
+          {insertAnchor ? (
+            <form
+              className='space-y-2 rounded border bg-background p-3'
+              onSubmit={(event) => {
+                event.preventDefault()
+                structureMutation.mutate({
+                  nodeID: insertAnchor,
+                  build: (nodes, nodeID) =>
+                    buildInsertParagraphSuggestion(
+                      nodes,
+                      nodeID,
+                      insertText,
+                      () => crypto.randomUUID()
+                    ),
+                })
+              }}
+            >
+              <label className='block text-xs' htmlFor='inserted-text'>
+                New paragraph text
+              </label>
+              <textarea
+                id='inserted-text'
+                className='min-h-16 w-full rounded border bg-background p-2 text-sm'
+                value={insertText}
+                onChange={(event) => setInsertText(event.target.value)}
+              />
+              <div className='flex gap-2'>
+                <Button
+                  size='sm'
+                  type='submit'
+                  disabled={structureMutation.isPending}
+                >
+                  Submit insert
+                </Button>
+                <Button
+                  size='sm'
+                  type='button'
+                  variant='outline'
+                  onClick={() => setInsertAnchor(null)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : null}
           {draft ? (
             <form
               className='space-y-2 rounded border bg-background p-3'
@@ -811,9 +957,15 @@ function SuggestionPanel({
                     {suggestion.status} · {suggestion.provenance}
                   </p>
                   {suggestion.reason ? <p>{suggestion.reason}</p> : null}
-                  {conflictReviewMessage(suggestion.status) ? (
+                  {conflictReviewMessage(
+                    suggestion.status,
+                    suggestion.conflictReason
+                  ) ? (
                     <p className='mt-1 text-destructive'>
-                      {conflictReviewMessage(suggestion.status)}
+                      {conflictReviewMessage(
+                        suggestion.status,
+                        suggestion.conflictReason
+                      )}
                     </p>
                   ) : null}
                 </div>

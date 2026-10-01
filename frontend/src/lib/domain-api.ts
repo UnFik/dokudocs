@@ -171,6 +171,7 @@ const documentSuggestionSchema = z.object({
   operations: z.unknown(),
   summary: z.string(),
   reason: z.string(),
+  conflictReason: z.string().optional().default(''),
   status: z.enum(['pending', 'accepted', 'rejected', 'conflicted']),
   createdAt: z.string(),
   decidedAt: z.string().nullable().optional(),
