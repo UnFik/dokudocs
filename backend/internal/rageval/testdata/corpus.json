@@ -1,0 +1,34 @@
+{
+  "docs": [
+    {"key": "restart-en", "title": "Operations runbook", "language": "en", "text": "The service restarts automatically after a failed health check. The orchestrator waits 30 seconds before the second attempt."},
+    {"key": "backup-id", "title": "Kebijakan cadangan", "language": "id", "text": "Cadangan basis data dibuat setiap hari pukul 02.00 WIB dan disimpan selama 30 hari di penyimpanan terpisah."},
+    {"key": "onboarding-en", "title": "Employee onboarding", "language": "en", "text": "New employees receive a laptop and accounts on their first day. Security training must be completed within the first week."},
+    {"key": "cuti-id", "title": "Kebijakan cuti", "language": "id", "text": "Karyawan tetap berhak atas 12 hari cuti tahunan. Pengajuan cuti dilakukan melalui atasan langsung paling lambat tiga hari sebelumnya."},
+    {"key": "api-limit-en", "title": "API rate limits", "language": "en", "text": "Each API key may send 600 requests per minute. Requests above the limit receive HTTP 429 with a Retry-After header."},
+    {"key": "deploy-id", "title": "Prosedur rilis", "language": "id", "text": "Rilis produksi dilakukan hari Selasa dan Kamis. Setiap rilis wajib melewati tinjauan kode dan uji regresi otomatis."},
+    {"key": "retention-a-en", "title": "Data retention (2024)", "language": "en", "text": "Audit logs are retained for 90 days and then deleted permanently."},
+    {"key": "retention-b-id", "title": "Retensi data (2026)", "language": "id", "text": "Log audit disimpan selama 365 hari sebelum dihapus permanen."},
+    {"key": "oncall-en", "title": "On-call rotation", "language": "en", "text": "The on-call engineer rotates every Monday at 09:00. The primary acknowledges pages within 15 minutes."},
+    {"key": "sla-a-en", "title": "Support SLA (standard)", "language": "en", "text": "Standard plan customers receive a first response within 24 hours."},
+    {"key": "sla-b-id", "title": "SLA dukungan (prioritas)", "language": "id", "text": "Pelanggan paket standar mendapat respons pertama dalam 8 jam kerja."}
+  ],
+  "cases": [
+    {"id": "a-restart-en", "kind": "answerable", "language": "en", "question": "What happens after a failed health check?", "relevant": ["restart-en"]},
+    {"id": "a-restart-id", "kind": "answerable", "language": "id", "question": "Apa yang terjadi setelah pemeriksaan kesehatan layanan gagal?", "relevant": ["restart-en"]},
+    {"id": "a-backup-id", "kind": "answerable", "language": "id", "question": "Kapan cadangan basis data dibuat?", "relevant": ["backup-id"]},
+    {"id": "a-backup-en", "kind": "answerable", "language": "en", "question": "How long are database backups kept?", "relevant": ["backup-id"]},
+    {"id": "a-onboard-en", "kind": "answerable", "language": "en", "question": "What does a new employee get on day one?", "relevant": ["onboarding-en"]},
+    {"id": "a-cuti-id", "kind": "answerable", "language": "id", "question": "Berapa hari cuti tahunan karyawan tetap?", "relevant": ["cuti-id"]},
+    {"id": "a-cuti-en", "kind": "answerable", "language": "en", "question": "How far in advance must annual leave be requested?", "relevant": ["cuti-id"]},
+    {"id": "a-api-en", "kind": "answerable", "language": "en", "question": "What is the API request limit per minute?", "relevant": ["api-limit-en"]},
+    {"id": "a-deploy-id", "kind": "answerable", "language": "id", "question": "Hari apa rilis produksi dilakukan?", "relevant": ["deploy-id"]},
+    {"id": "a-oncall-en", "kind": "answerable", "language": "en", "question": "When does the on-call rotation change?", "relevant": ["oncall-en"]},
+    {"id": "u-salary-id", "kind": "unanswerable", "language": "id", "question": "Berapa gaji pokok direktur utama?"},
+    {"id": "u-office-en", "kind": "unanswerable", "language": "en", "question": "Where is the Singapore office located?"},
+    {"id": "u-recipe-en", "kind": "unanswerable", "language": "en", "question": "How do I cook rendang?"},
+    {"id": "u-stock-id", "kind": "unanswerable", "language": "id", "question": "Berapa harga saham perusahaan hari ini?"},
+    {"id": "c-retention-en", "kind": "conflict", "language": "en", "question": "How long are audit logs retained?", "relevant": ["retention-a-en", "retention-b-id"]},
+    {"id": "c-retention-id", "kind": "conflict", "language": "id", "question": "Berapa lama log audit disimpan?", "relevant": ["retention-a-en", "retention-b-id"]},
+    {"id": "c-sla-en", "kind": "conflict", "language": "en", "question": "What is the first response time for standard plan customers?", "relevant": ["sla-a-en", "sla-b-id"]}
+  ]
+}
