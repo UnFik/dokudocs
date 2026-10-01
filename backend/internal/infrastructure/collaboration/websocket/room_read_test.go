@@ -239,3 +239,38 @@ func TestConcurrentFanOutsShareBodyReads(t *testing.T) {
 		t.Fatalf("four concurrent fan-outs read the full body %d times, want at most 2", full-fullBefore)
 	}
 }
+
+func TestFanOutDeliversCommitsInVersionOrderWhenTheyFinishOutOfOrder(t *testing.T) {
+	users := map[string]uuid.UUID{}
+	tokens := []string{"t1", "t2", "t3"}
+	for _, token := range tokens {
+		users[token] = uuid.New()
+	}
+	reader := &roomReaderFake{version: 1}
+	server := newRoomServer(t, users, reader)
+	documentID, workspaceID := uuid.New(), uuid.New()
+	clients := connectUsers(t, server, documentID, workspaceID, tokens...)
+	fullBefore, _ := reader.counts()
+
+	reader.mu.Lock()
+	reader.version = 3
+	reader.mu.Unlock()
+	// The writer of version 3 reaches fan-out before the writer of version 2.
+	done := make(chan uuid.UUID, 2)
+	go func() { done <- publishVersion(t, server, documentID, 3) }()
+	time.Sleep(60 * time.Millisecond)
+	second := publishVersion(t, server, documentID, 2)
+	third := <-done
+	_ = second
+
+	for i, client := range clients {
+		first := client.next(2 * time.Second)
+		next := client.next(2 * time.Second)
+		if first.Type != "update" || first.BodyVersion != 2 || next.Type != "update" || next.BodyVersion != 3 || next.UpdateID != third {
+			t.Fatalf("client %d got %+v then %+v, want update 2 then update 3", i, first, next)
+		}
+	}
+	if full, _ := reader.counts(); full != fullBefore {
+		t.Fatalf("in-order delivery still read the full body %d times, want 0", full-fullBefore)
+	}
+}

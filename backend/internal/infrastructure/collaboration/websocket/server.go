@@ -57,6 +57,22 @@ type ProfileReader interface {
 // entries expire after three times this, so a crashed instance disappears.
 const presenceRefresh = 10 * time.Second
 
+// fanoutOrderWait bounds how long a fan-out waits for the commit just before it
+// to be delivered first. Past it the fan-out goes ahead and peers that see a
+// gap resync from the full body, as before.
+const fanoutOrderWait = 250 * time.Millisecond
+
+// roomOrder keeps one document's fan-outs in version order. Commits are
+// serialized by the database but their fan-outs start from separate goroutines
+// and can arrive out of order; delivering version N before N-1 makes every peer
+// see a gap and resync from the full body, which costs far more than waiting.
+type roomOrder struct {
+	mu      sync.Mutex
+	changed chan struct{} // closed and replaced whenever delivered moves
+	epoch   int64
+	last    int64 // highest version whose fan-out has finished
+}
+
 // snapshotKey and snapshotEntry hold the newest full body read for a room, so
 // fan-outs that run at the same time and need the same head read it once.
 type snapshotKey struct {
@@ -73,6 +89,7 @@ type snapshotEntry struct {
 
 type Server struct {
 	snapshots      map[snapshotKey]*snapshotEntry // guarded by mu
+	orders         map[uuid.UUID]*roomOrder       // guarded by mu
 	verifier       TokenVerifier
 	presenceStore  collaboration.PresenceStore
 	presenceEvery  time.Duration
@@ -609,7 +626,67 @@ func (s *Server) Publish(_ context.Context, receipt collaboration.CommitReceipt,
 	return errors.Join(localErr, brokerErr)
 }
 
+// awaitTurn blocks until the fan-out for the commit before receipt has
+// finished, or fanoutOrderWait passes. The returned func marks receipt's
+// fan-out as finished and must be called once.
+func (s *Server) awaitTurn(ctx context.Context, receipt collaboration.CommitReceipt) func() {
+	s.mu.Lock()
+	if len(s.rooms[receipt.DocumentID]) == 0 {
+		s.mu.Unlock()
+		return func() {} // nobody here to order for; keeps the map from growing
+	}
+	if s.orders == nil {
+		s.orders = make(map[uuid.UUID]*roomOrder)
+	}
+	var floor int64 // newest version any local peer already holds in this epoch
+	for p := range s.rooms[receipt.DocumentID] {
+		p.mu.Lock()
+		if p.bodyEpoch == receipt.BodyEpoch && p.bodyVersion > floor {
+			floor = p.bodyVersion
+		}
+		p.mu.Unlock()
+	}
+	ord := s.orders[receipt.DocumentID]
+	if ord == nil {
+		ord = &roomOrder{changed: make(chan struct{})}
+		s.orders[receipt.DocumentID] = ord
+	}
+	s.mu.Unlock()
+
+	timer := time.NewTimer(fanoutOrderWait)
+	defer timer.Stop()
+	for {
+		ord.mu.Lock()
+		if ord.epoch != receipt.BodyEpoch {
+			ord.epoch, ord.last = receipt.BodyEpoch, floor
+		}
+		ready := ord.last == 0 || receipt.BodyVersion <= ord.last+1
+		wait := ord.changed
+		ord.mu.Unlock()
+		if ready {
+			break
+		}
+		select {
+		case <-wait:
+			continue
+		case <-timer.C:
+		case <-ctx.Done():
+		}
+		break
+	}
+	return func() {
+		ord.mu.Lock()
+		if ord.epoch == receipt.BodyEpoch && receipt.BodyVersion > ord.last {
+			ord.last = receipt.BodyVersion
+		}
+		close(ord.changed)
+		ord.changed = make(chan struct{})
+		ord.mu.Unlock()
+	}
+}
+
 func (s *Server) fanoutLocal(ctx context.Context, receipt collaboration.CommitReceipt, update collaboration.Update) error {
+	defer s.awaitTurn(ctx, receipt)()
 	s.mu.RLock()
 	peers := make([]*peer, 0, len(s.rooms[receipt.DocumentID]))
 	for p := range s.rooms[receipt.DocumentID] {
@@ -729,6 +806,7 @@ func (s *Server) removePeer(p *peer) {
 	delete(s.rooms[p.documentID], p)
 	if len(s.rooms[p.documentID]) == 0 {
 		delete(s.rooms, p.documentID)
+		delete(s.orders, p.documentID)
 		delete(s.snapshots, snapshotKey{documentID: p.documentID, canEdit: true})
 		delete(s.snapshots, snapshotKey{documentID: p.documentID, canEdit: false})
 		if cancel, ok := s.pollers[p.documentID]; ok {
