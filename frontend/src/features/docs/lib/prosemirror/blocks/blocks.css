@@ -1,0 +1,74 @@
+.dd-image {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.dd-image img {
+  display: block;
+  max-width: 100%;
+  border-radius: 4px;
+}
+.dd-image-blocked {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.dd-image-edit {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--input);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--foreground);
+  font: 11px var(--font-mono, ui-monospace, monospace);
+  opacity: 0;
+  cursor: pointer;
+}
+.dd-image:hover .dd-image-edit,
+.dd-image-edit:focus-visible {
+  opacity: 1;
+}
+.dd-image-edit:focus-visible,
+.dd-tb button:focus-visible,
+.dd-slash [role='option']:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+.dd-math {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.dd-math-source,
+.dd-block-source {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.dd-block {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+}
+.dd-block-preview {
+  padding: 12px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+.dd-block-source {
+  margin: 0;
+  padding: 8px 12px;
+  white-space: pre-wrap;
+}
+[data-preview-error] {
+  color: var(--destructive);
+  font-size: 12px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+[data-preview-empty] {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
