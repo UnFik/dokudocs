@@ -19,11 +19,13 @@ import (
 )
 
 const (
-	maxMessageBytes   = 16 << 20
-	writeTimeout      = 5 * time.Second
-	writePerMB        = time.Second
-	readTimeout       = 10 * time.Second
-	resyncInterval    = 5 * time.Second
+	maxMessageBytes = 16 << 20
+	writeTimeout    = 5 * time.Second
+	writePerMB      = time.Second
+	readTimeout     = 10 * time.Second
+	resyncInterval  = 5 * time.Second
+	// idleRevisionFlush matches the debounce of the rolling auto revision.
+	idleRevisionFlush = 10 * time.Second
 	peerQueueSize     = 64
 	fanoutTimeout     = 5 * time.Second
 	heartbeatInterval = 30 * time.Second
@@ -62,6 +64,8 @@ type Server struct {
 	verifier          TokenVerifier
 	presenceStore     collaboration.PresenceStore
 	presenceCloseOnce sync.Once
+	revisionFlusher   collaboration.RevisionFlusher
+	idleFlushAfter    time.Duration
 	presenceCloseErr  error
 	presenceEvery     time.Duration
 	presenceOnce      sync.Once
@@ -153,6 +157,14 @@ func (s *Server) WithPresenceStore(store collaboration.PresenceStore) *Server {
 	return s
 }
 
+// WithRevisionFlusher makes the server bring the rolling auto revision up to
+// the latest body when the last peer leaves a room and when a room has had no
+// new body version for idleFlushAfter.
+func (s *Server) WithRevisionFlusher(flusher collaboration.RevisionFlusher) *Server {
+	s.revisionFlusher = flusher
+	return s
+}
+
 // WithProfiles sets the reader used to label presence entries.
 func (s *Server) WithProfiles(profiles ProfileReader) *Server {
 	s.profiles = profiles
@@ -163,7 +175,7 @@ func NewServer(verifier TokenVerifier, reader BodyReader, writer UpdateWriter, a
 	brokerCtx, brokerCancel := context.WithCancel(context.Background())
 	server := &Server{
 		verifier: verifier, reader: reader, allowedOrigin: allowedOrigin,
-		resyncEvery: resyncInterval, presenceEvery: presenceRefresh, pollers: make(map[uuid.UUID]context.CancelFunc),
+		resyncEvery: resyncInterval, idleFlushAfter: idleRevisionFlush, presenceEvery: presenceRefresh, pollers: make(map[uuid.UUID]context.CancelFunc),
 		writeBase: writeTimeout, heartbeatEvery: heartbeatInterval, heartbeatWait: pongTimeout,
 		rooms: make(map[uuid.UUID]map[*peer]struct{}), broker: broker,
 		instanceID: uuid.New(), brokerCtx: brokerCtx, brokerCancel: brokerCancel,
@@ -714,7 +726,8 @@ func (s *Server) addPeer(p *peer) bool {
 func (s *Server) removePeer(p *peer) {
 	s.mu.Lock()
 	delete(s.rooms[p.documentID], p)
-	if len(s.rooms[p.documentID]) == 0 {
+	roomEmptied := len(s.rooms[p.documentID]) == 0
+	if roomEmptied {
 		delete(s.rooms, p.documentID)
 		if cancel, ok := s.pollers[p.documentID]; ok {
 			cancel()
@@ -722,6 +735,9 @@ func (s *Server) removePeer(p *peer) {
 		}
 	}
 	s.mu.Unlock()
+	if roomEmptied {
+		s.flushRevision(p.documentID)
+	}
 	if s.presenceStore != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), fanoutTimeout)
 		_ = s.presenceStore.Leave(ctx, p.documentID, p.connectionID)
@@ -730,6 +746,17 @@ func (s *Server) removePeer(p *peer) {
 	}
 	s.broadcastPresence(p.documentID)
 	s.wg.Done()
+}
+
+// flushRevision writes the pending rolling auto revision of a document. A
+// failure is dropped: the next commit or flush rewrites the same revision.
+func (s *Server) flushRevision(documentID uuid.UUID) {
+	if s.revisionFlusher == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fanoutTimeout)
+	defer cancel()
+	_ = s.revisionFlusher.FlushAutoRevision(ctx, documentID)
 }
 
 // markPresent makes the peer visible to the room once its ready frame is sent.
@@ -1071,24 +1098,39 @@ func (s *Server) pollRoom(ctx context.Context, documentID, workspaceID uuid.UUID
 	defer s.wg.Done()
 	ticker := time.NewTicker(s.resyncEvery)
 	defer ticker.Stop()
+	var observed collaboration.RoomHead
+	var observedAt time.Time
+	var flushedVersion, flushedEpoch int64
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.checkRoom(ctx, documentID, workspaceID)
+			head, ok := s.checkRoom(ctx, documentID, workspaceID)
+			if !ok || s.revisionFlusher == nil {
+				continue
+			}
+			if observedAt.IsZero() || head.BodyVersion != observed.BodyVersion || head.BodyEpoch != observed.BodyEpoch {
+				observed, observedAt = head, time.Now()
+				continue
+			}
+			if time.Since(observedAt) >= s.idleFlushAfter &&
+				(flushedVersion != head.BodyVersion || flushedEpoch != head.BodyEpoch) {
+				s.flushRevision(documentID)
+				flushedVersion, flushedEpoch = head.BodyVersion, head.BodyEpoch
+			}
 		}
 	}
 }
 
-func (s *Server) checkRoom(ctx context.Context, documentID, workspaceID uuid.UUID) {
+func (s *Server) checkRoom(ctx context.Context, documentID, workspaceID uuid.UUID) (collaboration.RoomHead, bool) {
 	_, peers := s.presenceSnapshot(documentID)
 	if len(peers) == 0 {
-		return
+		return collaboration.RoomHead{}, false
 	}
 	head, err := s.roomReader.ReadRoomHead(ctx, workspaceID, documentID, distinctUsers(peers))
 	if err != nil {
-		return
+		return collaboration.RoomHead{}, false
 	}
 	for _, p := range peers {
 		access := head.Access[p.actor.UserID]
@@ -1106,6 +1148,7 @@ func (s *Server) checkRoom(ctx context.Context, documentID, workspaceID uuid.UUI
 		}
 		s.resendPresenceIfChanged(p)
 	}
+	return head, true
 }
 
 // behind reports whether the peer must be resynced to match the head.
