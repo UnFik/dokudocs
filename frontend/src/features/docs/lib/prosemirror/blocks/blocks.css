@@ -158,6 +158,15 @@
   outline: 2px solid var(--signal);
   outline-offset: 2px;
 }
+@media (max-width: 640px), (pointer: coarse) {
+  .dd-handle {
+    left: 0;
+    width: 32px;
+    min-height: 32px;
+    background: var(--card);
+    border: 1px solid var(--border);
+  }
+}
 .dd-slash {
   position: absolute;
   z-index: 20;

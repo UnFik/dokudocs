@@ -543,6 +543,33 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     }
   })
 
+  it('ignores structural shortcuts while an IME composition is active', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const body = sampleBody()
+    const ydoc = prosemirrorToYDoc(documentBodyToProseMirror(body), 'body')
+    const editor = createDocumentBodyEditor(host, ydoc)
+    try {
+      const before = editor.view.state.doc.toJSON()
+      const press = (init: KeyboardEventInit) =>
+        editor.view.someProp('handleKeyDown', (handler) =>
+          handler(editor.view, new KeyboardEvent('keydown', init))
+        )
+      const handled = press({
+        key: 'ArrowDown',
+        altKey: true,
+        isComposing: true,
+        cancelable: true,
+      })
+      expect(handled).toBeFalsy()
+      expect(editor.view.state.doc.toJSON()).toEqual(before)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
   it('keeps one-block comment anchors stable through remote edits and local undo', () => {
     const body: DocumentBodyNode[] = [
       {
