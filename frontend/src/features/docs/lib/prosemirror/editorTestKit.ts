@@ -1,5 +1,5 @@
 import { prosemirrorToYDoc } from 'y-prosemirror'
-import * as Y from 'yjs'
+import type * as Y from 'yjs'
 import type { DocumentBodyNode } from '../documentBody'
 import { createDocumentBodyEditor } from './createDocumentBodyEditor'
 import { documentBodyToProseMirror } from './documentBody'

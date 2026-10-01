@@ -20,8 +20,10 @@ import {
 import type { DocumentBodyNode } from './documentBody'
 import {
   createDocumentBodyEditor,
+  type EditorHistoryState,
   type MoveNodeIntent,
 } from './prosemirror/createDocumentBodyEditor'
+import type { InlineState } from './prosemirror/inlineMarks'
 
 type CollaborativeBodySnapshot = {
   bodyVersion: number
@@ -64,6 +66,9 @@ export async function mountCollaborativeDocumentBody(
     onDeleteNodeQueued?: (nodeID: string) => void
     onMoveNodeQueued?: (move: MoveNodeIntent) => void
     onTransactionError?: (error: unknown) => void
+    onHistoryChange?: (history: EditorHistoryState) => void
+    onInlineStateChange?: (state: InlineState) => void
+    onLinkRequest?: () => void
   }
 ) {
   const document = new Y.Doc()
@@ -142,6 +147,9 @@ export async function mountCollaborativeDocumentBody(
       onMoveNode: (move) => provider!.moveNode(move),
       onMoveNodeQueued: input.onMoveNodeQueued,
       onTransactionError: input.onTransactionError,
+      onHistoryChange: input.onHistoryChange,
+      onInlineStateChange: input.onInlineStateChange,
+      onLinkRequest: input.onLinkRequest,
     })
     if (input.focusNodeID) {
       requestAnimationFrame(() => {
