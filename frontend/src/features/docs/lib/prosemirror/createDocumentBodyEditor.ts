@@ -17,9 +17,11 @@ import * as Y from 'yjs'
 import type { DocumentBodyNode } from '../documentBody'
 import {
   headingInputRule,
+  insertBlockCommand,
   setHeadingCommand,
   splitTextBlock,
   toggleTaskChecked,
+  type InsertableBlock,
 } from './blocks'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
 import {
@@ -83,6 +85,10 @@ export function createDocumentBodyEditor(
         Enter: () => runBlock(splitTextBlock),
         'Ctrl-Enter': () => runBlock(toggleTaskChecked),
         'Meta-Enter': () => runBlock(toggleTaskChecked),
+        'Ctrl-Alt-c': () => runBlock(insertBlockCommand('code-block')),
+        'Meta-Alt-c': () => runBlock(insertBlockCommand('code-block')),
+        'Ctrl-Alt--': () => runBlock(insertBlockCommand('thematic-break')),
+        'Meta-Alt--': () => runBlock(insertBlockCommand('thematic-break')),
         ...Object.fromEntries(
           ([0, 1, 2, 3, 4, 5, 6] as const).flatMap((level) =>
             ['Ctrl', 'Meta'].map((modifier) => [
@@ -337,6 +343,8 @@ export function createDocumentBodyEditor(
     setHeading: (level: 0 | 1 | 2 | 3 | 4 | 5 | 6) =>
       canEdit() && setHeadingCommand(level)(state, view.dispatch),
     toggleTask: () => canEdit() && toggleTaskChecked(state, view.dispatch),
+    insertBlock: (kind: InsertableBlock) =>
+      canEdit() && insertBlockCommand(kind)(state, view.dispatch),
     focus: () => view.focus(),
     undo: () => canEdit() && undoYjs(state),
     redo: () => canEdit() && redoYjs(state),

@@ -276,3 +276,69 @@ describe('task items', () => {
     }
   })
 })
+
+describe('insert blocks', () => {
+  it('inserts a code block after the current block without touching it', () => {
+    const harness = mountTestEditor(paragraphsBody('one', 'two'))
+    try {
+      caret(harness, 'one', 1)
+      const event = pressKey(harness.editor.view.dom, 'c', {
+        ctrlKey: true,
+        altKey: true,
+      })
+      expect(event.defaultPrevented).toBe(true)
+      const body = harness.editor.getBody()
+      const rootChildren = body
+        .filter((item) => item.parentID === 'root')
+        .sort((a, b) => a.siblingOrder - b.siblingOrder)
+      expect(rootChildren.map((item) => item.type)).toEqual([
+        'paragraph',
+        'code-block',
+        'paragraph',
+      ])
+      expect(rootChildren[0]!.nodeID).toBe('p0')
+      expect(rootChildren[2]!.nodeID).toBe('p1')
+      expect(rootChildren[1]).toMatchObject({
+        content: '',
+        attributes: { type: 'fenced', lang: '', fenceLength: 3 },
+      })
+      expect(['p0', 'p1']).not.toContain(rootChildren[1]!.nodeID)
+      expect(harness.editor.view.state.selection.$from.parent.type.name).toBe(
+        'code_block'
+      )
+    } finally {
+      harness.cleanup()
+    }
+  })
+
+  it('inserts a horizontal rule with Ctrl+Alt+minus', () => {
+    const harness = mountTestEditor(paragraphsBody('one'))
+    try {
+      caret(harness, 'one', 3)
+      pressKey(harness.editor.view.dom, '-', { ctrlKey: true, altKey: true })
+      const rule = harness.editor
+        .getBody()
+        .find((item) => item.type === 'thematic-break')
+      expect(rule).toMatchObject({ parentID: 'root', content: '---' })
+      expect(harness.editor.getBody().map((item) => item.nodeID)).toContain(
+        'p0'
+      )
+    } finally {
+      harness.cleanup()
+    }
+  })
+
+  it('does nothing while read-only', () => {
+    const harness = mountTestEditor(paragraphsBody('one'))
+    try {
+      caret(harness, 'one', 1)
+      harness.editor.setReadOnly(true)
+      expect(harness.editor.insertBlock('code-block')).toBe(false)
+      expect(
+        harness.editor.getBody().some((i) => i.type === 'code-block')
+      ).toBe(false)
+    } finally {
+      harness.cleanup()
+    }
+  })
+})

@@ -1,6 +1,10 @@
 import { InputRule } from 'prosemirror-inputrules'
 import type { NodeType } from 'prosemirror-model'
-import type { Command, EditorState } from 'prosemirror-state'
+import {
+  TextSelection,
+  type Command,
+  type EditorState,
+} from 'prosemirror-state'
 import { documentBodySchema } from './documentBody'
 
 const { atx_heading, paragraph, run, list_item, task_list_item } =
@@ -163,4 +167,53 @@ export const toggleTaskChecked: Command = (state, dispatch) => {
     return true
   }
   return false
+}
+
+export type InsertableBlock = 'code-block' | 'thematic-break'
+
+/**
+ * Insert a new empty block after the paragraph or heading holding the cursor.
+ * A new node under an existing parent is an ordinary edit; nothing existing is
+ * moved or deleted, so it needs no MoveNode or DeleteNode.
+ */
+export function insertBlockCommand(kind: InsertableBlock): Command {
+  return (state, dispatch) => {
+    const depth = textBlockDepth(state)
+    if (depth === null) return false
+    const { $from } = state.selection
+    const type =
+      documentBodySchema.nodes[
+        kind === 'code-block' ? 'code_block' : 'thematic_break'
+      ]!
+    const attrs =
+      kind === 'code-block'
+        ? {
+            nodeID: null,
+            bodyAttributes: JSON.stringify({
+              type: 'fenced',
+              lang: '',
+              fenceLength: 3,
+            }),
+            bodyContent: '',
+          }
+        : { nodeID: null, bodyAttributes: '{}', bodyContent: '---' }
+    const after = $from.after(depth)
+    if (
+      !$from
+        .node(depth - 1)
+        .canReplaceWith(
+          $from.indexAfter(depth - 1),
+          $from.indexAfter(depth - 1),
+          type
+        )
+    )
+      return false
+    if (dispatch) {
+      const tr = state.tr.insert(after, type.create(attrs))
+      if (kind === 'code-block')
+        tr.setSelection(TextSelection.create(tr.doc, after + 1))
+      dispatch(tr.scrollIntoView())
+    }
+    return true
+  }
 }
