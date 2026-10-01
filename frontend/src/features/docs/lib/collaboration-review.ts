@@ -275,6 +275,8 @@ export async function loadReviewModel(input: {
   scope: CollaborationScope
   store: CollaborationStore
   fetchBody: () => Promise<MarkdownBodySnapshot>
+  /** Default true. Off when pending edits are syncing normally and need no review. */
+  includePendingDiff?: boolean
 }): Promise<ReviewModel> {
   const stored = await input.store.load(input.scope)
   const current = await input.fetchBody()
@@ -310,9 +312,10 @@ export async function loadReviewModel(input: {
     canEdit: current.canEdit,
     held: stored.heldEdits,
     commands,
-    pendingDiff: stored.updates.length
-      ? diffForReview(pendingBodyNodes(stored), nodes)
-      : [],
+    pendingDiff:
+      stored.updates.length && input.includePendingDiff !== false
+        ? diffForReview(pendingBodyNodes(stored), nodes)
+        : [],
   }
 }
 

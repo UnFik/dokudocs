@@ -334,6 +334,36 @@ describe('loadReviewModel', () => {
     ])
   })
 
+  it('leaves out the pending text diff when it is not asked for', async () => {
+    const { scope, store } = await seedStore(deleteCommand('p2'), 'delete')
+    await store.saveUpdate(
+      scope,
+      {
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        encodedState: stateOf(body()),
+      },
+      {
+        updateID: 'u1',
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        update: Y.encodeStateAsUpdate(new Y.Doc()),
+      }
+    )
+    const current = body().map((n) =>
+      n.nodeID === 'r2' ? { ...n, content: 'changed' } : n
+    )
+    const model = await loadReviewModel({
+      scope,
+      store,
+      includePendingDiff: false,
+      fetchBody: async () => canonical(current, 1),
+    })
+    expect(model.pendingDiff).toEqual([])
+  })
+
   it('reports no edit access when the server says so', async () => {
     const { scope, store } = await seedStore(deleteCommand('p2'), 'delete')
     const model = await loadReviewModel({

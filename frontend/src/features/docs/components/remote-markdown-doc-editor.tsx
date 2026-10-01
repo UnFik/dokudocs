@@ -506,6 +506,7 @@ function CollaborativeMarkdownBody({
           load={() =>
             loadReviewModel({
               scope: { userID, documentID },
+              includePendingDiff: statusRef.current === 'recovery-required',
               store: reviewStore,
               fetchBody: () => getMarkdownBody(workspaceID, documentID),
             })
