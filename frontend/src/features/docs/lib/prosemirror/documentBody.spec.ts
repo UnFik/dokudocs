@@ -851,6 +851,84 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     }
   })
 
+  it('reports the local selection as relative positions that resolve to the same text', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const selections: Array<{ anchor: Uint8Array; head: Uint8Array } | null> =
+      []
+    const editor = createDocumentBodyEditor(host, ydoc, {
+      onSelectionChange: (selection) => selections.push(selection),
+    })
+
+    try {
+      const start = runPosition(editor.view.state.doc, 'first') + 1
+      editor.view.dispatch(
+        editor.view.state.tr.setSelection(
+          TextSelection.create(editor.view.state.doc, start + 1, start + 4)
+        )
+      )
+
+      const reported = selections.at(-1)
+      expect(reported).not.toBeNull()
+      const resolved = editor.resolveSelection(reported!)
+      expect(resolved).toEqual({ anchor: start + 1, head: start + 4 })
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
+  it('draws a remote selection with the collaborator name and color, and removes it', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const editor = createDocumentBodyEditor(host, ydoc)
+
+    try {
+      const start = runPosition(editor.view.state.doc, 'second') + 1
+      const anchor = editor.createAnchor(start + 1, start + 4)
+      const cursor = {
+        connectionID: 'c1',
+        userID: 'u2',
+        name: 'Bo',
+        color: '#0369A1',
+        anchor: anchor.start,
+        head: anchor.end,
+      }
+      editor.setRemoteCursors([cursor])
+
+      const caret = host.querySelector('.remote-cursor')
+      expect(caret?.textContent).toContain('Bo')
+      expect(
+        (caret as HTMLElement).style.getPropertyValue('--cursor-color')
+      ).toBe('#0369A1')
+      expect(host.querySelector('.remote-selection')?.textContent).toBe('eco')
+
+      // A color that is not a plain hex value is ignored, not injected.
+      editor.setRemoteCursors([{ ...cursor, color: 'red; background: url(x)' }])
+      const unsafe = host.querySelector('.remote-cursor') as HTMLElement
+      expect(unsafe.style.getPropertyValue('--cursor-color')).not.toContain(
+        'url'
+      )
+
+      editor.setRemoteCursors([])
+      expect(host.querySelector('.remote-cursor')).toBeNull()
+      expect(host.querySelector('.remote-selection')).toBeNull()
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
   it('blocks deleting the last formatted character when it would remove the run', async () => {
     const body: DocumentBodyNode[] = [
       {
