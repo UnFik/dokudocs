@@ -1892,3 +1892,171 @@ describe('CollaborativeDocumentProvider epoch rebase', () => {
 function decodeBase64ForTest(value: string) {
   return Uint8Array.from(atob(value), (c) => c.charCodeAt(0))
 }
+
+describe('CollaborativeDocumentProvider access loss and session expiry', () => {
+  async function connectedProvider(
+    overrides: Partial<
+      ConstructorParameters<typeof CollaborativeDocumentProvider>[0]
+    > = {}
+  ) {
+    const serverDoc = new Y.Doc()
+    serverDoc.getText('body').insert(0, 'base')
+    const initialState = Y.encodeStateAsUpdate(serverDoc)
+    const document = new Y.Doc()
+    Y.applyUpdate(document, initialState)
+    const store = new MemoryStore()
+    const sockets: FakeSocket[] = []
+    const statuses: string[] = []
+    const provider = new CollaborativeDocumentProvider({
+      documentID: 'document-1',
+      workspaceID: 'workspace-1',
+      userID: 'user-1',
+      token: 'jwt-token',
+      document,
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      store,
+      batchIntervalMs: 20,
+      socketFactory: () => {
+        const socket = new FakeSocket()
+        sockets.push(socket)
+        return socket
+      },
+      onStatus: (status) => statuses.push(status),
+      ...overrides,
+    })
+    await provider.start()
+    sockets[0]?.open()
+    sockets[0]?.receive({
+      type: 'ready',
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      canEdit: true,
+      state: base64(initialState),
+    })
+    await flushPromises()
+    return { provider, document, store, sockets, statuses }
+  }
+
+  const sentUpdates = (socket: FakeSocket) =>
+    socket.sent.map((f) => JSON.parse(f)).filter((f) => f.type === 'update')
+
+  it('drops the cached body and pending edits when access is revoked mid-edit', async () => {
+    const { provider, document, store, sockets, statuses } =
+      await connectedProvider()
+    const text = document.getText('body')
+    text.insert(text.length, ' first')
+    await wait(60)
+    expect(sentUpdates(sockets[0]!)).toHaveLength(1)
+    expect(store.updates.size).toBe(1)
+
+    sockets[0]!.receive({ type: 'error', code: 'forbidden' })
+    await flushPromises()
+
+    expect(statuses.at(-1)).toBe('forbidden')
+    expect(store.snapshot).toBeNull()
+    expect(store.updates.size).toBe(0)
+
+    text.insert(text.length, ' after revoke')
+    await wait(80)
+    expect(sentUpdates(sockets[0]!)).toHaveLength(1)
+    expect(store.updates.size).toBe(0)
+    expect(sockets).toHaveLength(1)
+    provider.stop()
+  })
+
+  it('keeps pending edits for the same user when the token is rejected after being offline', async () => {
+    const { provider, document, store, sockets, statuses } =
+      await connectedProvider()
+    sockets[0]!.close()
+    const text = document.getText('body')
+    text.insert(text.length, ' offline')
+    await wait(60)
+    expect(store.updates.size).toBe(1)
+
+    await wait(400)
+    expect(sockets).toHaveLength(2)
+    sockets[1]!.open()
+    sockets[1]!.receive({ type: 'error', code: 'unauthorized' })
+    await flushPromises()
+
+    expect(statuses.at(-1)).toBe('unauthorized')
+    expect(store.updates.size).toBe(1)
+    expect(store.snapshot).not.toBeNull()
+    expect(sentUpdates(sockets[1]!)).toHaveLength(0)
+    await wait(400)
+    expect(sockets).toHaveLength(2)
+    provider.stop()
+  })
+
+  it('does not open a socket or lose pending edits when the stored token has expired', async () => {
+    const store = new MemoryStore()
+    const serverDoc = new Y.Doc()
+    serverDoc.getText('body').insert(0, 'base')
+    const initialState = Y.encodeStateAsUpdate(serverDoc)
+    const offlineDoc = new Y.Doc()
+    Y.applyUpdate(offlineDoc, initialState)
+    const baseVector = Y.encodeStateVector(offlineDoc)
+    offlineDoc.getText('body').insert(4, ' offline')
+    store.snapshot = {
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      canEdit: true,
+      encodedState: initialState,
+    }
+    store.updates.set('offline-update', {
+      updateID: 'offline-update',
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      update: Y.encodeStateAsUpdate(offlineDoc, baseVector),
+    })
+    const statuses: string[] = []
+    const sockets: FakeSocket[] = []
+    const provider = new CollaborativeDocumentProvider({
+      documentID: 'document-1',
+      workspaceID: 'workspace-1',
+      userID: 'user-1',
+      token: () => '',
+      document: new Y.Doc(),
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      store,
+      socketFactory: () => {
+        const socket = new FakeSocket()
+        sockets.push(socket)
+        return socket
+      },
+      onStatus: (status) => statuses.push(status),
+    })
+
+    await provider.start()
+    await flushPromises()
+
+    expect(sockets).toHaveLength(0)
+    expect(statuses.at(-1)).toBe('unauthorized')
+    expect(store.updates.has('offline-update')).toBe(true)
+    provider.stop()
+  })
+
+  it('sends the token the app holds at reconnect time, so a refreshed session resumes sync', async () => {
+    let token = 'old-jwt'
+    const { provider, document, store, sockets } = await connectedProvider({
+      token: () => token,
+    })
+    sockets[0]!.close()
+    document.getText('body').insert(4, ' offline')
+    await wait(60)
+    token = 'fresh-jwt'
+
+    await wait(400)
+    sockets[1]!.open()
+    const auth = JSON.parse(sockets[1]!.sent[0]!)
+    expect(JSON.stringify(auth)).toContain('fresh-jwt')
+    expect(store.updates.size).toBe(1)
+    provider.stop()
+  })
+})
