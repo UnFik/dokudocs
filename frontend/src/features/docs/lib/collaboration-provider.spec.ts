@@ -6,6 +6,7 @@ import {
 import * as Y from 'yjs'
 import { ApiError } from '@/lib/api-client'
 import { CollaborativeDocumentProvider } from './collaboration-provider'
+import type { HeldEdit } from './collaboration-rebase'
 import type {
   CollaborationScope,
   CollaborationSnapshot,
@@ -52,6 +53,7 @@ class MemoryStore implements CollaborationStore {
   updates = new Map<string, PendingCollaborationUpdate>()
   deleteCommands = new Map<string, PendingDeleteNodeCommand>()
   moveCommands = new Map<string, PendingMoveNodeCommand>()
+  heldEdits: HeldEdit[] = []
   beforeSaveSnapshot?: Promise<void>
   beforeSaveUpdate?: Promise<void>
 
@@ -61,6 +63,7 @@ class MemoryStore implements CollaborationStore {
       updates: [...this.updates.values()],
       deleteCommands: [...this.deleteCommands.values()],
       moveCommands: [...this.moveCommands.values()],
+      heldEdits: this.heldEdits,
     }
   }
 
@@ -161,14 +164,21 @@ class MemoryStore implements CollaborationStore {
   async replaceWithRebased(
     _scope: CollaborationScope,
     snapshot: CollaborationSnapshot,
-    update: PendingCollaborationUpdate
+    update: PendingCollaborationUpdate,
+    heldEdits: HeldEdit[] = []
   ) {
     this.snapshot = snapshot
+    this.heldEdits = heldEdits
     this.updates.clear()
     this.updates.set(update.updateID, update)
   }
 
+  async clearHeldEdits(_scope: CollaborationScope) {
+    this.heldEdits = []
+  }
+
   async clear(_scope: CollaborationScope) {
+    this.heldEdits = []
     this.snapshot = null
     this.updates.clear()
     this.deleteCommands.clear()
@@ -1761,6 +1771,88 @@ describe('CollaborativeDocumentProvider epoch rebase', () => {
       const [pending] = [...store.updates.values()]
       expect(pending!.bodyEpoch).toBe(2)
       expect(pending!.updateID).not.toBe(originalUpdateID)
+    } finally {
+      provider.stop()
+    }
+  })
+
+  it('applies the clean edit and holds only the conflicting block for review', async () => {
+    const baseState = stateOf(twoParagraphs())
+    const document = new Y.Doc()
+    Y.applyUpdate(document, baseState)
+    const store = new MemoryStore()
+    const socket = new FakeSocket()
+    const statuses: string[] = []
+    const canonicalNodes = twoParagraphs().map((n) =>
+      n.nodeID === ids.r2 ? { ...n, content: 'second?' } : n
+    )
+    const canonical = canonicalBody(canonicalNodes, 2)
+    let rebased: typeof canonical | undefined
+    let held: HeldEdit[] = []
+    const provider = new CollaborativeDocumentProvider({
+      documentID: 'document-1',
+      workspaceID: 'workspace-1',
+      userID: 'user-1',
+      token: 'jwt-token',
+      document,
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      store,
+      socketFactory: () => socket,
+      refreshCanonicalBody: async () => canonical,
+      onStatus: (status) => statuses.push(status),
+      onCanonicalBody: (body) => {
+        rebased = body as typeof canonical
+      },
+      onHeldEdits: (edits) => {
+        held = edits
+      },
+    })
+
+    try {
+      await provider.start()
+      socket.open()
+      socket.receive({
+        type: 'ready',
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: base64(baseState),
+      })
+      await flushPromises()
+      document.transact(() => {
+        appendToFirstRun(document, ' world')
+        const root = document.getXmlFragment('body').get(0) as Y.XmlElement
+        const run = (root.get(1) as Y.XmlElement).get(0) as Y.XmlElement
+        const text = run.get(0) as Y.XmlText
+        text.insert(text.length, '!')
+      })
+      await flushPromises()
+
+      socket.receive({
+        type: 'resync',
+        bodyVersion: 2,
+        bodyEpoch: 2,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: canonical.encodedState,
+      })
+      await wait(50)
+
+      expect(statuses).not.toContain('recovery-required')
+      const content = (id: string) =>
+        projectState(decodeBase64ForTest(rebased!.encodedState)).find(
+          (n) => n.nodeID === id
+        )?.content
+      expect(content(ids.r1)).toBe('hello world')
+      expect(content(ids.r2)).toBe('second?')
+      expect(held.map((h) => [h.nodeID, h.local.content])).toEqual([
+        [ids.r2, 'second!'],
+      ])
+      expect(store.heldEdits.map((h) => h.nodeID)).toEqual([ids.r2])
+      expect(store.snapshot?.bodyEpoch).toBe(2)
     } finally {
       provider.stop()
     }
