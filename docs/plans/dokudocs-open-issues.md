@@ -2,7 +2,7 @@
 
 Tanggal: 2026-10-01. Sumber: `dokudocs-refactor-gap-closure.md` (ringkasan status, bagian G6, dan catatan progres), `audit-markdown-collaboration-2026-10-01.md`, dan temuan sesi G6.
 
-Status draf: belum dibuat di GitHub (repo `UnFik/dokudocs` belum punya issue). Label usulan: `gate:G0` … `gate:G6`, `priority:P0|P1|P2`, ditambah label bawaan (`bug`, `enhancement`, `documentation`). Judul memakai awalan gate.
+Status: dibuat di GitHub pada 2026-10-01 sebagai issue #1–#36 di `UnFik/dokudocs` (publik); nomor GitHub sama dengan nomor di draf ini. Pelacakan selanjutnya dilakukan di GitHub; dokumen ini menjadi snapshot awal. Label: `gate:G0`–`G7`, `priority:P0|P1|P2`, `needs-verification` (isi berasal dari dokumen progres), ditambah `bug`, `enhancement`, `documentation`. Label usulan: `gate:G0` … `gate:G7`, `priority:P0|P1|P2`, ditambah label bawaan (`bug`, `enhancement`, `documentation`). Judul memakai awalan gate.
 
 Keterangan kolom **Verifikasi**: *terkonfirmasi* = saya cek atau buktikan di sesi ini; *dari dokumen* = diambil dari ringkasan status dan belum saya jalankan ulang, jadi periksa dulu sebelum dikerjakan.
 
@@ -36,6 +36,16 @@ Keterangan kolom **Verifikasi**: *terkonfirmasi* = saya cek atau buktikan di ses
 | 24 | G5 | Ukur pemulihan indeks ≤1 menit dan lengkapi matriks ACL/lifecycle | P1 | enhancement | dari dokumen |
 | 25 | G5 | E2E browser→API untuk chatbot RAG | P2 | enhancement | dari dokumen |
 | 26 | G0 | Inventaris dan rekonsiliasi data per environment sebelum cutover | P0 | enhancement | dari dokumen |
+| 27 | G7 | Inventaris paritas fitur Muya vs editor kolaboratif | P0 | documentation | terkonfirmasi |
+| 28 | G7 | Undo/Redo: tombol dan shortcut | P0 | enhancement | terkonfirmasi |
+| 29 | G7 | Format inline: shortcut dan toolbar seleksi | P0 | enhancement | terkonfirmasi |
+| 30 | G7 | Blok: input rules dan perintah heading, daftar, quote, code block | P1 | enhancement | terkonfirmasi |
+| 31 | G7 | Tabel | P1 | enhancement | terkonfirmasi |
+| 32 | G7 | Clipboard: tempel Markdown/HTML, salin sebagai Markdown | P1 | enhancement | terkonfirmasi |
+| 33 | G7 | Gambar, math, dan diagram | P1 | enhancement | terkonfirmasi |
+| 34 | G7 | Menu blok (slash command) dan drag handle | P2 | enhancement | terkonfirmasi |
+| 35 | G7 | IME, aksesibilitas keyboard, dan toolbar di layar sempit | P2 | enhancement | terkonfirmasi |
+| 36 | G7 | E2E paritas editor dua klien dan round-trip Markdown | P0 | enhancement | terkonfirmasi |
 
 ## G6
 
@@ -137,4 +147,42 @@ Keterangan kolom **Verifikasi**: *terkonfirmasi* = saya cek atau buktikan di ses
 ## G0
 
 ### 26. [G0] Inventaris dan rekonsiliasi data per environment sebelum cutover
+- **Status 2026-10-01:** alat dan runbook selesai (`cmd/ownergrants`, 9 tes integrasi). Tersisa: menjalankannya per environment dan keputusan untuk dokumen `blocked-author-not-member` dan `multipleOwners`.
 - G0 selesai untuk scope dev/test. Inventaris consumer dan rekonsiliasi data (termasuk grant owner untuk dokumen yang belum punya, 34 dokumen di dev) per environment produksi tetap prasyarat cutover terpisah.
+
+## G7
+
+Konteks bersama: editor kolaboratif hanya memasang `ySyncPlugin` dan `yUndoPlugin`; skema sudah memuat semua tipe node tetapi tidak ada keymap, input rules, toolbar, atau tabel. Keputusan mesin: ADR 0018 (ProseMirror, bukan Muya). Paket yang perlu ditambah: `prosemirror-keymap`, `-commands`, `-inputrules`, `-schema-list`, `-tables`. **Outline berlisensi BSL 1.1: boleh dibaca sebagai acuan perilaku, kode tidak boleh disalin.**
+
+### 27. [G7] Inventaris paritas fitur Muya vs editor kolaboratif
+- Daftar fitur editor Muya yang dipakai pengguna (toolbar mengambang, tabel, gambar, math, diagram, undo/redo, clipboard, dll.) dibandingkan dengan editor kolaboratif, dengan keputusan bawa, tunda, atau buang per fitur.
+- **Selesai bila:** tabel inventaris tertulis di dokumen dan menjadi acuan issue #28–#35.
+
+### 28. [G7] Undo/Redo: tombol dan shortcut
+- `editor.undo()/redo()` sudah ada dan diuji (undo lokal tidak membatalkan edit orang lain), tetapi tidak tersambung ke UI. Tambah tombol dan `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, `Ctrl+Y`, dengan status aktif/nonaktif.
+- **Selesai bila:** E2E dua klien membuktikan undo hanya membatalkan edit sendiri.
+
+### 29. [G7] Format inline: shortcut dan toolbar seleksi
+- Bold, italic, strike, code, link lewat `Ctrl/Cmd+B/I`, dst. dan toolbar yang muncul pada seleksi. Perubahan mark harus menghasilkan run baru dengan ID stabil dan lolos validasi server.
+
+### 30. [G7] Blok: input rules dan perintah
+- Heading (`# `), bullet (`- `), bernomor (`1. `), task (`[ ] `), blockquote (`> `), code block (```` ``` ````), garis horizontal; indent/outdent, Enter, dan Backspace pada daftar. Memakai `prosemirror-inputrules` dan `-schema-list`.
+
+### 31. [G7] Tabel
+- Sisip tabel, tambah/hapus baris dan kolom, navigasi Tab, dipetakan ke `table`, `table.row`, `table.cell` dengan atribut `align`. Perhatikan aturan ketat AST dan server (tidak ada sel gabungan kecuali diputuskan).
+
+### 32. [G7] Clipboard
+- Tempel Markdown dan HTML (termasuk dari Word/Docs), salin sebagai Markdown, tanpa duplikasi ID node dan tanpa melewati validasi opaque.
+
+### 33. [G7] Gambar, math, dan diagram
+- Paritas dengan Muya sesuai inventaris (#27): sisip dan edit gambar, math inline/blok, diagram Mermaid. Syntax yang belum bisa diedit tetap opaque dan baca-saja.
+
+### 34. [G7] Menu blok (slash command) dan drag handle
+- Menu `/` untuk sisip blok dan handle seret untuk memindah blok. Pemindahan harus lewat command `MoveNode` (ADR 0012). Bergantung pada #1.
+
+### 35. [G7] IME, aksesibilitas keyboard, dan toolbar di layar sempit
+- Input IME (CJK, dll.), navigasi keyboard penuh untuk toolbar dan menu, label aksesibel, dan toolbar yang bekerja di mobile.
+
+### 36. [G7] E2E paritas editor dua klien dan round-trip Markdown
+- Playwright dua klien: bold, italic, daftar bersarang, tabel, undo/redo; converge, tersimpan di server, ekspor Markdown identik untuk syntax yang didukung. Ini gate G7.
+

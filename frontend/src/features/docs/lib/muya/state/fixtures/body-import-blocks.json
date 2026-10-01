@@ -193,7 +193,8 @@
           }
         ]
       }
-    ]
+    ],
+    "sourceMarkdown": "| left | right |\n| --- | --- |\n| a | b |"
   },
   {
     "name": "code-block",
@@ -216,7 +217,8 @@
       "type": "mermaid",
       "lang": "yaml"
     },
-    "text": "graph TD"
+    "text": "graph TD",
+    "sourceGap": ""
   },
   {
     "name": "footnote",

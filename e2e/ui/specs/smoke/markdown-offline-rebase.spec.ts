@@ -160,7 +160,7 @@ async function pendingCommandCount(
   storeName: "pending-delete-commands" | "pending-move-commands",
 ) {
   return page.evaluate(
-    () =>
+    (storeName) =>
       new Promise<number>((resolve, reject) => {
         const request = indexedDB.open("dokudocs-collaboration");
         request.onerror = () => reject(request.error);
@@ -182,6 +182,7 @@ async function pendingCommandCount(
           count.onerror = () => reject(count.error);
         };
       }),
+    storeName,
   );
 }
 
