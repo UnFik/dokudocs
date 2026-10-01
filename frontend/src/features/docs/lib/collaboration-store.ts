@@ -459,6 +459,20 @@ export class IndexedDBCollaborationStore implements CollaborationStore {
     return [...counts].map(([documentID, count]) => ({ documentID, count }))
   }
 
+  /** Every document of one user that has anything cached, pending or not. */
+  async listAllDocuments(userID: string): Promise<string[]> {
+    if (!userID) throw new Error('collaboration storage scope is required')
+    const db = await this.open()
+    const prefix = `${userID}:`
+    const keys = await transaction(db, [snapshotStore], 'readonly', (tx) =>
+      requestValue(tx.objectStore(snapshotStore).getAllKeys())
+    )
+    return keys
+      .filter((key): key is string => typeof key === 'string')
+      .filter((key) => key.startsWith(prefix))
+      .map((key) => key.slice(prefix.length))
+  }
+
   /** Removes every cached body, pending update, and command of one user. */
   async clearUser(userID: string): Promise<void> {
     if (!userID) throw new Error('collaboration storage scope is required')
