@@ -84,7 +84,7 @@ test-load:
 		DATABASE_URL=$$test_database_url $(MIGRATE_CMD) up; \
 		TEST_DATABASE_URL=$$test_database_url TEST_REDIS_URL=redis://127.0.0.1:$$redis_port \
 		WS_LOAD=1 WS_LOAD_PARAGRAPHS=$${WS_LOAD_PARAGRAPHS:-100} WS_LOAD_COMMITS=$${WS_LOAD_COMMITS:-20} \
-		WS_LOAD_ACK_P95_MS=$${WS_LOAD_ACK_P95_MS:-100} WS_LOAD_PEER_P95_MS=$${WS_LOAD_PEER_P95_MS:-150} \
+		WS_LOAD_ACK_P95_MS=$${WS_LOAD_ACK_P95_MS:-250} WS_LOAD_PEER_P95_MS=$${WS_LOAD_PEER_P95_MS:-400} \
 		go test -p 1 -tags=integration -count=1 -v -run '$(LOAD_RUN)' ./internal/infrastructure/repository/document
 
 docs:

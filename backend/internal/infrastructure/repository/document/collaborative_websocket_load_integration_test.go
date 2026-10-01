@@ -237,6 +237,7 @@ func runWebSocketLoad(t *testing.T, sc loadScenario, cfg loadConfig) loadResult 
 	var (
 		mu         sync.Mutex
 		sentAt     = map[uuid.UUID]time.Time{}
+		sentBy     = map[uuid.UUID]int{}
 		ackSamples []time.Duration
 		peerSample []time.Duration
 		errs       []string
@@ -307,7 +308,8 @@ func runWebSocketLoad(t *testing.T, sc loadScenario, cfg loadConfig) loadResult 
 				case "update":
 					updates.Add(1)
 					mu.Lock()
-					if at, ok := sentAt[frame.UpdateID]; ok {
+					// The author also gets its own update back; only other sockets count.
+					if at, ok := sentAt[frame.UpdateID]; ok && sentBy[frame.UpdateID] != s.clientID {
 						peerSample = append(peerSample, now.Sub(at))
 					}
 					mu.Unlock()
@@ -352,7 +354,7 @@ func runWebSocketLoad(t *testing.T, sc loadScenario, cfg loadConfig) loadResult 
 				update := crdt.EncodeStateAsUpdateV1(doc, vector)
 				id := uuid.New()
 				mu.Lock()
-				sentAt[id] = time.Now()
+				sentAt[id], sentBy[id] = time.Now(), i
 				mu.Unlock()
 				if err := sendWebSocketUpdate(sockets[i].conn, id, update); err != nil {
 					fail("editor %d send: %v", i, err)
