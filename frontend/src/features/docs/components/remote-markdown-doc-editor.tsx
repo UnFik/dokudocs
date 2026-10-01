@@ -36,6 +36,10 @@ import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
 } from '../lib/muya/state/documentBodyToMarkdown'
+import {
+  buildDeleteBlockSuggestion,
+  conflictReviewMessage,
+} from '../lib/suggestion-operations'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { EditorHeader } from './editor-header'
 import './markdown-body.css'
@@ -500,6 +504,10 @@ function CollaborativeMarkdownBody({
           documentID={documentID}
           canDecide={canEdit}
           canSuggest={Boolean(snapshot.canSuggest) && status === 'ready'}
+          captureBlock={() => {
+            if (!mountRef.current) throw new Error('Editor is not ready')
+            return captureSelectedNodeID(mountRef.current)
+          }}
           captureSelection={() => {
             if (!mountRef.current || !sessionRef.current)
               throw new Error('Editor is not ready')
@@ -555,6 +563,16 @@ function captureSelectedRun(
   }
 }
 
+function captureSelectedNodeID(mount: HTMLElement): string {
+  const selection = window.getSelection()
+  const anchor = selection?.anchorNode
+  const element = anchor instanceof Element ? anchor : anchor?.parentElement
+  const target = element?.closest('[data-node-id]')
+  if (!(target instanceof HTMLElement) || !mount.contains(target))
+    throw new Error('Place the cursor in the block first')
+  return target.dataset.nodeId as string
+}
+
 function isUninitializedBody(error: unknown): error is ApiError {
   return (
     error instanceof ApiError &&
@@ -571,6 +589,7 @@ function SuggestionPanel({
   canDecide,
   canSuggest,
   captureSelection,
+  captureBlock,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -579,6 +598,7 @@ function SuggestionPanel({
   canDecide: boolean
   canSuggest: boolean
   captureSelection: () => TextSuggestionSelection
+  captureBlock: () => string
 }) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<TextSuggestionSelection | null>(null)
@@ -650,6 +670,32 @@ function SuggestionPanel({
     },
     onError: (error) => toast.error(error.message),
   })
+  const deleteBlockMutation = useMutation({
+    mutationFn: async (nodeID: string) => {
+      const latest = await getMarkdownBody(workspaceID, documentID)
+      if (!latest.canSuggest) throw new Error('You cannot suggest changes here')
+      const { operations, summary } = buildDeleteBlockSuggestion(
+        latest.nodes,
+        nodeID
+      )
+      await createDocumentSuggestion(workspaceID, documentID, {
+        suggestionID: crypto.randomUUID(),
+        baseBodyVersion: latest.bodyVersion,
+        baseBodyEpoch: latest.bodyEpoch,
+        operationSchemaVersion: 1,
+        provenance: 'human',
+        operations,
+        summary,
+      })
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['document-suggestions', workspaceID, documentID],
+      })
+      toast.success('Suggestion submitted')
+    },
+    onError: (error) => toast.error(error.message),
+  })
   return (
     <aside className='border-t bg-muted/20'>
       <div className='flex items-center gap-2 px-4 py-2'>
@@ -674,6 +720,27 @@ function SuggestionPanel({
             }}
           >
             Suggest change
+          </Button>
+        ) : null}
+        {canSuggest ? (
+          <Button
+            size='sm'
+            variant='outline'
+            disabled={deleteBlockMutation.isPending}
+            onClick={() => {
+              try {
+                deleteBlockMutation.mutate(captureBlock())
+                onOpenChange(true)
+              } catch (error) {
+                toast.error(
+                  error instanceof Error
+                    ? error.message
+                    : 'Select a block first'
+                )
+              }
+            }}
+          >
+            Suggest delete block
           </Button>
         ) : null}
         {open ? (
@@ -744,6 +811,11 @@ function SuggestionPanel({
                     {suggestion.status} · {suggestion.provenance}
                   </p>
                   {suggestion.reason ? <p>{suggestion.reason}</p> : null}
+                  {conflictReviewMessage(suggestion.status) ? (
+                    <p className='mt-1 text-destructive'>
+                      {conflictReviewMessage(suggestion.status)}
+                    </p>
+                  ) : null}
                 </div>
                 {canDecide && suggestion.status === 'pending' ? (
                   <div className='flex shrink-0 gap-1'>
