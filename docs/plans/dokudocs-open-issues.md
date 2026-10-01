@@ -89,7 +89,7 @@ Keterangan kolom **Verifikasi**: *terkonfirmasi* = saya cek atau buktikan di ses
 - Angka editor per dokumen, koneksi per instance, latency, availability, dan topologi HA belum ditetapkan ("ditetapkan dari sizing dan load/failover sebelum rilis").
 
 ### 13. [G1] Bukti E2E revoke, kedaluwarsa token, dan logout dengan pending edit
-- **Status 2026-10-02 (sebagian):** revoke dan token kedaluwarsa terbukti di tingkat provider; logout menyisakan pending di IndexedDB dan menyimpang dari ADR 0007 (lihat [catatan HA](../research/dokudocs-g1-ha-resilience.md)). E2E browser logout belum ada.
+- **Status 2026-10-02 (sebagian):** revoke dan token kedaluwarsa terbukti di tingkat provider; logout mengikuti ADR 0007 (opsi B): flush lalu bersihkan, atau konfirmasi buang; E2E browser untuk revoke, token ditolak, dan logout lulus (lihat [catatan HA](../research/dokudocs-g1-ha-resilience.md)).
 - Catatan lama menyebut alur ini belum terbukti; periksa dulu mana yang sudah tertutup oleh tes terbaru, lalu tutup sisanya (revoke saat edit berjalan, token kedaluwarsa saat offline, logout dengan pending).
 
 ## G2

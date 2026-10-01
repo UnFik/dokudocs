@@ -68,14 +68,14 @@ Verified by tests (this branch added the frontend ones; the backend ones already
 - Token rejected after being offline: pending edits and snapshot are kept, status is `unauthorized`, no retry loop (provider spec). An expired or missing token never opens a socket and keeps pending edits. The token is read again at each reconnect, so a refreshed session resumes sync.
 - Logout with pending edits: pending data is keyed by user ID, so another account on the same device cannot read it (`collaboration-store.spec.ts`).
 
-## Decision needed: logout with pending edits versus ADR 0007
+## Decision: logout with pending edits follows ADR 0007 (option B chosen, implemented)
 
-Current behavior (unchanged, recorded by an E2E spec): sign-out only resets the session. Pending Yjs updates and the cached body stay in IndexedDB under the user's ID. They are unreadable to another account (store test) and reappear when the same user signs in again. ADR 0007 says logout should offer sync or export while read access can be verified, then clear that user's local document state after logout is confirmed.
+The owner chose option B. Sign-out now:
 
-| Option | What changes | Pro | Con |
-| --- | --- | --- | --- |
-| A. Keep current behavior, amend ADR 0007 | Document that data stays per user on the device | No work, no data loss on accidental logout | Document content remains on shared devices; contradicts the privacy reason in the ADR |
-| B. Implement the ADR | Sign-out dialog counts pending edits; online: wait for ACK or export, then clear; offline: block logout or require explicit discard | Matches the ADR, no residue on shared devices | Needs dialog flow, export path, and an offline policy; user can lose offline work by discarding |
-| C. Hybrid | Clear cached bodies with nothing pending at logout; keep only unsynced pending edits, flagged, with a "discard local data" action and a retention limit | No residue except unsynced work | Still leaves some content; more states to test |
+1. Counts the account's pending edits in IndexedDB. For each document it waits (up to 15 s) for the open editor's provider to get every update acknowledged, or opens a short-lived provider for documents that are not open and need a known workspace and a connection.
+2. If everything is acknowledged, it stops the open providers, clears the account's cached bodies, pending updates and commands, then signs out.
+3. If anything cannot be sent (offline, rejected, workspace unknown, check failed), it keeps the data and shows "Edits are not synced". The user can Cancel (stay signed in, data kept), export the unsynced documents as Markdown (online only, after a read-access check), or choose "Discard and sign out". Nothing is dropped without that confirmation.
 
-Recommendation: B for online logout (flush, then clear), and for offline logout block with an explicit "discard unsynced edits" confirmation. It is the only option that keeps the ADR's stated guarantee on shared devices without silently losing work. Owner decides; until then the E2E spec `logout with a pending edit currently leaves it in local storage` documents the present behavior and should be inverted when the decision lands.
+Code: `collaboration-logout.ts`, `sign-out-dialog.tsx`, `IndexedDBCollaborationStore.listPendingDocuments/listAllDocuments/clearUser`, `CollaborativeDocumentProvider.whenDrained/settled`. Evidence: unit tests for each, plus E2E `logout flushes a pending edit to the server and clears local data` and `logout that cannot flush asks before discarding the pending edit` (both pass through `make test-e2e-with-backend`).
+
+Known limits: export and the temporary flush provider depend on the document's workspace being known from the loaded document list; a document not in that list is treated as unsynced and can only be discarded. Another tab holding the writer role for the same document is not coordinated. Pending structural commands are flushed by the same drain check but have no dedicated E2E.
