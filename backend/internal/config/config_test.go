@@ -51,3 +51,44 @@ func TestLoadConfigFallbackOnBadDuration(t *testing.T) {
 		t.Fatalf("expected fallback 24h, got %v", cfg.AccessTokenTTL)
 	}
 }
+
+func TestLoadConfigDatabasePoolDefaultsKeepTodaysSizing(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.DBMaxOpenConns != 10 || cfg.DBMaxIdleConns != 10 || cfg.DBConnMaxLifetime != 30*time.Minute {
+		t.Fatalf("pool defaults = %d/%d/%s, want 10/10/30m", cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxLifetime)
+	}
+}
+
+func TestLoadConfigDatabasePoolIsTunableFromTheEnvironment(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("DB_MAX_OPEN_CONNS", "40")
+	t.Setenv("DB_MAX_IDLE_CONNS", "20")
+	t.Setenv("DB_CONN_MAX_LIFETIME", "5m")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.DBMaxOpenConns != 40 || cfg.DBMaxIdleConns != 20 || cfg.DBConnMaxLifetime != 5*time.Minute {
+		t.Fatalf("pool = %d/%d/%s, want 40/20/5m", cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxLifetime)
+	}
+}
+
+func TestLoadConfigIdleConnsNeverExceedOpenConns(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("DB_MAX_OPEN_CONNS", "8")
+	t.Setenv("DB_MAX_IDLE_CONNS", "30")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.DBMaxIdleConns != 8 {
+		t.Fatalf("idle = %d, want clamped to open = 8", cfg.DBMaxIdleConns)
+	}
+}

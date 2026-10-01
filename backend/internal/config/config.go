@@ -12,6 +12,9 @@ type Config struct {
 	Addr               string
 	DatabaseURL        string
 	RedisURL           string
+	DBMaxOpenConns     int
+	DBMaxIdleConns     int
+	DBConnMaxLifetime  time.Duration
 	AllowedOrigin      string
 	GoogleClientID     string
 	GoogleClientSecret string
@@ -42,6 +45,9 @@ func LoadConfig() (Config, error) {
 		Addr:               env.GetString("APP_ADDR", ":8080"),
 		DatabaseURL:        env.GetString("DATABASE_URL", ""),
 		RedisURL:           env.GetString("REDIS_URL", ""),
+		DBMaxOpenConns:     env.GetInt("DB_MAX_OPEN_CONNS", 10),
+		DBMaxIdleConns:     env.GetInt("DB_MAX_IDLE_CONNS", 10),
+		DBConnMaxLifetime:  env.GetDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
 		AllowedOrigin:      env.GetString("ALLOWED_ORIGIN", "http://localhost:5173"),
 		GoogleClientID:     env.GetString("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret: env.GetString("GOOGLE_CLIENT_SECRET", ""),
@@ -56,6 +62,13 @@ func LoadConfig() (Config, error) {
 		WriteTimeout:       env.GetDuration("WRITE_TIMEOUT", 10*time.Second),
 		IdleTimeout:        env.GetDuration("IDLE_TIMEOUT", 60*time.Second),
 		ShutdownTimeout:    env.GetDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
+	}
+
+	if cfg.DBMaxOpenConns < 1 {
+		cfg.DBMaxOpenConns = 10
+	}
+	if cfg.DBMaxIdleConns < 0 || cfg.DBMaxIdleConns > cfg.DBMaxOpenConns {
+		cfg.DBMaxIdleConns = cfg.DBMaxOpenConns
 	}
 
 	if cfg.DatabaseURL == "" {
