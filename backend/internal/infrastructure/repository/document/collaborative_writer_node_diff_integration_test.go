@@ -374,3 +374,28 @@ func TestCommitUpdateUnderConcurrentWritersKeepsEveryEditAndEveryVersion(t *test
 		t.Fatalf("p95 commit latency %v exceeds the 200 ms G6 gate", p95)
 	}
 }
+
+// TestCommitUpdateProfileRun commits many one-character edits to a 2,001-node
+// document so a CPU profile (-cpuprofile) shows where commit time goes.
+// Run with COMMIT_PROFILE=1.
+func TestCommitUpdateProfileRun(t *testing.T) {
+	if os.Getenv("COMMIT_PROFILE") == "" {
+		t.Skip("set COMMIT_PROFILE=1 to run the profiling loop")
+	}
+	const paragraphs = 1000
+	f := newNodeDiffFixture(t, paragraphs)
+	texts := make([]*crdt.YXmlText, paragraphs)
+	for i := range texts {
+		paragraph := f.root().Children()[i].(*crdt.YXmlElement)
+		texts[i] = paragraph.Children()[0].(*crdt.YXmlElement).Children()[0].(*crdt.YXmlText)
+	}
+	durations := make([]time.Duration, 0, 400)
+	for i := 0; i < 400; i++ {
+		text := texts[(i*37)%paragraphs]
+		start := time.Now()
+		f.commit(t, func(tx *crdt.Transaction) { text.Insert(tx, text.Len(), "x", nil) })
+		durations = append(durations, time.Since(start))
+	}
+	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
+	t.Logf("PROFILE nodes=%d p50=%v p95=%v", paragraphs*2+1, durations[len(durations)/2], durations[len(durations)*95/100])
+}
