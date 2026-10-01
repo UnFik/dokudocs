@@ -194,7 +194,7 @@ export function ConflictReviewPanel({
             {edit.local.type} {edit.nodeID.slice(0, 8)}:{' '}
             {reasonLabel[edit.reason]}
           </p>
-          <div className='grid gap-2 sm:grid-cols-2'>
+          <div className='grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2'>
             <VersionBlock label='Your version' text={edit.local.content} />
             <VersionBlock
               label='Server version'
@@ -233,7 +233,7 @@ export function ConflictReviewPanel({
           <p className='font-mono text-[11px] text-muted-foreground'>
             {item.type} {item.nodeID.slice(0, 8)}: {item.kind}
           </p>
-          <div className='grid gap-2 sm:grid-cols-2'>
+          <div className='grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2'>
             <VersionBlock label='Your version' text={item.local} />
             <VersionBlock label='Server version' text={item.canonical} />
           </div>
@@ -321,7 +321,7 @@ function VersionBlock({ label, text }: { label: string; text: string | null }) {
       {text === null ? (
         <p className='text-sm text-muted-foreground'>Not in this version.</p>
       ) : (
-        <pre className='font-sans text-sm break-words whitespace-pre-wrap'>
+        <pre className='font-sans text-sm whitespace-pre-wrap [overflow-wrap:anywhere]'>
           {text}
         </pre>
       )}

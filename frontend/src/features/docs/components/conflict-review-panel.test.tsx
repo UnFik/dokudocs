@@ -1,3 +1,4 @@
+import '@/styles/index.css'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page } from 'vitest/browser'
@@ -228,4 +229,46 @@ describe('ConflictReviewPanel', () => {
     await page.getByRole('button', { name: 'Move to the end instead' }).click()
     expect(a.resolveCommand).toHaveBeenCalledWith('move', 'm1', 'reissue')
   })
+
+  for (const theme of ['light', 'dark'] as const) {
+    it(`fits a phone width without horizontal overflow and keeps 44px tap targets (${theme})`, async () => {
+      await page.viewport(375, 700)
+      document.documentElement.classList.toggle('dark', theme === 'dark')
+      try {
+        const long = 'word '.repeat(60) + 'x'.repeat(120)
+        await render(
+          <div style={{ width: 375 }}>
+            <ConflictReviewPanel
+              load={async () =>
+                model({
+                  held: [
+                    {
+                      nodeID: 'r1',
+                      reason: 'concurrent-edit',
+                      local: node(long),
+                      canonical: node(long + '!'),
+                    },
+                  ],
+                })
+              }
+              actions={actions()}
+            />
+          </div>
+        )
+        await expect
+          .element(page.getByText('Your version').first())
+          .toBeVisible()
+        const root = page.getByRole('region', { name: 'Review local changes' })
+        const el = root.element() as HTMLElement
+        expect(el.scrollWidth).toBeLessThanOrEqual(el.clientWidth)
+        for (const button of el.querySelectorAll('button'))
+          expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(
+            44
+          )
+      } finally {
+        document.documentElement.classList.remove('dark')
+        await page.viewport(414, 896)
+      }
+    })
+  }
 })
