@@ -219,3 +219,9 @@
 .dd-slash-empty {
   padding: 8px;
 }
+
+@media (hover: none) {
+  .dd-image-edit {
+    opacity: 1;
+  }
+}
