@@ -38,6 +38,20 @@ Sebagai pembanding, gate repository (tanpa WebSocket, PostgreSQL lokal, 2.001 no
 3. Menambah RTT 10 ms ke PostgreSQL meruntuhkan skenario bahkan pada 201 node. Commit memakai beberapa round trip berurutan dalam satu transaksi per dokumen, sehingga throughput per dokumen dibatasi RTT. Ini belum dikuantifikasi per RTT; hanya satu nilai (10 ms) yang dicoba.
 4. Frame `resync` per commit terlihat di semua run (mis. 120 resync untuk 120 commit di 201 node). Belum diselidiki apakah ini frame awal per socket, balasan ke penulis, atau perilaku yang bisa dihindari.
 
+## Diagnosis awal pada 2.001 node (run ulang, mesin tenang)
+
+Run ulang `single-instance`, 10 editor, 10 peer, 2.001 node, 150 commit, mesin dengan load average sekitar 4 (bukan 20). Satu run per sel.
+
+| Commit/s | ACK p50 / p95 / p99 (ms) | Peer p50 / p95 / p99 (ms) | Frame update / resync | Hasil |
+|---|---|---|---|---|
+| 9,4 | 12,1 / 20,5 / 38,8 | 31,2 / 45,3 / 52,4 | 2.850 / 150 | bersih |
+| 13,4 | 13,2 / 28,5 / 50,2 | 32,2 / 86,1 / 115,6 | 2.830 / 163 | bersih |
+| 18,7 | 3.159 / 7.332 / 7.979 | 378 / 7.952 / 8.352 | 1.010 / 294 | jenuh (antrean), semua socket tetap mencapai versi akhir |
+
+Koreksi atas temuan 2: "runtuh" pada 9 commit/s di tabel atas terjadi saat load average 20, jadi lebih mungkin kontensi mesin daripada batas kode. Pada mesin tenang, 2.001 node bersih sampai 13 commit/s dan jenuh antara 13 dan 19 commit/s. Gate G6 (2 commit/s per editor, 20 commit/s total) tetap belum tercapai lewat WebSocket.
+
+Profil CPU pada run 18,7 commit/s (`go test -cpuprofile`): sekitar 46% waktu di `BodyReadUseCase.Read` (pembacaan seluruh body: `loadDocumentBody`, `yjs.ProjectV1`, `documentbody.Validate`, `encoding/json`), dan sekitar 41% di GC. Pembaca itu dipanggil dari dua jalur: `fanoutFromRoomHead` lewat `readAuthorizedSnapshot` dan jalur pembacaan snapshot saat resync. Hipotesis yang belum dibuktikan dengan perubahan kode: saat commit dari beberapa editor tiba tidak berurutan, `fanoutNeedsFullSnapshot` bernilai benar (`receipt.BodyVersion > p.bodyVersion+1`) untuk banyak peer sekaligus, dan tiap peer memicu pembacaan body penuh. Jumlah frame `resync` naik dari 150 ke 294 pada run jenuh, sejalan dengan hipotesis ini. Perbaikan yang layak dicoba: memakai satu pembacaan snapshot per fan-out (di-cache per hak akses) dan menunda resync untuk peer yang hanya tertinggal beberapa versi. Belum dikerjakan dan belum diukur.
+
 ## SLO
 
 Target ini ditetapkan sebagai tujuan. Kolom status hanya mengklaim apa yang diukur.
