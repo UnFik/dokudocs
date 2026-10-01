@@ -1,3 +1,4 @@
+import { inputRules } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
 import { EditorState, type Command, type Transaction } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
@@ -14,6 +15,7 @@ import {
 } from 'y-prosemirror'
 import * as Y from 'yjs'
 import type { DocumentBodyNode } from '../documentBody'
+import { headingInputRule, setHeadingCommand, splitTextBlock } from './blocks'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
 import {
   emptyInlineState,
@@ -71,6 +73,18 @@ export function createDocumentBodyEditor(
     plugins: [
       ySyncPlugin(fragment),
       yUndoPlugin(),
+      inputRules({ rules: [headingInputRule] }),
+      keymap({
+        Enter: () => runBlock(splitTextBlock),
+        ...Object.fromEntries(
+          ([0, 1, 2, 3, 4, 5, 6] as const).flatMap((level) =>
+            ['Ctrl', 'Meta'].map((modifier) => [
+              `${modifier}-Alt-${level}`,
+              () => runBlock(setHeadingCommand(level)),
+            ])
+          )
+        ),
+      }),
       keymap(
         bindControlAndMeta({
           b: () => runInline(toggleInlineMark('strong')),
@@ -99,6 +113,10 @@ export function createDocumentBodyEditor(
   const runInline = (command: Command) => {
     if (canEdit()) command(state, (tr) => viewHolder.current?.dispatch(tr))
     return true
+  }
+  const runBlock = (command: Command) => {
+    if (!canEdit()) return false
+    return command(state, (tr) => viewHolder.current?.dispatch(tr))
   }
   let lastInline = emptyInlineState
   const publishInline = () => {
@@ -309,6 +327,8 @@ export function createDocumentBodyEditor(
     setLink: (href: string) =>
       canEdit() && setLinkCommand(href)(state, view.dispatch),
     removeLink: () => canEdit() && removeLinkCommand(state, view.dispatch),
+    setHeading: (level: 0 | 1 | 2 | 3 | 4 | 5 | 6) =>
+      canEdit() && setHeadingCommand(level)(state, view.dispatch),
     focus: () => view.focus(),
     undo: () => canEdit() && undoYjs(state),
     redo: () => canEdit() && redoYjs(state),

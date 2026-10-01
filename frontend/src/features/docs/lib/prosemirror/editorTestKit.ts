@@ -62,7 +62,12 @@ export function mountTestEditor(
 export function pressKey(
   target: HTMLElement,
   key: string,
-  modifiers: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean } = {}
+  modifiers: {
+    ctrlKey?: boolean
+    metaKey?: boolean
+    shiftKey?: boolean
+    altKey?: boolean
+  } = {}
 ) {
   const event = new KeyboardEvent('keydown', {
     key,
