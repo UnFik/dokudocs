@@ -57,7 +57,22 @@ type ProfileReader interface {
 // entries expire after three times this, so a crashed instance disappears.
 const presenceRefresh = 10 * time.Second
 
+// snapshotKey and snapshotEntry hold the newest full body read for a room, so
+// fan-outs that run at the same time and need the same head read it once.
+type snapshotKey struct {
+	documentID uuid.UUID
+	canEdit    bool
+}
+
+type snapshotEntry struct {
+	mu       sync.Mutex
+	snapshot collaboration.BodySnapshot
+	started  time.Time // when the read that produced snapshot began
+	valid    bool
+}
+
 type Server struct {
+	snapshots      map[snapshotKey]*snapshotEntry // guarded by mu
 	verifier       TokenVerifier
 	presenceStore  collaboration.PresenceStore
 	presenceEvery  time.Duration
@@ -163,6 +178,7 @@ func NewServer(verifier TokenVerifier, reader BodyReader, writer UpdateWriter, a
 		resyncEvery: resyncInterval, presenceEvery: presenceRefresh, pollers: make(map[uuid.UUID]context.CancelFunc),
 		writeBase: writeTimeout, heartbeatEvery: heartbeatInterval, heartbeatWait: pongTimeout,
 		rooms: make(map[uuid.UUID]map[*peer]struct{}), broker: broker,
+		snapshots:  make(map[snapshotKey]*snapshotEntry),
 		instanceID: uuid.New(), brokerCtx: brokerCtx, brokerCancel: brokerCancel,
 	}
 	server.updates = collaboration.NewUseCase(writer, server)
@@ -713,6 +729,8 @@ func (s *Server) removePeer(p *peer) {
 	delete(s.rooms[p.documentID], p)
 	if len(s.rooms[p.documentID]) == 0 {
 		delete(s.rooms, p.documentID)
+		delete(s.snapshots, snapshotKey{documentID: p.documentID, canEdit: true})
+		delete(s.snapshots, snapshotKey{documentID: p.documentID, canEdit: false})
 		if cancel, ok := s.pollers[p.documentID]; ok {
 			cancel()
 			delete(s.pollers, p.documentID)
@@ -1006,6 +1024,7 @@ func (s *Server) verifySession(p *peer) bool {
 // fanoutFromRoomHead delivers an update after one access check for the whole
 // room. A peer is read in full only when it must resync.
 func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt collaboration.CommitReceipt, update collaboration.Update) error {
+	headAt := time.Now()
 	head, err := s.roomReader.ReadRoomHead(ctx, peers[0].workspaceID, receipt.DocumentID, distinctUsers(peers))
 	if err != nil {
 		return err
@@ -1029,7 +1048,7 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 			full, shared := fulls[access.CanEdit]
 			if !shared {
 				var err error
-				full, err = s.readAuthorizedSnapshot(ctx, p)
+				full, err = s.headSnapshot(ctx, p, headAt, access.CanEdit)
 				if err != nil {
 					p.close()
 					if firstError == nil {
@@ -1048,6 +1067,38 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 		}
 	}
 	return firstError
+}
+
+// headSnapshot returns a full body read no earlier than headAt, the moment the
+// caller began reading the room head. A body whose read began after that moment
+// holds every commit the head did, including state-only commits that leave
+// body_version unchanged, so concurrent fan-outs share it instead of each
+// reading the whole document. A read that began earlier is never reused. The
+// caller has already authorized p through the room head; the shared body is
+// only content for that access level.
+func (s *Server) headSnapshot(ctx context.Context, p *peer, headAt time.Time, canEdit bool) (collaboration.BodySnapshot, error) {
+	key := snapshotKey{documentID: p.documentID, canEdit: canEdit}
+	s.mu.Lock()
+	entry := s.snapshots[key]
+	if entry == nil {
+		entry = &snapshotEntry{}
+		s.snapshots[key] = entry
+	}
+	s.mu.Unlock()
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if entry.valid && !entry.started.Before(headAt) {
+		return entry.snapshot, nil
+	}
+	started := time.Now()
+	snapshot, err := s.readAuthorizedSnapshot(ctx, p)
+	if err != nil {
+		return collaboration.BodySnapshot{}, err
+	}
+	if snapshot.CanEdit == canEdit {
+		entry.snapshot, entry.started, entry.valid = snapshot, started, true
+	}
+	return snapshot, nil
 }
 
 // fanoutNeedsFullSnapshot mirrors the cases in enqueueUpdate that send a
