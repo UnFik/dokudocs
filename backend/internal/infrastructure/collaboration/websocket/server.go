@@ -300,8 +300,7 @@ func (s *Server) servePeer(ctx context.Context, conn *ws.Conn, documentID uuid.U
 	// The snapshot can be large, so the deadline grows with its size; a client
 	// that stops reading must not hold this goroutine indefinitely.
 	_ = conn.SetWriteDeadline(time.Now().Add(s.writeBase + time.Duration(len(snapshot.EncodedState)>>20)*writePerMB))
-	sendErr := ws.JSON.Send(conn, snapshotMessage("ready", snapshot))
-	if sendErr != nil {
+	if err := ws.JSON.Send(conn, snapshotMessage("ready", snapshot)); err != nil {
 		return
 	}
 	close(peer.started)
