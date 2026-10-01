@@ -62,3 +62,20 @@ Outline (`references/outline`) is licensed BSL 1.1: behavior reference only, no 
 - Block-type changes must write the attributes the server requires (see items 10 to 11).
 - Controls respect `readOnly` and the structural-command pause (`editable()`).
 - UI follows `DESIGN.md`: ghost toolbar buttons with `aria-label`, Lucide icons at 16px, 4px radius, one small shadow on the floating layer, no accent fill.
+
+## Status of #28 to #30 and the structural-command limit
+
+Done in the editor (`frontend/src/features/docs/lib/prosemirror`):
+
+- #28: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y; undo and redo buttons with enabled state from the Yjs undo manager; a two-editor test proves undo reverts only the local edit.
+- #29: Ctrl/Cmd+B, I, E, Shift+X, K; floating selection toolbar (bold, italic, strike, code, link); a mark change splits the run in place, the first part keeps its ID and the rest get fresh IDs.
+- #30 (part): heading by `Ctrl+Alt+1..6` and `Ctrl+Alt+0`, heading input rule `# `, Enter in paragraph, heading, bullet item and task item.
+
+Not done in #30, and why. [ADR 0012](../adr/0012-movenode-owns-existing-node-structure.md) and `prepareBodyTransaction` reject any local transaction that reparents or deletes an existing node unless it goes through `MoveNode` or `DeleteNode`. That blocks these behaviors until a command exists for them:
+
+- Wrapping a paragraph in a list or quote (`- `, `1. `, `[ ] `, `> `): the paragraph changes parent.
+- Indent, outdent, and Backspace at the start of a list item: the item or its paragraph changes parent.
+- Code block (```` ``` ````) and horizontal rule from a paragraph: the run children are replaced, which deletes run nodes.
+- `# ` in an empty paragraph: removing the marker empties the only run, and `wouldRemoveInlineRun` blocks it.
+
+A way forward is a server `ConvertBlock` command (change a block's type and wrap or unwrap it while keeping descendant IDs), or sequencing existing `MoveNode` calls with the editor paused. Either needs an ADR. The server also requires per-type attributes (`marker`, `loose`, `start`, `delimiter`, `checked`, `level`), so any new block command must write them.
