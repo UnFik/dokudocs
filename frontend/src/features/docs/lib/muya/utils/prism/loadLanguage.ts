@@ -12,12 +12,11 @@ interface ILangLoadStatus {
  */
 export const loadedLanguages = new Set(['markup', 'css', 'clike', 'javascript'])
 
+// Vite only rewrites a literal `import.meta.glob(...)` call. A cast such as
+// `(import.meta as any).glob` survives as plain JS, leaves the map empty, and
+// every grammar then reports "loaded" without registering.
 const prismComponents: Record<string, () => Promise<unknown>> =
-  typeof (import.meta as any).glob === 'function'
-    ? (import.meta as any).glob(
-        '../../../../../../node_modules/prismjs/components/prism-*.js'
-      )
-    : {}
+  import.meta.glob('/node_modules/prismjs/components/prism-*.js')
 
 const { languages } = components
 
@@ -89,7 +88,7 @@ function initLoadLanguage(Prism: IPrismLike) {
         return
       }
       delete Prism.languages[lang]
-      const key = `../../../../../../node_modules/prismjs/components/prism-${lang}.js`
+      const key = `/node_modules/prismjs/components/prism-${lang}.js`
       const loader = prismComponents[key]
       if (loader) {
         await loader()

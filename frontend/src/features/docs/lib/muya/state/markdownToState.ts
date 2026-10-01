@@ -108,6 +108,10 @@ export class MarkdownToState {
           // The front matter token swallows the blank line after it, so an
           // empty gap there is not "adjacent blocks"; keep the canonical break.
           siblings[previousLength - 1]!.name !== 'frontmatter' &&
+          // Loose list items are separated by a blank line that the item
+          // token does not carry, so an empty gap would drop it.
+          siblings[siblings.length - 1]!.name !== 'list-item' &&
+          siblings[siblings.length - 1]!.name !== 'task-list-item' &&
           sourceGap === '' &&
           !sourceGapByToken.has(token)
         ) {
