@@ -1,3 +1,4 @@
+import { keymap } from 'prosemirror-keymap'
 import { EditorState, type Transaction } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import {
@@ -8,6 +9,7 @@ import {
   ySyncPlugin,
   ySyncPluginKey,
   yUndoPlugin,
+  yUndoPluginKey,
   yXmlFragmentToProseMirrorRootNode,
 } from 'y-prosemirror'
 import * as Y from 'yjs'
@@ -23,6 +25,11 @@ export type MoveNodeIntent = {
   nodeID: string
   targetParentID: string
   beforeNodeID: string | null
+}
+
+export interface EditorHistoryState {
+  canUndo: boolean
+  canRedo: boolean
 }
 
 export interface DocumentBodyAnchor {
@@ -42,6 +49,7 @@ export function createDocumentBodyEditor(
     onMoveNode?: (move: MoveNodeIntent) => void | Promise<void>
     onMoveNodeQueued?: (move: MoveNodeIntent) => void
     onTransactionError?: (error: unknown) => void
+    onHistoryChange?: (history: EditorHistoryState) => void
   } = {}
 ) {
   const fragment = ydoc.getXmlFragment('body')
@@ -49,8 +57,43 @@ export function createDocumentBodyEditor(
   let structuralCommandPending = false
   let state = EditorState.create({
     doc: yXmlFragmentToProseMirrorRootNode(fragment, documentBodySchema),
-    plugins: [ySyncPlugin(fragment), yUndoPlugin()],
+    plugins: [
+      ySyncPlugin(fragment),
+      yUndoPlugin(),
+      keymap(
+        bindControlAndMeta({
+          z: () => runHistory(undoYjs),
+          'Shift-z': () => runHistory(redoYjs),
+          y: () => runHistory(redoYjs),
+        })
+      ),
+    ],
   })
+  const canEdit = () => !readOnly && !structuralCommandPending
+  // A shortcut swallowed while read-only must not fall through to the browser's
+  // own contenteditable history, which would bypass the Yjs undo manager.
+  const runHistory = (action: (state: EditorState) => boolean) => {
+    if (canEdit()) action(state)
+    return true
+  }
+  const readHistory = (): EditorHistoryState => {
+    const undoManager = yUndoPluginKey.getState(state)?.undoManager
+    return {
+      canUndo: undoManager?.canUndo() ?? false,
+      canRedo: undoManager?.canRedo() ?? false,
+    }
+  }
+  let lastHistory = readHistory()
+  const publishHistory = () => {
+    const next = readHistory()
+    if (
+      next.canUndo === lastHistory.canUndo &&
+      next.canRedo === lastHistory.canRedo
+    )
+      return
+    lastHistory = next
+    options.onHistoryChange?.(next)
+  }
   const viewHolder: { current?: EditorView } = {}
   const queueDeleteNode = (nodeID: string) => {
     if (!options.onDeleteNode) return false
@@ -171,6 +214,10 @@ export function createDocumentBodyEditor(
   })
   viewHolder.current = view
   if (view.state !== state) view.updateState(state)
+  const undoManager = yUndoPluginKey.getState(state)?.undoManager
+  undoManager?.on('stack-item-added', publishHistory)
+  undoManager?.on('stack-item-popped', publishHistory)
+  undoManager?.on('stack-cleared', publishHistory)
 
   return {
     view,
@@ -221,16 +268,32 @@ export function createDocumentBodyEditor(
         return null
       }
     },
-    undo: () => undoYjs(state),
-    redo: () => redoYjs(state),
+    getHistory: readHistory,
+    undo: () => canEdit() && undoYjs(state),
+    redo: () => canEdit() && redoYjs(state),
     setReadOnly: (next: boolean) => {
       readOnly = next
       view.setProps({ editable: () => !readOnly && !structuralCommandPending })
     },
     destroy: () => {
+      undoManager?.off('stack-item-added', publishHistory)
+      undoManager?.off('stack-item-popped', publishHistory)
+      undoManager?.off('stack-cleared', publishHistory)
       view.destroy()
     },
   }
+}
+
+/** Bind each shortcut to both Ctrl and Cmd so it works on every platform. */
+function bindControlAndMeta<T>(bindings: Record<string, T>) {
+  const bound: Record<string, T> = {}
+  for (const [key, command] of Object.entries(bindings)) {
+    const parts = key.split('-')
+    const last = parts.pop()!
+    for (const modifier of ['Ctrl', 'Meta'])
+      bound[[modifier, ...parts, last].join('-')] = command
+  }
+  return bound
 }
 
 function wouldRemoveInlineRun(
