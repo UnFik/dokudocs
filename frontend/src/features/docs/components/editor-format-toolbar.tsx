@@ -17,6 +17,9 @@ import type {
   InlineState,
 } from '../lib/prosemirror/inlineMarks'
 
+// Widest state: mark buttons plus the link field and its apply button.
+const TOOLBAR_MAX_WIDTH = 340
+
 // Keep the editor selection: a button press must not move focus off the text.
 const keepSelection = (event: React.MouseEvent) => event.preventDefault()
 
@@ -36,7 +39,7 @@ export function HistoryButtons({
       <Button
         size='icon'
         variant='ghost'
-        className='size-8'
+        className='size-8 max-sm:size-11'
         aria-label='Undo'
         title='Undo (Ctrl+Z)'
         disabled={disabled || !history.canUndo}
@@ -48,7 +51,7 @@ export function HistoryButtons({
       <Button
         size='icon'
         variant='ghost'
-        className='size-8'
+        className='size-8 max-sm:size-11'
         aria-label='Redo'
         title='Redo (Ctrl+Shift+Z)'
         disabled={disabled || !history.canRedo}
@@ -118,10 +121,13 @@ export function SelectionToolbar({
     <div
       role='toolbar'
       aria-label='Format selection'
-      className='fixed z-50 flex flex-col gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-sm'
+      className='fixed z-50 flex max-w-[calc(100vw-1rem)] flex-col gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-sm'
       style={{
         top: Math.max(8, inline.rect.top - 44),
-        left: Math.max(8, inline.rect.left),
+        left: Math.max(
+          8,
+          Math.min(inline.rect.left, window.innerWidth - TOOLBAR_MAX_WIDTH - 8)
+        ),
       }}
     >
       <div className='flex items-center gap-0.5'>
@@ -130,7 +136,7 @@ export function SelectionToolbar({
             key={mark}
             size='icon'
             variant={inline.marks[mark] ? 'secondary' : 'ghost'}
-            className='size-8'
+            className='size-8 max-sm:size-11'
             aria-label={label}
             aria-pressed={inline.marks[mark]}
             title={`${label} (${shortcut})`}
@@ -144,7 +150,7 @@ export function SelectionToolbar({
           <Button
             size='icon'
             variant='ghost'
-            className='size-8'
+            className='size-8 max-sm:size-11'
             aria-label='Remove link'
             title='Remove link'
             onMouseDown={keepSelection}
@@ -156,7 +162,7 @@ export function SelectionToolbar({
         <Button
           size='icon'
           variant={inline.link ? 'secondary' : 'ghost'}
-          className='size-8'
+          className='size-8 max-sm:size-11'
           aria-label='Link'
           aria-pressed={Boolean(inline.link)}
           title='Link (Ctrl+K)'
@@ -189,7 +195,7 @@ export function SelectionToolbar({
               autoFocus
               aria-label='Link address'
               aria-invalid={Boolean(error)}
-              className='h-8 w-56'
+              className='h-8 w-40 sm:w-56'
               placeholder='https://example.com'
               value={href}
               onChange={(event) => setHref(event.target.value)}

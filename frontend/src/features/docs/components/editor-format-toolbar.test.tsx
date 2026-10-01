@@ -114,4 +114,19 @@ describe('SelectionToolbar', () => {
       .element(view.getByRole('textbox', { name: 'Link address' }))
       .toBeVisible()
   })
+
+  it('stays inside the viewport when the selection is near the right edge', async () => {
+    const props = selectionProps({
+      inline: {
+        ...selected,
+        rect: { top: 100, bottom: 120, left: 9000, right: 9100 },
+      },
+    })
+    const view = await render(<SelectionToolbar {...props} />)
+    await view.getByRole('button', { name: 'Link' }).click()
+    const toolbar = view.container.querySelector('[role="toolbar"]')!
+    const box = toolbar.getBoundingClientRect()
+    expect(box.left).toBeGreaterThanOrEqual(0)
+    expect(box.right).toBeLessThanOrEqual(window.innerWidth)
+  })
 })
