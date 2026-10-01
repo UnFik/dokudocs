@@ -1,4 +1,4 @@
-import { EditorState } from 'prosemirror-state'
+import { EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { describe, expect, it } from 'vitest'
 import {
@@ -765,6 +765,89 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     } finally {
       editor.destroy()
       ydoc.destroy()
+    }
+  })
+
+  it('queues DeleteNode when Backspace is pressed on a fully selected paragraph', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const yStateBefore = Y.encodeStateAsUpdate(ydoc)
+    const deleteRequests: string[] = []
+    const editor = createDocumentBodyEditor(host, ydoc, {
+      onDeleteNode: (nodeID) => {
+        deleteRequests.push(nodeID)
+      },
+    })
+
+    try {
+      const start = runPosition(editor.view.state.doc, 'second')
+      editor.view.dispatch(
+        editor.view.state.tr.setSelection(
+          TextSelection.create(editor.view.state.doc, start, start + 8)
+        )
+      )
+      editor.view.dom.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Backspace',
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+      await waitUntil(async () => deleteRequests.length === 1)
+
+      expect(deleteRequests).toEqual(['p2'])
+      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
+  it('queues MoveNode when Alt+ArrowDown is pressed in a paragraph', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const yStateBefore = Y.encodeStateAsUpdate(ydoc)
+    const moves: unknown[] = []
+    const editor = createDocumentBodyEditor(host, ydoc, {
+      onMoveNode: (move) => {
+        moves.push(move)
+      },
+    })
+
+    try {
+      const start = runPosition(editor.view.state.doc, 'first')
+      editor.view.dispatch(
+        editor.view.state.tr.setSelection(
+          TextSelection.create(editor.view.state.doc, start + 1)
+        )
+      )
+      editor.view.dom.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          altKey: true,
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+      await waitUntil(async () => moves.length === 1)
+
+      expect(moves).toEqual([
+        { nodeID: 'p1', targetParentID: 'root', beforeNodeID: null },
+      ])
+      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
     }
   })
 
@@ -1850,4 +1933,28 @@ function runPosition(doc: EditorState['doc'], text: string) {
   })
   if (position < 0) throw new Error(`missing run ${text}`)
   return position
+}
+
+function twoParagraphBody(): DocumentBodyNode[] {
+  const node = (
+    nodeID: string,
+    parentID: string | null,
+    siblingOrder: number,
+    type: string,
+    content = ''
+  ): DocumentBodyNode => ({
+    nodeID,
+    parentID,
+    siblingOrder,
+    type,
+    content,
+    attributes: {},
+  })
+  return [
+    node('root', null, 0, 'document'),
+    node('p1', 'root', 0, 'paragraph'),
+    node('r1', 'p1', 0, 'run', 'first'),
+    node('p2', 'root', 1, 'paragraph'),
+    node('r2', 'p2', 0, 'run', 'second'),
+  ]
 }
