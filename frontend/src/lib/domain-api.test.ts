@@ -14,6 +14,7 @@ import {
   getRAGConversation,
   initializeMarkdownBody,
   listDocuments,
+  listDocumentSuggestions,
   listProjects,
   listRAGConversations,
   listWorkspaces,
@@ -126,6 +127,35 @@ describe('Dokudocs domain API adapter', () => {
       publicLinkTokens: ['opened-public-token'],
     })
     expect(new Headers(calls[4][1].headers).has('X-Workspace-Id')).toBe(false)
+  })
+
+  it('lists suggestions decided by the seeded system user, whose id is not an RFC UUID', async () => {
+    const seededUser = '00000000-0000-0000-0000-000000000001'
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse([
+        {
+          documentId: documentId,
+          suggestionId: '11111111-1111-4111-8111-111111111111',
+          proposerId: '22222222-2222-4222-8222-222222222222',
+          deciderId: seededUser,
+          baseBodyVersion: 1,
+          baseBodyEpoch: 1,
+          operationSchemaVersion: 1,
+          provenance: 'human',
+          operations: [],
+          summary: 'Delete paragraph',
+          reason: '',
+          conflictReason: 'base',
+          status: 'conflicted',
+          createdAt: '2026-10-02T00:00:00Z',
+        },
+      ])
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    const [suggestion] = await listDocumentSuggestions(workspaceId, documentId)
+    expect(suggestion?.deciderId).toBe(seededUser)
+    expect(suggestion?.conflictReason).toBe('base')
   })
 
   it('requests a public share token with workspace scope', async () => {
