@@ -1659,6 +1659,88 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     }
   })
 
+  it('shares the local selection and shows remote cursors through the collaboration socket', async () => {
+    const source = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const state = Y.encodeStateAsUpdate(source)
+    source.destroy()
+    const socket = new FakeCollaborationSocket()
+    const userID = crypto.randomUUID()
+    const documentID = crypto.randomUUID()
+    const host = document.createElement('div')
+    document.body.append(host)
+    let signalReady!: () => void
+    const ready = new Promise<void>((resolve) => {
+      signalReady = resolve
+    })
+    const session = await mountCollaborativeDocumentBody(host, {
+      documentID,
+      workspaceID: crypto.randomUUID(),
+      userID,
+      token: 'test-token',
+      snapshot: {
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        encodedState: encodeBase64(state),
+      },
+      store: new IndexedDBCollaborationStore(),
+      socketFactory: () => socket,
+      onStatus: (status) => {
+        if (status === 'ready') signalReady()
+      },
+    })
+
+    try {
+      socket.open()
+      socket.receive({
+        type: 'ready',
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: encodeBase64(state),
+      })
+      await ready
+
+      const start = runPosition(session.editor.view.state.doc, 'first') + 1
+      session.editor.view.dispatch(
+        session.editor.view.state.tr.setSelection(
+          TextSelection.create(session.editor.view.state.doc, start, start + 3)
+        )
+      )
+      const cursorFrames = () =>
+        socket.sent
+          .map((frame) => JSON.parse(frame) as { type: string })
+          .filter((frame) => frame.type === 'cursor')
+      expect(cursorFrames()).toHaveLength(1)
+
+      const anchor = session.editor.createAnchor(start, start + 3)
+      socket.receive({
+        type: 'cursor',
+        cursor: {
+          connectionID: 'c1',
+          userID: 'u2',
+          name: 'Bo',
+          color: '#0369A1',
+          anchor: encodeBase64(anchor.start),
+          head: encodeBase64(anchor.end),
+        },
+      })
+      await waitUntil(async () => host.querySelector('.remote-cursor') !== null)
+      expect(host.querySelector('.remote-selection')?.textContent).toBe('fir')
+
+      socket.close()
+      await waitUntil(async () => host.querySelector('.remote-cursor') === null)
+    } finally {
+      session.destroy()
+      host.remove()
+    }
+  })
+
   it('persists DeleteNode intent with its source epoch until canonical completion', async () => {
     const store = new IndexedDBCollaborationStore()
     const scope = {
