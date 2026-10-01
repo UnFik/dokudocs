@@ -340,7 +340,7 @@ export class MarkdownToState {
         const { header, align, rows, raw } = token
         const tableState: ITableState = {
           name: 'table',
-          sourceMarkdown: raw,
+          sourceMarkdown: raw.replace(/(?:\r\n|\r|\n)+$/, ''),
           children: [],
         }
 

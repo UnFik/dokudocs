@@ -10,6 +10,7 @@ import {
 import blockFixture from '../fixtures/body-import-blocks.json'
 import corpus from '../fixtures/v1/manifest.json'
 import { MarkdownToState } from '../markdownToState'
+import { markdownToDocumentBody } from '../markdownToDocumentBody'
 import ExportMarkdown from '../stateToMarkdown'
 import type { TState } from '../types'
 
@@ -64,7 +65,7 @@ describe('documentBodyToMarkdown', () => {
     }).generate(source)
     const enriched = enrichMuyaStateForBodyImport(state)
 
-    expect(enriched).toEqual(blockFixture)
+    expect(stripSourceMetadata(enriched)).toEqual(blockFixture)
     expect(documentBodyToMarkdown(flatten(enriched))).toBe(
       new ExportMarkdown().generate(state)
     )
@@ -73,15 +74,17 @@ describe('documentBodyToMarkdown', () => {
   for (const fixture of corpus.fixtures) {
     it.skipIf(
       fixture.id === 'inline-opaque' && typeof DOMParser === 'undefined'
-    )(`round-trips AST fixture ${fixture.id} byte-for-byte`, () => {
+    )(`round-trips AST fixture ${fixture.id} byte-for-byte`, async () => {
       expect(['exact-byte', 'opaque']).toContain(fixture.classification)
       const source = fixtures[`../fixtures/v1/${fixture.file}`]
       expect(source, `missing fixture ${fixture.file}`).toBeDefined()
-      const state = new MarkdownToState().generate(source!)
 
-      expect(
-        documentBodyToMarkdown(flatten(enrichMuyaStateForBodyImport(state)))
-      ).toBe(source)
+      const body = await markdownToDocumentBody(
+        '00000000-0000-4000-8000-000000000001',
+        source!
+      )
+
+      expect(documentBodyToMarkdown(body.nodes)).toBe(source)
     })
   }
 
@@ -306,7 +309,24 @@ describe('documentBodyToMarkdown', () => {
   })
 })
 
+// The shared Go fixture covers block shape only; source gaps and compact
+// tables travel as root attributes (see markdownToDocumentBody).
+function testUUID(index: number) {
+  return `00000000-0000-4000-8000-${(index + 2).toString(16).padStart(12, '0')}`
+}
+
+function stripSourceMetadata(
+  states: MuyaBodyImportState[]
+): MuyaBodyImportState[] {
+  return states.map(({ sourceGap: _gap, sourceMarkdown: _table, ...rest }) => ({
+    ...rest,
+    ...(rest.children && { children: stripSourceMetadata(rest.children) }),
+  }))
+}
+
 function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
+  const sourceGaps: Record<string, string> = {}
+  const sourceTables: Record<string, string> = {}
   const nodes: DocumentBodyNode[] = [
     {
       nodeID: 'root',
@@ -322,7 +342,9 @@ function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
   function addStates(states: MuyaBodyImportState[], parentID: string) {
     for (let order = 0; order < states.length; order++) {
       const state = states[order]!
-      const nodeID = `node-${nextID++}`
+      const nodeID = testUUID(nextID++)
+      if (state.sourceGap !== undefined) sourceGaps[nodeID] = state.sourceGap
+      if (state.sourceMarkdown) sourceTables[nodeID] = state.sourceMarkdown
       nodes.push({
         nodeID,
         parentID,
@@ -338,7 +360,7 @@ function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
       ) {
         const inline = state.inline![inlineOrder]!
         nodes.push({
-          nodeID: `node-${nextID++}`,
+          nodeID: testUUID(nextID++),
           parentID: nodeID,
           siblingOrder: inlineOrder,
           type: inline.type,
@@ -351,6 +373,9 @@ function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
   }
 
   addStates(states, 'root')
+  if (Object.keys(sourceGaps).length) nodes[0]!.attributes.sourceGaps = sourceGaps
+  if (Object.keys(sourceTables).length)
+    nodes[0]!.attributes.sourceTables = sourceTables
   return nodes
 }
 
