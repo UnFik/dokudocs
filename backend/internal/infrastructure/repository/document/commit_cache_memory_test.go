@@ -40,7 +40,7 @@ func cacheBody(documentID uuid.UUID, nodes int) documentbody.Body {
 
 // TestCommitCacheMemoryAtTheLargestSupportedDocument fills the cache with
 // documents of MaxCollaborativeNodes nodes and checks the heap it holds stays
-// within the documented budget (docs/adr/0019 sizing section: 32 documents).
+// within the documented budget (docs/adr/0020 sizing section: 32 documents).
 func TestCommitCacheMemoryAtTheLargestSupportedDocument(t *testing.T) {
 	const documents = 32
 	cache := newCommitCache(documents)

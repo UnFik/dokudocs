@@ -266,7 +266,7 @@ func TestCommitUpdateUnderConcurrentWritersKeepsEveryEditAndEveryVersion(t *test
 	gate := os.Getenv("COMMIT_LOAD") != ""
 	if gate {
 		writers, commitsPerWriter, paragraphs, interval = 10, 20, 1000, 500*time.Millisecond
-		// COMMIT_LOAD_PARAGRAPHS sizes the document for the sizing runs in ADR 0019.
+		// COMMIT_LOAD_PARAGRAPHS sizes the document for the sizing runs in ADR 0020.
 		if raw := os.Getenv("COMMIT_LOAD_PARAGRAPHS"); raw != "" {
 			if n, err := strconv.Atoi(raw); err == nil && n >= writers {
 				paragraphs = n - n%writers
