@@ -40,47 +40,87 @@ export function createNode(
 export function insertBlock(block: ProseMirrorNode): Command {
   return (state, dispatch) => {
     const { $from } = state.selection
-    if (!$from.parent.isTextblock || $from.depth < 1) return false
     for (let depth = $from.depth; depth > 0; depth--)
       if ($from.node(depth).type === documentBodySchema.nodes.table_cell)
         return false
-    const depth = $from.depth
-    const container = $from.node(depth - 1)
-    const index = $from.index(depth - 1)
-    const emptyParagraph =
-      $from.parent.type === documentBodySchema.nodes.paragraph &&
-      $from.parent.content.size === 0
-    const inPlace =
-      emptyParagraph &&
-      block.isTextblock &&
-      container.canReplaceWith(index, index + 1, block.type)
-    if (!inPlace && !container.canReplaceWith(index + 1, index + 1, block.type))
-      return false
-    if (!dispatch) return true
 
-    const tr = state.tr
-    let cursor: number
-    if (inPlace) {
-      const start = $from.before(depth)
-      tr.setNodeMarkup(start, block.type, {
-        ...$from.parent.attrs,
-        bodyAttributes: block.attrs.bodyAttributes,
-      })
-      if (block.content.size) tr.insert(start + 1, block.content)
-      cursor = start + 1
-    } else {
-      const at = $from.after(depth)
-      tr.insert(at, block)
-      cursor = at + 1
-      for (
-        let node = block;
-        node.firstChild && !node.isTextblock;
-        node = node.firstChild
+    // The cursor usually sits in a run; climb to the first block that has a
+    // parent able to hold the new block.
+    for (let depth = $from.depth; depth > 0; depth--) {
+      const current = $from.node(depth)
+      const container = $from.node(depth - 1)
+      const index = $from.index(depth - 1)
+      const inPlace =
+        current.type === documentBodySchema.nodes.paragraph &&
+        current.content.size === 0 &&
+        block.isTextblock &&
+        container.canReplaceWith(index, index + 1, block.type)
+      if (
+        !inPlace &&
+        !container.canReplaceWith(index + 1, index + 1, block.type)
       )
-        cursor++
+        continue
+      if (!dispatch) return true
+
+      const tr = state.tr
+      let cursor: number
+      if (inPlace) {
+        const start = $from.before(depth)
+        tr.setNodeMarkup(start, block.type, {
+          ...current.attrs,
+          bodyAttributes: block.attrs.bodyAttributes,
+        })
+        if (block.content.size) tr.insert(start + 1, block.content)
+        cursor = start + 1
+      } else {
+        const at = $from.after(depth)
+        tr.insert(at, block)
+        cursor = at + 1
+        for (
+          let node = block;
+          node.firstChild && !node.isTextblock;
+          node = node.firstChild
+        )
+          cursor++
+      }
+      tr.setSelection(TextSelection.near(tr.doc.resolve(cursor)))
+      dispatch(tr.scrollIntoView())
+      return true
     }
-    tr.setSelection(TextSelection.near(tr.doc.resolve(cursor)))
-    dispatch(tr.scrollIntoView())
-    return true
+    return false
   }
+}
+
+/**
+ * Inline nodes live beside runs, not inside them, so a cursor in the middle of
+ * a run splits it first. Returns the transaction and where the node landed.
+ */
+export function insertInline(
+  state: EditorState,
+  node: ProseMirrorNode
+): { tr: Transaction; at: number } | null {
+  const { $from } = state.selection
+  const tr = state.tr
+  let at = $from.pos
+  const depth = $from.depth
+  if ($from.parent.type === documentBodySchema.nodes.run) {
+    const offset = $from.parentOffset
+    if (offset === 0) at = $from.before(depth)
+    else if (offset === $from.parent.content.size) at = $from.after(depth)
+    else {
+      tr.split($from.pos)
+      at = $from.pos + 1
+    }
+  }
+  const resolved = tr.doc.resolve(at)
+  if (
+    !resolved.parent.canReplaceWith(
+      resolved.index(),
+      resolved.index(),
+      node.type
+    )
+  )
+    return null
+  tr.insert(at, node)
+  return { tr, at }
 }

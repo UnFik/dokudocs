@@ -7,6 +7,7 @@ import {
   isSafeImageSource,
   updateImage,
 } from './mediaCommands'
+import { insertTable } from './tableCommands'
 import { bodyBuilder, bodyOf, run, stateFor } from './testSupport'
 
 function paragraph(text = '') {
@@ -70,6 +71,55 @@ describe('insertImage', () => {
     const after = bodyOf(updated.doc).find((n) => n.type === 'image')!
     expect(after.nodeID).toBe(before.nodeID)
     expect(after.attributes).toEqual({ src: '/b.png', alt: 'b' })
+  })
+})
+
+describe('cursor inside text runs', () => {
+  function inRun(offset: number) {
+    const b = bodyBuilder()
+    const root = b.add(null, 'document')
+    const p = b.add(root, 'paragraph')
+    const r = b.add(p, 'run', 'hello')
+    return { b, p, r, state: stateFor(b.nodes, r, offset) }
+  }
+
+  it('inserts an image in the middle of a run by splitting it', () => {
+    const { state } = inRun(2)
+    const result = run(state, insertImage({ src: '/a.png', alt: 'a' }))
+    expect(result.ok).toBe(true)
+    const body = bodyOf(result.state.doc)
+    expect(body.map((n) => n.type).filter((t) => t !== 'document')).toEqual([
+      'paragraph',
+      'run',
+      'image',
+      'run',
+    ])
+    expect(body.filter((n) => n.type === 'run').map((n) => n.content)).toEqual([
+      'he',
+      'llo',
+    ])
+  })
+
+  it('inserts inline math at the end of a run', () => {
+    const { state } = inRun(5)
+    const result = run(state, insertInlineMath)
+    expect(result.ok).toBe(true)
+    expect(bodyOf(result.state.doc).some((n) => n.type === 'math')).toBe(true)
+  })
+
+  it('inserts a table after the paragraph that holds the run', () => {
+    const { state } = inRun(2)
+    const result = run(state, insertTable(2, 2))
+    expect(result.ok).toBe(true)
+    const body = bodyOf(result.state.doc)
+    const table = body.find((n) => n.type === 'table')!
+    expect(table.parentID).toBe(body.find((n) => n.type === 'document')!.nodeID)
+    expect(body.find((n) => n.type === 'run')!.content).toBe('hello')
+  })
+
+  it('inserts a math block after the paragraph that holds the run', () => {
+    const { state } = inRun(2)
+    expect(run(state, insertMathBlock).ok).toBe(true)
   })
 })
 

@@ -5,7 +5,7 @@ import {
   type Transaction,
 } from 'prosemirror-state'
 import { documentBodySchema } from '../documentBody'
-import { insertBlock } from './insertBlock'
+import { insertBlock, insertInline } from './insertBlock'
 
 type Command = (
   state: EditorState,
@@ -41,19 +41,14 @@ export const insertImage =
   (image: { src: string; alt: string }): Command =>
   (state, dispatch) => {
     if (!isSafeImageSource(image.src)) return false
-    const { $from } = state.selection
-    if (
-      !$from.parent.canReplaceWith($from.index(), $from.index(), nodes.image!)
-    )
-      return false
-    if (dispatch)
-      dispatch(
-        state.tr
-          .replaceSelectionWith(
-            create(nodes.image!, { src: image.src.trim(), alt: image.alt })
-          )
-          .scrollIntoView()
-      )
+    const node = create(nodes.image!, { src: image.src.trim(), alt: image.alt })
+    const result = insertInline(state, node)
+    if (!result) return false
+    if (dispatch) {
+      const { tr, at } = result
+      tr.setSelection(TextSelection.near(tr.doc.resolve(at + node.nodeSize)))
+      dispatch(tr.scrollIntoView())
+    }
     return true
   }
 
@@ -81,15 +76,12 @@ export const updateImage =
 
 /** Inline math cannot be empty in the AST, so it starts with a placeholder. */
 export const insertInlineMath: Command = (state, dispatch) => {
-  const { $from } = state.selection
-  if (!$from.parent.canReplaceWith($from.index(), $from.index(), nodes.math!))
-    return false
+  const node = create(nodes.math!, { marker: '$' }, 'x')
+  const result = insertInline(state, node)
+  if (!result) return false
   if (dispatch) {
-    const tr = state.tr.replaceSelectionWith(
-      create(nodes.math!, { marker: '$' }, 'x')
-    )
-    const start = state.selection.from
-    tr.setSelection(TextSelection.create(tr.doc, start + 1, start + 2))
+    const { tr, at } = result
+    tr.setSelection(TextSelection.create(tr.doc, at + 1, at + 2))
     dispatch(tr.scrollIntoView())
   }
   return true
