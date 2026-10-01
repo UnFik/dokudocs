@@ -1,5 +1,5 @@
 import { keymap } from 'prosemirror-keymap'
-import { EditorState, type Transaction } from 'prosemirror-state'
+import { EditorState, type Command, type Transaction } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import {
   absolutePositionToRelativePosition,
@@ -15,6 +15,15 @@ import {
 import * as Y from 'yjs'
 import type { DocumentBodyNode } from '../documentBody'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
+import {
+  emptyInlineState,
+  readInlineState,
+  removeLinkCommand,
+  setLinkCommand,
+  toggleInlineMark,
+  type InlineMarkName,
+  type InlineState,
+} from './inlineMarks'
 import {
   DeleteNodeRequiredError,
   MoveNodeRequiredError,
@@ -50,6 +59,8 @@ export function createDocumentBodyEditor(
     onMoveNodeQueued?: (move: MoveNodeIntent) => void
     onTransactionError?: (error: unknown) => void
     onHistoryChange?: (history: EditorHistoryState) => void
+    onInlineStateChange?: (state: InlineState) => void
+    onLinkRequest?: () => void
   } = {}
 ) {
   const fragment = ydoc.getXmlFragment('body')
@@ -62,6 +73,15 @@ export function createDocumentBodyEditor(
       yUndoPlugin(),
       keymap(
         bindControlAndMeta({
+          b: () => runInline(toggleInlineMark('strong')),
+          i: () => runInline(toggleInlineMark('em')),
+          e: () => runInline(toggleInlineMark('code')),
+          'Shift-x': () => runInline(toggleInlineMark('strike')),
+          k: () => {
+            if (!canEdit()) return true
+            options.onLinkRequest?.()
+            return true
+          },
           z: () => runHistory(undoYjs),
           'Shift-z': () => runHistory(redoYjs),
           y: () => runHistory(redoYjs),
@@ -75,6 +95,19 @@ export function createDocumentBodyEditor(
   const runHistory = (action: (state: EditorState) => boolean) => {
     if (canEdit()) action(state)
     return true
+  }
+  const runInline = (command: Command) => {
+    if (canEdit()) command(state, (tr) => viewHolder.current?.dispatch(tr))
+    return true
+  }
+  let lastInline = emptyInlineState
+  const publishInline = () => {
+    const view = viewHolder.current
+    if (!view) return
+    const next = readInlineState(view)
+    if (JSON.stringify(next) === JSON.stringify(lastInline)) return
+    lastInline = next
+    options.onInlineStateChange?.(next)
   }
   const readHistory = (): EditorHistoryState => {
     const undoManager = yUndoPluginKey.getState(state)?.undoManager
@@ -134,6 +167,7 @@ export function createDocumentBodyEditor(
       viewHolder.current?.updateState(state)
       if (result.transactions.some((item) => item.docChanged))
         options.onBodyChange?.(prosemirrorToDocumentBody(state.doc))
+      publishInline()
     } catch (error) {
       if (
         error instanceof DeleteNodeRequiredError &&
@@ -269,6 +303,13 @@ export function createDocumentBodyEditor(
       }
     },
     getHistory: readHistory,
+    getInlineState: () => readInlineState(view),
+    toggleMark: (name: InlineMarkName) =>
+      canEdit() && toggleInlineMark(name)(state, view.dispatch),
+    setLink: (href: string) =>
+      canEdit() && setLinkCommand(href)(state, view.dispatch),
+    removeLink: () => canEdit() && removeLinkCommand(state, view.dispatch),
+    focus: () => view.focus(),
     undo: () => canEdit() && undoYjs(state),
     redo: () => canEdit() && redoYjs(state),
     setReadOnly: (next: boolean) => {
