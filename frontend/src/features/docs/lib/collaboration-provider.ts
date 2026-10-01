@@ -1358,7 +1358,7 @@ export class CollaborativeDocumentProvider {
   }
 }
 
-async function executeDeleteNode(
+export async function executeDeleteNode(
   workspaceID: string,
   documentID: string,
   command: PendingDeleteNodeCommand
@@ -1375,7 +1375,7 @@ async function executeDeleteNode(
   return body
 }
 
-async function executeMoveNode(
+export async function executeMoveNode(
   workspaceID: string,
   documentID: string,
   command: PendingMoveNodeCommand

@@ -5,6 +5,7 @@ import {
   type CollaborativeDocumentStatus,
   type RecoveryReason,
 } from './collaboration-provider'
+import type { HeldEdit } from './collaboration-rebase'
 import {
   decodeBase64,
   type CollaborationSocketOptions,
@@ -60,6 +61,7 @@ export async function mountCollaborativeDocumentBody(
       moveCommands: PendingMoveNodeCommand[]
     ) => void
     onCanonicalBody?: (body: MarkdownBodySnapshot) => void
+    onHeldEdits?: (edits: HeldEdit[]) => void
     onBodyChange?: (body: DocumentBodyNode[]) => void
     onDeleteNodeQueued?: (nodeID: string) => void
     onMoveNodeQueued?: (move: MoveNodeIntent) => void
@@ -119,6 +121,7 @@ export async function mountCollaborativeDocumentBody(
       onRecovery: input.onRecovery,
       onPresence: input.onPresence,
       onCanonicalBody: input.onCanonicalBody,
+      onHeldEdits: input.onHeldEdits,
       onCanEdit: (canEdit) => {
         setEditorReadOnly(forceReadOnly || !canEdit)
         input.onCanEdit?.(canEdit)
