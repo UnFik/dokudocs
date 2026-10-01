@@ -2042,6 +2042,39 @@ describe('CollaborativeDocumentProvider access loss and session expiry', () => {
     provider.stop()
   })
 
+  it('keeps the update pending and reconnects when the server reports a store outage', async () => {
+    const { provider, document, store, sockets, statuses } =
+      await connectedProvider()
+    document.getText('body').insert(4, ' during outage')
+    await wait(60)
+    const [first] = sentUpdates(sockets[0]!)
+    expect(first).toBeDefined()
+
+    sockets[0]!.receive({
+      type: 'error',
+      updateID: first.updateID,
+      code: 'unavailable',
+    })
+    await flushPromises()
+
+    expect(statuses).not.toContain('recovery-required')
+    expect(store.updates.size).toBe(1)
+    await wait(400)
+    expect(sockets).toHaveLength(2)
+    sockets[1]!.open()
+    sockets[1]!.receive({
+      type: 'ready',
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      canEdit: true,
+      state: base64(Y.encodeStateAsUpdate(new Y.Doc())),
+    })
+    await wait(60)
+    expect(sentUpdates(sockets[1]!).length).toBeGreaterThan(0)
+    provider.stop()
+  })
+
   it('sends the token the app holds at reconnect time, so a refreshed session resumes sync', async () => {
     let token = 'old-jwt'
     const { provider, document, store, sockets } = await connectedProvider({

@@ -603,6 +603,12 @@ export class CollaborativeDocumentProvider {
       this.socket?.close()
       return
     }
+    if (code === 'unavailable') {
+      // The server's store is down (failover, restart). The update was never
+      // committed, so keep it pending and let the reconnect backoff resend it.
+      this.socket?.close()
+      return
+    }
     if (code === 'unauthorized') {
       this.terminal = true
       this.ready = false

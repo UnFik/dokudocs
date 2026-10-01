@@ -101,10 +101,16 @@ func (p *redisOutageProxy) restore(t *testing.T) {
 	t.Fatalf("restore Redis proxy on %s: %v", p.addr, err)
 }
 
-// A Redis outage must not cost an acknowledged edit: the origin ACK means
-// "durable in PostgreSQL", fan-out is best effort, and a peer that missed the
-// publish converges again from PostgreSQL once Redis is back.
-func TestRedisOutageKeepsAcknowledgedEditsAndPeersConvergeAfterRecovery(t *testing.T) {
+type outageFixture struct {
+	db                      *sql.DB
+	ownerID, viewerID       uuid.UUID
+	workspaceID, documentID uuid.UUID
+	runID                   uuid.UUID
+	state                   []byte
+}
+
+func newOutageFixture(t *testing.T) outageFixture {
+	t.Helper()
 	ctx := context.Background()
 	db, err := sql.Open("pgx", integrationDatabaseURL(t))
 	if err != nil {
@@ -148,7 +154,16 @@ func TestRedisOutageKeepsAcknowledgedEditsAndPeersConvergeAfterRecovery(t *testi
 		documentID, viewerID); err != nil {
 		t.Fatalf("grant viewer access: %v", err)
 	}
+	return outageFixture{db: db, ownerID: ownerID, viewerID: viewerID, workspaceID: workspaceID, documentID: documentID, runID: runID, state: state}
+}
 
+// A Redis outage must not cost an acknowledged edit: the origin ACK means
+// "durable in PostgreSQL", fan-out is best effort, and a peer that missed the
+// publish converges again from PostgreSQL once Redis is back.
+func TestRedisOutageKeepsAcknowledgedEditsAndPeersConvergeAfterRecovery(t *testing.T) {
+	ctx := context.Background()
+	f := newOutageFixture(t)
+	db, ownerID, viewerID, workspaceID, documentID, runID, state := f.db, f.ownerID, f.viewerID, f.workspaceID, f.documentID, f.runID, f.state
 	redisURL, err := url.Parse(integrationRedisURL(t))
 	if err != nil {
 		t.Fatalf("parse TEST_REDIS_URL: %v", err)
@@ -265,5 +280,117 @@ func TestRedisOutageKeepsAcknowledgedEditsAndPeersConvergeAfterRecovery(t *testi
 	}
 	if !fanned {
 		t.Fatal("live fan-out did not resume after Redis returned")
+	}
+}
+
+// A PostgreSQL outage during a commit must produce no ACK and no fan-out. The
+// client keeps the update pending, and the retry with the same update ID is
+// applied exactly once after the database is back.
+func TestPostgresOutageNeverAcksAndTheRetryAppliesOnce(t *testing.T) {
+	ctx := context.Background()
+	f := newOutageFixture(t)
+	dbURL, err := url.Parse(integrationDatabaseURL(t))
+	if err != nil {
+		t.Fatalf("parse database URL: %v", err)
+	}
+	proxy := newRedisOutageProxy(t, dbURL.Host)
+	dbURL.Host = proxy.addr
+	viaProxy, err := sql.Open("pgx", dbURL.String())
+	if err != nil {
+		t.Fatalf("open proxied database: %v", err)
+	}
+	t.Cleanup(func() { _ = viaProxy.Close() })
+	viaProxy.SetMaxOpenConns(4)
+
+	repository := NewRepository(database.NewSQLDB(viaProxy))
+	direct := NewRepository(database.NewSQLDB(f.db))
+	verifier := integrationWebSocketVerifier{"owner-token": f.ownerID, "viewer-token": f.viewerID}
+	server := websocket.NewServer(verifier, collaboration.NewBodyReadUseCase(repository), repository, integrationOrigin, nil)
+	mux := http.NewServeMux()
+	mux.Handle("GET /api/v1/collaboration/{id}", server)
+	httpServer := httptest.NewServer(mux)
+	t.Cleanup(func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
+		httpServer.Close()
+	})
+	host := strings.TrimPrefix(httpServer.URL, "http://")
+	owner, ready := dialWebSocketProcess(t, host, f.workspaceID, f.documentID, "owner-token")
+	defer owner.Close()
+	if ready.Type != "ready" {
+		t.Fatalf("ready = %+v", ready)
+	}
+	viewer, ready := dialWebSocketProcess(t, host, f.workspaceID, f.documentID, "viewer-token")
+	defer viewer.Close()
+	if ready.Type != "ready" {
+		t.Fatalf("viewer ready = %+v", ready)
+	}
+
+	clientDoc := crdt.New()
+	defer clientDoc.Destroy()
+	if err := crdt.ApplyUpdateV1(clientDoc, f.state, nil); err != nil {
+		t.Fatalf("load client Yjs state: %v", err)
+	}
+	before, err := crdt.DecodeStateVectorV1(crdt.EncodeStateVectorV1(clientDoc))
+	if err != nil {
+		t.Fatalf("capture state vector: %v", err)
+	}
+	root := clientDoc.GetXmlFragment("body").Children()[0].(*crdt.YXmlElement)
+	text := root.Children()[0].(*crdt.YXmlElement).Children()[0].(*crdt.YXmlElement).Children()[0].(*crdt.YXmlText)
+	at := len(text.ToString())
+	clientDoc.Transact(func(tx *crdt.Transaction) { text.Insert(tx, at, " retried", nil) })
+	update := crdt.EncodeStateAsUpdateV1(clientDoc, before)
+
+	proxy.outage()
+	updateID := uuid.New()
+	if err := sendWebSocketUpdate(owner, updateID, update); err != nil {
+		t.Fatalf("send update during outage: %v", err)
+	}
+	failed := readWebSocketFrame(t, owner)
+	if failed.Type == "ack" {
+		t.Fatalf("got ACK %+v while PostgreSQL was unreachable", failed)
+	}
+	t.Logf("frame during PostgreSQL outage: type=%q code=%q", failed.Type, failed.Code)
+	_ = viewer.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	var leaked integrationWebSocketFrame
+	for ws.JSON.Receive(viewer, &leaked) == nil {
+		if leaked.Type == "update" {
+			t.Fatalf("peer received %+v for an update that never committed", leaked)
+		}
+	}
+
+	proxy.restore(t)
+	var ack integrationWebSocketFrame
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		if err := sendWebSocketUpdate(owner, updateID, update); err != nil {
+			t.Fatalf("retry update: %v", err)
+		}
+		ack = readWebSocketFrame(t, owner)
+		for ack.Type == "resync" {
+			ack = readWebSocketFrame(t, owner)
+		}
+		if ack.Type == "ack" || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if ack.Type != "ack" || ack.UpdateID != updateID || ack.BodyVersion != 2 {
+		t.Fatalf("retry response = %+v, want ACK at version 2", ack)
+	}
+	if err := sendWebSocketUpdate(owner, updateID, update); err != nil {
+		t.Fatalf("duplicate retry: %v", err)
+	}
+	again := readWebSocketFrame(t, owner)
+	for again.Type == "resync" {
+		again = readWebSocketFrame(t, owner)
+	}
+	if again.Type != "ack" || again.BodyVersion != 2 {
+		t.Fatalf("duplicate retry = %+v, want the same ACK at version 2", again)
+	}
+	committed, err := direct.ReadBody(ctx, collaboration.Actor{UserID: f.ownerID}, f.workspaceID, f.documentID)
+	if err != nil || committed.BodyVersion != 2 || bodyNodeContent(committed.Body, f.runID) != "alpha retried" {
+		t.Fatalf("PostgreSQL = version %d err %v run %q, want version 2 applied once", committed.BodyVersion, err, bodyNodeContent(committed.Body, f.runID))
 	}
 }
