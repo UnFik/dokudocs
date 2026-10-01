@@ -3,7 +3,7 @@ package documentbody
 import "fmt"
 
 // MaxCollaborativeNodes is the largest body, counted in AST nodes, that
-// collaborative editing supports. See docs/adr/0020 for how it was chosen.
+// collaborative editing supports. See docs/adr/0023 for how it was chosen.
 const MaxCollaborativeNodes = 2001
 
 // ErrTooLarge reports a body above MaxCollaborativeNodes. It wraps ErrInvalid.
