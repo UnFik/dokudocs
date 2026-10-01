@@ -5,6 +5,7 @@ import {
   type Transaction,
 } from 'prosemirror-state'
 import { documentBodySchema } from '../documentBody'
+import { insertBlock } from './insertBlock'
 
 type Command = (
   state: EditorState,
@@ -92,32 +93,6 @@ export const insertInlineMath: Command = (state, dispatch) => {
     dispatch(tr.scrollIntoView())
   }
   return true
-}
-
-/** Puts a block after the current one, or in place of an empty paragraph. */
-function insertBlock(block: ProseMirrorNode): Command {
-  return (state, dispatch) => {
-    const { $from } = state.selection
-    if (!$from.parent.isTextblock || $from.depth < 1) return false
-    const depth = $from.depth
-    const container = $from.node(depth - 1)
-    const index = $from.index(depth - 1)
-    const replaceEmpty =
-      $from.parent.type === nodes.paragraph && $from.parent.content.size === 0
-    const at = replaceEmpty ? index : index + 1
-    if (
-      !container.canReplaceWith(at, replaceEmpty ? index + 1 : at, block.type)
-    )
-      return false
-    if (dispatch) {
-      const from = replaceEmpty ? $from.before(depth) : $from.after(depth)
-      const to = replaceEmpty ? $from.after(depth) : from
-      const tr = state.tr.replaceWith(from, to, block)
-      tr.setSelection(TextSelection.create(tr.doc, from + 1))
-      dispatch(tr.scrollIntoView())
-    }
-    return true
-  }
 }
 
 export const insertMathBlock: Command = (state, dispatch) =>

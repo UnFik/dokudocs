@@ -5,6 +5,7 @@ import {
   type Transaction,
 } from 'prosemirror-state'
 import { documentBodySchema } from '../documentBody'
+import { insertBlock } from './insertBlock'
 
 export type TableAlign = 'none' | 'left' | 'center' | 'right'
 type Dispatch = ((tr: Transaction) => void) | undefined
@@ -86,35 +87,11 @@ export const insertTable =
   (rows = 3, columns = 3): TableCommand =>
   (state, dispatch) => {
     if (rows < 1 || columns < 1) return false
-    const { $from } = state.selection
-    if (!$from.parent.isTextblock) return false
-    for (let depth = $from.depth; depth > 0; depth--)
-      if ($from.node(depth).type === nodes.table_cell) return false
-
-    const blockDepth = $from.depth
-    const container = $from.node(blockDepth - 1)
-    const index = $from.index(blockDepth - 1)
-    const replaceEmpty =
-      $from.parent.type === nodes.paragraph && $from.parent.content.size === 0
-    const from = replaceEmpty
-      ? $from.before(blockDepth)
-      : $from.after(blockDepth)
-    const to = replaceEmpty ? $from.after(blockDepth) : from
-    const at = replaceEmpty ? index : index + 1
-    if (
-      !container.canReplaceWith(at, replaceEmpty ? index + 1 : at, nodes.table!)
-    )
-      return false
-    if (!dispatch) return true
-
     const table = nodes.table!.create(
       { nodeID: null, bodyAttributes: '{}', bodyContent: '' },
       Array.from({ length: rows }, () => newRow(Array(columns).fill('none')))
     )
-    const tr = state.tr.replaceWith(from, to, table)
-    selectCell(tr, from + 2)
-    dispatch(tr.scrollIntoView())
-    return true
+    return insertBlock(table)(state, dispatch)
   }
 
 const addRow =
