@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 export function TrashEmptyState() {
   return (
     <div className='flex min-h-[50vh] flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 bg-card/50 p-12 text-center'>
-      <div className='flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground shadow-2xs'>
+      <div className='flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground'>
         <Trash className='size-7 stroke-[1.5]' />
       </div>
       <h3 className='mt-4 text-base font-semibold text-foreground'>

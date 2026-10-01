@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import { getUserStorage } from '@/lib/user-storage'
 
 export type EditorViewMode = 'code' | 'split' | 'preview'
 export type MarkdownPreviewMode = 'view' | 'edit'
@@ -153,7 +154,7 @@ export const useEditorPreferenceStore = create<EditorPreferenceState>()(
     }),
     {
       name: 'dokudocs-editor-user-preferences',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => getUserStorage()),
     }
   )
 )

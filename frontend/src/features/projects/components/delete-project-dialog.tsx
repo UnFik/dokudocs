@@ -123,8 +123,8 @@ export function DeleteProjectDialog({
               >
                 {copied ? (
                   <>
-                    <Check className='size-3 text-emerald-600 dark:text-emerald-400' />
-                    <span className='text-[11px] font-medium text-emerald-600 dark:text-emerald-400'>
+                    <Check className='size-3 text-ok' />
+                    <span className='text-[11px] font-medium text-ok'>
                       Copied
                     </span>
                   </>
@@ -173,7 +173,7 @@ export function DeleteProjectDialog({
                 variant='destructive'
                 size='sm'
                 disabled={!isMatch}
-                className='h-8 text-xs shadow-xs'
+                className='h-8 text-xs'
               >
                 Delete Project
               </Button>

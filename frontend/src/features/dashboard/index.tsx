@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { DocType } from '@/types/dokudocs'
+import type { DocType } from '@/types/dokudocs'
 import {
   ChevronDown,
   Database,
@@ -25,7 +25,7 @@ import { ProjectsSection } from './components/projects-section'
 import { RecentSection } from './components/recent-section'
 
 export function Dashboard() {
-  const { activeOrg } = useDokudocs()
+  const { activeOrg, isLoading, error, refetch } = useDokudocs()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [selectedType, setSelectedType] = useState<DocType>('markdown')
@@ -58,7 +58,7 @@ export function Dashboard() {
             <DropdownMenuTrigger asChild>
               <Button
                 size='sm'
-                className='h-8 gap-1.5 px-3 text-xs font-semibold shadow-xs'
+                className='h-8 gap-1.5 px-3 text-xs font-semibold'
               >
                 <Plus className='size-3.5' />
                 <span>New</span>
@@ -67,15 +67,15 @@ export function Dashboard() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align='end' className='w-48'>
               <DropdownMenuItem onClick={() => handleOpenCreate('markdown')}>
-                <FileText className='mr-2 size-3.5 text-blue-500' />
+                <FileText className='mr-2 size-3.5 text-muted-foreground' />
                 Markdown
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleOpenCreate('dbdiagram')}>
-                <Database className='mr-2 size-3.5 text-emerald-500' />
+                <Database className='mr-2 size-3.5 text-muted-foreground' />
                 DB Diagram
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleOpenCreate('mermaid')}>
-                <GitFork className='mr-2 size-3.5 text-purple-500' />
+                <GitFork className='mr-2 size-3.5 text-muted-foreground' />
                 Flowchart / Diagram
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -96,15 +96,38 @@ export function Dashboard() {
           <FilterTabs />
         </div>
 
-        <RecentSection
-          onOpenCreateDialog={() => handleOpenCreate('markdown')}
-        />
+        {error ? (
+          <div
+            role='alert'
+            className='rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm'
+          >
+            <p>Could not load this workspace: {error.message}</p>
+            <Button
+              variant='outline'
+              size='sm'
+              className='mt-3'
+              onClick={() => void refetch()}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : isLoading ? (
+          <p role='status' className='text-sm text-muted-foreground'>
+            Loading workspace documents and projects…
+          </p>
+        ) : (
+          <>
+            <RecentSection
+              onOpenCreateDialog={() => handleOpenCreate('markdown')}
+            />
 
-        <ProjectsSection
-          onAddDocToProject={(projectId) =>
-            handleOpenCreate('markdown', projectId)
-          }
-        />
+            <ProjectsSection
+              onAddDocToProject={(projectId) =>
+                handleOpenCreate('markdown', projectId)
+              }
+            />
+          </>
+        )}
       </Main>
 
       <CreateDocDialog

@@ -117,5 +117,11 @@ func SeedDemoData(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	for _, documentID := range []string{DemoDoc1ID, DemoDoc2ID, DemoDoc3ID} {
+		if err := ensureSeedDocumentOwnerGrant(ctx, db, documentID, AdminUser.ID); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

@@ -6,12 +6,29 @@ import (
 
 	"backend/constant"
 	"backend/internal/application/workspace/dto"
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/response"
 	"backend/internal/presentation/workspace/presenter"
 
 	"github.com/google/uuid"
 )
 
+// Update updates an existing workspace.
+// @Summary Update workspace
+// @Description Update workspace details (name, plan, logo)
+// @Tags Workspace
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Workspace ID (UUID)"
+// @Param request body presenter.UpdateWorkspaceRequest true "Workspace update payload"
+// @Success 200 {object} response.Envelope{data=model.Workspace}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /workspaces/{id} [put]
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	userID, err := getUserUUID(r)
 	if err != nil {

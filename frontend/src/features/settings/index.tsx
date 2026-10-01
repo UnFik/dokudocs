@@ -262,25 +262,25 @@ export function Settings() {
           <TabsList className='inline-flex h-auto gap-1 rounded-lg border border-border/40 bg-muted/60 p-1'>
             <TabsTrigger
               value='general'
-              className='rounded-md px-3.5 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs'
+              className='rounded-md px-3.5 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground'
             >
               General
             </TabsTrigger>
             <TabsTrigger
               value='billing'
-              className='rounded-md px-3.5 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs'
+              className='rounded-md px-3.5 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground'
             >
               Billing
             </TabsTrigger>
             <TabsTrigger
               value='members'
-              className='rounded-md px-3.5 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs'
+              className='rounded-md px-3.5 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground'
             >
               Members
             </TabsTrigger>
             <TabsTrigger
               value='notifications'
-              className='rounded-md px-3.5 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs'
+              className='rounded-md px-3.5 py-1.5 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground'
             >
               Notifications
             </TabsTrigger>
@@ -290,7 +290,7 @@ export function Settings() {
             value='general'
             className='space-y-6 focus-visible:outline-none'
           >
-            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
+            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6'>
               <div className='flex items-start gap-3.5'>
                 <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground'>
                   <Building2 className='size-5 text-muted-foreground' />
@@ -367,7 +367,7 @@ export function Settings() {
                       title='Copy ID'
                     >
                       {copiedId ? (
-                        <Check className='size-4 text-emerald-500' />
+                        <Check className='size-4 text-ok' />
                       ) : (
                         <Copy className='size-4 text-muted-foreground' />
                       )}
@@ -384,9 +384,9 @@ export function Settings() {
               </form>
             </div>
 
-            <div className='space-y-5 rounded-xl border border-red-500/30 bg-red-500/5 p-6 shadow-xs'>
+            <div className='space-y-5 rounded-lg border border-destructive/40 p-6'>
               <div className='flex items-start gap-3.5'>
-                <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-500'>
+                <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-destructive'>
                   <AlertTriangle className='size-5' />
                 </div>
                 <div>
@@ -399,7 +399,7 @@ export function Settings() {
                 </div>
               </div>
 
-              <div className='divide-y divide-red-500/15 pt-2'>
+              <div className='divide-y divide-border pt-2'>
                 <div className='flex items-center justify-between py-3.5'>
                   <div className='space-y-0.5 pr-4'>
                     <p className='text-xs font-medium text-foreground'>
@@ -451,7 +451,7 @@ export function Settings() {
             value='billing'
             className='space-y-6 focus-visible:outline-none'
           >
-            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
+            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6'>
               <div className='flex items-start justify-between'>
                 <div className='flex items-start gap-3.5'>
                   <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary'>
@@ -480,7 +480,7 @@ export function Settings() {
                 <div
                   className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
                     activeOrg.plan === 'Free'
-                      ? 'border-primary bg-primary/5 shadow-xs'
+                      ? 'border-primary bg-primary/5'
                       : 'border-border/60 bg-muted/20 hover:border-border'
                   }`}
                 >
@@ -528,7 +528,7 @@ export function Settings() {
                 <div
                   className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
                     activeOrg.plan === 'Pro Workspace'
-                      ? 'border-primary bg-primary/5 shadow-xs'
+                      ? 'border-primary bg-primary/5'
                       : 'border-border/60 bg-muted/20 hover:border-border'
                   }`}
                 >
@@ -580,7 +580,7 @@ export function Settings() {
                 <div
                   className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
                     activeOrg.plan === 'Enterprise'
-                      ? 'border-primary bg-primary/5 shadow-xs'
+                      ? 'border-primary bg-primary/5'
                       : 'border-border/60 bg-muted/20 hover:border-border'
                   }`}
                 >
@@ -662,7 +662,7 @@ export function Settings() {
             value='members'
             className='space-y-6 focus-visible:outline-none'
           >
-            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
+            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6'>
               <div className='flex flex-col justify-between gap-4 sm:flex-row sm:items-center'>
                 <div className='flex items-start gap-3.5'>
                   <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground'>
@@ -802,7 +802,7 @@ export function Settings() {
             value='notifications'
             className='space-y-6 focus-visible:outline-none'
           >
-            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-xs'>
+            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6'>
               <div className='flex items-start gap-3.5'>
                 <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground'>
                   <Mail className='size-5 text-muted-foreground' />

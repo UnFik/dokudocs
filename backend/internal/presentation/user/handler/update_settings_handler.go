@@ -11,6 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// UpdateSettings updates user settings for the authenticated user.
+// @Summary Update user settings
+// @Description Update settings for authenticated user
+// @Tags User
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body presenter.UpdateSettingsRequest true "Update settings payload"
+// @Success 200 {object} response.Envelope{data=model.UserSettings}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /user/settings [put]
 func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.UserFromContext(r.Context())
 	if !ok {

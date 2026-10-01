@@ -95,9 +95,9 @@ export function NavUser({ user }: NavUserProps) {
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
                     {theme === 'dark' ? (
-                      <Moon className='mr-2 size-4 text-indigo-500' />
+                      <Moon className='mr-2 size-4 text-muted-foreground' />
                     ) : theme === 'light' ? (
-                      <Sun className='mr-2 size-4 text-amber-500' />
+                      <Sun className='mr-2 size-4 text-muted-foreground' />
                     ) : (
                       <Laptop className='mr-2 size-4 text-muted-foreground' />
                     )}
@@ -105,14 +105,14 @@ export function NavUser({ user }: NavUserProps) {
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className='w-36'>
                     <DropdownMenuItem onClick={() => setTheme('light')}>
-                      <Sun className='mr-2 size-4 text-amber-500' />
+                      <Sun className='mr-2 size-4 text-muted-foreground' />
                       <span>Light</span>
                       {theme === 'light' && (
                         <Check className='ms-auto size-4' />
                       )}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setTheme('dark')}>
-                      <Moon className='mr-2 size-4 text-indigo-500' />
+                      <Moon className='mr-2 size-4 text-muted-foreground' />
                       <span>Dark</span>
                       {theme === 'dark' && <Check className='ms-auto size-4' />}
                     </DropdownMenuItem>

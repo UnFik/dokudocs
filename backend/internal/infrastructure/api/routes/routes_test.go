@@ -82,6 +82,30 @@ func TestInitRoutes(t *testing.T) {
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
+			name:           "Document body initialization requires auth",
+			method:         http.MethodPost,
+			path:           "/api/v1/documents/10000000-0000-4000-8000-000000000001/body/initialize",
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "Document body read requires auth",
+			method:         http.MethodGet,
+			path:           "/api/v1/documents/10000000-0000-4000-8000-000000000001/body",
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "Document body move requires auth",
+			method:         http.MethodPost,
+			path:           "/api/v1/documents/10000000-0000-4000-8000-000000000001/body/move",
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "Document body delete requires auth",
+			method:         http.MethodPost,
+			path:           "/api/v1/documents/10000000-0000-4000-8000-000000000001/body/delete",
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
 			name:           "Protected Trash requires auth",
 			method:         http.MethodGet,
 			path:           "/api/v1/trash",
@@ -106,4 +130,15 @@ func TestInitRoutes(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("collaboration socket rejects missing origin before upgrade", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/collaboration/10000000-0000-4000-8000-000000000001", nil)
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Upgrade", "websocket")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("collaboration request without Origin = %d, want %d", rec.Code, http.StatusForbidden)
+		}
+	})
 }

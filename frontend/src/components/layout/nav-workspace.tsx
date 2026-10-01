@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Check, ChevronsUpDown, Plus, Settings } from 'lucide-react'
-import { defaultOrganizations, useDokudocsStore } from '@/stores/dokudocs-store'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,21 +16,15 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { CreateWorkspaceDialog } from './create-workspace-dialog'
 
 export function NavWorkspace() {
   const navigate = useNavigate()
   const { isMobile, state } = useSidebar()
   const [createOpen, setCreateOpen] = useState(false)
-  const storeOrganizations = useDokudocsStore((s) => s.organizations)
-  const activeOrgId = useDokudocsStore((s) => s.activeOrgId)
-  const setActiveOrgId = useDokudocsStore((s) => s.setActiveOrgId)
-
-  const organizations = storeOrganizations?.length
-    ? storeOrganizations
-    : defaultOrganizations
-  const activeOrg =
-    organizations.find((org) => org.id === activeOrgId) || organizations[0]
+  const { workspaces, activeWorkspace, setActiveWorkspace, isLoading } =
+    useWorkspaces()
 
   return (
     <>
@@ -43,17 +36,16 @@ export function NavWorkspace() {
                 size='lg'
                 className='cursor-pointer data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
               >
-                <div className='flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground shadow-xs'>
-                  {activeOrg.name
-                    ? activeOrg.name.slice(0, 2).toUpperCase()
-                    : 'DK'}
+                <div className='flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground'>
+                  {activeWorkspace?.name.slice(0, 2).toUpperCase() ?? 'DK'}
                 </div>
                 <div className='grid flex-1 text-start text-sm leading-tight'>
                   <span className='truncate text-xs font-semibold'>
-                    {activeOrg.name}
+                    {activeWorkspace?.name ??
+                      (isLoading ? 'Loading…' : 'Workspace')}
                   </span>
                   <span className='truncate text-[10px] text-muted-foreground'>
-                    {activeOrg.plan || 'Free'}
+                    {activeWorkspace?.plan ?? ' '}
                   </span>
                 </div>
                 <ChevronsUpDown className='ms-auto size-4 text-muted-foreground' />
@@ -69,23 +61,23 @@ export function NavWorkspace() {
                 Workspaces
               </DropdownMenuLabel>
               <DropdownMenuGroup>
-                {organizations.map((org) => {
-                  const isActive = org.id === activeOrg.id
+                {workspaces.map((workspace) => {
+                  const isActive = workspace.id === activeWorkspace?.id
                   return (
                     <DropdownMenuItem
-                      key={org.id}
-                      onClick={() => setActiveOrgId(org.id)}
+                      key={workspace.id}
+                      onClick={() => setActiveWorkspace(workspace.id)}
                       className='flex cursor-pointer items-center gap-2.5 px-2 py-2'
                     >
                       <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] font-semibold text-foreground'>
-                        {org.name.slice(0, 2).toUpperCase()}
+                        {workspace.name.slice(0, 2).toUpperCase()}
                       </div>
                       <div className='flex min-w-0 flex-1 flex-col'>
                         <span className='truncate text-xs font-medium'>
-                          {org.name}
+                          {workspace.name}
                         </span>
                         <span className='truncate text-[10px] text-muted-foreground'>
-                          {org.plan || 'Free'}
+                          {workspace.plan || 'Free'}
                         </span>
                       </div>
                       {isActive && (

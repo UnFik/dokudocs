@@ -1,4 +1,4 @@
-import { validEmoji } from '../../../utils/emoji'
+import { validEmoji } from '../../emoji'
 
 const START_REG = /(\s|^):(?!:)/
 const EMOJI_REG = /^(:)([a-z_\d+-]+)\1/

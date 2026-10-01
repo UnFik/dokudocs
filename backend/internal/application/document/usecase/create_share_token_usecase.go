@@ -21,12 +21,10 @@ func (u *useCase) CreateShareToken(ctx context.Context, id, workspaceID, userID 
 	}
 
 	b := make([]byte, 24)
-	_, _ = rand.Read(b)
-	token := hex.EncodeToString(b)
-
-	if err = u.docRepo.SetShareToken(ctx, id, token, "public_link"); err != nil {
+	if _, err = rand.Read(b); err != nil {
 		return "", err
 	}
-	data = token
-	return data, nil
+	token := hex.EncodeToString(b)
+
+	return u.docRepo.SetShareToken(ctx, id, workspaceID, userID, token, "public_link")
 }

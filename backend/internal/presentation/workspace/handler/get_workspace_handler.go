@@ -5,11 +5,25 @@ import (
 	"net/http"
 
 	"backend/constant"
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/response"
 
 	"github.com/google/uuid"
 )
 
+// Get retrieves workspace by ID.
+// @Summary Get workspace
+// @Description Get details of a workspace by ID
+// @Tags Workspace
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Workspace ID (UUID)"
+// @Success 200 {object} response.Envelope{data=model.Workspace}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /workspaces/{id} [get]
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	userID, err := getUserUUID(r)
 	if err != nil {

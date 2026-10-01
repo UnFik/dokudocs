@@ -34,6 +34,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AccessTokenTTL != 24*time.Hour || cfg.ReadTimeout != 5*time.Second || cfg.WriteTimeout != 10*time.Second || cfg.IdleTimeout != time.Minute || cfg.ShutdownTimeout != 10*time.Second {
 		t.Fatalf("unexpected duration defaults: %#v", cfg)
 	}
+	if cfg.RAGRequestTimeout != 2*time.Minute || cfg.RAGAnswerModel != "gpt-5-mini" || cfg.RAGEmbeddingModel != "text-embedding-3-small" {
+		t.Fatalf("unexpected RAG defaults: %#v", cfg)
+	}
 }
 
 func TestLoadConfigFallbackOnBadDuration(t *testing.T) {

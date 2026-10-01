@@ -177,18 +177,18 @@ export function DocListRow({ document }: DocListRowProps) {
                   e.stopPropagation()
                   toggleStarDocument(document.id)
                 }}
-                className='text-muted-foreground transition-colors hover:text-amber-500'
+                className='text-muted-foreground transition-colors hover:text-foreground'
               >
                 <Star
                   className={`size-4 ${
                     document.isStarred
-                      ? 'fill-amber-400 text-amber-500'
+                      ? 'fill-foreground text-foreground'
                       : 'text-muted-foreground/60'
                   }`}
                 />
               </button>
 
-              <DocTypeBadge type={document.type} showIcon={false} />
+              <DocTypeBadge type={document.type} />
 
               <span className='truncate text-sm font-medium transition-colors group-hover:text-primary'>
                 {document.title}
@@ -205,14 +205,14 @@ export function DocListRow({ document }: DocListRowProps) {
                     return (
                       <>
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[9px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
+                          className={`rounded-sm border px-2 py-0.5 text-[9px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
                         >
                           {firstCat}
                         </span>
                         {remainingCount > 0 && (
                           <span
                             title={docCategories.slice(1).join(', ')}
-                            className='rounded-full border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
+                            className='rounded-sm border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
                           >
                             +{remainingCount}
                           </span>
@@ -444,7 +444,7 @@ export function DocListRow({ document }: DocListRowProps) {
           <ContextMenuItem onClick={() => toggleStarDocument(document.id)}>
             <Star
               className={`mr-2 size-3.5 ${
-                document.isStarred ? 'fill-amber-400 text-amber-500' : ''
+                document.isStarred ? 'fill-foreground text-foreground' : ''
               }`}
             />
             <span>

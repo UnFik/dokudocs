@@ -11,6 +11,18 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// Register creates a new user account.
+// @Summary User registration
+// @Description Register a new user with email, password, and full name
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body presenter.RegisterRequest true "Register request payload"
+// @Success 201 {object} response.Envelope{data=presenter.LoginResponse}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 409 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /auth/register [post]
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req presenter.RegisterRequest
 	if err := response.DecodeJSON(r, &req); err != nil {
@@ -30,8 +42,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, constant.ErrEmailAlreadyExists):
 			response.Error(w, http.StatusConflict, constant.ErrEmailAlreadyExists.Error())
-		case errors.Is(err, constant.ErrMissingCredential):
-			response.Error(w, http.StatusBadRequest, constant.ErrMissingCredential.Error())
+		case errors.Is(err, constant.ErrMissingCredential), errors.Is(err, constant.ErrInvalidRegistration):
+			response.Error(w, http.StatusBadRequest, err.Error())
 		default:
 			response.Error(w, http.StatusInternalServerError, "internal server error")
 		}

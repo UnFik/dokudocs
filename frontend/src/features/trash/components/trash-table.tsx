@@ -49,7 +49,7 @@ export function TrashTable({ items }: TrashTableProps) {
 
   return (
     <>
-      <div className='overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xs'>
+      <div className='overflow-hidden rounded-xl border border-border/80 bg-card'>
         <Table>
           <TableHeader>
             <TableRow className='bg-muted/40 hover:bg-muted/40'>
@@ -89,7 +89,6 @@ export function TrashTable({ items }: TrashTableProps) {
                     <div className='flex items-center gap-2.5'>
                       <DocTypeBadge
                         type={item.document.type}
-                        showIcon={false}
                       />
                       <div className='flex min-w-0 flex-col'>
                         <span className='truncate text-xs font-semibold text-foreground'>
@@ -97,7 +96,7 @@ export function TrashTable({ items }: TrashTableProps) {
                         </span>
                         {category && categoryPalette && (
                           <span
-                            className={`py-0.2 mt-1 inline-flex w-fit rounded-full border px-1.5 text-[9px] font-medium ${categoryPalette.bg} ${categoryPalette.text} ${categoryPalette.border}`}
+                            className={`py-0.2 mt-1 inline-flex w-fit rounded-sm border px-1.5 text-[9px] font-medium ${categoryPalette.bg} ${categoryPalette.text} ${categoryPalette.border}`}
                           >
                             {category}
                           </span>
@@ -144,7 +143,7 @@ export function TrashTable({ items }: TrashTableProps) {
                   </TableCell>
 
                   <TableCell>
-                    <span className='inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400'>
+                    <span className='inline-flex items-center text-[10px] font-medium text-warn'>
                       {item.daysRemaining} days left
                     </span>
                   </TableCell>

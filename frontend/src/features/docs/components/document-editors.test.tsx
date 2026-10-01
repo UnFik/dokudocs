@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import * as monaco from 'monaco-editor'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
@@ -32,6 +34,143 @@ describe('Document Editors (Markdown, DBML, Mermaid)', () => {
       await expect
         .element(screen.getByTitle('In-place interactive rich editor'))
         .toBeInTheDocument()
+    })
+
+    it('preserves Markdown when switching between source editor and preview', async () => {
+      const handleChange = vi.fn()
+      const initialContent = '# Initial heading\n\nInitial paragraph.\n'
+      const updatedContent = '# Updated heading\n\nUpdated paragraph.\n'
+      function ControlledMarkdownEditor() {
+        const [content, setContent] = useState(initialContent)
+        return (
+          <MarkdownEditor
+            docId='doc-md-transition'
+            content={content}
+            onChange={(nextContent) => {
+              handleChange(nextContent)
+              setContent(nextContent)
+            }}
+          />
+        )
+      }
+      const screen = await render(<ControlledMarkdownEditor />)
+
+      const model = await vi.waitFor(() => {
+        const currentModel = monaco.editor
+          .getModels()
+          .find((candidate) => candidate.getValue() === initialContent)
+        expect(currentModel).toBeDefined()
+        return currentModel!
+      })
+
+      model.setValue(updatedContent)
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Preview', exact: true })
+      )
+      await expect
+        .element(screen.getByText('Updated heading', { exact: true }))
+        .toBeInTheDocument()
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Editor', exact: true })
+      )
+      await vi.waitFor(() => {
+        expect(
+          monaco.editor
+            .getModels()
+            .some((candidate) => candidate.getValue() === updatedContent)
+        ).toBe(true)
+      })
+      expect(handleChange).toHaveBeenLastCalledWith(updatedContent)
+      await screen.unmount()
+    })
+
+    it('keeps the Muya caret at the insertion point after controlled onChange', async () => {
+      const handleChange = vi.fn()
+      function ControlledMarkdownEditor() {
+        const [content, setContent] = useState('Existing paragraph')
+        return (
+          <MarkdownEditor
+            docId='doc-md-caret'
+            content={content}
+            onChange={(nextContent) => {
+              handleChange(nextContent)
+              setContent(nextContent)
+            }}
+          />
+        )
+      }
+
+      const screen = await render(<ControlledMarkdownEditor />)
+      await userEvent.click(screen.getByTestId('preview-mode-edit'))
+      const editable = await vi.waitFor(() => {
+        const element = document.querySelector<HTMLElement>(
+          '.muya-container [contenteditable="true"]'
+        )
+        expect(element).toBeTruthy()
+        return element!
+      })
+
+      await userEvent.click(editable)
+      await userEvent.keyboard('{End}')
+      await userEvent.type(editable, ' X')
+
+      await vi.waitFor(() => {
+        expect(handleChange).toHaveBeenLastCalledWith(
+          expect.stringContaining('Existing paragraph X')
+        )
+      })
+
+      const selection = window.getSelection()
+      expect(selection?.anchorNode?.textContent).toContain(
+        'Existing paragraph X'
+      )
+      expect(selection?.anchorOffset).toBe(
+        selection?.anchorNode?.textContent?.length
+      )
+
+      await userEvent.type(editable, 'Y')
+      await vi.waitFor(() => {
+        expect(handleChange).toHaveBeenLastCalledWith(
+          expect.stringContaining('Existing paragraph XY')
+        )
+      })
+      await screen.unmount()
+    })
+
+    it('debounces Muya onChange while typing', async () => {
+      const handleChange = vi.fn()
+      const screen = await render(
+        <MarkdownEditor
+          docId='doc-md-debounce'
+          content='Existing paragraph'
+          onChange={handleChange}
+        />
+      )
+
+      await userEvent.click(screen.getByTestId('preview-mode-edit'))
+      const editable = await vi.waitFor(() => {
+        const element = document.querySelector<HTMLElement>(
+          '.muya-container [contenteditable="true"]'
+        )
+        expect(element).toBeTruthy()
+        return element!
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 350))
+      handleChange.mockClear()
+      await userEvent.click(editable)
+      await userEvent.keyboard('{End}')
+      await userEvent.type(editable, ' XY')
+
+      expect(handleChange).not.toHaveBeenCalled()
+      await vi.waitFor(() => {
+        expect(handleChange).toHaveBeenLastCalledWith(
+          expect.stringContaining('Existing paragraph XY')
+        )
+      })
+      expect(handleChange).toHaveBeenCalledTimes(1)
+      await screen.unmount()
     })
   })
 

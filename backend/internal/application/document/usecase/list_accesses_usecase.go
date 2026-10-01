@@ -12,7 +12,7 @@ func (u *useCase) ListAccesses(ctx context.Context, docID, workspaceID, userID u
 	if _, err = u.GetDocument(ctx, docID, workspaceID, userID); err != nil {
 		return nil, err
 	}
-	data, err = u.docRepo.ListAccesses(ctx, docID)
+	data, err = u.docRepo.ListAccesses(ctx, docID, userID)
 	if err != nil {
 		return data, err
 	}

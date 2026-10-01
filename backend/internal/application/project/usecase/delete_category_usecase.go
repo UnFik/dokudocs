@@ -16,5 +16,5 @@ func (u *useCase) DeleteCategory(ctx context.Context, projectID, categoryID, wor
 	if err != nil || !canEdit {
 		return constant.ErrForbidden
 	}
-	return u.projectRepo.DeleteCategory(ctx, projectID, categoryID)
+	return u.projectRepo.DeleteCategory(ctx, projectID, workspaceID, userID, categoryID)
 }

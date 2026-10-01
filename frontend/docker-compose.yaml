@@ -6,6 +6,10 @@ services:
     container_name: dokudocs-frontend
     restart: unless-stopped
     working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - API_PROXY_TARGET=http://host.docker.internal:8080
     env_file:
       - .env.example
     ports:

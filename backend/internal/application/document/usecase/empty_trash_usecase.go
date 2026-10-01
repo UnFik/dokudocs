@@ -13,5 +13,5 @@ func (u *useCase) EmptyTrash(ctx context.Context, workspaceID, userID uuid.UUID)
 	if err != nil || (wsRole != "owner" && wsRole != "admin") {
 		return constant.ErrForbidden
 	}
-	return u.docRepo.EmptyTrash(ctx, workspaceID)
+	return u.docRepo.EmptyTrash(ctx, workspaceID, userID)
 }

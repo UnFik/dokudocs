@@ -6,6 +6,21 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// Restore restores a document from trash.
+// @Summary Restore document
+// @Description Restore a trashed document back to active status
+// @Tags Document
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Document ID (UUID)"
+// @Success 200 {object} response.Envelope{data=map[string]string}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /documents/{id}/restore [post]
 func (h *Handler) Restore(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {
@@ -18,7 +33,7 @@ func (h *Handler) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.service.RestoreDocument(r.Context(), id, wsID, userID); err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		writeDocumentError(w, err)
 		return
 	}
 	_ = response.Data(w, http.StatusOK, map[string]string{"status": "restored"})

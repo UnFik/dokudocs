@@ -7,6 +7,7 @@ import (
 	"backend/internal/domain/contract/repository"
 	usecasecontract "backend/internal/domain/contract/usecase"
 	"backend/internal/domain/model"
+	"backend/internal/domain/policy"
 	"backend/internal/infrastructure/database"
 	docrepo "backend/internal/infrastructure/repository/document"
 	projectrepo "backend/internal/infrastructure/repository/project"
@@ -54,23 +55,45 @@ func (u *useCase) checkWorkspaceMembership(ctx context.Context, workspaceID, use
 	return role, nil
 }
 
+func (u *useCase) checkProjectWorkspace(ctx context.Context, projectID *uuid.UUID, workspaceID, userID uuid.UUID) error {
+	if projectID == nil {
+		return nil
+	}
+	project, err := u.projectRepo.GetByID(ctx, *projectID, userID)
+	if err != nil {
+		return err
+	}
+	if project.WorkspaceID != workspaceID {
+		return constant.ErrProjectNotFound
+	}
+	workspaceRole, err := u.checkWorkspaceMembership(ctx, workspaceID, userID)
+	if err != nil {
+		return err
+	}
+	if !policy.CanPlaceDocumentInProject(project.Visibility, project.Role, workspaceRole) {
+		return constant.ErrForbidden
+	}
+	return nil
+}
+
+func sameProject(left, right *uuid.UUID) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
+}
+
 func (u *useCase) canManageDoc(ctx context.Context, doc model.Document, workspaceID, userID uuid.UUID) (bool, error) {
-	if doc.AuthorID == userID {
-		return true, nil
+	if doc.WorkspaceID != workspaceID {
+		return false, constant.ErrDocumentNotFound
 	}
-	wsRole, err := u.workspaceRepo.GetUserRole(ctx, workspaceID, userID)
-	if err == nil && (wsRole == "owner" || wsRole == "admin") {
-		return true, nil
+	wsRole, err := u.checkWorkspaceMembership(ctx, workspaceID, userID)
+	if err != nil {
+		return false, err
 	}
-	if doc.ProjectID != nil {
-		projRole, err := u.projectRepo.GetUserRole(ctx, *doc.ProjectID, userID)
-		if err == nil && (projRole == "manager" || projRole == "editor") {
-			return true, nil
-		}
+	access, err := u.resolveDocumentAccess(ctx, doc, wsRole, userID)
+	if err != nil {
+		return false, err
 	}
-	accessLevel, err := u.docRepo.GetUserAccessLevel(ctx, doc.ID, userID)
-	if err == nil && (accessLevel == "owner" || accessLevel == "edit") {
-		return true, nil
-	}
-	return false, nil
+	return policy.CanEditDocument(doc, access), nil
 }

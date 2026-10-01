@@ -3,12 +3,23 @@ package handler
 import (
 	"net/http"
 
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/middleware"
 	"backend/internal/presentation/response"
 
 	"github.com/google/uuid"
 )
 
+// GetSettings retrieves user settings for the authenticated user.
+// @Summary Get user settings
+// @Description Retrieve settings for authenticated user
+// @Tags User
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.Envelope{data=model.UserSettings}
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Router /user/settings [get]
 func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.UserFromContext(r.Context())
 	if !ok {

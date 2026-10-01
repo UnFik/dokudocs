@@ -1,0 +1,3 @@
+# Scope collaborative Markdown editing
+
+Dokudocs supports collaborative online editing and offline editing for Markdown documents. The browser persists pending Yjs-compatible state in IndexedDB and keeps it until the server confirms a durable PostgreSQL commit; reconnect merges pending edits only under current authorization and within the same BodyEpoch. Pending edits from before a revision restore wait for user review. DBML and Mermaid remain text documents. Preserve comment threads, replies, resolution, and anchors; add presence and cursors after edit synchronization is stable. Existing localStorage demo data is not migrated.

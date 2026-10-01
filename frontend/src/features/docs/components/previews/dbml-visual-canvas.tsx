@@ -14,6 +14,7 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { getLocalUserScope, getUserStorage } from '@/lib/user-storage'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -467,6 +468,7 @@ export function DbmlVisualCanvas({
   content,
   onNavigateToSource,
 }: DbmlVisualCanvasProps) {
+  const [storage] = useState(() => getUserStorage(getLocalUserScope()))
   const {
     viewportRef,
     canvasLayerRef,
@@ -495,7 +497,7 @@ export function DbmlVisualCanvas({
   >(() => {
     if (docId) {
       try {
-        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+        const saved = storage.getItem(`dokudocs_dbml_layout_${docId}`)
         if (saved) {
           const parsed = JSON.parse(saved)
           if (parsed.tablePositions) {
@@ -511,7 +513,7 @@ export function DbmlVisualCanvas({
     () => {
       if (docId) {
         try {
-          const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+          const saved = storage.getItem(`dokudocs_dbml_layout_${docId}`)
           if (saved) {
             const parsed = JSON.parse(saved)
             if (parsed.edgeJoints) {
@@ -939,9 +941,9 @@ export function DbmlVisualCanvas({
     setEdgeJoints({})
     if (docId) {
       try {
-        const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+        const saved = storage.getItem(`dokudocs_dbml_layout_${docId}`)
         const parsed = saved ? JSON.parse(saved) : {}
-        localStorage.setItem(
+        storage.setItem(
           `dokudocs_dbml_layout_${docId}`,
           JSON.stringify({
             ...parsed,
@@ -1008,9 +1010,9 @@ export function DbmlVisualCanvas({
       if (hasMoved && docId) {
         setTablePositions((current) => {
           try {
-            const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+            const saved = storage.getItem(`dokudocs_dbml_layout_${docId}`)
             const parsed = saved ? JSON.parse(saved) : {}
-            localStorage.setItem(
+            storage.setItem(
               `dokudocs_dbml_layout_${docId}`,
               JSON.stringify({
                 ...parsed,
@@ -1111,9 +1113,9 @@ export function DbmlVisualCanvas({
       if (hasMoved && docId) {
         setEdgeJoints((current) => {
           try {
-            const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+            const saved = storage.getItem(`dokudocs_dbml_layout_${docId}`)
             const parsed = saved ? JSON.parse(saved) : {}
-            localStorage.setItem(
+            storage.setItem(
               `dokudocs_dbml_layout_${docId}`,
               JSON.stringify({
                 ...parsed,
@@ -1179,9 +1181,9 @@ export function DbmlVisualCanvas({
       delete next[relKey]
       if (docId) {
         try {
-          const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+          const saved = storage.getItem(`dokudocs_dbml_layout_${docId}`)
           const parsed = saved ? JSON.parse(saved) : {}
-          localStorage.setItem(
+          storage.setItem(
             `dokudocs_dbml_layout_${docId}`,
             JSON.stringify({
               ...parsed,
@@ -1212,9 +1214,9 @@ export function DbmlVisualCanvas({
 
       if (docId) {
         try {
-          const saved = localStorage.getItem(`dokudocs_dbml_layout_${docId}`)
+          const saved = storage.getItem(`dokudocs_dbml_layout_${docId}`)
           const parsed = saved ? JSON.parse(saved) : {}
-          localStorage.setItem(
+          storage.setItem(
             `dokudocs_dbml_layout_${docId}`,
             JSON.stringify({
               ...parsed,
@@ -1474,7 +1476,7 @@ export function DbmlVisualCanvas({
         }
       `}</style>
 
-      <div className='absolute top-3 right-3 z-30 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 p-1 shadow-md backdrop-blur-md'>
+      <div className='absolute top-3 right-3 z-30 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 p-1'>
         <Button
           variant='ghost'
           size='sm'
@@ -1764,7 +1766,7 @@ export function DbmlVisualCanvas({
                               r={isThisJointDragging ? 8 : 6}
                               fill='#10b981'
                               fillOpacity={0.25}
-                              className='pointer-events-none animate-pulse'
+                              className='pointer-events-none'
                             />
 
                             <circle
@@ -1834,7 +1836,7 @@ export function DbmlVisualCanvas({
                         <button
                           type='button'
                           onClick={(e) => handleResetEdgeJoints(e, line.id)}
-                          className='hover:text-destructive-foreground flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-background/95 px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-lg backdrop-blur-md transition-colors duration-150 select-none hover:bg-destructive'
+                          className='hover:text-destructive-foreground flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background/95 px-2.5 py-1 text-[10px] font-semibold text-foreground transition-colors duration-150 select-none hover:bg-destructive'
                           title='Reset joints to default effective edge'
                         >
                           <RotateCcw className='h-3 w-3 shrink-0' />
@@ -1878,12 +1880,12 @@ export function DbmlVisualCanvas({
                   onMouseDown={(e) => handleMouseDownTable(table.name, e)}
                   onMouseEnter={() => setHoveredTable(table.name)}
                   onMouseLeave={() => setHoveredTable(null)}
-                  className={`group/table z-30 flex cursor-grab flex-col rounded-xl border bg-card shadow-sm transition-[border-color,box-shadow] duration-150 active:cursor-grabbing ${
+                  className={`group/table z-30 flex cursor-grab flex-col rounded-xl border bg-card transition-[border-color,box-shadow] duration-150 active:cursor-grabbing ${
                     isSelected
-                      ? 'border-emerald-500 shadow-md ring-1 ring-emerald-500/30'
+                      ? 'border-emerald-500 ring-1 ring-emerald-500/30'
                       : isHovered
-                        ? 'border-emerald-500/60 shadow-sm'
-                        : 'border-border/80 hover:border-border hover:shadow-md'
+                        ? 'border-emerald-500/60'
+                        : 'border-border/80 hover:border-border'
                   }`}
                 >
                   <div
@@ -1945,7 +1947,7 @@ export function DbmlVisualCanvas({
                         variant='outline'
                         className={`shrink-0 px-1.5 py-0 font-mono text-[10px] ${
                           table.headerColor
-                            ? 'border-white/25 bg-black/25 text-white shadow-xs'
+                            ? 'border-white/25 bg-black/25 text-white'
                             : 'bg-background/80'
                         }`}
                       >

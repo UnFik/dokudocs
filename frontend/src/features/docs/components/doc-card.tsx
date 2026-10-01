@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { DocumentItem } from '@/types/dokudocs'
+import type { DocumentItem } from '@/types/dokudocs'
 import {
   Check,
   Copy,
@@ -170,11 +170,12 @@ export function DocCard({ document }: DocCardProps) {
         <ContextMenuTrigger asChild>
           <div
             onClick={handleCardClick}
-            className='group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-xl border border-border/80 bg-card transition-all duration-200 select-none hover:-translate-y-0.5 hover:border-sidebar-ring/60 hover:shadow-md'
+            className='group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-xl border border-border/80 bg-card transition-all duration-200 select-none hover:-translate-y-0.5 hover:border-sidebar-ring/60'
           >
             <div className='relative h-32 w-full border-b border-border/40'>
               <DocThumbnailPreview
                 docId={document.id}
+                workspaceID={document.workspaceId}
                 type={document.type}
                 content={document.content}
                 thumbnail={document.thumbnail || document.thumbnailPreview}
@@ -190,12 +191,12 @@ export function DocCard({ document }: DocCardProps) {
                   e.stopPropagation()
                   toggleStarDocument(document.id)
                 }}
-                className='absolute top-2.5 right-2.5 flex size-7 items-center justify-center rounded-full bg-background/80 text-muted-foreground shadow-2xs backdrop-blur-xs transition-transform hover:scale-110 hover:text-amber-500'
+                className='absolute top-2.5 right-2.5 flex size-7 items-center justify-center rounded-md bg-background/80 text-muted-foreground transition-transform hover:scale-110 hover:text-foreground'
               >
                 <Star
                   className={`size-3.5 ${
                     document.isStarred
-                      ? 'fill-amber-400 text-amber-500'
+                      ? 'fill-foreground text-foreground'
                       : 'text-muted-foreground/80'
                   }`}
                 />
@@ -221,14 +222,14 @@ export function DocCard({ document }: DocCardProps) {
                         return (
                           <>
                             <span
-                              className={`rounded-full border px-2 py-0.5 text-[9px] font-medium ${categoryPalette.bg} ${categoryPalette.text} ${categoryPalette.border}`}
+                              className={`rounded-sm border px-2 py-0.5 text-[9px] font-medium ${categoryPalette.bg} ${categoryPalette.text} ${categoryPalette.border}`}
                             >
                               {firstCat}
                             </span>
                             {remainingCount > 0 && (
                               <span
                                 title={docCategories.slice(1).join(', ')}
-                                className='rounded-full border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
+                                className='rounded-sm border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
                               >
                                 +{remainingCount}
                               </span>
@@ -479,7 +480,7 @@ export function DocCard({ document }: DocCardProps) {
           <ContextMenuItem onClick={() => toggleStarDocument(document.id)}>
             <Star
               className={`mr-2 size-3.5 ${
-                document.isStarred ? 'fill-amber-400 text-amber-500' : ''
+                document.isStarred ? 'fill-foreground text-foreground' : ''
               }`}
             />
             <span>

@@ -17,5 +17,5 @@ func (u *useCase) UpdateThumbnails(ctx context.Context, id, workspaceID, userID 
 	if err != nil || !canManage {
 		return constant.ErrForbidden
 	}
-	return u.docRepo.UpdateThumbnails(ctx, id, thumb, thumbDark, thumbPreview, thumbPreviewDark)
+	return u.docRepo.UpdateThumbnails(ctx, id, workspaceID, userID, thumb, thumbDark, thumbPreview, thumbPreviewDark)
 }

@@ -1,0 +1,242 @@
+[
+  {
+    "name": "frontmatter",
+    "meta": {
+      "lang": "yaml",
+      "style": "-"
+    },
+    "text": "title: AST contract"
+  },
+  {
+    "name": "atx-heading",
+    "meta": {
+      "level": 1
+    },
+    "text": "# Heading",
+    "inline": [
+      {
+        "type": "run",
+        "content": "Heading",
+        "attributes": {
+          "source": "Heading"
+        }
+      }
+    ]
+  },
+  {
+    "name": "setext-heading",
+    "meta": {
+      "level": 1,
+      "underline": "======="
+    },
+    "text": "Section",
+    "inline": [
+      {
+        "type": "run",
+        "content": "Section",
+        "attributes": {
+          "source": "Section"
+        }
+      }
+    ]
+  },
+  {
+    "name": "order-list",
+    "meta": {
+      "loose": false,
+      "start": 4,
+      "delimiter": ")"
+    },
+    "children": [
+      {
+        "name": "list-item",
+        "children": [
+          {
+            "name": "paragraph",
+            "text": "ordered",
+            "inline": [
+              {
+                "type": "run",
+                "content": "ordered",
+                "attributes": {
+                  "source": "ordered"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "task-list",
+    "meta": {
+      "loose": false,
+      "marker": "-"
+    },
+    "children": [
+      {
+        "name": "task-list-item",
+        "meta": {
+          "checked": true
+        },
+        "children": [
+          {
+            "name": "paragraph",
+            "text": "done",
+            "inline": [
+              {
+                "type": "run",
+                "content": "done",
+                "attributes": {
+                  "source": "done"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "block-quote",
+    "children": [
+      {
+        "name": "paragraph",
+        "text": "quoted",
+        "inline": [
+          {
+            "type": "run",
+            "content": "quoted",
+            "attributes": {
+              "source": "quoted"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "table",
+    "children": [
+      {
+        "name": "table.row",
+        "children": [
+          {
+            "name": "table.cell",
+            "meta": {
+              "align": "none"
+            },
+            "text": "left",
+            "inline": [
+              {
+                "type": "run",
+                "content": "left",
+                "attributes": {
+                  "source": "left"
+                }
+              }
+            ]
+          },
+          {
+            "name": "table.cell",
+            "meta": {
+              "align": "none"
+            },
+            "text": "right",
+            "inline": [
+              {
+                "type": "run",
+                "content": "right",
+                "attributes": {
+                  "source": "right"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "table.row",
+        "children": [
+          {
+            "name": "table.cell",
+            "meta": {
+              "align": "none"
+            },
+            "text": "a",
+            "inline": [
+              {
+                "type": "run",
+                "content": "a",
+                "attributes": {
+                  "source": "a"
+                }
+              }
+            ]
+          },
+          {
+            "name": "table.cell",
+            "meta": {
+              "align": "none"
+            },
+            "text": "b",
+            "inline": [
+              {
+                "type": "run",
+                "content": "b",
+                "attributes": {
+                  "source": "b"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "code-block",
+    "meta": {
+      "type": "fenced",
+      "lang": "ts title=\"example\""
+    },
+    "text": "const answer = 42"
+  },
+  {
+    "name": "math-block",
+    "meta": {
+      "mathStyle": ""
+    },
+    "text": "a + b"
+  },
+  {
+    "name": "diagram",
+    "meta": {
+      "type": "mermaid",
+      "lang": "yaml"
+    },
+    "text": "graph TD"
+  },
+  {
+    "name": "footnote",
+    "meta": {
+      "identifier": "note-1"
+    },
+    "children": [
+      {
+        "name": "paragraph",
+        "text": "Footnote text",
+        "inline": [
+          {
+            "type": "run",
+            "content": "Footnote text",
+            "attributes": {
+              "source": "Footnote text"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -133,9 +133,9 @@ export function SettingsDialog({
               variant={activeTab === 'account' ? 'secondary' : 'ghost'}
               size='sm'
               onClick={() => setActiveTab('account')}
-              className={`h-8 rounded-full px-3.5 text-xs font-medium transition-all ${
+              className={`h-8 rounded-md px-3.5 text-xs font-medium transition-all ${
                 activeTab === 'account'
-                  ? 'bg-secondary font-semibold text-secondary-foreground shadow-2xs'
+                  ? 'bg-secondary font-semibold text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -148,9 +148,9 @@ export function SettingsDialog({
               variant={activeTab === 'notification' ? 'secondary' : 'ghost'}
               size='sm'
               onClick={() => setActiveTab('notification')}
-              className={`h-8 rounded-full px-3.5 text-xs font-medium transition-all ${
+              className={`h-8 rounded-md px-3.5 text-xs font-medium transition-all ${
                 activeTab === 'notification'
-                  ? 'bg-secondary font-semibold text-secondary-foreground shadow-2xs'
+                  ? 'bg-secondary font-semibold text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -163,9 +163,9 @@ export function SettingsDialog({
               variant={activeTab === 'security' ? 'secondary' : 'ghost'}
               size='sm'
               onClick={() => setActiveTab('security')}
-              className={`h-8 rounded-full px-3.5 text-xs font-medium transition-all ${
+              className={`h-8 rounded-md px-3.5 text-xs font-medium transition-all ${
                 activeTab === 'security'
-                  ? 'bg-secondary font-semibold text-secondary-foreground shadow-2xs'
+                  ? 'bg-secondary font-semibold text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -178,7 +178,7 @@ export function SettingsDialog({
             {activeTab === 'account' && (
               <div className='space-y-4 py-1'>
                 <div className='flex items-center gap-4 rounded-xl border border-border/80 bg-card p-4'>
-                  <Avatar className='size-14 rounded-xl border border-border/80 shadow-2xs'>
+                  <Avatar className='size-14 rounded-xl border border-border/80'>
                     <AvatarImage src={user.avatar} alt={displayName} />
                     <AvatarFallback className='rounded-xl font-bold'>
                       {displayName.slice(0, 2).toUpperCase()}
@@ -641,7 +641,7 @@ export function SettingsDialog({
                     key={r}
                     type='button'
                     onClick={() => setTempRole(r)}
-                    className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    className={`cursor-pointer rounded-sm border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                       tempRole === r
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-muted/40 text-foreground hover:bg-muted'

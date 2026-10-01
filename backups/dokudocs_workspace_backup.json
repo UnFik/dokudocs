@@ -1,0 +1,480 @@
+{
+  "version": 2,
+  "createdAt": "2026-09-10T02:12:10.176Z",
+  "description": "Dokudocs Workspace data backup (documents, projects, workspaces, trash)",
+  "workspaces": [
+    {
+      "id": "org-1",
+      "name": "Dokudocs Workspace",
+      "plan": "Pro Workspace",
+      "role": "owner"
+    },
+    {
+      "id": "org-2",
+      "name": "Personal Workspace",
+      "plan": "Free",
+      "role": "owner"
+    },
+    {
+      "id": "org-3",
+      "name": "Engineering Team",
+      "plan": "Enterprise",
+      "role": "admin"
+    }
+  ],
+  "projects": [
+    {
+      "id": "proj-1",
+      "name": "E-Commerce Core",
+      "description": "Core microservices, checkout, orders, and payment integrations",
+      "orgId": "org-1",
+      "colorBadge": "#3b82f6",
+      "isStarred": true,
+      "categories": [
+        "Checkout Flow",
+        "Order Engine",
+        "Database Schema",
+        "API Specs"
+      ],
+      "documentIds": [
+        "doc-1",
+        "doc-2",
+        "doc-3",
+        "doc-4",
+        "doc-5"
+      ],
+      "createdAt": "2026-08-10T10:00:00.000Z",
+      "updatedAt": "2026-08-20T20:30:00.000Z"
+    },
+    {
+      "id": "proj-2",
+      "name": "Payment Gateway",
+      "description": "Third-party payment providers, ledger, and reconciliation flow",
+      "orgId": "org-1",
+      "colorBadge": "#10b981",
+      "categories": [
+        "Integration",
+        "Ledger",
+        "Security"
+      ],
+      "documentIds": [
+        "doc-6",
+        "doc-7",
+        "doc-8"
+      ],
+      "createdAt": "2026-08-12T14:30:00.000Z",
+      "updatedAt": "2026-08-19T14:30:00.000Z"
+    },
+    {
+      "id": "proj-3",
+      "name": "User Auth & SSO",
+      "description": "Authentication architecture, RBAC permissions, and OAuth2 flow",
+      "orgId": "org-1",
+      "colorBadge": "#8b5cf6",
+      "categories": [
+        "OAuth2",
+        "RBAC",
+        "Session"
+      ],
+      "documentIds": [
+        "doc-9",
+        "doc-10"
+      ],
+      "createdAt": "2026-08-15T09:15:00.000Z",
+      "updatedAt": "2026-08-17T09:15:00.000Z"
+    }
+  ],
+  "documents": [
+    {
+      "id": "doc-1",
+      "title": "Order Processing FSD",
+      "type": "markdown",
+      "content": "# Functional Specification: Order Processing Service\n\n## 1. Overview\nThe Order Processing Service manages cart validation, inventory reservation, payment authorization, and fulfillment dispatch.\n\n## 2. Order States\n- **PENDING**: Order placed, waiting for payment confirmation.\n- **PAID**: Payment verified by gateway.\n- **PROCESSING**: Warehouse allocation underway.\n- **SHIPPED**: Courier tracking active.\n- **COMPLETED**: Received by customer.\n\n## 3. SLA & Requirements\n- Max latency for checkout API: 250ms (p99).\n- Webhook retry with exponential backoff up to 5 attempts.",
+      "projectId": "proj-1",
+      "projectName": "E-Commerce Core",
+      "category": "Checkout Flow",
+      "categories": [
+        "Checkout Flow",
+        "Core Architecture"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-1",
+        "name": "Fikri",
+        "email": "fikri@dokudocs.app",
+        "avatar": "/avatars/01.png"
+      },
+      "isStarred": true,
+      "isShared": true,
+      "isDraft": false,
+      "createdAt": "2026-08-16T11:00:00.000Z",
+      "updatedAt": "2026-08-20T20:30:00.000Z",
+      "lastViewedAt": "2026-08-20T22:25:00.000Z",
+      "tags": [
+        "Checkout",
+        "Core API",
+        "FSD"
+      ]
+    },
+    {
+      "id": "doc-2",
+      "title": "E-Commerce Database Schema",
+      "type": "dbdiagram",
+      "content": "Table users {\n  id int [pk, increment]\n  email varchar(255) [unique, not null]\n  full_name varchar(150)\n  created_at timestamp\n}\n\nTable orders {\n  id int [pk, increment]\n  user_id int [ref: > users.id]\n  total_amount decimal(12,2)\n  status varchar(50)\n  created_at timestamp\n}\n\nTable order_items {\n  id int [pk, increment]\n  order_id int [ref: > orders.id]\n  product_id int\n  quantity int\n  unit_price decimal(10,2)\n}\n\nTable products {\n  id int [pk, increment]\n  sku varchar(100) [unique]\n  title varchar(200)\n  stock_count int\n}",
+      "projectId": "proj-1",
+      "projectName": "E-Commerce Core",
+      "category": "Database Schema",
+      "categories": [
+        "Database Schema",
+        "PostgreSQL"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-1",
+        "name": "Fikri",
+        "email": "fikri@dokudocs.app",
+        "avatar": "/avatars/01.png"
+      },
+      "isStarred": false,
+      "isShared": true,
+      "isDraft": false,
+      "createdAt": "2026-08-15T14:30:00.000Z",
+      "updatedAt": "2026-08-19T14:30:00.000Z",
+      "lastViewedAt": "2026-08-20T21:40:00.000Z",
+      "tags": [
+        "Database",
+        "Postgres",
+        "DBML"
+      ]
+    },
+    {
+      "id": "doc-3",
+      "title": "Checkout & Payment Flow",
+      "type": "mermaid",
+      "content": "graph TD\n  Customer([Customer]) --> AddCart[Add Item to Cart]\n  AddCart --> Review[Review Cart]\n  Review --> Checkout[Click Checkout]\n  CheckStock -- No --> OutOfStock[Show Stock Error]\n  CheckStock -- Yes --> ReserveStock[Reserve Inventory 15m]\n  ReserveStock --> SelectPayment[Select Payment Method]\n  SelectPayment --> Stripe{Process Stripe?}\n  Stripe -- Success --> MarkPaid[Mark Order as Paid]\n  Stripe -- Failed --> ReleaseStock[Release Reserved Stock]\n  MarkPaid --> NotifyFulfillment[Dispatch Fulfillment Webhook]\n  NotifyFulfillment --> Finish([Order Complete])",
+      "projectId": "proj-1",
+      "projectName": "E-Commerce Core",
+      "category": "Checkout Flow",
+      "categories": [
+        "Checkout Flow",
+        "Payment Flow"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-2",
+        "name": "Sarah Chen",
+        "email": "sarah@dokudocs.app",
+        "avatar": "/avatars/02.png"
+      },
+      "isStarred": true,
+      "isShared": true,
+      "isDraft": false,
+      "createdAt": "2026-08-14T09:15:00.000Z",
+      "updatedAt": "2026-08-17T09:15:00.000Z",
+      "lastViewedAt": "2026-08-20T19:15:00.000Z",
+      "tags": [
+        "Flowchart",
+        "Mermaid",
+        "Checkout"
+      ]
+    },
+    {
+      "id": "doc-4",
+      "title": "Payment Gateway Integration FSD",
+      "type": "markdown",
+      "content": "# Payment Gateway Integration Specification\n\n## 1. Scope\nIntegration with Stripe, Xendit, and Midtrans unified router.\n\n## 2. Security Requirements\n- PCI-DSS Compliance Level 1.\n- Zero raw card storage on internal servers.",
+      "projectId": "proj-2",
+      "projectName": "Payment Gateway",
+      "category": "Core Service",
+      "categories": [
+        "Core Service",
+        "Integration"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-1",
+        "name": "Fikri",
+        "email": "fikri@dokudocs.app",
+        "avatar": "/avatars/01.png"
+      },
+      "isStarred": false,
+      "isShared": false,
+      "isDraft": false,
+      "createdAt": "2026-08-16T15:00:00.000Z",
+      "updatedAt": "2026-08-20T18:00:00.000Z",
+      "lastViewedAt": "2026-08-20T21:10:00.000Z"
+    },
+    {
+      "id": "doc-5",
+      "title": "Payment Transactions ERD",
+      "type": "dbdiagram",
+      "content": "Table payment_transactions {\n  id varchar(36) [pk]\n  order_id varchar(36)\n  gateway_name varchar(50)\n  amount decimal(12,2)\n  currency varchar(3)\n  status varchar(30)\n  idempotency_key varchar(64) [unique]\n  created_at timestamp\n}\n\nTable payment_refunds {\n  id varchar(36) [pk]\n  transaction_id varchar(36) [ref: > payment_transactions.id]\n  refund_amount decimal(12,2)\n  reason text\n  created_at timestamp\n}",
+      "projectId": "proj-2",
+      "projectName": "Payment Gateway",
+      "category": "Database Schema",
+      "categories": [
+        "Database Schema",
+        "Finance"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-3",
+        "name": "Alex Rivera",
+        "email": "alex@dokudocs.app",
+        "avatar": "/avatars/03.png"
+      },
+      "isStarred": true,
+      "isShared": true,
+      "isDraft": false,
+      "createdAt": "2026-08-13T10:00:00.000Z",
+      "updatedAt": "2026-08-18T10:00:00.000Z",
+      "lastViewedAt": "2026-08-20T16:00:00.000Z"
+    },
+    {
+      "id": "doc-6",
+      "title": "Refund Lifecycle Sequence",
+      "type": "mermaid",
+      "content": "sequenceDiagram\n  autonumber\n  actor Admin as Operations Admin\n  participant API as Payment API\n  participant Gate as Stripe Gateway\n  participant DB as Database\n\n  Admin->>API: POST /refunds (orderId, amount)\n  API->>DB: Verify original transaction status\n  DB-->>API: Status = PAID\n  API->>Gate: Create refund charge\n  Gate-->>API: Refund processed (ref_id)\n  API->>DB: Store refund transaction\n  API-->>Admin: 200 OK (Refund Completed)",
+      "projectId": "proj-2",
+      "projectName": "Payment Gateway",
+      "category": "Refund Flow",
+      "categories": [
+        "Refund Flow",
+        "Finance"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-2",
+        "name": "Sarah Chen",
+        "email": "sarah@dokudocs.app",
+        "avatar": "/avatars/02.png"
+      },
+      "isStarred": false,
+      "isShared": true,
+      "isDraft": false,
+      "createdAt": "2026-08-12T16:20:00.000Z",
+      "updatedAt": "2026-08-15T16:20:00.000Z",
+      "lastViewedAt": "2026-08-19T11:00:00.000Z"
+    },
+    {
+      "id": "doc-7",
+      "title": "OAuth2 & OIDC Authentication Spec",
+      "type": "markdown",
+      "content": "# OAuth2 & OIDC Authentication Specification\n\n## 1. Identity Providers\n- Google Workspace OAuth2\n- GitHub Enterprise SSO\n- Microsoft Entra ID (SAML 2.0)",
+      "projectId": "proj-3",
+      "projectName": "User Auth & SSO",
+      "category": "SSO Spec",
+      "categories": [
+        "SSO Spec",
+        "Security"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-1",
+        "name": "Fikri",
+        "email": "fikri@dokudocs.app",
+        "avatar": "/avatars/01.png"
+      },
+      "isStarred": true,
+      "isShared": true,
+      "isDraft": false,
+      "createdAt": "2026-08-16T08:00:00.000Z",
+      "updatedAt": "2026-08-20T16:00:00.000Z",
+      "lastViewedAt": "2026-08-20T22:15:00.000Z"
+    },
+    {
+      "id": "doc-8",
+      "title": "User Identity & Sessions Schema",
+      "type": "dbdiagram",
+      "content": "Table accounts {\n  id varchar(36) [pk]\n  email varchar(255) [unique, not null]\n  password_hash varchar(255)\n  is_verified boolean\n  created_at timestamp\n}\n\nTable sessions {\n  id varchar(64) [pk]\n  account_id varchar(36) [ref: > accounts.id]\n  ip_address varchar(45)\n  user_agent text\n  expires_at timestamp\n  created_at timestamp\n}",
+      "projectId": "proj-3",
+      "projectName": "User Auth & SSO",
+      "category": "Database Schema",
+      "categories": [
+        "Database Schema",
+        "Auth"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-1",
+        "name": "Fikri",
+        "email": "fikri@dokudocs.app",
+        "avatar": "/avatars/01.png"
+      },
+      "isStarred": false,
+      "isShared": false,
+      "isDraft": false,
+      "createdAt": "2026-08-14T11:30:00.000Z",
+      "updatedAt": "2026-08-19T11:30:00.000Z",
+      "lastViewedAt": "2026-08-20T20:00:00.000Z"
+    },
+    {
+      "id": "doc-9",
+      "title": "MFA SMS & Authenticator Flow",
+      "type": "mermaid",
+      "content": "graph TD\n  Start([User Enters Password]) --> CheckMfa{MFA Enabled?}\n  CheckMfa -- No --> IssueToken[Issue Session JWT]\n  CheckMfa -- Yes --> PromptOTP[Prompt TOTP Authenticator]\n  PromptOTP --> ValidateOTP{Valid Code?}\n  ValidateOTP -- Yes --> IssueToken\n  ValidateOTP -- No --> LockoutCheck{Failed Attempts >= 5?}\n  LockoutCheck -- Yes --> LockAccount[Temporary 15m Lockout]\n  LockoutCheck -- No --> PromptOTP\n  IssueToken --> Complete([Dashboard Access])",
+      "projectId": "proj-3",
+      "projectName": "User Auth & SSO",
+      "category": "MFA Flow",
+      "categories": [
+        "MFA Flow",
+        "Security"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-2",
+        "name": "Sarah Chen",
+        "email": "sarah@dokudocs.app",
+        "avatar": "/avatars/02.png"
+      },
+      "isStarred": false,
+      "isShared": true,
+      "isDraft": false,
+      "createdAt": "2026-08-15T09:00:00.000Z",
+      "updatedAt": "2026-08-17T09:00:00.000Z",
+      "lastViewedAt": "2026-08-20T18:30:00.000Z"
+    },
+    {
+      "id": "doc-10",
+      "title": "RBAC Permission Matrix FSD",
+      "type": "markdown",
+      "content": "# Role-Based Access Control Specification\n\n## Roles\n- **SuperAdmin**: Global access across all organizations.\n- **OrgAdmin**: Workspace management and billing control.\n- **Editor**: Create and edit documents in assigned projects.\n- **Viewer**: Read-only access to published documents.",
+      "projectId": "proj-3",
+      "projectName": "User Auth & SSO",
+      "category": "RBAC",
+      "categories": [
+        "RBAC",
+        "Governance"
+      ],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-3",
+        "name": "Alex Rivera",
+        "email": "alex@dokudocs.app",
+        "avatar": "/avatars/03.png"
+      },
+      "isStarred": false,
+      "isShared": true,
+      "isDraft": false,
+      "createdAt": "2026-08-14T16:00:00.000Z",
+      "updatedAt": "2026-08-15T16:00:00.000Z",
+      "lastViewedAt": "2026-08-18T14:00:00.000Z"
+    },
+    {
+      "id": "doc-draft-1",
+      "title": "Q3 Microservice Migration Notes",
+      "type": "markdown",
+      "content": "# Q3 Architecture Scratchpad\n\n- Monolith decoupling plan\n- Event-driven Kafka topics\n- Redis distributed lock evaluation",
+      "projectId": null,
+      "projectName": null,
+      "category": null,
+      "categories": [],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-1",
+        "name": "Fikri",
+        "email": "fikri@dokudocs.app",
+        "avatar": "/avatars/01.png"
+      },
+      "isStarred": false,
+      "isShared": false,
+      "isDraft": true,
+      "createdAt": "2026-08-17T10:00:00.000Z",
+      "updatedAt": "2026-08-20T21:00:00.000Z",
+      "lastViewedAt": "2026-08-20T22:28:00.000Z"
+    },
+    {
+      "id": "doc-draft-2",
+      "title": "Exploratory GraphQL Gateway Schema",
+      "type": "dbdiagram",
+      "content": "Table graphql_resolvers {\n  id int [pk]\n  name varchar(100)\n  target_service varchar(100)\n}",
+      "projectId": null,
+      "projectName": null,
+      "category": null,
+      "categories": [],
+      "orgId": "org-1",
+      "author": {
+        "id": "usr-1",
+        "name": "Fikri",
+        "email": "fikri@dokudocs.app",
+        "avatar": "/avatars/01.png"
+      },
+      "isStarred": false,
+      "isShared": false,
+      "isDraft": true,
+      "createdAt": "2026-08-17T12:00:00.000Z",
+      "updatedAt": "2026-08-20T19:00:00.000Z",
+      "lastViewedAt": "2026-08-20T20:15:00.000Z"
+    }
+  ],
+  "trash": [
+    {
+      "id": "trash-1",
+      "docId": "doc-old-1",
+      "document": {
+        "id": "doc-old-1",
+        "title": "Legacy Payment Webhook Specs",
+        "type": "markdown",
+        "content": "# Legacy Payment Webhook Specifications\n\nDeprecated specification for v1 payment IPN listeners.",
+        "projectId": "proj-2",
+        "projectName": "Payment Gateway",
+        "category": "Webhook API",
+        "orgId": "org-1",
+        "author": {
+          "id": "usr-1",
+          "name": "Fikri",
+          "email": "fikri@dokudocs.app",
+          "avatar": "/avatars/01.png"
+        },
+        "isStarred": false,
+        "isShared": false,
+        "isDraft": false,
+        "createdAt": "2026-08-01T10:00:00.000Z",
+        "updatedAt": "2 days ago",
+        "deletedAt": "2026-08-16T10:00:00.000Z"
+      },
+      "deletedAt": "2 days ago",
+      "deletedBy": {
+        "id": "usr-1",
+        "name": "Fikri",
+        "email": "fikri@dokudocs.app",
+        "avatar": "/avatars/01.png"
+      },
+      "daysRemaining": 28
+    },
+    {
+      "id": "trash-2",
+      "docId": "doc-old-2",
+      "document": {
+        "id": "doc-old-2",
+        "title": "V1 Auth Architecture Flow",
+        "type": "mermaid",
+        "content": "graph TD\n  A[Old Client] --> B[Deprecated OAuth Gateway]",
+        "projectId": "proj-3",
+        "projectName": "User Authentication",
+        "category": "OAuth",
+        "orgId": "org-1",
+        "author": {
+          "id": "usr-1",
+          "name": "Fikri",
+          "email": "fikri@dokudocs.app",
+          "avatar": "/avatars/01.png"
+        },
+        "isStarred": false,
+        "isShared": false,
+        "isDraft": false,
+        "createdAt": "2026-07-20T10:00:00.000Z",
+        "updatedAt": "5 days ago",
+        "deletedAt": "2026-08-13T10:00:00.000Z"
+      },
+      "deletedAt": "5 days ago",
+      "deletedBy": {
+        "id": "usr-1",
+        "name": "Fikri",
+        "email": "fikri@dokudocs.app",
+        "avatar": "/avatars/01.png"
+      },
+      "daysRemaining": 25
+    }
+  ]
+}

@@ -16,5 +16,5 @@ func (u *useCase) RemoveMember(ctx context.Context, projectID, workspaceID, memb
 	if (err != nil || !canManage) && actorID != memberUserID {
 		return constant.ErrForbidden
 	}
-	return u.projectRepo.RemoveMember(ctx, projectID, memberUserID)
+	return u.projectRepo.RemoveMember(ctx, projectID, workspaceID, actorID, memberUserID)
 }

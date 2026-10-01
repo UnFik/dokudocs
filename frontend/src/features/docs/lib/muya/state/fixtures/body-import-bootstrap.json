@@ -1,0 +1,50 @@
+[
+  {
+    "name": "atx-heading",
+    "meta": {
+      "level": 1
+    },
+    "text": "# **Plan**",
+    "inline": [
+      {
+        "type": "run",
+        "content": "Plan",
+        "attributes": {
+          "bold": true,
+          "boldMarker": "**",
+          "source": "Plan"
+        }
+      }
+    ]
+  },
+  {
+    "name": "task-list",
+    "meta": {
+      "loose": false,
+      "marker": "-"
+    },
+    "children": [
+      {
+        "name": "task-list-item",
+        "meta": {
+          "checked": true
+        },
+        "children": [
+          {
+            "name": "paragraph",
+            "text": "ship",
+            "inline": [
+              {
+                "type": "run",
+                "content": "ship",
+                "attributes": {
+                  "source": "ship"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

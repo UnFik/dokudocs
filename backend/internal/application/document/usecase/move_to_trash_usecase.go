@@ -17,5 +17,5 @@ func (u *useCase) MoveToTrash(ctx context.Context, id, workspaceID, userID uuid.
 	if err != nil || !canManage {
 		return constant.ErrForbidden
 	}
-	return u.docRepo.SoftDelete(ctx, id, userID)
+	return u.docRepo.SoftDelete(ctx, id, workspaceID, userID)
 }

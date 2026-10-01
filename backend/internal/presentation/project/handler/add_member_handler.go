@@ -9,6 +9,23 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// AddMember adds or updates a member's role in a project.
+// @Summary Add or update project member
+// @Description Add a member by email or update role in a project
+// @Tags Project
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Project ID (UUID)"
+// @Param request body presenter.AddMemberRequest true "Add member payload"
+// @Success 201 {object} response.Envelope{data=map[string]string}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /projects/{id}/members [post]
 func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {

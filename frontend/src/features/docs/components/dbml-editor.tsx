@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react'
+import { AlignLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DbmlVisualCanvas } from './previews/dbml-visual-canvas'
 import { UnifiedMonacoEditor } from './unified-monaco-editor'
@@ -44,7 +44,7 @@ export function DbmlEditor({ docId, content, onChange }: DbmlEditorProps) {
       className='h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground'
       title='Beautify schema code'
     >
-      <Sparkles className='size-3 text-emerald-500' />
+      <AlignLeft className='size-3 text-muted-foreground' />
       <span>Format</span>
     </Button>
   )

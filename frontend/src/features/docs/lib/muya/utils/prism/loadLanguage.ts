@@ -1,4 +1,4 @@
-import components from 'prismjs/components.js'
+import components from 'prismjs/components'
 import getLoader from 'prismjs/dependencies'
 
 interface ILangLoadStatus {

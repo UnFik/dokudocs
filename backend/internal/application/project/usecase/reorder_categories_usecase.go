@@ -16,5 +16,5 @@ func (u *useCase) ReorderCategories(ctx context.Context, projectID, workspaceID,
 	if err != nil || !canEdit {
 		return constant.ErrForbidden
 	}
-	return u.projectRepo.ReorderCategories(ctx, projectID, categoryIDs)
+	return u.projectRepo.ReorderCategories(ctx, projectID, workspaceID, userID, categoryIDs)
 }

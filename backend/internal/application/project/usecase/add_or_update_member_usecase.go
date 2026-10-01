@@ -33,5 +33,5 @@ func (u *useCase) AddOrUpdateMember(ctx context.Context, projectID, workspaceID,
 		role = "editor"
 	}
 
-	return u.projectRepo.AddOrUpdateMember(ctx, projectID, targetUser.ID, role)
+	return u.projectRepo.AddOrUpdateMember(ctx, projectID, workspaceID, actorID, targetUser.ID, role)
 }

@@ -111,6 +111,13 @@
   color: var(--editor-color, inherit) !important;
 }
 
+.muya-container,
+.muya-container [contenteditable],
+.muya-container [contenteditable]:focus,
+.muya-container [contenteditable]:focus-visible {
+  outline: none !important;
+}
+
 .muya-container .mu-editor {
   outline: none;
   min-height: 100%;

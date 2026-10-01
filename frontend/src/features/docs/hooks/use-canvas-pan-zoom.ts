@@ -1,4 +1,9 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import {
+  getLocalUserScope,
+  getUserStorage,
+  registerLocalUserFlush,
+} from '@/lib/user-storage'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
 interface UseCanvasPanZoomOptions {
@@ -14,13 +19,14 @@ export function useCanvasPanZoom({
   initialZoom = 1,
   storagePrefix = 'dokudocs_canvas_layout_',
 }: UseCanvasPanZoomOptions = {}) {
+  const [storage] = useState(() => getUserStorage(getLocalUserScope()))
   const viewportRef = useRef<HTMLDivElement>(null)
   const isPanningRef = useRef(false)
 
   const initialPanValue = useMemo(() => {
     if (docId) {
       try {
-        const saved = localStorage.getItem(`${storagePrefix}${docId}`)
+        const saved = storage.getItem(`${storagePrefix}${docId}`)
         if (saved) {
           const parsed = JSON.parse(saved)
           if (parsed.pan && typeof parsed.pan.x === 'number') {
@@ -32,12 +38,12 @@ export function useCanvasPanZoom({
       }
     }
     return initialPan
-  }, [docId, storagePrefix, initialPan.x, initialPan.y])
+  }, [docId, storagePrefix, storage, initialPan.x, initialPan.y])
 
   const initialZoomValue = useMemo(() => {
     if (docId) {
       try {
-        const saved = localStorage.getItem(`${storagePrefix}${docId}`)
+        const saved = storage.getItem(`${storagePrefix}${docId}`)
         if (saved) {
           const parsed = JSON.parse(saved)
           if (typeof parsed.zoom === 'number') {
@@ -49,7 +55,7 @@ export function useCanvasPanZoom({
       }
     }
     return initialZoom
-  }, [docId, storagePrefix, initialZoom])
+  }, [docId, storagePrefix, storage, initialZoom])
 
   const panRef = useRef<{ x: number; y: number }>(initialPanValue)
   const zoomRef = useRef<number>(initialZoomValue)
@@ -137,9 +143,9 @@ export function useCanvasPanZoom({
     if (docId) {
       try {
         const key = `${storagePrefix}${docId}`
-        const saved = localStorage.getItem(key)
+        const saved = storage.getItem(key)
         const parsed = saved ? JSON.parse(saved) : {}
-        localStorage.setItem(
+        storage.setItem(
           key,
           JSON.stringify({
             ...parsed,
@@ -151,7 +157,7 @@ export function useCanvasPanZoom({
         return
       }
     }
-  }, [docId, storagePrefix])
+  }, [docId, storagePrefix, storage])
 
   const saveLayoutRef = useRef(saveLayout)
   saveLayoutRef.current = saveLayout
@@ -309,11 +315,16 @@ export function useCanvasPanZoom({
       saveLayoutRef.current()
     }
 
+    const unregisterFlush = registerLocalUserFlush(() =>
+      saveLayoutRef.current()
+    )
     viewport.addEventListener('wheel', handleWheel, { passive: false })
     window.addEventListener('mousemove', handleWindowMouseMove)
     window.addEventListener('mouseup', handleWindowMouseUp)
 
     return () => {
+      unregisterFlush()
+      saveLayoutRef.current()
       viewport.removeEventListener('wheel', handleWheel)
       window.removeEventListener('mousemove', handleWindowMouseMove)
       window.removeEventListener('mouseup', handleWindowMouseUp)

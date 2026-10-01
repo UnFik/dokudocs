@@ -4,9 +4,21 @@ import (
 	"net/http"
 	"strconv"
 
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/response"
 )
 
+// SearchUsers searches users by query string.
+// @Summary Search users
+// @Description Search users by email or name query
+// @Tags User
+// @Produce json
+// @Security BearerAuth
+// @Param q query string false "Search query string"
+// @Param limit query int false "Max results count" default(10)
+// @Success 200 {object} response.Envelope{data=[]model.UserSummary}
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /user/search [get]
 func (h *Handler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	limit := 10

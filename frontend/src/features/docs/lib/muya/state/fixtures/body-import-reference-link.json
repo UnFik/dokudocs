@@ -1,0 +1,37 @@
+[
+  {
+    "name": "paragraph",
+    "text": "Read [guide][docs].",
+    "inline": [
+      {
+        "type": "run",
+        "content": "Read ",
+        "attributes": {
+          "source": "Read "
+        }
+      },
+      {
+        "type": "run",
+        "content": "guide",
+        "attributes": {
+          "href": "https://example.com",
+          "linkTitle": "Docs",
+          "referenceLabel": "docs",
+          "linkSource": "[guide][docs]",
+          "source": "guide"
+        }
+      },
+      {
+        "type": "run",
+        "content": ".",
+        "attributes": {
+          "source": "."
+        }
+      }
+    ]
+  },
+  {
+    "name": "link-reference-definition",
+    "text": "[docs]: https://example.com \"Docs\""
+  }
+]

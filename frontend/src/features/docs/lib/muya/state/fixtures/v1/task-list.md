@@ -1,0 +1,2 @@
+- [x] preserve IDs
+- [ ] retry safely

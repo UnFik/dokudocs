@@ -1,4 +1,4 @@
-import {
+import type {
   DocFilterTab,
   DocType,
   DocumentAccessItem,
@@ -17,6 +17,7 @@ import {
 } from '@/types/dokudocs'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import { getUserStorage } from '@/lib/user-storage'
 import { invalidateThumbnailCache } from '@/features/docs/components/doc-thumbnail-preview'
 import { mockDocuments } from '@/features/docs/data/mock-docs'
 import { mockProjects } from '@/features/projects/data/mock-projects'
@@ -81,6 +82,7 @@ interface DokudocsState {
     content?: string
     isDraft?: boolean
   }) => DocumentItem
+  upsertDocument: (document: DocumentItem) => void
   updateDocument: (id: string, updates: Partial<DocumentItem>) => void
   updateDocumentThumbnail: (
     id: string,
@@ -148,13 +150,16 @@ const defaultTemplates: Record<DocType, string> = {
   markdown: `# New Document
 
 ## 1. Overview
+
 Describe the service, module, or architecture specification here.
 
 ## 2. Requirements & Scope
+
 - Requirement 1
 - Requirement 2
 
 ## 3. Implementation Details
+
 Details go here...`,
 
   dbdiagram: `Table users {
@@ -174,6 +179,10 @@ Table orders {
   Start([Start Process]) --> Check{Is Valid?}
   Check -- Yes --> Success[Proceed Success]
   Check -- No --> Error[Show Error State]`,
+}
+
+export function getDefaultDocumentContent(type: DocType) {
+  return defaultTemplates[type]
 }
 
 function generateUniqueId(prefix: string) {
@@ -424,6 +433,17 @@ export const useDokudocsStore = create<DokudocsState>()(
         })
 
         return newDoc
+      },
+
+      upsertDocument: (document) => {
+        set((state) => ({
+          documents: [
+            document,
+            ...(state.documents || []).filter(
+              (item) => item.id !== document.id
+            ),
+          ],
+        }))
       },
 
       updateDocument: (id, updates) => {
@@ -800,7 +820,9 @@ export const useDokudocsStore = create<DokudocsState>()(
 
         // Coalesce in-place if latest revision is an unnamed auto-save within 10 min window
         if (latest && !latest.isNamed) {
-          const lastTime = new Date(latest.updatedAt || latest.createdAt).getTime()
+          const lastTime = new Date(
+            latest.updatedAt || latest.createdAt
+          ).getTime()
           if (now.getTime() - lastTime < SESSION_WINDOW_MS) {
             set((state) => ({
               revisions: {
@@ -860,7 +882,9 @@ export const useDokudocsStore = create<DokudocsState>()(
 
       restoreRevision: (docId, revisionId) => {
         const doc = (get().documents || []).find((d) => d.id === docId)
-        const rev = (get().revisions[docId] || []).find((r) => r.id === revisionId)
+        const rev = (get().revisions[docId] || []).find(
+          (r) => r.id === revisionId
+        )
         if (!doc || !rev) return
 
         const currentRevisions = get().revisions[docId] || []
@@ -903,7 +927,9 @@ export const useDokudocsStore = create<DokudocsState>()(
         const trimmed = email.trim().toLowerCase()
         if (!trimmed) return
         const existing = get().documentAccesses[docId] || []
-        const found = existing.find((a) => a.user.email.toLowerCase() === trimmed)
+        const found = existing.find(
+          (a) => a.user.email.toLowerCase() === trimmed
+        )
         if (found) {
           set((state) => ({
             documentAccesses: {
@@ -955,7 +981,9 @@ export const useDokudocsStore = create<DokudocsState>()(
         const trimmed = email.trim().toLowerCase()
         if (!trimmed) return
         const existing = get().projectMembers[projectId] || []
-        const found = existing.find((m) => m.user.email.toLowerCase() === trimmed)
+        const found = existing.find(
+          (m) => m.user.email.toLowerCase() === trimmed
+        )
         if (found) {
           set((state) => ({
             projectMembers: {
@@ -1002,7 +1030,7 @@ export const useDokudocsStore = create<DokudocsState>()(
     }),
     {
       name: 'dokudocs-workspace-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => getUserStorage()),
       version: 2,
       migrate: (persistedState: unknown, version: number) => {
         const state = (persistedState as Partial<DokudocsState>) || {}

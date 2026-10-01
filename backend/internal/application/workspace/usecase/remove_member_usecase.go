@@ -16,5 +16,5 @@ func (u *useCase) RemoveMember(ctx context.Context, workspaceID uuid.UUID, membe
 	if actorRole != "owner" && actorRole != "admin" && actorID != memberUserID {
 		return constant.ErrForbidden
 	}
-	return u.workspaceRepo.RemoveMember(ctx, workspaceID, memberUserID)
+	return u.workspaceRepo.RemoveMember(ctx, workspaceID, actorID, memberUserID)
 }

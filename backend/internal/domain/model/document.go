@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,7 +27,6 @@ type Document struct {
 	Tags                 []string    `json:"tags"`
 	IsDraft              bool        `json:"isDraft"`
 	Visibility           string      `json:"visibility"` // workspace, private, public_link, inherit
-	ShareToken           string      `json:"shareToken,omitempty"`
 	Thumbnail            string      `json:"thumbnail,omitempty"`
 	ThumbnailDark        string      `json:"thumbnailDark,omitempty"`
 	ThumbnailPreview     string      `json:"thumbnailPreview,omitempty"`
@@ -45,13 +45,36 @@ type Document struct {
 	DeletedByUser        *UserAuthor `json:"deletedByUser,omitempty"`
 }
 
+type DocumentRevision struct {
+	ID                uuid.UUID       `json:"id"`
+	DocumentID        uuid.UUID       `json:"documentId"`
+	AuthorID          uuid.UUID       `json:"authorId"`
+	VersionNumber     int             `json:"versionNumber"`
+	Title             string          `json:"title,omitempty"`
+	Content           string          `json:"content"`
+	IsNamed           bool            `json:"isNamed"`
+	ASTSnapshot       json.RawMessage `json:"astSnapshot,omitempty"`
+	BodyVersion       *int64          `json:"bodyVersion,omitempty"`
+	BodySchemaVersion *int            `json:"bodySchemaVersion,omitempty"`
+	CreatedAt         time.Time       `json:"createdAt"`
+	UpdatedAt         time.Time       `json:"updatedAt"`
+}
+
+type DocumentRestoreResult struct {
+	DocumentID       uuid.UUID `json:"documentId"`
+	RevisionID       uuid.UUID `json:"revisionId"`
+	SourceRevisionID uuid.UUID `json:"sourceRevisionId"`
+	BodyVersion      int64     `json:"bodyVersion"`
+	BodyEpoch        int64     `json:"bodyEpoch"`
+}
+
 type TrashItem struct {
-	ID            uuid.UUID   `json:"id"`
-	DocID         uuid.UUID   `json:"docId"`
-	Document      Document    `json:"document"`
-	DeletedAt     time.Time   `json:"deletedAt"`
-	DeletedBy     UserAuthor  `json:"deletedBy"`
-	DaysRemaining int         `json:"daysRemaining"`
+	ID            uuid.UUID  `json:"id"`
+	DocID         uuid.UUID  `json:"docId"`
+	Document      Document   `json:"document"`
+	DeletedAt     time.Time  `json:"deletedAt"`
+	DeletedBy     UserAuthor `json:"deletedBy"`
+	DaysRemaining int        `json:"daysRemaining"`
 }
 
 type DocumentAccess struct {
@@ -60,4 +83,21 @@ type DocumentAccess struct {
 	AccessLevel string     `json:"accessLevel"` // owner, edit, comment, view
 	CreatedAt   time.Time  `json:"createdAt"`
 	User        UserAuthor `json:"user"`
+}
+
+type DocumentSuggestion struct {
+	DocumentID             uuid.UUID       `json:"documentId"`
+	SuggestionID           uuid.UUID       `json:"suggestionId"`
+	ProposerID             uuid.UUID       `json:"proposerId"`
+	DeciderID              *uuid.UUID      `json:"deciderId,omitempty"`
+	BaseBodyVersion        int64           `json:"baseBodyVersion"`
+	BaseBodyEpoch          int64           `json:"baseBodyEpoch"`
+	OperationSchemaVersion int             `json:"operationSchemaVersion"`
+	Provenance             string          `json:"provenance"`
+	Operations             json.RawMessage `json:"operations"`
+	Summary                string          `json:"summary"`
+	Reason                 string          `json:"reason"`
+	Status                 string          `json:"status"`
+	CreatedAt              time.Time       `json:"createdAt"`
+	DecidedAt              *time.Time      `json:"decidedAt,omitempty"`
 }

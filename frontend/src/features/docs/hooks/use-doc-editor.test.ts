@@ -1,8 +1,9 @@
 import { act } from 'react'
 import type { DocumentItem, ProjectItem } from '@/types/dokudocs'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from 'vitest-browser-react'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { switchLocalUser } from '@/lib/local-user-data'
 import { useDocEditor } from './use-doc-editor'
 
 const mockDoc: DocumentItem = {
@@ -63,11 +64,14 @@ const mockProject: ProjectItem = {
 
 describe('useDocEditor hook', () => {
   beforeEach(() => {
+    switchLocalUser('11111111-1111-4111-8111-111111111111')
     useDokudocsStore.setState({
       documents: [{ ...mockDoc }, { ...mockDoc2 }],
       projects: [{ ...mockProject }],
     })
   })
+
+  afterEach(() => switchLocalUser(null))
 
   it('loads document data correctly when found', async () => {
     const { result } = await renderHook(() => useDocEditor('doc-test-1'))

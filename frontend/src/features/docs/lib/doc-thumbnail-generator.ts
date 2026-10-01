@@ -690,22 +690,27 @@ function renderFlowchartSvg(content: string, isDark = false): string {
     ranks.set(nodes[0].id, 0)
   }
 
-  while (queue.length > 0) {
+  const maxRank = Math.min(nodes.length, 10)
+  let iterations = 0
+  const maxIterations = nodes.length * 4
+
+  while (queue.length > 0 && iterations++ < maxIterations) {
     const curr = queue.shift()!
     const neighbors = adj.get(curr.id) || []
     neighbors.forEach((nxt) => {
       const existingRank = ranks.get(nxt) ?? -1
       const nextRank = curr.rank + 1
-      if (nextRank > existingRank) {
+      if (nextRank < maxRank && (existingRank === -1 || nextRank > existingRank)) {
         ranks.set(nxt, nextRank)
         queue.push({ id: nxt, rank: nextRank })
       }
     })
   }
 
+  let fallbackRank = 0
   nodes.forEach((n) => {
     if (!ranks.has(n.id)) {
-      ranks.set(n.id, 0)
+      ranks.set(n.id, fallbackRank++ % maxRank)
     }
   })
 

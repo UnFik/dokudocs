@@ -11,31 +11,60 @@
  */
 import { deepClone } from '../utils'
 import logger from '../utils/logger'
+import { lexBlock } from '../utils/marked'
 import stringWidth from '../utils/stringWidth'
-import type {
-  IAtxHeadingState,
-  IBlockQuoteState,
-  IBulletListState,
-  ICodeBlockState,
-  IDiagramState,
-  IFootnoteBlockState,
-  IFrontmatterState,
-  IHtmlBlockState,
-  IListItemState,
-  IMathBlockState,
-  IOrderListState,
-  IParagraphState,
-  ISetextHeadingState,
-  ITableState,
-  ITaskListItemState,
-  ITaskListState,
-  IThematicBreakState,
-  TState,
+import {
+  isAnyListState,
+  type IAtxHeadingState,
+  type IBlockQuoteState,
+  type IBulletListState,
+  type ICodeBlockState,
+  type IDiagramState,
+  type IFootnoteBlockState,
+  type IFrontmatterState,
+  type IHtmlBlockState,
+  type IListItemState,
+  type IMathBlockState,
+  type IOrderListState,
+  type IOpaqueBlockState,
+  type IParagraphState,
+  type ISetextHeadingState,
+  type ITableState,
+  type ITaskListItemState,
+  type ITaskListState,
+  type IThematicBreakState,
+  type TState,
 } from './types'
-import { isAnyListState } from './types'
 
 const debug = logger('export markdown: ')
 const SETEXT_SAFE_BULLET_MARKER = '*'
+
+function sourceTableMatchesState(sourceMarkdown: string, state: ITableState) {
+  const tokens = lexBlock(sourceMarkdown, {
+    footnote: false,
+    math: true,
+    frontMatter: true,
+    isGitlabCompatibilityEnabled: false,
+  })
+  if (tokens.length !== 1 || tokens[0]?.type !== 'table') return false
+
+  const token = tokens[0]
+  const sourceRows = [token.header, ...token.rows]
+  return (
+    sourceRows.length === state.children.length &&
+    sourceRows.every(
+      (row, rowIndex) =>
+        row.length === state.children[rowIndex]!.children.length &&
+        row.every((cell, cellIndex) => {
+          const current = state.children[rowIndex]!.children[cellIndex]!
+          return (
+            cell.text.trim() === current.text.trim() &&
+            (token.align[cellIndex] ?? 'none') === current.meta.align
+          )
+        })
+    )
+  )
+}
 
 function escapeText(str: string) {
   return str.replace(/(?<!\\)\|/g, '\\|')
@@ -148,52 +177,57 @@ export default class ExportMarkdown {
       case 'paragraph':
 
       case 'thematic-break':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeTextParagraph(state, indent))
         break
 
       case 'atx-heading':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeAtxHeading(state, indent))
         break
 
       case 'setext-heading':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeSetextHeading(state, indent))
         break
 
       case 'code-block':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeCodeBlock(state, indent))
         break
 
       case 'html-block':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeHtmlBlock(state, indent))
         break
 
+      case 'opaque':
+        this._insertLineBreak(result, indent, state.sourceGap)
+        result.push(this._serializeOpaqueBlock(state, indent))
+        break
+
       case 'math-block':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeMathBlock(state, indent))
         break
 
       case 'diagram':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeDiagramBlock(state, indent))
         break
 
       case 'block-quote':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeBlockquote(state, indent))
         break
 
       case 'table':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeTable(state, indent))
         break
 
       case 'footnote':
-        this._insertLineBreak(result, indent)
+        this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeFootnote(state, indent))
         break
 
@@ -224,7 +258,7 @@ export default class ExportMarkdown {
     if (lastListBullet && lastListBullet !== bulletMarkerOrDelimiter)
       insertNewLine = false
 
-    if (insertNewLine) this._insertLineBreak(result, indent)
+    if (insertNewLine) this._insertLineBreak(result, indent, state.sourceGap)
 
     this._listType.push(meta)
     result.push(this._serializeList(state, indent, listIndent))
@@ -256,19 +290,46 @@ export default class ExportMarkdown {
 
     // helper variable to correct the first tight item in a nested list
     this._isLooseParentList = loose
-    if (loose) this._insertLineBreak(result, indent)
+    if (loose) this._insertLineBreak(result, indent, state.sourceGap)
 
     result.push(this._serializeListItem(state, indent + listIndent))
     this._isLooseParentList = true
   }
 
-  private _insertLineBreak(result: unknown[], indent: string) {
-    if (!result.length) return
+  private _insertLineBreak(
+    result: unknown[],
+    indent: string,
+    sourceGap?: string
+  ) {
+    if (!result.length) {
+      if (sourceGap && /^[ \t\r\n]+$/.test(sourceGap)) result.push(sourceGap)
+      return
+    }
+    if (sourceGap === '') return
+    let trailingWhitespace = ''
+    if (sourceGap !== undefined && /^[ \t\r\n]+$/.test(sourceGap)) {
+      trailingWhitespace = sourceGap.match(/[ \t]*$/)?.[0] ?? ''
+      const lines = [...sourceGap.matchAll(/([ \t]*)(\r\n|\r|\n)/g)]
+      const last = result[result.length - 1]
+      const previousEndsWithLineBreak =
+        typeof last === 'string' && /(?:\r\n|\r|\n)$/.test(last)
+      const firstLine = previousEndsWithLineBreak ? 1 : 0
+      const blankPrefix = indent.replace(/ +$/, '')
+      for (const [index, line] of lines.entries()) {
+        if (index < firstLine) continue
+        result.push(`${blankPrefix}${line[1]}${line[2]}`)
+      }
+      if (lines.length > firstLine) {
+        if (trailingWhitespace) result.push(trailingWhitespace)
+        return
+      }
+    }
     // Blank lines inside a list item should be empty, not carry the
     // item's indent as trailing whitespace. For blockquote-style indents
     // like `> ` we keep the `>` so the quote stays continuous — only
     // strip the trailing run of plain spaces.
     result.push(`${indent.replace(/ +$/, '')}\n`)
+    if (trailingWhitespace) result.push(trailingWhitespace)
   }
 
   private _serializeFrontMatter(state: IFrontmatterState) {
@@ -384,6 +445,16 @@ export default class ExportMarkdown {
     return result.join('')
   }
 
+  private _serializeOpaqueBlock(state: IOpaqueBlockState, indent: string) {
+    if (!indent) return state.text
+    const lines = state.text.split('\n')
+    return lines
+      .map((line, index) =>
+        index === lines.length - 1 && line === '' ? '' : `${indent}${line}`
+      )
+      .join('\n')
+  }
+
   private _serializeMathBlock(state: IMathBlockState, indent: string) {
     const result = []
     const {
@@ -442,6 +513,16 @@ export default class ExportMarkdown {
   }
 
   private _serializeTable(state: ITableState, indent: string) {
+    if (
+      state.sourceMarkdown &&
+      sourceTableMatchesState(state.sourceMarkdown, state)
+    ) {
+      return `${indent}${state.sourceMarkdown.replace(
+        /(\r\n|\r|\n)/g,
+        (lineBreak) => `${lineBreak}${indent}`
+      )}\n`
+    }
+
     const result: string[] = []
     const row = state.children.length
     const tableData = []

@@ -71,12 +71,28 @@ export class MarkdownToState {
 
     const states: TState[] = []
     let token: TBlockToken | undefined
+    let pendingSourceGap = ''
     const parentList: TState[][] = [states]
+    const sourceGapByToken = new WeakMap<object, string>()
 
-    // eslint-disable-next-line no-cond-assign
     while ((token = tokens.shift())) {
+      if (token.type === 'space') {
+        pendingSourceGap += sourceGapByToken.get(token) ?? token.raw
+        continue
+      }
+      if (token.type === 'block-end') {
+        pendingSourceGap = ''
+      }
+      const headingIndent =
+        token.type === 'heading'
+          ? (token.raw.match(/^( {1,3})(?=#)/)?.[1] ?? '')
+          : ''
+      const sourceGap =
+        (sourceGapByToken.get(token) ?? pendingSourceGap) + headingIndent
+      const siblings = parentList[0]
+      const previousLength = siblings.length
       if (CONTAINER_TOKEN_TYPES.has(token.type))
-        this._handleContainerToken(token, parentList, tokens)
+        this._handleContainerToken(token, parentList, tokens, sourceGapByToken)
       else
         this._handleLeafToken(
           token,
@@ -84,6 +100,18 @@ export class MarkdownToState {
           tokens,
           trimUnnecessaryCodeBlockEmptyLines
         )
+      if (siblings.length > previousLength) {
+        if (isNonCanonicalSourceGap(sourceGap) || headingIndent) {
+          siblings[siblings.length - 1]!.sourceGap = sourceGap
+        } else if (
+          previousLength > 0 &&
+          sourceGap === '' &&
+          !sourceGapByToken.has(token)
+        ) {
+          siblings[siblings.length - 1]!.sourceGap = ''
+        }
+        pendingSourceGap = ''
+      }
     }
 
     return states.length ? states : [{ name: 'paragraph', text: '' }]
@@ -92,7 +120,8 @@ export class MarkdownToState {
   private _handleContainerToken(
     token: TBlockToken,
     parentList: TState[][],
-    tokens: TBlockToken[]
+    tokens: TBlockToken[],
+    sourceGapByToken: WeakMap<object, string>
   ) {
     let state: TState
     switch (token.type) {
@@ -116,6 +145,11 @@ export class MarkdownToState {
       }
 
       case 'blockquote': {
+        addBlockquoteGapWhitespace(
+          token.raw,
+          token.tokens as TBlockToken[],
+          sourceGapByToken
+        )
         state = {
           name: 'block-quote' as const,
           children: [],
@@ -166,7 +200,16 @@ export class MarkdownToState {
         parentList[0].push(state)
         parentList.unshift(state.children)
         tokens.unshift({ type: 'block-end', tokenType: 'list' })
-        tokens.unshift(...(token.items as TBlockToken[]))
+        const items = token.items as TBlockToken[]
+        items.forEach((item, index) => {
+          if (index === 0 || sourceGapByToken.has(item)) return
+          const previousItem = items[index - 1]!
+          if (!('raw' in previousItem)) return
+          const sourceGap = previousItem.raw.match(/[ \t\r\n]+$/)?.[0]
+          if (isNonCanonicalSourceGap(sourceGap))
+            sourceGapByToken.set(item, sourceGap)
+        })
+        tokens.unshift(...items)
         break
       }
 
@@ -294,9 +337,10 @@ export class MarkdownToState {
       }
 
       case 'table': {
-        const { header, align, rows } = token
+        const { header, align, rows, raw } = token
         const tableState: ITableState = {
           name: 'table',
+          sourceMarkdown: raw,
           children: [],
         }
 
@@ -473,4 +517,65 @@ export class MarkdownToState {
       text: value,
     }
   }
+}
+
+function isNonCanonicalSourceGap(
+  sourceGap: string | undefined
+): sourceGap is string {
+  if (!sourceGap || !/^[ \t\r\n]+$/.test(sourceGap)) return false
+  const lineBreaks = sourceGap.match(/\r\n|\r|\n/g)?.length ?? 0
+  return lineBreaks >= 2 && sourceGap !== '\n\n'
+}
+
+function addBlockquoteGapWhitespace(
+  raw: string,
+  tokens: TBlockToken[],
+  sourceGapByToken: WeakMap<object, string>
+) {
+  const blankLineWhitespace = raw
+    .split(/\r\n|\r|\n/)
+    .flatMap((line) =>
+      /^ {0,3}>[ \t]*$/.test(line) ? [line.slice(line.indexOf('>') + 1)] : []
+    )
+  let nextBlankLine = 0
+  const preserveGap = (target: object, rawGap: string) => {
+    const lineBreaks = rawGap.match(/\r\n|\r|\n/g)?.length ?? 0
+    const blankLines = Math.max(0, lineBreaks - 1)
+    const whitespace = blankLineWhitespace.slice(
+      nextBlankLine,
+      nextBlankLine + blankLines
+    )
+    nextBlankLine += blankLines
+    if (!whitespace.length) return
+
+    const endings = [...rawGap.matchAll(/\r\n|\r|\n/g)]
+    const segments = rawGap.split(/\r\n|\r|\n/)
+    let sourceGap = segments[0] ?? ''
+    endings.forEach((ending, index) => {
+      sourceGap += ending[0]
+      if (index < endings.length - 1)
+        sourceGap += whitespace[index] ?? segments[index + 1] ?? ''
+    })
+    sourceGapByToken.set(target, sourceGap)
+  }
+  const visit = (children: TBlockToken[]) => {
+    for (const token of children) {
+      if (token.type === 'space') preserveGap(token, token.raw)
+      else if (token.type === 'list') {
+        const items = token.items as TBlockToken[]
+        for (let index = 1; index < items.length; index++) {
+          const previous = items[index - 1]!
+          if ('raw' in previous)
+            preserveGap(
+              items[index]!,
+              previous.raw.match(/[ \t\r\n]+$/)?.[0] ?? ''
+            )
+        }
+        for (const item of items)
+          visit('tokens' in item ? ((item.tokens ?? []) as TBlockToken[]) : [])
+      } else if (token.type !== 'blockquote' && 'tokens' in token)
+        visit((token.tokens ?? []) as TBlockToken[])
+    }
+  }
+  visit(tokens)
 }

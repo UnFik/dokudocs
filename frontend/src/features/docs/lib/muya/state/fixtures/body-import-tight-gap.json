@@ -1,0 +1,46 @@
+[
+  {
+    "name": "atx-heading",
+    "meta": {
+      "level": 1
+    },
+    "text": "# heading",
+    "inline": [
+      {
+        "type": "run",
+        "content": "heading",
+        "attributes": {
+          "source": "heading"
+        }
+      }
+    ]
+  },
+  {
+    "name": "bullet-list",
+    "sourceGap": "",
+    "meta": {
+      "loose": false,
+      "marker": "-"
+    },
+    "children": [
+      {
+        "name": "list-item",
+        "children": [
+          {
+            "name": "paragraph",
+            "text": "item",
+            "inline": [
+              {
+                "type": "run",
+                "content": "item",
+                "attributes": {
+                  "source": "item"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
