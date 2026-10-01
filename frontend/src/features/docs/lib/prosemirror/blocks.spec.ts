@@ -214,3 +214,65 @@ describe('Enter', () => {
     }
   })
 })
+
+describe('Enter in headings', () => {
+  it('starts a paragraph after a heading when Enter is pressed at its end', () => {
+    const harness = mountTestEditor(paragraphsBody('Title'))
+    try {
+      harness.editor.view.dispatch(
+        harness.editor.view.state.tr.setSelection(
+          TextSelection.create(
+            harness.editor.view.state.doc,
+            runStart(harness.editor.view.state.doc, 'Title') + 2
+          )
+        )
+      )
+      harness.editor.setHeading(1)
+      caret(harness, 'Title', 5)
+      pressKey(harness.editor.view.dom, 'Enter')
+      const body = harness.editor.getBody()
+      expect(node(harness, 'p0')?.type).toBe('atx-heading')
+      const next = body.filter((item) => item.parentID === 'root')[1]
+      expect(next).toMatchObject({ type: 'paragraph', attributes: {} })
+    } finally {
+      harness.cleanup()
+    }
+  })
+})
+
+describe('task items', () => {
+  it('toggles the checked state in place with Mod+Enter', () => {
+    const harness = mountTestEditor(listBody('task-list'))
+    try {
+      caret(harness, 'first second', 3)
+      const event = pressKey(harness.editor.view.dom, 'Enter', {
+        ctrlKey: true,
+      })
+      expect(event.defaultPrevented).toBe(true)
+      expect(node(harness, 'item')?.attributes).toEqual({ checked: false })
+      expect(harness.editor.toggleTask()).toBe(true)
+      expect(node(harness, 'item')?.attributes).toEqual({ checked: true })
+    } finally {
+      harness.cleanup()
+    }
+  })
+
+  it('does nothing outside a task item or while read-only', () => {
+    const plain = mountTestEditor(paragraphsBody('hello'))
+    try {
+      caret(plain, 'hello', 1)
+      expect(plain.editor.toggleTask()).toBe(false)
+    } finally {
+      plain.cleanup()
+    }
+    const harness = mountTestEditor(listBody('task-list'))
+    try {
+      caret(harness, 'first second', 3)
+      harness.editor.setReadOnly(true)
+      expect(harness.editor.toggleTask()).toBe(false)
+      expect(node(harness, 'item')?.attributes).toEqual({ checked: true })
+    } finally {
+      harness.cleanup()
+    }
+  })
+})

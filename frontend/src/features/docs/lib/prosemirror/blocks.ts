@@ -143,3 +143,24 @@ export const splitTextBlock: Command = (state, dispatch) => {
   }
   return true
 }
+
+/** Flip `checked` on the task item around the cursor; the item keeps its ID. */
+export const toggleTaskChecked: Command = (state, dispatch) => {
+  const { $from } = state.selection
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const item = $from.node(depth)
+    if (item.type !== task_list_item) continue
+    const attrs = JSON.parse(String(item.attrs.bodyAttributes ?? '{}')) as {
+      checked?: boolean
+    }
+    dispatch?.(
+      state.tr.setNodeMarkup(
+        $from.before(depth),
+        undefined,
+        withBodyAttributes(item.attrs, { checked: !attrs.checked })
+      )
+    )
+    return true
+  }
+  return false
+}

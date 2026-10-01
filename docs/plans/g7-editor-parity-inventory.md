@@ -69,7 +69,7 @@ Done in the editor (`frontend/src/features/docs/lib/prosemirror`):
 
 - #28: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl+Y; undo and redo buttons with enabled state from the Yjs undo manager; a two-editor test proves undo reverts only the local edit.
 - #29: Ctrl/Cmd+B, I, E, Shift+X, K; floating selection toolbar (bold, italic, strike, code, link); a mark change splits the run in place, the first part keeps its ID and the rest get fresh IDs.
-- #30 (part): heading by `Ctrl+Alt+1..6` and `Ctrl+Alt+0`, heading input rule `# `, Enter in paragraph, heading, bullet item and task item.
+- #30 (part): heading by `Ctrl+Alt+1..6` and `Ctrl+Alt+0`, heading input rule `# `, Enter in paragraph, heading, bullet item and task item, `Ctrl/Cmd+Enter` to toggle a task item.
 
 Not done in #30, and why. [ADR 0012](../adr/0012-movenode-owns-existing-node-structure.md) and `prepareBodyTransaction` reject any local transaction that reparents or deletes an existing node unless it goes through `MoveNode` or `DeleteNode`. That blocks these behaviors until a command exists for them:
 
