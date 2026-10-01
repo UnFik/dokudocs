@@ -6,6 +6,7 @@ import {
   buildInsertParagraphSuggestion,
   buildMoveBlockSuggestion,
   conflictReviewMessage,
+  overlayCss,
   pendingOverlay,
 } from './suggestion-operations'
 
@@ -220,5 +221,24 @@ describe('pendingOverlay', () => {
       suggestion('pending', [{ op: 'insert', nodeID: 'new' }, { nope: 1 }]),
     ])
     expect(overlay.size).toBe(0)
+  })
+})
+
+describe('overlayCss', () => {
+  it('styles each marked node by id and kind without touching the editor DOM', () => {
+    const css = overlayCss(
+      new Map([
+        [PARA, ['delete']],
+        [RUN2, ['replace_text', 'format']],
+      ])
+    )
+    expect(css).toContain(`.markdown-body [data-node-id="${PARA}"]`)
+    expect(css).toContain('line-through')
+    expect(css).toContain(`.markdown-body [data-node-id="${RUN2}"]`)
+    expect(css).toContain('underline')
+  })
+
+  it('drops ids that are not UUIDs so the stylesheet cannot be injected into', () => {
+    expect(overlayCss(new Map([['"] { color: red } x[', ['delete']]]))).toBe('')
   })
 })

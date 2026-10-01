@@ -139,26 +139,3 @@
 .markdown-body input[type='checkbox'] {
   margin-right: 0.4em;
 }
-
-/* Pending suggestions: marked on the canonical body without changing it. */
-.markdown-body [data-suggestion~='delete'] {
-  text-decoration: line-through;
-  text-decoration-color: var(--destructive);
-  background-color: color-mix(in srgb, var(--destructive) 10%, transparent);
-}
-
-.markdown-body [data-suggestion~='replace_text'] {
-  text-decoration: underline;
-  text-decoration-color: var(--signal);
-  text-underline-offset: 3px;
-  background-color: color-mix(in srgb, var(--signal) 10%, transparent);
-}
-
-.markdown-body [data-suggestion~='format'] {
-  border-bottom: 1px dashed var(--signal);
-}
-
-.markdown-body [data-suggestion~='move'] {
-  outline: 1px dashed var(--warn);
-  outline-offset: 2px;
-}

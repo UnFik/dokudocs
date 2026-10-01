@@ -227,3 +227,28 @@ export function pendingOverlay(
   }
   return overlay
 }
+
+const overlayStyles: Record<OverlayKind, string> = {
+  delete:
+    'text-decoration: line-through; text-decoration-color: var(--destructive); background-color: color-mix(in srgb, var(--destructive) 10%, transparent);',
+  replace_text:
+    'text-decoration: underline; text-decoration-color: var(--signal); text-underline-offset: 3px; background-color: color-mix(in srgb, var(--signal) 10%, transparent);',
+  format: 'border-bottom: 1px dashed var(--signal);',
+  move: 'outline: 1px dashed var(--warn); outline-offset: 2px;',
+}
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// A stylesheet, not DOM attributes: ProseMirror re-renders nodes whose
+// attributes change from outside, which loops in an editable view.
+export function overlayCss(overlay: Map<string, OverlayKind[]>): string {
+  const rules: string[] = []
+  for (const [nodeID, kinds] of overlay) {
+    if (!uuidPattern.test(nodeID)) continue
+    rules.push(
+      `.markdown-body [data-node-id="${nodeID}"] { ${kinds.map((kind) => overlayStyles[kind]).join(' ')} }`
+    )
+  }
+  return rules.join('\n')
+}

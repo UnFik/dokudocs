@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
 import { Eye, Edit3 } from 'lucide-react'
@@ -42,6 +42,7 @@ import {
   buildInsertParagraphSuggestion,
   buildMoveBlockSuggestion,
   conflictReviewMessage,
+  overlayCss,
   pendingOverlay,
   type FormatMark,
   type SuggestionDraft,
@@ -510,7 +511,6 @@ function CollaborativeMarkdownBody({
           documentID={documentID}
           canDecide={canEdit}
           canSuggest={Boolean(snapshot.canSuggest) && status === 'ready'}
-          getMount={() => mountRef.current}
           captureBlock={() => {
             if (!mountRef.current) throw new Error('Editor is not ready')
             return captureSelectedNodeID(mountRef.current)
@@ -597,7 +597,6 @@ function SuggestionPanel({
   canSuggest,
   captureSelection,
   captureBlock,
-  getMount,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -607,7 +606,6 @@ function SuggestionPanel({
   canSuggest: boolean
   captureSelection: () => TextSuggestionSelection
   captureBlock: () => string
-  getMount: () => HTMLElement | null
 }) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState<TextSuggestionSelection | null>(null)
@@ -631,7 +629,8 @@ function SuggestionPanel({
       decision === 'accept'
         ? acceptDocumentSuggestion(workspaceID, documentID, suggestionID)
         : rejectDocumentSuggestion(workspaceID, documentID, suggestionID),
-    onSuccess: async () => {
+    // A refused accept still changes state (the batch is marked conflicted).
+    onSettled: async () => {
       await queryClient.invalidateQueries({
         queryKey: ['document-suggestions', workspaceID, documentID],
       })
@@ -724,29 +723,10 @@ function SuggestionPanel({
       )
     }
   }
-  const suggestions = suggestionsQuery.data
-  useEffect(() => {
-    const mount = getMount()
-    if (!mount) return
-    const overlay = pendingOverlay(suggestions ?? [])
-    const apply = () => {
-      for (const element of mount.querySelectorAll('[data-suggestion]'))
-        if (!overlay.has((element as HTMLElement).dataset.nodeId ?? ''))
-          element.removeAttribute('data-suggestion')
-      for (const [nodeID, kinds] of overlay) {
-        const element = mount.querySelector(`[data-node-id="${nodeID}"]`)
-        const value = kinds.join(' ')
-        if (element && element.getAttribute('data-suggestion') !== value)
-          element.setAttribute('data-suggestion', value)
-      }
-    }
-    apply()
-    const observer = new MutationObserver(apply)
-    observer.observe(mount, { childList: true, subtree: true })
-    return () => observer.disconnect()
-  }, [suggestions, getMount])
+  const overlay = overlayCss(pendingOverlay(suggestionsQuery.data ?? []))
   return (
     <aside className='border-t bg-muted/20'>
+      {overlay ? <style>{overlay}</style> : null}
       <div className='flex flex-wrap items-center gap-2 px-4 py-2'>
         <Button size='sm' variant='outline' onClick={() => onOpenChange(!open)}>
           {open ? 'Hide suggestions' : 'Suggestions'}
