@@ -68,4 +68,14 @@ Verified by tests (this branch added the frontend ones; the backend ones already
 - Token rejected after being offline: pending edits and snapshot are kept, status is `unauthorized`, no retry loop (provider spec). An expired or missing token never opens a socket and keeps pending edits. The token is read again at each reconnect, so a refreshed session resumes sync.
 - Logout with pending edits: pending data is keyed by user ID, so another account on the same device cannot read it (`collaboration-store.spec.ts`).
 
-**Gap against ADR 0007, not fixed here:** the ADR says pending edits are cleared at logout after offering sync or export. The code does neither: `SignOutDialog` only resets the session, and pending IndexedDB rows stay under the signed-out user's key and reappear when that user signs in again. This is safer for the user's work but differs from the ADR and leaves document content on a shared device. A product decision is needed (change the ADR or implement the offer-and-clear flow); a full browser E2E of sign-out with real pending edits was not written.
+## Decision needed: logout with pending edits versus ADR 0007
+
+Current behavior (unchanged, recorded by an E2E spec): sign-out only resets the session. Pending Yjs updates and the cached body stay in IndexedDB under the user's ID. They are unreadable to another account (store test) and reappear when the same user signs in again. ADR 0007 says logout should offer sync or export while read access can be verified, then clear that user's local document state after logout is confirmed.
+
+| Option | What changes | Pro | Con |
+| --- | --- | --- | --- |
+| A. Keep current behavior, amend ADR 0007 | Document that data stays per user on the device | No work, no data loss on accidental logout | Document content remains on shared devices; contradicts the privacy reason in the ADR |
+| B. Implement the ADR | Sign-out dialog counts pending edits; online: wait for ACK or export, then clear; offline: block logout or require explicit discard | Matches the ADR, no residue on shared devices | Needs dialog flow, export path, and an offline policy; user can lose offline work by discarding |
+| C. Hybrid | Clear cached bodies with nothing pending at logout; keep only unsynced pending edits, flagged, with a "discard local data" action and a retention limit | No residue except unsynced work | Still leaves some content; more states to test |
+
+Recommendation: B for online logout (flush, then clear), and for offline logout block with an explicit "discard unsynced edits" confirmation. It is the only option that keeps the ADR's stated guarantee on shared devices without silently losing work. Owner decides; until then the E2E spec `logout with a pending edit currently leaves it in local storage` documents the present behavior and should be inverted when the decision lands.
