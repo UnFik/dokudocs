@@ -240,10 +240,36 @@ test("@live @smoke: a rejected token keeps the pending edit and asks the user to
   expect(await pendingUpdateCount(session.page)).toBeGreaterThan(0);
 });
 
-// Records current behavior, which differs from ADR 0007 (logout is supposed to
-// clear pending edits after offering sync or export). See
-// docs/research/dokudocs-g1-ha-resilience.md before changing this assertion.
-test("@live @smoke: logout with a pending edit currently leaves it in local storage", async ({
+async function startSignOut(page: Page) {
+  await page.goto("/");
+  await page.locator('[data-sidebar="footer"] button').last().click();
+  await page.getByRole("menuitem", { name: /logout/i }).click();
+  await page.getByRole("button", { name: /^sign out$/i }).click();
+}
+
+// ADR 0007: at logout, pending edits are flushed to the server and the
+// account's local document data is cleared; nothing is dropped silently.
+test("@live @smoke: logout flushes a pending edit to the server and clears local data", async ({
+  browser,
+}) => {
+  test.setTimeout(90000);
+  const baseURL = test.info().project.use.baseURL!;
+  const { doc, session } = await sharedDocument(browser, baseURL);
+  const editor = await openEditor(session.page, doc.documentID, doc.workspaceID);
+  await typeOffline(session, editor);
+  session.setLink("up");
+
+  await startSignOut(session.page);
+  await session.page.waitForURL(/sign-in/, { timeout: 30000 });
+
+  expect(await pendingUpdateCount(session.page)).toBe(0);
+  const stored = await fetch(`${apiURL}/api/v1/documents/${doc.documentID}/body`, {
+    headers: doc.headers,
+  });
+  expect(JSON.stringify(await stored.json())).toContain("PENDING");
+});
+
+test("@live @smoke: logout that cannot flush asks before discarding the pending edit", async ({
   browser,
 }) => {
   test.setTimeout(90000);
@@ -252,14 +278,19 @@ test("@live @smoke: logout with a pending edit currently leaves it in local stor
   const editor = await openEditor(session.page, doc.documentID, doc.workspaceID);
   await typeOffline(session, editor);
 
-  await session.page.goto("/");
-  const userButton = session.page
-    .locator('[data-sidebar="footer"] button')
-    .last();
-  await userButton.click();
-  await session.page.getByRole("menuitem", { name: /logout/i }).click();
-  await session.page.getByRole("button", { name: /^sign out$/i }).click();
-  await session.page.waitForURL(/sign-in/);
+  await startSignOut(session.page);
+  const discard = session.page.getByRole("alertdialog");
+  await expect(discard).toContainText(/not synced/i, { timeout: 30000 });
+  await expect(session.page).not.toHaveURL(/sign-in/);
 
+  await discard.getByRole("button", { name: /cancel/i }).click();
   expect(await pendingUpdateCount(session.page)).toBeGreaterThan(0);
+
+  await startSignOut(session.page);
+  await session.page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: /discard and sign out/i })
+    .click({ timeout: 30000 });
+  await session.page.waitForURL(/sign-in/, { timeout: 30000 });
+  expect(await pendingUpdateCount(session.page)).toBe(0);
 });
