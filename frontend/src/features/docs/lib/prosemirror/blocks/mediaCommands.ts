@@ -1,4 +1,4 @@
-import type { Node as ProseMirrorNode, NodeType } from 'prosemirror-model'
+import type { NodeType } from 'prosemirror-model'
 import {
   TextSelection,
   type EditorState,
