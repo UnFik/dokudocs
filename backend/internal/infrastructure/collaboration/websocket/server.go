@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -58,27 +59,29 @@ type ProfileReader interface {
 const presenceRefresh = 10 * time.Second
 
 type Server struct {
-	verifier       TokenVerifier
-	presenceStore  collaboration.PresenceStore
-	presenceEvery  time.Duration
-	presenceOnce   sync.Once
-	roomReader     collaboration.RoomReader
-	resyncEvery    time.Duration
-	pollers        map[uuid.UUID]context.CancelFunc
-	profiles       ProfileReader
-	reader         BodyReader
-	updates        *collaboration.UseCase
-	broker         collaboration.Broker
-	allowedOrigin  string
-	writeBase      time.Duration
-	heartbeatEvery time.Duration
-	heartbeatWait  time.Duration
-	instanceID     uuid.UUID
-	brokerCtx      context.Context
-	brokerCancel   context.CancelFunc
-	brokerClose    sync.Once
-	brokerStarted  bool
-	brokerCloseErr error
+	verifier          TokenVerifier
+	presenceStore     collaboration.PresenceStore
+	presenceCloseOnce sync.Once
+	presenceCloseErr  error
+	presenceEvery     time.Duration
+	presenceOnce      sync.Once
+	roomReader        collaboration.RoomReader
+	resyncEvery       time.Duration
+	pollers           map[uuid.UUID]context.CancelFunc
+	profiles          ProfileReader
+	reader            BodyReader
+	updates           *collaboration.UseCase
+	broker            collaboration.Broker
+	allowedOrigin     string
+	writeBase         time.Duration
+	heartbeatEvery    time.Duration
+	heartbeatWait     time.Duration
+	instanceID        uuid.UUID
+	brokerCtx         context.Context
+	brokerCancel      context.CancelFunc
+	brokerClose       sync.Once
+	brokerStarted     bool
+	brokerCloseErr    error
 
 	mu       sync.RWMutex
 	rooms    map[uuid.UUID]map[*peer]struct{}
@@ -949,10 +952,21 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}()
 	select {
 	case <-done:
-		return s.closeBroker()
+		return errors.Join(s.closeBroker(), s.closePresenceStore())
 	case <-ctx.Done():
-		return errors.Join(ctx.Err(), s.closeBroker())
+		return errors.Join(ctx.Err(), s.closeBroker(), s.closePresenceStore())
 	}
+}
+
+// closePresenceStore releases the store's connection once peers have left, if
+// the store holds one.
+func (s *Server) closePresenceStore() error {
+	closer, ok := s.presenceStore.(io.Closer)
+	if !ok {
+		return nil
+	}
+	s.presenceCloseOnce.Do(func() { s.presenceCloseErr = closer.Close() })
+	return s.presenceCloseErr
 }
 
 func (s *Server) closeBroker() error {
