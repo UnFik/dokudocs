@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { prosemirrorToYXmlFragment } from 'y-prosemirror'
+import * as Y from 'yjs'
 import type { MarkdownBodySnapshot } from '@/lib/domain-api'
 import {
   diffForReview,
   explainStructuralHold,
+  loadReviewModel,
   resolveHeldCommand,
 } from './collaboration-review'
 import {
@@ -11,6 +14,7 @@ import {
   type PendingMoveNodeCommand,
 } from './collaboration-store'
 import type { DocumentBodyNode } from './documentBody'
+import { documentBodyToProseMirror } from './prosemirror/documentBody'
 
 function node(
   nodeID: string,
@@ -167,7 +171,7 @@ async function seedStore(
     bodyEpoch: 1,
     bodySchemaVersion: 1,
     canEdit: true,
-    encodedState: new Uint8Array([1]),
+    encodedState: stateOf(body()),
   }
   if (kind === 'delete')
     await store.saveDeleteCommand(
@@ -261,5 +265,80 @@ describe('resolveHeldCommand', () => {
       })
     ).rejects.toThrow('network')
     expect((await store.load(scope)).deleteCommands).toHaveLength(1)
+  })
+})
+
+function stateOf(nodes: DocumentBodyNode[]) {
+  const doc = new Y.Doc()
+  prosemirrorToYXmlFragment(
+    documentBodyToProseMirror(nodes),
+    doc.getXmlFragment('body')
+  )
+  return Y.encodeStateAsUpdate(doc)
+}
+
+describe('loadReviewModel', () => {
+  it('collects held edits and explains a held structural command against the current body', async () => {
+    const { scope, store } = await seedStore(deleteCommand('p2'), 'delete')
+    await store.replaceWithRebased(
+      scope,
+      {
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        encodedState: stateOf(body()),
+      },
+      {
+        updateID: 'u1',
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        update: Y.encodeStateAsUpdate(new Y.Doc()),
+      },
+      [
+        {
+          nodeID: 'r1',
+          reason: 'concurrent-edit',
+          local: node('r1', 'p1', 1, 'run', 'mine'),
+          canonical: node('r1', 'p1', 1, 'run', 'theirs'),
+        },
+      ]
+    )
+    const current = body().map((n) =>
+      n.nodeID === 'r2' ? { ...n, content: 'second and more' } : n
+    )
+    const model = await loadReviewModel({
+      scope,
+      store,
+      fetchBody: async () => canonical(current, 3),
+    })
+    expect(model.canEdit).toBe(true)
+    expect(model.held.map((h) => h.nodeID)).toEqual(['r1'])
+    expect(model.commands).toMatchObject([
+      {
+        kind: 'delete',
+        commandID: 'c1',
+        explanation: { code: 'content-changed' },
+      },
+    ])
+    expect(model.pendingDiff).toEqual([
+      {
+        nodeID: 'r2',
+        type: 'run',
+        kind: 'edited',
+        local: 'second',
+        canonical: 'second and more',
+      },
+    ])
+  })
+
+  it('reports no edit access when the server says so', async () => {
+    const { scope, store } = await seedStore(deleteCommand('p2'), 'delete')
+    const model = await loadReviewModel({
+      scope,
+      store,
+      fetchBody: async () => ({ ...canonical(body(), 3), canEdit: false }),
+    })
+    expect(model.canEdit).toBe(false)
   })
 })

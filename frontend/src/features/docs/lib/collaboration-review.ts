@@ -1,4 +1,6 @@
 import type { MarkdownBodySnapshot } from '@/lib/domain-api'
+import type { HeldEdit } from './collaboration-rebase'
+import { pendingBodyNodes, projectEncodedState } from './collaboration-recovery'
 import { decodeBase64 } from './collaboration-socket'
 import {
   type CollaborationScope,
@@ -209,4 +211,68 @@ export async function resolveHeldCommand(input: {
   })
   await complete(result)
   return result
+}
+
+export type ReviewCommand = {
+  kind: 'delete' | 'move'
+  commandID: string
+  nodeID: string
+  explanation: HoldExplanation
+}
+
+export type ReviewModel = {
+  canEdit: boolean
+  held: HeldEdit[]
+  commands: ReviewCommand[]
+  pendingDiff: ReviewItem[]
+}
+
+/**
+ * Everything the review screen shows, read from the device store and compared
+ * with the current server body. `canEdit` comes from that same fetch, so copy
+ * is offered only with edit rights as they are now.
+ */
+export async function loadReviewModel(input: {
+  scope: CollaborationScope
+  store: CollaborationStore
+  fetchBody: () => Promise<MarkdownBodySnapshot>
+}): Promise<ReviewModel> {
+  const stored = await input.store.load(input.scope)
+  const current = await input.fetchBody()
+  const seen = stored.snapshot
+    ? projectEncodedState(stored.snapshot.encodedState)
+    : []
+  const nodes = current.nodes as DocumentBodyNode[]
+  const commands: ReviewCommand[] = [
+    ...stored.deleteCommands.map((command) => ({
+      kind: 'delete' as const,
+      commandID: command.commandID,
+      nodeID: command.nodeID,
+      explanation: explainStructuralHold({
+        kind: 'delete',
+        command,
+        current: nodes,
+        seen,
+      }),
+    })),
+    ...stored.moveCommands.map((command) => ({
+      kind: 'move' as const,
+      commandID: command.commandID,
+      nodeID: command.nodeID,
+      explanation: explainStructuralHold({
+        kind: 'move',
+        command,
+        current: nodes,
+        seen,
+      }),
+    })),
+  ]
+  return {
+    canEdit: current.canEdit,
+    held: stored.heldEdits,
+    commands,
+    pendingDiff: stored.updates.length
+      ? diffForReview(pendingBodyNodes(stored), nodes)
+      : [],
+  }
 }
