@@ -80,7 +80,9 @@ describe('documentBodyToMarkdown', () => {
       const state = new MarkdownToState().generate(source!)
 
       expect(
-        documentBodyToMarkdown(flatten(enrichMuyaStateForBodyImport(state)))
+        documentBodyToMarkdown(
+          flatten(enrichMuyaStateForBodyImport(state), source)
+        )
       ).toBe(source)
     })
   }
@@ -306,7 +308,12 @@ describe('documentBodyToMarkdown', () => {
   })
 })
 
-function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
+function flatten(
+  states: MuyaBodyImportState[],
+  source?: string
+): DocumentBodyNode[] {
+  const sourceGaps: Record<string, string> = {}
+  const sourceTables: Record<string, string> = {}
   const nodes: DocumentBodyNode[] = [
     {
       nodeID: 'root',
@@ -322,7 +329,9 @@ function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
   function addStates(states: MuyaBodyImportState[], parentID: string) {
     for (let order = 0; order < states.length; order++) {
       const state = states[order]!
-      const nodeID = `node-${nextID++}`
+      const nodeID = testNodeID(nextID++)
+      if (state.sourceGap !== undefined) sourceGaps[nodeID] = state.sourceGap
+      if (state.sourceMarkdown) sourceTables[nodeID] = state.sourceMarkdown
       nodes.push({
         nodeID,
         parentID,
@@ -338,7 +347,7 @@ function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
       ) {
         const inline = state.inline![inlineOrder]!
         nodes.push({
-          nodeID: `node-${nextID++}`,
+          nodeID: testNodeID(nextID++),
           parentID: nodeID,
           siblingOrder: inlineOrder,
           type: inline.type,
@@ -351,6 +360,13 @@ function flatten(states: MuyaBodyImportState[]): DocumentBodyNode[] {
   }
 
   addStates(states, 'root')
+  Object.assign(nodes[0]!.attributes, {
+    ...(source === undefined
+      ? {}
+      : { trailingWhitespace: source.match(/[ \t\r\n]*$/)![0] }),
+    ...(Object.keys(sourceGaps).length ? { sourceGaps } : {}),
+    ...(Object.keys(sourceTables).length ? { sourceTables } : {}),
+  })
   return nodes
 }
 
@@ -359,4 +375,8 @@ function stateNames(states: TState[]): string[] {
     state.name,
     ...('children' in state ? stateNames(state.children) : []),
   ])
+}
+
+function testNodeID(index: number) {
+  return `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`
 }
