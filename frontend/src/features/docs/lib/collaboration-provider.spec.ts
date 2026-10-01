@@ -173,6 +173,10 @@ class MemoryStore implements CollaborationStore {
     this.updates.set(update.updateID, update)
   }
 
+  async setHeldEdits(_scope: CollaborationScope, edits: HeldEdit[]) {
+    this.heldEdits = edits
+  }
+
   async clearHeldEdits(_scope: CollaborationScope) {
     this.heldEdits = []
   }

@@ -1,5 +1,7 @@
+import * as Y from 'yjs'
 import type { MarkdownBodySnapshot } from '@/lib/domain-api'
 import type { HeldEdit } from './collaboration-rebase'
+import { buildRebaseUpdate } from './collaboration-rebase-yjs'
 import { pendingBodyNodes, projectEncodedState } from './collaboration-recovery'
 import { decodeBase64 } from './collaboration-socket'
 import {
@@ -77,6 +79,8 @@ export type HoldExplanation = {
   message: string
   /** Only a delete of a changed block can be pushed through on purpose. */
   canForce: boolean
+  /** A move that can still be sent, possibly with a changed position. */
+  canReissue: boolean
 }
 
 export function explainStructuralHold(
@@ -98,8 +102,9 @@ export function explainStructuralHold(
   const hold = (
     code: HoldCode,
     message: string,
-    canForce = false
-  ): HoldExplanation => ({ code, message, canForce })
+    canForce = false,
+    canReissue = false
+  ): HoldExplanation => ({ code, message, canForce, canReissue })
 
   if (input.kind === 'delete') {
     const node = byID.get(input.command.nodeID)
@@ -142,10 +147,17 @@ export function explainStructuralHold(
     if (!before || before.parentID !== command.targetParentID)
       return hold(
         'before-missing',
-        'The block you placed it before was moved or deleted.'
+        'The block you placed it before was moved or deleted.',
+        false,
+        true
       )
   }
-  return hold('unknown', 'This move could not be checked.')
+  return hold(
+    'unknown',
+    'This move was held, but it still fits the current document.',
+    false,
+    true
+  )
 }
 
 function toSnapshot(body: MarkdownBodySnapshot): CollaborationSnapshot {
@@ -169,7 +181,7 @@ export async function resolveHeldCommand(input: {
   store: CollaborationStore
   kind: 'delete' | 'move'
   commandID: string
-  choice: 'force' | 'cancel'
+  choice: 'force' | 'reissue' | 'cancel'
   fetchBody: () => Promise<MarkdownBodySnapshot>
   executeDelete: (
     command: PendingDeleteNodeCommand
@@ -195,6 +207,33 @@ export async function resolveHeldCommand(input: {
   if (input.choice === 'cancel') {
     await complete(current)
     return current
+  }
+
+  if (input.choice === 'reissue') {
+    if (input.kind !== 'move')
+      throw new Error('only a held move can be re-issued')
+    const stored = (await input.store.load(input.scope)).moveCommands.find(
+      (command) => command.commandID === input.commandID
+    )
+    if (!stored) throw new Error('held move command not found')
+    const explanation = explainStructuralHold({
+      kind: 'move',
+      command: stored,
+      current: current.nodes as DocumentBodyNode[],
+      seen: [],
+    })
+    if (!explanation.canReissue)
+      throw new Error('This move cannot be re-issued: ' + explanation.message)
+    const result = await input.executeMove({
+      ...stored,
+      commandID: crypto.randomUUID(),
+      bodyEpoch: current.bodyEpoch,
+      bodySchemaVersion: current.bodySchemaVersion,
+      beforeNodeID:
+        explanation.code === 'before-missing' ? null : stored.beforeNodeID,
+    })
+    await complete(result)
+    return result
   }
 
   if (input.kind !== 'delete')
@@ -275,4 +314,60 @@ export async function loadReviewModel(input: {
       ? diffForReview(pendingBodyNodes(stored), nodes)
       : [],
   }
+}
+
+/**
+ * "Use my version": writes the held local text back as a new pending edit on
+ * top of the stored state, so it syncs like any other edit. It needs edit
+ * rights as they are now and the same epoch the device state was built on.
+ */
+export async function acceptHeldEdit(input: {
+  scope: CollaborationScope
+  store: CollaborationStore
+  nodeID: string
+  fetchBody: () => Promise<MarkdownBodySnapshot>
+}): Promise<void> {
+  const body = await input.fetchBody()
+  if (!body.canEdit)
+    throw new Error(
+      'You no longer have edit access, so your version cannot be applied.'
+    )
+  const stored = await input.store.load(input.scope)
+  const { snapshot } = stored
+  if (!snapshot || snapshot.bodyEpoch !== body.bodyEpoch)
+    throw new Error(
+      'The document changed again. Reopen it to review the new comparison.'
+    )
+  const edit = stored.heldEdits.find((held) => held.nodeID === input.nodeID)
+  if (!edit) throw new Error('That edit is no longer held.')
+  const nodes = projectEncodedState(snapshot.encodedState)
+  if (!nodes.some((candidate) => candidate.nodeID === input.nodeID))
+    throw new Error(
+      'That block no longer exists, so your version cannot be applied.'
+    )
+  const update = buildRebaseUpdate(
+    snapshot.encodedState,
+    nodes.map((candidate) =>
+      candidate.nodeID === input.nodeID
+        ? { ...candidate, content: edit.local.content }
+        : candidate
+    )
+  )
+  await input.store.saveUpdate(
+    input.scope,
+    {
+      ...snapshot,
+      encodedState: Y.mergeUpdates([snapshot.encodedState, update]),
+    },
+    {
+      updateID: crypto.randomUUID(),
+      bodyEpoch: body.bodyEpoch,
+      bodySchemaVersion: body.bodySchemaVersion,
+      update,
+    }
+  )
+  await input.store.setHeldEdits(
+    input.scope,
+    stored.heldEdits.filter((held) => held.nodeID !== input.nodeID)
+  )
 }

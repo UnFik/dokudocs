@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { prosemirrorToYXmlFragment } from 'y-prosemirror'
 import * as Y from 'yjs'
 import type { MarkdownBodySnapshot } from '@/lib/domain-api'
+import { projectEncodedState } from './collaboration-recovery'
 import {
   diffForReview,
+  acceptHeldEdit,
   explainStructuralHold,
   loadReviewModel,
   resolveHeldCommand,
@@ -340,5 +342,165 @@ describe('loadReviewModel', () => {
       fetchBody: async () => ({ ...canonical(body(), 3), canEdit: false }),
     })
     expect(model.canEdit).toBe(false)
+  })
+})
+
+describe('move re-issue', () => {
+  it('offers re-issue only when the move can still be applied', () => {
+    const explain = (command: PendingMoveNodeCommand) =>
+      explainStructuralHold({
+        kind: 'move',
+        command,
+        current: body(),
+        seen: body(),
+      })
+    expect(explain(moveCommand('p2', 'root', 'gone'))).toMatchObject({
+      code: 'before-missing',
+      canReissue: true,
+    })
+    expect(explain(moveCommand('p2', 'gone')).canReissue).toBe(false)
+    expect(explain(moveCommand('gone', 'p1')).canReissue).toBe(false)
+  })
+
+  it('re-issues a move whose neighbour vanished to the end of the target, under a new ID at the current epoch', async () => {
+    const { scope, store } = await seedStore(
+      moveCommand('p2', 'root', 'gone'),
+      'move'
+    )
+    const sent: PendingMoveNodeCommand[] = []
+    const result = await resolveHeldCommand({
+      scope,
+      store,
+      kind: 'move',
+      commandID: 'm1',
+      choice: 'reissue',
+      fetchBody: async () => canonical(body(), 3),
+      executeDelete: async () => {
+        throw new Error('unused')
+      },
+      executeMove: async (command) => {
+        sent.push(command)
+        return canonical(body(), 4)
+      },
+    })
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({
+      nodeID: 'p2',
+      targetParentID: 'root',
+      beforeNodeID: null,
+      bodyEpoch: 3,
+    })
+    expect(sent[0]!.commandID).not.toBe('m1')
+    expect(result.bodyEpoch).toBe(4)
+    expect((await store.load(scope)).moveCommands).toEqual([])
+  })
+
+  it('refuses to re-issue a move whose target is gone and keeps it held', async () => {
+    const { scope, store } = await seedStore(moveCommand('p2', 'gone'), 'move')
+    await expect(
+      resolveHeldCommand({
+        scope,
+        store,
+        kind: 'move',
+        commandID: 'm1',
+        choice: 'reissue',
+        fetchBody: async () => canonical(body(), 3),
+        executeDelete: async () => {
+          throw new Error('unused')
+        },
+        executeMove: async () => {
+          throw new Error('must not call')
+        },
+      })
+    ).rejects.toThrow(/cannot be re-issued/)
+    expect((await store.load(scope)).moveCommands).toHaveLength(1)
+  })
+})
+
+describe('acceptHeldEdit', () => {
+  async function seedHeld() {
+    const scope = {
+      userID: crypto.randomUUID(),
+      documentID: crypto.randomUUID(),
+    }
+    const store = new IndexedDBCollaborationStore()
+    const theirs = body().map((n) =>
+      n.nodeID === 'r1' ? { ...n, content: 'theirs' } : n
+    )
+    await store.replaceWithRebased(
+      scope,
+      {
+        bodyVersion: 2,
+        bodyEpoch: 2,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        encodedState: stateOf(theirs),
+      },
+      {
+        updateID: 'u1',
+        bodyEpoch: 2,
+        bodySchemaVersion: 1,
+        update: Y.encodeStateAsUpdate(new Y.Doc()),
+      },
+      [
+        {
+          nodeID: 'r1',
+          reason: 'concurrent-edit',
+          local: node('r1', 'p1', 1, 'run', 'mine'),
+          canonical: node('r1', 'p1', 1, 'run', 'theirs'),
+        },
+      ]
+    )
+    return { scope, store, theirs }
+  }
+
+  it('queues the local text as a new pending edit at the current epoch and removes the hold', async () => {
+    const { scope, store, theirs } = await seedHeld()
+    await acceptHeldEdit({
+      scope,
+      store,
+      nodeID: 'r1',
+      fetchBody: async () => canonical(theirs, 2),
+    })
+    const stored = await store.load(scope)
+    expect(stored.heldEdits).toEqual([])
+    expect(stored.updates).toHaveLength(2)
+    const added = stored.updates.find((u) => u.updateID !== 'u1')!
+    expect(added.bodyEpoch).toBe(2)
+    const doc = new Y.Doc()
+    Y.applyUpdate(doc, stored.snapshot!.encodedState)
+    expect(
+      projectEncodedState(Y.encodeStateAsUpdate(doc)).find(
+        (n) => n.nodeID === 'r1'
+      )?.content
+    ).toBe('mine')
+  })
+
+  it('refuses without current edit access and changes nothing', async () => {
+    const { scope, store, theirs } = await seedHeld()
+    await expect(
+      acceptHeldEdit({
+        scope,
+        store,
+        nodeID: 'r1',
+        fetchBody: async () => ({ ...canonical(theirs, 2), canEdit: false }),
+      })
+    ).rejects.toThrow(/edit access/)
+    const stored = await store.load(scope)
+    expect(stored.heldEdits).toHaveLength(1)
+    expect(stored.updates).toHaveLength(1)
+  })
+
+  it('refuses when the document moved to a newer epoch', async () => {
+    const { scope, store, theirs } = await seedHeld()
+    await expect(
+      acceptHeldEdit({
+        scope,
+        store,
+        nodeID: 'r1',
+        fetchBody: async () => canonical(theirs, 3),
+      })
+    ).rejects.toThrow(/changed again/)
+    expect((await store.load(scope)).heldEdits).toHaveLength(1)
   })
 })

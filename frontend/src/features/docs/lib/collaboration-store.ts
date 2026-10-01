@@ -113,6 +113,8 @@ export interface CollaborationStore {
     heldEdits?: HeldEdit[]
   ): Promise<void>
   clearHeldEdits(scope: CollaborationScope): Promise<void>
+  /** Replaces the held edits; an empty list clears them. */
+  setHeldEdits(scope: CollaborationScope, edits: HeldEdit[]): Promise<void>
   clear(scope: CollaborationScope): Promise<void>
 }
 
@@ -208,35 +210,24 @@ export class IndexedDBCollaborationStore implements CollaborationStore {
   async saveUpdate(
     scope: CollaborationScope,
     snapshot: CollaborationSnapshot,
-    update: PendingCollaborationUpdate,
-    heldEdits: HeldEdit[] = []
+    update: PendingCollaborationUpdate
   ): Promise<void> {
     const db = await this.open()
     const key = scopeKey(scope)
-    await transaction(
-      db,
-      [snapshotStore, updateStore, heldEditStore],
-      'readwrite',
-      (tx) => {
-        if (heldEdits.length)
-          tx.objectStore(heldEditStore).put({
-            scope: key,
-            edits: structuredClone(heldEdits),
-          } satisfies HeldEditRow)
-        tx.objectStore(snapshotStore).put({
-          ...snapshot,
-          canEdit: snapshot.canEdit === true,
-          encodedState: snapshot.encodedState.slice(),
-          scope: key,
-        } satisfies SnapshotRow)
-        tx.objectStore(updateStore).put({
-          ...update,
-          update: update.update.slice(),
-          key: updateKey(key, update.updateID),
-          scope: key,
-        } satisfies UpdateRow)
-      }
-    )
+    await transaction(db, [snapshotStore, updateStore], 'readwrite', (tx) => {
+      tx.objectStore(snapshotStore).put({
+        ...snapshot,
+        canEdit: snapshot.canEdit === true,
+        encodedState: snapshot.encodedState.slice(),
+        scope: key,
+      } satisfies SnapshotRow)
+      tx.objectStore(updateStore).put({
+        ...update,
+        update: update.update.slice(),
+        key: updateKey(key, update.updateID),
+        scope: key,
+      } satisfies UpdateRow)
+    })
   }
 
   async acknowledge(
@@ -454,6 +445,23 @@ export class IndexedDBCollaborationStore implements CollaborationStore {
         }
       }
     )
+  }
+
+  async setHeldEdits(
+    scope: CollaborationScope,
+    edits: HeldEdit[]
+  ): Promise<void> {
+    const db = await this.open()
+    const key = scopeKey(scope)
+    await transaction(db, [heldEditStore], 'readwrite', (tx) => {
+      const store = tx.objectStore(heldEditStore)
+      if (edits.length)
+        store.put({
+          scope: key,
+          edits: structuredClone(edits),
+        } satisfies HeldEditRow)
+      else store.delete(key)
+    })
   }
 
   async clearHeldEdits(scope: CollaborationScope): Promise<void> {
