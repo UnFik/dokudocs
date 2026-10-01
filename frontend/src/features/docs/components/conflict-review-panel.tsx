@@ -5,12 +5,13 @@ import type { ReviewModel } from '../lib/collaboration-review'
 
 export type ConflictReviewActions = {
   copyText: (text: string) => Promise<void>
+  acceptHeld: (nodeID: string) => Promise<void>
   discardLocal: () => Promise<void>
   dismissHeld: () => Promise<void>
   resolveCommand: (
     kind: 'delete' | 'move',
     commandID: string,
-    choice: 'force' | 'cancel'
+    choice: 'force' | 'reissue' | 'cancel'
   ) => Promise<void>
   exportLocal: () => Promise<void>
 }
@@ -86,7 +87,7 @@ export function ConflictReviewPanel({
         <Button
           size='sm'
           variant='outline'
-          className='ml-auto shrink-0'
+          className='ml-auto min-h-11 shrink-0 sm:min-h-8'
           onClick={() => void refresh()}
         >
           Try again
@@ -130,6 +131,7 @@ export function ConflictReviewPanel({
               <Button
                 size='sm'
                 variant='outline'
+                className='min-h-11 sm:min-h-8'
                 disabled={busy || !model.canEdit}
                 onClick={() =>
                   void run(() =>
@@ -144,9 +146,31 @@ export function ConflictReviewPanel({
                 Delete anyway
               </Button>
             ) : null}
+            {command.explanation.canReissue ? (
+              <Button
+                size='sm'
+                variant='outline'
+                className='min-h-11 sm:min-h-8'
+                disabled={busy || !model.canEdit}
+                onClick={() =>
+                  void run(() =>
+                    actions.resolveCommand(
+                      command.kind,
+                      command.commandID,
+                      'reissue'
+                    )
+                  )
+                }
+              >
+                {command.explanation.code === 'before-missing'
+                  ? 'Move to the end instead'
+                  : 'Move again'}
+              </Button>
+            ) : null}
             <Button
               size='sm'
               variant='outline'
+              className='min-h-11 sm:min-h-8'
               disabled={busy}
               onClick={() =>
                 void run(() =>
@@ -177,10 +201,11 @@ export function ConflictReviewPanel({
               text={edit.canonical ? edit.canonical.content : null}
             />
           </div>
-          <div>
+          <div className='flex flex-wrap gap-2'>
             <Button
               size='sm'
               variant='outline'
+              className='min-h-11 sm:min-h-8'
               disabled={busy || !model.canEdit}
               onClick={() =>
                 void run(() => actions.copyText(edit.local.content))
@@ -188,6 +213,17 @@ export function ConflictReviewPanel({
             >
               Copy your version
             </Button>
+            {edit.canonical ? (
+              <Button
+                size='sm'
+                variant='outline'
+                className='min-h-11 sm:min-h-8'
+                disabled={busy || !model.canEdit}
+                onClick={() => void run(() => actions.acceptHeld(edit.nodeID))}
+              >
+                Use my version
+              </Button>
+            ) : null}
           </div>
         </div>
       ))}
@@ -206,6 +242,7 @@ export function ConflictReviewPanel({
               <Button
                 size='sm'
                 variant='outline'
+                className='min-h-11 sm:min-h-8'
                 disabled={busy || !model.canEdit}
                 onClick={() => void run(() => actions.copyText(item.local!))}
               >
@@ -221,6 +258,7 @@ export function ConflictReviewPanel({
           <Button
             size='sm'
             variant='outline'
+            className='min-h-11 sm:min-h-8'
             disabled={busy}
             onClick={() => void run(actions.dismissHeld)}
           >
@@ -230,6 +268,7 @@ export function ConflictReviewPanel({
         <Button
           size='sm'
           variant='outline'
+          className='min-h-11 sm:min-h-8'
           disabled={busy}
           onClick={() => void run(actions.exportLocal)}
         >
@@ -243,7 +282,7 @@ export function ConflictReviewPanel({
             <Button
               size='sm'
               variant='outline'
-              className='text-destructive'
+              className='min-h-11 text-destructive sm:min-h-8'
               disabled={busy}
               onClick={() => void run(actions.discardLocal)}
             >
@@ -252,6 +291,7 @@ export function ConflictReviewPanel({
             <Button
               size='sm'
               variant='ghost'
+              className='min-h-11 sm:min-h-8'
               disabled={busy}
               onClick={() => setConfirmingDiscard(false)}
             >
@@ -262,7 +302,7 @@ export function ConflictReviewPanel({
           <Button
             size='sm'
             variant='outline'
-            className='text-destructive'
+            className='min-h-11 text-destructive sm:min-h-8'
             disabled={busy}
             onClick={() => setConfirmingDiscard(true)}
           >

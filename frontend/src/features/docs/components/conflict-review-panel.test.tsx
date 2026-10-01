@@ -38,6 +38,7 @@ function actions(
 ): ConflictReviewActions {
   return {
     copyText: vi.fn(async () => {}),
+    acceptHeld: vi.fn(async () => {}),
     discardLocal: vi.fn(async () => {}),
     dismissHeld: vi.fn(async () => {}),
     resolveCommand: vi.fn(async () => {}),
@@ -88,6 +89,7 @@ describe('ConflictReviewPanel', () => {
                   message:
                     'This block changed on the server after you deleted it.',
                   canForce: true,
+                  canReissue: false,
                 },
               },
             ],
@@ -121,6 +123,7 @@ describe('ConflictReviewPanel', () => {
                   message:
                     'The place you moved this block to no longer exists.',
                   canForce: false,
+                  canReissue: false,
                 },
               },
             ],
@@ -175,5 +178,54 @@ describe('ConflictReviewPanel', () => {
     await expect
       .element(page.getByText('Nothing left to review.'))
       .toBeVisible()
+  })
+
+  it('applies your version of a held edit when you can edit', async () => {
+    const a = actions()
+    await render(<ConflictReviewPanel load={async () => model()} actions={a} />)
+    await page.getByRole('button', { name: 'Use my version' }).click()
+    expect(a.acceptHeld).toHaveBeenCalledWith('r1')
+  })
+
+  it('disables Use my version without edit access', async () => {
+    await render(
+      <ConflictReviewPanel
+        load={async () => model({ canEdit: false })}
+        actions={actions()}
+      />
+    )
+    await expect
+      .element(page.getByRole('button', { name: 'Use my version' }))
+      .toBeDisabled()
+  })
+
+  it('offers to re-issue a held move that can still be applied', async () => {
+    const a = actions()
+    await render(
+      <ConflictReviewPanel
+        load={async () =>
+          model({
+            held: [],
+            commands: [
+              {
+                kind: 'move',
+                commandID: 'm1',
+                nodeID: 'p2',
+                explanation: {
+                  code: 'before-missing',
+                  message:
+                    'The block you placed it before was moved or deleted.',
+                  canForce: false,
+                  canReissue: true,
+                },
+              },
+            ],
+          })
+        }
+        actions={a}
+      />
+    )
+    await page.getByRole('button', { name: 'Move to the end instead' }).click()
+    expect(a.resolveCommand).toHaveBeenCalledWith('move', 'm1', 'reissue')
   })
 })

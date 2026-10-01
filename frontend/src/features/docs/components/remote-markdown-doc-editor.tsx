@@ -30,6 +30,7 @@ import {
   recoverPendingMarkdown,
 } from '../lib/collaboration-recovery'
 import {
+  acceptHeldEdit,
   loadReviewModel,
   resolveHeldCommand,
 } from '../lib/collaboration-review'
@@ -67,6 +68,7 @@ export function RemoteMarkdownDocEditor({
   focusNodeID?: string
 }) {
   const queryClient = useQueryClient()
+  const [localStateNonce, setLocalStateNonce] = useState(0)
   const bodyQuery = useQuery({
     queryKey: ['markdown-body', workspaceID, document.id, userID, offline],
     queryFn: async ({ signal }) => {
@@ -196,13 +198,14 @@ export function RemoteMarkdownDocEditor({
         </p>
       ) : bodyQuery.data ? (
         <CollaborativeMarkdownBody
-          key={`${document.id}:${bodyQuery.data.bodyEpoch}:${bodyQuery.data.bodyVersion}`}
+          key={`${document.id}:${bodyQuery.data.bodyEpoch}:${bodyQuery.data.bodyVersion}:${localStateNonce}`}
           documentID={document.id}
           workspaceID={workspaceID}
           userID={userID}
           offline={offline}
           snapshot={bodyQuery.data}
           focusNodeID={focusNodeID}
+          onLocalStateChanged={() => setLocalStateNonce((value) => value + 1)}
           onCanonicalBody={(body) =>
             queryClient.setQueryData(
               ['markdown-body', workspaceID, document.id, userID, offline],
@@ -272,6 +275,7 @@ function CollaborativeMarkdownBody({
   snapshot,
   focusNodeID,
   onCanonicalBody,
+  onLocalStateChanged,
   onMarkdownChange,
   onAccessUnavailable,
 }: {
@@ -282,6 +286,7 @@ function CollaborativeMarkdownBody({
   snapshot: Awaited<ReturnType<typeof getMarkdownBody>>
   focusNodeID?: string
   onCanonicalBody: (body: Awaited<ReturnType<typeof getMarkdownBody>>) => void
+  onLocalStateChanged: () => void
   onMarkdownChange: (markdown: string) => void
   onAccessUnavailable: () => void
 }) {
@@ -507,6 +512,15 @@ function CollaborativeMarkdownBody({
           }
           actions={{
             copyText: (text) => navigator.clipboard.writeText(text),
+            acceptHeld: async (nodeID) => {
+              await acceptHeldEdit({
+                scope: { userID, documentID },
+                store: reviewStore,
+                nodeID,
+                fetchBody: () => getMarkdownBody(workspaceID, documentID),
+              })
+              onLocalStateChanged()
+            },
             exportLocal: exportPendingChanges,
             dismissHeld: async () => {
               await reviewStore.clearHeldEdits({ userID, documentID })
