@@ -105,6 +105,9 @@ export class MarkdownToState {
           siblings[siblings.length - 1]!.sourceGap = sourceGap
         } else if (
           previousLength > 0 &&
+          // The front matter token swallows the blank line after it, so an
+          // empty gap there is not "adjacent blocks"; keep the canonical break.
+          siblings[previousLength - 1]!.name !== 'frontmatter' &&
           sourceGap === '' &&
           !sourceGapByToken.has(token)
         ) {
