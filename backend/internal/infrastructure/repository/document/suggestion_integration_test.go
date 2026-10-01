@@ -5,6 +5,7 @@ package document
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"backend/internal/domain/documentbody"
@@ -167,6 +168,18 @@ func TestSuggestionRepositoryPersistsBatchAndRejectsItOnce(t *testing.T) {
 	}
 	if receiptCount != 3 {
 		t.Fatalf("structural suggestion receipts = %d, want 3", receiptCount)
+	}
+	var receiptEpoch, receiptVersion int64
+	var receiptActor uuid.UUID
+	var receiptResult string
+	if err := db.QueryRowContext(ctx, `SELECT body_epoch, body_version, actor_id, result::text FROM document_command_receipts WHERE document_id = $1 AND command_id = $2`, documentID, deleteSuggestion.SuggestionID).Scan(&receiptEpoch, &receiptVersion, &receiptActor, &receiptResult); err != nil {
+		t.Fatalf("read delete suggestion receipt: %v", err)
+	}
+	if receiptEpoch != 3 || receiptVersion != 5 || receiptActor != actorID {
+		t.Fatalf("delete receipt = epoch %d version %d actor %s, want epoch 3 version 5 actor %s", receiptEpoch, receiptVersion, receiptActor, actorID)
+	}
+	if !strings.Contains(receiptResult, `"bodyEpoch": 4`) || !strings.Contains(receiptResult, `"bodyVersion": 5`) {
+		t.Fatalf("delete receipt result = %s, want post-commit epoch 4 and version 5", receiptResult)
 	}
 	index, err := repo.RebuildRAGIndex(ctx, documentID)
 	if err != nil {
