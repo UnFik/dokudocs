@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"backend/internal/domain/documentbody"
+
 	"github.com/google/uuid"
 )
 
@@ -80,4 +82,10 @@ func TestIdleRoomFlushesTheAutoRevisionOncePerBodyVersion(t *testing.T) {
 	reader.version = 2
 	reader.mu.Unlock()
 	waitForFlushes(t, flusher, 2)
+}
+
+func TestUpdateErrorCodeNamesAnOversizedDocument(t *testing.T) {
+	if got := updateErrorCode(documentbody.ErrTooLarge); got != "document_too_large" {
+		t.Fatalf("updateErrorCode(ErrTooLarge) = %q, want document_too_large", got)
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -237,7 +238,7 @@ func TestCommitUpdateLatencyReport(t *testing.T) {
 	if os.Getenv("COMMIT_LATENCY") == "" {
 		t.Skip("set COMMIT_LATENCY=1 to print commit latency")
 	}
-	for _, paragraphs := range []int{100, 1000, 5000} {
+	for _, paragraphs := range []int{100, 1000, 2500, 5000} {
 		f := newNodeDiffFixture(t, paragraphs)
 		texts := make([]*crdt.YXmlText, paragraphs)
 		for i := range texts {
@@ -265,6 +266,12 @@ func TestCommitUpdateUnderConcurrentWritersKeepsEveryEditAndEveryVersion(t *test
 	gate := os.Getenv("COMMIT_LOAD") != ""
 	if gate {
 		writers, commitsPerWriter, paragraphs, interval = 10, 20, 1000, 500*time.Millisecond
+		// COMMIT_LOAD_PARAGRAPHS sizes the document for the sizing runs in ADR 0019.
+		if raw := os.Getenv("COMMIT_LOAD_PARAGRAPHS"); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil && n >= writers {
+				paragraphs = n - n%writers
+			}
+		}
 	}
 	f := newNodeDiffFixture(t, paragraphs)
 	ctx := context.Background()

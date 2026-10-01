@@ -13,6 +13,7 @@ import (
 
 	appauth "backend/internal/application/auth/dto"
 	"backend/internal/application/collaboration"
+	"backend/internal/domain/documentbody"
 
 	"github.com/google/uuid"
 	ws "golang.org/x/net/websocket"
@@ -1020,6 +1021,8 @@ func updateErrorCode(err error) string {
 		return "schema_mismatch"
 	case errors.Is(err, collaboration.ErrBodyNotInitialized):
 		return "body_not_initialized"
+	case errors.Is(err, documentbody.ErrTooLarge):
+		return "document_too_large"
 	default:
 		return "update_rejected"
 	}
