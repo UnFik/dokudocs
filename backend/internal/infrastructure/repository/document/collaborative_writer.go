@@ -179,7 +179,7 @@ func (r *Repository) CommitUpdate(ctx context.Context, actor collaboration.Actor
 			if rows, err := updatedDocument.RowsAffected(); err != nil {
 				return err
 			} else if rows != 1 {
-				return constant.ErrDocumentConflict
+				return collaboration.ErrConcurrentUpdate
 			}
 		}
 		var newRevision int64

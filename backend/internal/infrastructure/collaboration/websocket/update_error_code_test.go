@@ -20,6 +20,8 @@ func TestUpdateErrorCodeSeparatesInfrastructureOutagesFromRejections(t *testing.
 		err  error
 		want string
 	}{
+		{"concurrent writer", collaboration.ErrConcurrentUpdate, "unavailable"},
+		{"wrapped concurrent writer", fmt.Errorf("commit: %w", collaboration.ErrConcurrentUpdate), "unavailable"},
 		{"stale epoch", collaboration.ErrStaleBodyEpoch, "stale_epoch"},
 		{"schema mismatch", collaboration.ErrBodySchemaMismatch, "schema_mismatch"},
 		{"body not initialized", collaboration.ErrBodyNotInitialized, "body_not_initialized"},
