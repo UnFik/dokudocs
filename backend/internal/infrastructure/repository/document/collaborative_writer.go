@@ -65,7 +65,10 @@ func (r *Repository) CommitUpdate(ctx context.Context, actor collaboration.Actor
 		if err != nil {
 			return err
 		}
-		if !policy.CanEditDocument(doc, access) {
+		// Edit access changes anything. Comment access may only suggest: the
+		// update is judged below, once its effect is known (ADR 0027).
+		canEdit := policy.CanEditDocument(doc, access)
+		if !canEdit && !policy.CanSuggest(doc, access) {
 			return constant.ErrForbidden
 		}
 
@@ -147,7 +150,11 @@ func (r *Repository) CommitUpdate(ctx context.Context, actor collaboration.Actor
 		if err := setNodeVersions(before, &after); err != nil {
 			return err
 		}
-		if err := documentbody.ValidateCollaborativeChange(before, after); err != nil {
+		if canEdit {
+			if err := documentbody.ValidateCollaborativeChange(before, after); err != nil {
+				return err
+			}
+		} else if err := validateSuggesterUpdate(before, after, persisted, merged, actor.UserID); err != nil {
 			return err
 		}
 
