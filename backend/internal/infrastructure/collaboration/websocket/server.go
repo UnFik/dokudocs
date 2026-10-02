@@ -61,7 +61,39 @@ type ProfileReader interface {
 // entries expire after three times this, so a crashed instance disappears.
 const presenceRefresh = 10 * time.Second
 
+// fanoutOrderWait bounds how long a fan-out waits for the commit just before it
+// to be delivered first. Past it the fan-out goes ahead and peers that see a
+// gap resync from the full body, as before.
+const fanoutOrderWait = 250 * time.Millisecond
+
+// roomOrder keeps one document's fan-outs in version order. Commits are
+// serialized by the database but their fan-outs start from separate goroutines
+// and can arrive out of order; delivering version N before N-1 makes every peer
+// see a gap and resync from the full body, which costs far more than waiting.
+type roomOrder struct {
+	mu      sync.Mutex
+	changed chan struct{} // closed and replaced whenever delivered moves
+	epoch   int64
+	last    int64 // highest version whose fan-out has finished
+}
+
+// snapshotKey and snapshotEntry hold the newest full body read for a room, so
+// fan-outs that run at the same time and need the same head read it once.
+type snapshotKey struct {
+	documentID uuid.UUID
+	canEdit    bool
+}
+
+type snapshotEntry struct {
+	mu       sync.Mutex
+	snapshot collaboration.BodySnapshot
+	started  time.Time // when the read that produced snapshot began
+	valid    bool
+}
+
 type Server struct {
+	snapshots         map[snapshotKey]*snapshotEntry // guarded by mu
+	orders            map[uuid.UUID]*roomOrder       // guarded by mu
 	verifier          TokenVerifier
 	presenceStore     collaboration.PresenceStore
 	presenceCloseOnce sync.Once
@@ -183,6 +215,7 @@ func NewServer(verifier TokenVerifier, reader BodyReader, writer UpdateWriter, a
 		resyncEvery: resyncInterval, idleFlushAfter: idleRevisionFlush, presenceEvery: presenceRefresh, pollers: make(map[uuid.UUID]context.CancelFunc),
 		writeBase: writeTimeout, heartbeatEvery: heartbeatInterval, heartbeatWait: pongTimeout,
 		rooms: make(map[uuid.UUID]map[*peer]struct{}), broker: broker,
+		snapshots:  make(map[snapshotKey]*snapshotEntry),
 		instanceID: uuid.New(), brokerCtx: brokerCtx, brokerCancel: brokerCancel,
 	}
 	server.updates = collaboration.NewUseCase(writer, server)
@@ -375,7 +408,10 @@ func (p *peer) readLoop(ctx context.Context) {
 		if err := p.sendAndWait(ack); err != nil {
 			return
 		}
-		p.advance(receipt.BodyVersion, receipt.BodyEpoch)
+		// The author's version is not advanced by its own ACK: commits from
+		// other writers below this one may not have reached it yet, and moving
+		// ahead would make their fan-out look already covered. Its own update
+		// comes back as an ordinary fan-out frame, which Yjs applies idempotently.
 		_ = p.server.updates.PublishAfterAck(ctx, receipt, update)
 	}
 }
@@ -440,7 +476,9 @@ func (p *peer) writeLoop() {
 				_ = p.conn.Close()
 				return
 			}
-			p.advance(item.message.BodyVersion, item.message.BodyEpoch)
+			if item.message.Type == "update" || item.message.Type == "resync" {
+				p.advance(item.message.BodyVersion, item.message.BodyEpoch)
+			}
 		}
 	}
 }
@@ -623,7 +661,67 @@ func (s *Server) Publish(_ context.Context, receipt collaboration.CommitReceipt,
 	return errors.Join(localErr, brokerErr)
 }
 
+// awaitTurn blocks until the fan-out for the commit before receipt has
+// finished, or fanoutOrderWait passes. The returned func marks receipt's
+// fan-out as finished and must be called once.
+func (s *Server) awaitTurn(ctx context.Context, receipt collaboration.CommitReceipt) func() {
+	s.mu.Lock()
+	if len(s.rooms[receipt.DocumentID]) == 0 {
+		s.mu.Unlock()
+		return func() {} // nobody here to order for; keeps the map from growing
+	}
+	if s.orders == nil {
+		s.orders = make(map[uuid.UUID]*roomOrder)
+	}
+	var floor int64 // newest version any local peer already holds in this epoch
+	for p := range s.rooms[receipt.DocumentID] {
+		p.mu.Lock()
+		if p.bodyEpoch == receipt.BodyEpoch && p.bodyVersion > floor {
+			floor = p.bodyVersion
+		}
+		p.mu.Unlock()
+	}
+	ord := s.orders[receipt.DocumentID]
+	if ord == nil {
+		ord = &roomOrder{changed: make(chan struct{})}
+		s.orders[receipt.DocumentID] = ord
+	}
+	s.mu.Unlock()
+
+	timer := time.NewTimer(fanoutOrderWait)
+	defer timer.Stop()
+	for {
+		ord.mu.Lock()
+		if ord.epoch != receipt.BodyEpoch {
+			ord.epoch, ord.last = receipt.BodyEpoch, floor
+		}
+		ready := ord.last == 0 || receipt.BodyVersion <= ord.last+1
+		wait := ord.changed
+		ord.mu.Unlock()
+		if ready {
+			break
+		}
+		select {
+		case <-wait:
+			continue
+		case <-timer.C:
+		case <-ctx.Done():
+		}
+		break
+	}
+	return func() {
+		ord.mu.Lock()
+		if ord.epoch == receipt.BodyEpoch && receipt.BodyVersion > ord.last {
+			ord.last = receipt.BodyVersion
+		}
+		close(ord.changed)
+		ord.changed = make(chan struct{})
+		ord.mu.Unlock()
+	}
+}
+
 func (s *Server) fanoutLocal(ctx context.Context, receipt collaboration.CommitReceipt, update collaboration.Update) error {
+	defer s.awaitTurn(ctx, receipt)()
 	s.mu.RLock()
 	peers := make([]*peer, 0, len(s.rooms[receipt.DocumentID]))
 	for p := range s.rooms[receipt.DocumentID] {
@@ -744,6 +842,9 @@ func (s *Server) removePeer(p *peer) {
 	roomEmptied := len(s.rooms[p.documentID]) == 0
 	if roomEmptied {
 		delete(s.rooms, p.documentID)
+		delete(s.orders, p.documentID)
+		delete(s.snapshots, snapshotKey{documentID: p.documentID, canEdit: true})
+		delete(s.snapshots, snapshotKey{documentID: p.documentID, canEdit: false})
 		if cancel, ok := s.pollers[p.documentID]; ok {
 			cancel()
 			delete(s.pollers, p.documentID)
@@ -1065,11 +1166,16 @@ func (s *Server) verifySession(p *peer) bool {
 // fanoutFromRoomHead delivers an update after one access check for the whole
 // room. A peer is read in full only when it must resync.
 func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt collaboration.CommitReceipt, update collaboration.Update) error {
+	headAt := time.Now()
 	head, err := s.roomReader.ReadRoomHead(ctx, peers[0].workspaceID, receipt.DocumentID, distinctUsers(peers))
 	if err != nil {
 		return err
 	}
 	var firstError error
+	// Peers that must resync all resync to the same head, so the body is read
+	// once per CanEdit value and shared. Each peer was already authorized by
+	// the room head above; the body read only supplies the content.
+	fulls := map[bool]collaboration.BodySnapshot{}
 	for _, p := range peers {
 		access := head.Access[p.actor.UserID]
 		if !access.CanRead || !s.verifySession(p) {
@@ -1081,13 +1187,20 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 			BodySchemaVersion: head.BodySchemaVersion, CanEdit: access.CanEdit,
 		}
 		if p.fanoutNeedsFullSnapshot(receipt, update.BodySchemaVersion, snapshot) {
-			full, err := s.readAuthorizedSnapshot(ctx, p)
-			if err != nil {
-				p.close()
-				if firstError == nil {
-					firstError = err
+			full, shared := fulls[access.CanEdit]
+			if !shared {
+				var err error
+				full, err = s.headSnapshot(ctx, p, headAt, access.CanEdit)
+				if err != nil {
+					p.close()
+					if firstError == nil {
+						firstError = err
+					}
+					continue
 				}
-				continue
+				if full.CanEdit == access.CanEdit {
+					fulls[access.CanEdit] = full
+				}
 			}
 			snapshot = full
 		}
@@ -1096,6 +1209,38 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 		}
 	}
 	return firstError
+}
+
+// headSnapshot returns a full body read no earlier than headAt, the moment the
+// caller began reading the room head. A body whose read began after that moment
+// holds every commit the head did, including state-only commits that leave
+// body_version unchanged, so concurrent fan-outs share it instead of each
+// reading the whole document. A read that began earlier is never reused. The
+// caller has already authorized p through the room head; the shared body is
+// only content for that access level.
+func (s *Server) headSnapshot(ctx context.Context, p *peer, headAt time.Time, canEdit bool) (collaboration.BodySnapshot, error) {
+	key := snapshotKey{documentID: p.documentID, canEdit: canEdit}
+	s.mu.Lock()
+	entry := s.snapshots[key]
+	if entry == nil {
+		entry = &snapshotEntry{}
+		s.snapshots[key] = entry
+	}
+	s.mu.Unlock()
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if entry.valid && !entry.started.Before(headAt) {
+		return entry.snapshot, nil
+	}
+	started := time.Now()
+	snapshot, err := s.readAuthorizedSnapshot(ctx, p)
+	if err != nil {
+		return collaboration.BodySnapshot{}, err
+	}
+	if snapshot.CanEdit == canEdit {
+		entry.snapshot, entry.started, entry.valid = snapshot, started, true
+	}
+	return snapshot, nil
 }
 
 // fanoutNeedsFullSnapshot mirrors the cases in enqueueUpdate that send a

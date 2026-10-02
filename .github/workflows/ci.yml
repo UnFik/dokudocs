@@ -135,3 +135,18 @@ jobs:
           path: e2e/test-results/
           if-no-files-found: ignore
           retention-days: 14
+
+  collab-load:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: WebSocket collaboration load gate (regression guard on a shared runner)
+        run: make test-backend-load

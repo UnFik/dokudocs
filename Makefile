@@ -1,6 +1,6 @@
 DOCKER_COMPOSE ?= docker compose
 
-.PHONY: test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration docs
+.PHONY: test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
 
 test-e2e: test-e2e-api
 
@@ -52,6 +52,9 @@ test-backend-unit:
 
 test-backend-integration:
 	cd backend && $(MAKE) test-integration
+
+test-backend-load:
+	cd backend && $(MAKE) test-load
 
 test-seed:
 	cd backend && go run ./cmd/testseed
