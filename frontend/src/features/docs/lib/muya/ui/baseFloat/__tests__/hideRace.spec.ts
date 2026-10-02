@@ -16,7 +16,10 @@ import BaseFloat from '../index'
 class TestFloat extends BaseFloat {}
 
 function makeFloat(): TestFloat {
-  const muya = { eventCenter: { emit: vi.fn() } } as unknown as Muya
+  const muya = {
+    eventCenter: { emit: vi.fn() },
+    options: { readOnly: false },
+  } as unknown as Muya
   return new TestFloat(muya, 'mu-test-float')
 }
 
