@@ -230,6 +230,7 @@ func loadDocumentBody(ctx context.Context, tx database.Queryer, documentID, root
 	rows, err := tx.QueryContext(ctx, `
 		SELECT node_id, parent_id, sibling_order, node_type, content, attributes, version
 		FROM document_nodes WHERE document_id = $1
+		ORDER BY parent_id NULLS FIRST, sibling_order, node_id
 	`, documentID)
 	if err != nil {
 		return documentbody.Body{}, err
