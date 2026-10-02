@@ -192,6 +192,10 @@ describe('Enter', () => {
           emptyRuns.push(child.type.name)
       })
       expect(emptyRuns).toEqual([])
+      const { $from } = harness.editor.view.state.selection
+      expect($from.parent.type.name).toBe('paragraph')
+      expect($from.parent.textContent).toBe('')
+      expect($from.index(1)).toBe(1)
       expect(
         harness.editor.getBody().filter((item) => item.type === 'paragraph')
       ).toHaveLength(2)
