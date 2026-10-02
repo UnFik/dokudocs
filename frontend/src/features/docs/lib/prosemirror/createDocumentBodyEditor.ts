@@ -1,5 +1,17 @@
-import { EditorState, type Plugin, type Transaction } from 'prosemirror-state'
-import { EditorView, type EditorProps } from 'prosemirror-view'
+import { inputRules } from 'prosemirror-inputrules'
+import { keymap } from 'prosemirror-keymap'
+import {
+  EditorState,
+  Plugin,
+  type Command,
+  type Transaction,
+} from 'prosemirror-state'
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  type EditorProps,
+} from 'prosemirror-view'
 import {
   absolutePositionToRelativePosition,
   redo as redoYjs,
@@ -8,11 +20,30 @@ import {
   ySyncPlugin,
   ySyncPluginKey,
   yUndoPlugin,
+  yUndoPluginKey,
   yXmlFragmentToProseMirrorRootNode,
 } from 'y-prosemirror'
 import * as Y from 'yjs'
+import type { RemoteCursor } from '../collaboration-socket'
 import type { DocumentBodyNode } from '../documentBody'
+import {
+  headingInputRule,
+  insertBlockCommand,
+  setHeadingCommand,
+  splitTextBlock,
+  toggleTaskChecked,
+  type InsertableBlock,
+} from './blockCommands'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
+import {
+  emptyInlineState,
+  readInlineState,
+  removeLinkCommand,
+  setLinkCommand,
+  toggleInlineMark,
+  type InlineMarkName,
+  type InlineState,
+} from './inlineMarks'
 import {
   DeleteNodeRequiredError,
   MoveNodeRequiredError,
@@ -24,6 +55,19 @@ export type MoveNodeIntent = {
   targetParentID: string
   beforeNodeID: string | null
 }
+
+export interface EditorHistoryState {
+  canUndo: boolean
+  canRedo: boolean
+}
+
+/** The local selection as two encoded Yjs relative positions. */
+export interface DocumentBodySelection {
+  anchor: Uint8Array
+  head: Uint8Array
+}
+
+const safeColor = /^#[0-9A-Fa-f]{6}$/
 
 export interface DocumentBodyAnchor {
   nodeID: string
@@ -45,15 +89,183 @@ export function createDocumentBodyEditor(
     onMoveNode?: (move: MoveNodeIntent) => void | Promise<void>
     onMoveNodeQueued?: (move: MoveNodeIntent) => void
     onTransactionError?: (error: unknown) => void
+    onHistoryChange?: (history: EditorHistoryState) => void
+    onInlineStateChange?: (state: InlineState) => void
+    onLinkRequest?: () => void
+    /** Fires when the local selection moves; null when the editor loses focus. */
+    onSelectionChange?: (selection: DocumentBodySelection | null) => void
   } = {}
 ) {
   const fragment = ydoc.getXmlFragment('body')
   let readOnly = options.readOnly ?? false
   let structuralCommandPending = false
+  let remoteCursors: RemoteCursor[] = []
+  const remoteCursorPlugin = new Plugin({
+    props: {
+      decorations: (editorState) => remoteCursorDecorations(editorState),
+    },
+  })
   let state = EditorState.create({
     doc: yXmlFragmentToProseMirrorRootNode(fragment, documentBodySchema),
-    plugins: [ySyncPlugin(fragment), yUndoPlugin(), ...(options.plugins ?? [])],
+    plugins: [
+      ySyncPlugin(fragment),
+      yUndoPlugin(),
+      remoteCursorPlugin,
+      // Block plugins (slash menu, drag handle) run before the keymaps below so
+      // they can claim Enter and arrow keys while a menu is open.
+      ...(options.plugins ?? []),
+      inputRules({ rules: [headingInputRule] }),
+      keymap({
+        Enter: () => runBlock(splitTextBlock),
+        'Ctrl-Enter': () => runBlock(toggleTaskChecked),
+        'Meta-Enter': () => runBlock(toggleTaskChecked),
+        'Ctrl-Alt-c': () => runBlock(insertBlockCommand('code-block')),
+        'Meta-Alt-c': () => runBlock(insertBlockCommand('code-block')),
+        'Ctrl-Alt--': () => runBlock(insertBlockCommand('thematic-break')),
+        'Meta-Alt--': () => runBlock(insertBlockCommand('thematic-break')),
+        ...Object.fromEntries(
+          ([0, 1, 2, 3, 4, 5, 6] as const).flatMap((level) =>
+            ['Ctrl', 'Meta'].map((modifier) => [
+              `${modifier}-Alt-${level}`,
+              () => runBlock(setHeadingCommand(level)),
+            ])
+          )
+        ),
+      }),
+      keymap(
+        bindControlAndMeta({
+          b: () => runInline(toggleInlineMark('strong')),
+          i: () => runInline(toggleInlineMark('em')),
+          e: () => runInline(toggleInlineMark('code')),
+          'Shift-x': () => runInline(toggleInlineMark('strike')),
+          k: () => {
+            if (!canEdit()) return true
+            options.onLinkRequest?.()
+            return true
+          },
+          z: () => runHistory(undoYjs),
+          'Shift-z': () => runHistory(redoYjs),
+          y: () => runHistory(redoYjs),
+        })
+      ),
+    ],
   })
+  const canEdit = () => !readOnly && !structuralCommandPending
+  // A shortcut swallowed while read-only must not fall through to the browser's
+  // own contenteditable history, which would bypass the Yjs undo manager.
+  const runHistory = (action: (state: EditorState) => boolean) => {
+    if (canEdit()) action(state)
+    return true
+  }
+  const runInline = (command: Command) => {
+    if (canEdit()) command(state, (tr) => viewHolder.current?.dispatch(tr))
+    return true
+  }
+  const runBlock = (command: Command) => {
+    if (!canEdit()) return false
+    return command(state, (tr) => viewHolder.current?.dispatch(tr))
+  }
+  let lastInline = emptyInlineState
+  const publishInline = () => {
+    const view = viewHolder.current
+    if (!view) return
+    const next = readInlineState(view)
+    if (JSON.stringify(next) === JSON.stringify(lastInline)) return
+    lastInline = next
+    options.onInlineStateChange?.(next)
+  }
+  const readHistory = (): EditorHistoryState => {
+    const undoManager = yUndoPluginKey.getState(state)?.undoManager
+    return {
+      canUndo: undoManager?.canUndo() ?? false,
+      canRedo: undoManager?.canRedo() ?? false,
+    }
+  }
+  let lastHistory = readHistory()
+  const publishHistory = () => {
+    const next = readHistory()
+    if (
+      next.canUndo === lastHistory.canUndo &&
+      next.canRedo === lastHistory.canRedo
+    )
+      return
+    lastHistory = next
+    options.onHistoryChange?.(next)
+  }
+
+  const resolveRelative = (
+    editorState: EditorState,
+    encoded: Uint8Array
+  ): number | null => {
+    try {
+      const mapping = ySyncPluginKey.getState(editorState)?.binding.mapping
+      if (!mapping) return null
+      const position = relativePositionToAbsolutePosition(
+        ydoc,
+        fragment,
+        Y.decodeRelativePosition(encoded),
+        mapping
+      )
+      return position !== null && position <= editorState.doc.content.size
+        ? position
+        : null
+    } catch {
+      return null
+    }
+  }
+
+  const remoteCursorDecorations = (editorState: EditorState) => {
+    const decorations: Decoration[] = []
+    for (const cursor of remoteCursors) {
+      if (!cursor.anchor || !cursor.head) continue
+      const anchor = resolveRelative(editorState, cursor.anchor)
+      const head = resolveRelative(editorState, cursor.head)
+      if (anchor === null || head === null) continue
+      const color =
+        cursor.color && safeColor.test(cursor.color) ? cursor.color : null
+      const style = color ? `--cursor-color: ${color}` : ''
+      if (anchor !== head)
+        decorations.push(
+          Decoration.inline(Math.min(anchor, head), Math.max(anchor, head), {
+            class: 'remote-selection',
+            style,
+          })
+        )
+      decorations.push(
+        Decoration.widget(
+          head,
+          () => {
+            const caret = document.createElement('span')
+            caret.className = 'remote-cursor'
+            if (color) caret.style.setProperty('--cursor-color', color)
+            const label = document.createElement('span')
+            label.className = 'remote-cursor-label'
+            label.textContent = cursor.name || 'Collaborator'
+            caret.append(label)
+            return caret
+          },
+          { key: `cursor-${cursor.connectionID}-${head}-${color}`, side: 1 }
+        )
+      )
+    }
+    return DecorationSet.create(editorState.doc, decorations)
+  }
+
+  const toRelativeSelection = (
+    editorState: EditorState
+  ): DocumentBodySelection | null => {
+    const mapping = ySyncPluginKey.getState(editorState)?.binding.mapping
+    if (!mapping) return null
+    const { anchor, head } = editorState.selection
+    return {
+      anchor: Y.encodeRelativePosition(
+        absolutePositionToRelativePosition(anchor, fragment, mapping)
+      ),
+      head: Y.encodeRelativePosition(
+        absolutePositionToRelativePosition(head, fragment, mapping)
+      ),
+    }
+  }
   const viewHolder: { current?: EditorView } = {}
   const queueDeleteNode = (nodeID: string) => {
     if (!options.onDeleteNode) return false
@@ -94,6 +306,15 @@ export function createDocumentBodyEditor(
       viewHolder.current?.updateState(state)
       if (result.transactions.some((item) => item.docChanged))
         options.onBodyChange?.(prosemirrorToDocumentBody(state.doc))
+      publishInline()
+      if (
+        options.onSelectionChange &&
+        !remote &&
+        (transaction.selectionSet || transaction.docChanged)
+      ) {
+        const selection = toRelativeSelection(state)
+        if (selection) options.onSelectionChange(selection)
+      }
     } catch (error) {
       if (
         error instanceof DeleteNodeRequiredError &&
@@ -123,6 +344,12 @@ export function createDocumentBodyEditor(
     nodeViews: options.nodeViews,
     dispatchTransaction,
     editable: () => !readOnly && !structuralCommandPending,
+    handleDOMEvents: {
+      blur: () => {
+        options.onSelectionChange?.(null)
+        return false
+      },
+    },
     handleKeyDown: (editorView, event) => {
       // Keys pressed during IME composition belong to the input method.
       if (readOnly || structuralCommandPending || event.isComposing)
@@ -178,6 +405,10 @@ export function createDocumentBodyEditor(
   viewHolder.current = view
   options.onEditorReady?.(view)
   if (view.state !== state) view.updateState(state)
+  const undoManager = yUndoPluginKey.getState(state)?.undoManager
+  undoManager?.on('stack-item-added', publishHistory)
+  undoManager?.on('stack-item-popped', publishHistory)
+  undoManager?.on('stack-cleared', publishHistory)
 
   return {
     view,
@@ -228,16 +459,53 @@ export function createDocumentBodyEditor(
         return null
       }
     },
-    undo: () => undoYjs(state),
-    redo: () => redoYjs(state),
+    getHistory: readHistory,
+    getInlineState: () => readInlineState(view),
+    toggleMark: (name: InlineMarkName) =>
+      canEdit() && toggleInlineMark(name)(state, view.dispatch),
+    setLink: (href: string) =>
+      canEdit() && setLinkCommand(href)(state, view.dispatch),
+    removeLink: () => canEdit() && removeLinkCommand(state, view.dispatch),
+    setHeading: (level: 0 | 1 | 2 | 3 | 4 | 5 | 6) =>
+      canEdit() && setHeadingCommand(level)(state, view.dispatch),
+    toggleTask: () => canEdit() && toggleTaskChecked(state, view.dispatch),
+    insertBlock: (kind: InsertableBlock) =>
+      canEdit() && insertBlockCommand(kind)(state, view.dispatch),
+    focus: () => view.focus(),
+    undo: () => canEdit() && undoYjs(state),
+    redo: () => canEdit() && redoYjs(state),
+    resolveSelection: (selection: DocumentBodySelection) => {
+      const anchor = resolveRelative(state, selection.anchor)
+      const head = resolveRelative(state, selection.head)
+      return anchor === null || head === null ? null : { anchor, head }
+    },
+    setRemoteCursors: (cursors: RemoteCursor[]) => {
+      remoteCursors = cursors
+      view.dispatch(view.state.tr.setMeta(remoteCursorPlugin, 'refresh'))
+    },
     setReadOnly: (next: boolean) => {
       readOnly = next
       view.setProps({ editable: () => !readOnly && !structuralCommandPending })
     },
     destroy: () => {
+      undoManager?.off('stack-item-added', publishHistory)
+      undoManager?.off('stack-item-popped', publishHistory)
+      undoManager?.off('stack-cleared', publishHistory)
       view.destroy()
     },
   }
+}
+
+/** Bind each shortcut to both Ctrl and Cmd so it works on every platform. */
+function bindControlAndMeta<T>(bindings: Record<string, T>) {
+  const bound: Record<string, T> = {}
+  for (const [key, command] of Object.entries(bindings)) {
+    const parts = key.split('-')
+    const last = parts.pop()!
+    for (const modifier of ['Ctrl', 'Meta'])
+      bound[[modifier, ...parts, last].join('-')] = command
+  }
+  return bound
 }
 
 function wouldRemoveInlineRun(
