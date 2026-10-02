@@ -175,6 +175,12 @@ export function RemoteMarkdownDocEditor({
   const [accessUnavailable, setAccessUnavailable] = useState(false)
   const [presence, setPresence] = useState<PresenceUser[]>([])
   const restoreRevision = (revision: DocumentRevision) => {
+    if (
+      !window.confirm(
+        'Restore this revision? Pending suggestions will be discarded.'
+      )
+    )
+      return
     const requestID =
       restoreRequestIDs.current.get(revision.id) ?? crypto.randomUUID()
     restoreRequestIDs.current.set(revision.id, requestID)
