@@ -53,6 +53,10 @@ jobs:
           src/components/layout/create-workspace-dialog.test.tsx
           src/features/docs/components/create-doc-dialog.test.tsx
 
+      - name: Frontend Muya and local editor browser tests
+        working-directory: frontend
+        run: bun run test:muya
+
       - name: Full frontend browser suite (baseline advisory)
         continue-on-error: true
         working-directory: frontend
