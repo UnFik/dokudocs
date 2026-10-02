@@ -5,6 +5,7 @@ import {
   type Transaction,
 } from 'prosemirror-state'
 import { documentBodySchema } from './documentBody'
+import { nodeSuggestionOf, withNodeSuggestion } from './nodeSuggestion'
 
 // Suggest mode (ADR 0027). A user edits as usual and the edit is recorded as
 // suggestion marks on the text instead of changing it: typed text carries an
@@ -184,5 +185,102 @@ export function suggestReplace(
         options.caret === 'end' ? -1 : -1
       )
   tr.setSelection(TextSelection.create(tr.doc, caretAt))
+  return tr
+}
+
+const isOpaque = (node: ProseMirrorNode) => {
+  let found = node.type.name === 'opaque'
+  node.descendants((child) => {
+    if (child.type.name === 'opaque' || child.type.name === 'opaque-inline')
+      found = true
+    return !found
+  })
+  return found
+}
+
+/**
+ * Proposes deleting a selection that spans blocks, as one suggestion: a block the
+ * selection covers entirely is marked as deleted, and the text at its ragged
+ * ends gets delete marks. A block you inserted yourself is removed for real.
+ */
+export function suggestDelete(
+  state: EditorState,
+  from: number,
+  to: number,
+  options: TrackOptions
+): Transaction {
+  const doc = state.doc
+  type Operation = { at: number; apply: (tr: Transaction, id: string) => void }
+  const operations: Operation[] = []
+
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (node === doc || node.type.name === 'document') return true
+    const nodeID = node.attrs.nodeID
+    const covered = from <= pos && pos + node.nodeSize <= to
+    if (node.isBlock && typeof nodeID === 'string' && covered) {
+      if (node.type.name === 'table_cell' || isOpaque(node))
+        throw new UnsupportedSuggestionError(
+          'This selection includes content that cannot be deleted by a suggestion.'
+        )
+      const existing = nodeSuggestionOf(node)
+      if (existing?.kind === 'delete') return false
+      if (existing?.kind === 'insert' && existing.author === options.author)
+        operations.push({
+          at: pos,
+          apply: (tr) => {
+            tr.delete(pos, pos + node.nodeSize)
+          },
+        })
+      else
+        operations.push({
+          at: pos,
+          apply: (tr, id) => {
+            tr.setNodeMarkup(
+              pos,
+              undefined,
+              withNodeSuggestion(node, {
+                kind: 'delete',
+                id,
+                author: options.author,
+              })
+            )
+          },
+        })
+      return false
+    }
+    if (!node.isTextblock) return true
+    const block = { node, start: pos + 1 }
+    for (const chunk of chunksOf(block)) {
+      const start = Math.max(chunk.start, from)
+      const end = Math.min(chunk.end, to)
+      if (start >= end || markOf(chunk, 'delete')) continue
+      const insert = markOf(chunk, 'insert')
+      const own = insert && insert.attrs.author === options.author
+      const whole =
+        own &&
+        doc.resolve(start).parent.type.name === 'run' &&
+        doc.resolve(start).parent.content.size === end - start
+      operations.push({
+        at: start,
+        apply: (tr, id) => {
+          if (own && whole) tr.delete(start - 1, end + 1)
+          else if (own) tr.delete(start, end)
+          else
+            tr.addMark(
+              start,
+              end,
+              marks.suggestion_delete!.create({ id, author: options.author })
+            )
+        },
+      })
+    }
+    return false
+  })
+
+  const tr = state.tr
+  if (!operations.length) return tr
+  const id = (options.newID ?? (() => crypto.randomUUID()))()
+  for (const operation of operations.sort((a, b) => b.at - a.at))
+    operation.apply(tr, id)
   return tr
 }
