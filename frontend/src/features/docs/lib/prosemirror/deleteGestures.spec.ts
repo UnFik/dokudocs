@@ -137,6 +137,41 @@ describe('delete gestures with a real keyboard', () => {
     }
   })
 
+  it('uses the caret the browser just moved, before the editor has read it', async () => {
+    const { editor, batches, errors, host, cleanup } = mount(withSeparator())
+    try {
+      const { view } = editor
+      // Park the editor's own selection mid-word, as a click would.
+      let secondRun: HTMLElement | null = null
+      host.querySelectorAll('span[data-node-id]').forEach((span) => {
+        if (span.textContent === 'second') secondRun = span as HTMLElement
+      })
+      const text = secondRun!.firstChild!
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, view.posAtDOM(text, 2))
+        )
+      )
+      // The browser moves the caret to the end (End key), and the next key
+      // arrives before the selectionchange event has been handled.
+      const selection = window.getSelection()!
+      selection.collapse(text, text.textContent!.length)
+      view.dom.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Delete',
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+      await Promise.resolve()
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+      expect(view.state.doc.textContent).toContain('second')
+    } finally {
+      cleanup()
+    }
+  })
+
   it('selects a separator when it is clicked, so Delete removes it', async () => {
     const { editor, batches, errors, host, cleanup } = mount(withSeparator())
     try {
