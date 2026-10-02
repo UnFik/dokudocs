@@ -36,12 +36,24 @@ test("@live @smoke: slash Heading 2 and Ctrl+Alt shortcuts convert blocks, rende
   const token = (await page.context().cookies()).find(
     (cookie) => cookie.name === "thisisjustarandomstring",
   )!.value;
-  const workspace = await page.request.post(`${apiURL}/api/v1/workspaces`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: { name: `Heading ${suffix}`, plan: "Pro Workspace" },
-  });
-  expect(workspace.status()).toBe(201);
-  const workspaceID = ((await workspace.json()) as { data: { id: string } }).data.id;
+  // Create the workspace through the UI: that makes it the active workspace, which
+  // the document page uses to load the document. A workspace made through the API
+  // is not active, so the document would be looked up in another workspace.
+  await page
+    .getByRole("button", { name: /workspace/i })
+    .first()
+    .click();
+  await page.getByRole("menuitem", { name: "Create Workspace" }).click();
+  await page.getByLabel("Workspace Name").fill(`Heading ${suffix}`);
+  const workspaceResponse = page.waitForResponse(
+    (r) =>
+      r.request().method() === "POST" &&
+      new URL(r.url()).pathname === "/api/v1/workspaces",
+  );
+  await page.getByRole("button", { name: "Create Workspace" }).click();
+  const workspaceID = (
+    (await (await workspaceResponse).json()) as { data: { id: string } }
+  ).data.id;
   const headers = { Authorization: `Bearer ${token}`, "X-Workspace-Id": workspaceID };
 
   const documentID = randomUUID();
