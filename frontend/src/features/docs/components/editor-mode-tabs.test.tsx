@@ -114,12 +114,18 @@ describe('resolveMode', () => {
     ).toBe('suggest')
   })
 
-  it('falls back to view when the mode is no longer allowed', () => {
+  it('falls back to view when edit is no longer allowed', () => {
     expect(resolveMode('edit', { canEdit: false, suggestEnabled: true })).toBe(
       'view'
     )
+  })
+
+  it('falls back from Suggest to Edit for an editor, and to View when the user cannot edit', () => {
     expect(
       resolveMode('suggest', { canEdit: true, suggestEnabled: false })
+    ).toBe('edit')
+    expect(
+      resolveMode('suggest', { canEdit: false, suggestEnabled: false })
     ).toBe('view')
   })
 })

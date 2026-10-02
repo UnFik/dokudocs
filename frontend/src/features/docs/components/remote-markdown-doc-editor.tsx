@@ -326,9 +326,10 @@ function CollaborativeMarkdownBody({
   const storedMode = useEditorPreferenceStore(
     (state) => state.preferencesByUser[userID || 'guest']?.previewMode ?? 'edit'
   )
-  // Suggest is session state only; the store never holds it (a document
-  // always opens in View or Edit).
-  const [requestedMode, setRequestedMode] = useState<EditorMode>(storedMode)
+  // The stored mode is the user's choice. When it cannot be used right now
+  // (offline, no suggest access) the editor shows a fallback and leaves the
+  // stored value alone, so Suggest returns once it is possible again.
+  const requestedMode: EditorMode = storedMode
   const setPreviewMode = useEditorPreferenceStore(
     (state) => state.setPreviewMode
   )
@@ -350,6 +351,7 @@ function CollaborativeMarkdownBody({
   const [inline, setInline] = useState<InlineState>(emptyInlineState)
   const [linkRequest, setLinkRequest] = useState(0)
   const modeRef = useRef<EditorMode>(requestedMode)
+  const lastEffectiveRef = useRef<EditorMode | null>(null)
   const canEditRef = useRef(canEdit)
   const suggestEnabled =
     Boolean(snapshot.canSuggest) && !offline && status === 'ready'
@@ -374,6 +376,9 @@ function CollaborativeMarkdownBody({
     })
     editor.setSuggestMode(effective === 'suggest')
     editor.setReadOnly(effective === 'view')
+    if (effective === 'suggest' && lastEffectiveRef.current !== 'suggest')
+      setIsSuggestionsOpen(true)
+    lastEffectiveRef.current = effective
   }
 
   function submitTypedSuggestion(result: TextEditTranslation) {
@@ -444,7 +449,11 @@ function CollaborativeMarkdownBody({
       token: () => useAuthStore.getState().auth.accessToken,
       snapshot,
       focusNodeID,
-      readOnly: modeRef.current === 'view',
+      readOnly:
+        resolveMode(modeRef.current, {
+          canEdit: snapshot.canEdit,
+          suggestEnabled: false,
+        }) === 'view',
       onSuggestTransaction: submitTypedSuggestion,
       onStatus: (next) => {
         statusRef.current = next
@@ -525,9 +534,7 @@ function CollaborativeMarkdownBody({
 
   const changeMode = (next: EditorMode) => {
     modeRef.current = next
-    setRequestedMode(next)
-    if (next === 'suggest') setIsSuggestionsOpen(true)
-    else setPreviewMode(userID, next)
+    setPreviewMode(userID, next)
     applyEditorMode()
   }
 
