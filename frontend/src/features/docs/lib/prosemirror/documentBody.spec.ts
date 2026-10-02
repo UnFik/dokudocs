@@ -1,4 +1,4 @@
-import { EditorState } from 'prosemirror-state'
+import { EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { describe, expect, it } from 'vitest'
 import {
@@ -768,6 +768,167 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     }
   })
 
+  it('queues DeleteNode when Backspace is pressed on a fully selected paragraph', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const yStateBefore = Y.encodeStateAsUpdate(ydoc)
+    const deleteRequests: string[] = []
+    const editor = createDocumentBodyEditor(host, ydoc, {
+      onDeleteNode: (nodeID) => {
+        deleteRequests.push(nodeID)
+      },
+    })
+
+    try {
+      const start = runPosition(editor.view.state.doc, 'second')
+      editor.view.dispatch(
+        editor.view.state.tr.setSelection(
+          TextSelection.create(editor.view.state.doc, start, start + 8)
+        )
+      )
+      editor.view.dom.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Backspace',
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+      await waitUntil(async () => deleteRequests.length === 1)
+
+      expect(deleteRequests).toEqual(['p2'])
+      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
+  it('queues MoveNode when Alt+ArrowDown is pressed in a paragraph', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const yStateBefore = Y.encodeStateAsUpdate(ydoc)
+    const moves: unknown[] = []
+    const editor = createDocumentBodyEditor(host, ydoc, {
+      onMoveNode: (move) => {
+        moves.push(move)
+      },
+    })
+
+    try {
+      const start = runPosition(editor.view.state.doc, 'first')
+      editor.view.dispatch(
+        editor.view.state.tr.setSelection(
+          TextSelection.create(editor.view.state.doc, start + 1)
+        )
+      )
+      editor.view.dom.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          altKey: true,
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+      await waitUntil(async () => moves.length === 1)
+
+      expect(moves).toEqual([
+        { nodeID: 'p1', targetParentID: 'root', beforeNodeID: null },
+      ])
+      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
+  it('reports the local selection as relative positions that resolve to the same text', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const selections: Array<{ anchor: Uint8Array; head: Uint8Array } | null> =
+      []
+    const editor = createDocumentBodyEditor(host, ydoc, {
+      onSelectionChange: (selection) => selections.push(selection),
+    })
+
+    try {
+      const start = runPosition(editor.view.state.doc, 'first') + 1
+      editor.view.dispatch(
+        editor.view.state.tr.setSelection(
+          TextSelection.create(editor.view.state.doc, start + 1, start + 4)
+        )
+      )
+
+      const reported = selections.at(-1)
+      expect(reported).not.toBeNull()
+      const resolved = editor.resolveSelection(reported!)
+      expect(resolved).toEqual({ anchor: start + 1, head: start + 4 })
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
+  it('draws a remote selection with the collaborator name and color, and removes it', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const editor = createDocumentBodyEditor(host, ydoc)
+
+    try {
+      const start = runPosition(editor.view.state.doc, 'second') + 1
+      const anchor = editor.createAnchor(start + 1, start + 4)
+      const cursor = {
+        connectionID: 'c1',
+        userID: 'u2',
+        name: 'Bo',
+        color: '#0369A1',
+        anchor: anchor.start,
+        head: anchor.end,
+      }
+      editor.setRemoteCursors([cursor])
+
+      const caret = host.querySelector('.remote-cursor')
+      expect(caret?.textContent).toContain('Bo')
+      expect(
+        (caret as HTMLElement).style.getPropertyValue('--cursor-color')
+      ).toBe('#0369A1')
+      expect(host.querySelector('.remote-selection')?.textContent).toBe('eco')
+
+      // A color that is not a plain hex value is ignored, not injected.
+      editor.setRemoteCursors([{ ...cursor, color: 'red; background: url(x)' }])
+      const unsafe = host.querySelector('.remote-cursor') as HTMLElement
+      expect(unsafe.style.getPropertyValue('--cursor-color')).not.toContain(
+        'url'
+      )
+
+      editor.setRemoteCursors([])
+      expect(host.querySelector('.remote-cursor')).toBeNull()
+      expect(host.querySelector('.remote-selection')).toBeNull()
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
   it('blocks deleting the last formatted character when it would remove the run', async () => {
     const body: DocumentBodyNode[] = [
       {
@@ -1498,6 +1659,88 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     }
   })
 
+  it('shares the local selection and shows remote cursors through the collaboration socket', async () => {
+    const source = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const state = Y.encodeStateAsUpdate(source)
+    source.destroy()
+    const socket = new FakeCollaborationSocket()
+    const userID = crypto.randomUUID()
+    const documentID = crypto.randomUUID()
+    const host = document.createElement('div')
+    document.body.append(host)
+    let signalReady!: () => void
+    const ready = new Promise<void>((resolve) => {
+      signalReady = resolve
+    })
+    const session = await mountCollaborativeDocumentBody(host, {
+      documentID,
+      workspaceID: crypto.randomUUID(),
+      userID,
+      token: 'test-token',
+      snapshot: {
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        encodedState: encodeBase64(state),
+      },
+      store: new IndexedDBCollaborationStore(),
+      socketFactory: () => socket,
+      onStatus: (status) => {
+        if (status === 'ready') signalReady()
+      },
+    })
+
+    try {
+      socket.open()
+      socket.receive({
+        type: 'ready',
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: encodeBase64(state),
+      })
+      await ready
+
+      const start = runPosition(session.editor.view.state.doc, 'first') + 1
+      session.editor.view.dispatch(
+        session.editor.view.state.tr.setSelection(
+          TextSelection.create(session.editor.view.state.doc, start, start + 3)
+        )
+      )
+      const cursorFrames = () =>
+        socket.sent
+          .map((frame) => JSON.parse(frame) as { type: string })
+          .filter((frame) => frame.type === 'cursor')
+      expect(cursorFrames()).toHaveLength(1)
+
+      const anchor = session.editor.createAnchor(start, start + 3)
+      socket.receive({
+        type: 'cursor',
+        cursor: {
+          connectionID: 'c1',
+          userID: 'u2',
+          name: 'Bo',
+          color: '#0369A1',
+          anchor: encodeBase64(anchor.start),
+          head: encodeBase64(anchor.end),
+        },
+      })
+      await waitUntil(async () => host.querySelector('.remote-cursor') !== null)
+      expect(host.querySelector('.remote-selection')?.textContent).toBe('fir')
+
+      socket.close()
+      await waitUntil(async () => host.querySelector('.remote-cursor') === null)
+    } finally {
+      session.destroy()
+      host.remove()
+    }
+  })
+
   it('persists DeleteNode intent with its source epoch until canonical completion', async () => {
     const store = new IndexedDBCollaborationStore()
     const scope = {
@@ -1850,4 +2093,28 @@ function runPosition(doc: EditorState['doc'], text: string) {
   })
   if (position < 0) throw new Error(`missing run ${text}`)
   return position
+}
+
+function twoParagraphBody(): DocumentBodyNode[] {
+  const node = (
+    nodeID: string,
+    parentID: string | null,
+    siblingOrder: number,
+    type: string,
+    content = ''
+  ): DocumentBodyNode => ({
+    nodeID,
+    parentID,
+    siblingOrder,
+    type,
+    content,
+    attributes: {},
+  })
+  return [
+    node('root', null, 0, 'document'),
+    node('p1', 'root', 0, 'paragraph'),
+    node('r1', 'p1', 0, 'run', 'first'),
+    node('p2', 'root', 1, 'paragraph'),
+    node('r2', 'p2', 0, 'run', 'second'),
+  ]
 }
