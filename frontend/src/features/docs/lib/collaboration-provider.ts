@@ -117,6 +117,7 @@ export class CollaborativeDocumentProvider {
   private readonly remoteCursors = new Map<string, RemoteCursor>()
   private status: CollaborativeDocumentStatus = 'connecting'
   private canEdit?: boolean
+  private canSuggest = false
   private bodyVersion: number
   private ready = false
   private stopped = false
@@ -534,6 +535,7 @@ export class CollaborativeDocumentProvider {
     try {
       this.bodyVersion = frame.bodyVersion
       this.canEdit = frame.canEdit
+      this.canSuggest = frame.canSuggest === true
       Y.applyUpdate(this.options.document, frame.state, this.remoteOrigin)
       for (const pending of this.pending.values())
         Y.applyUpdate(this.options.document, pending.update, this.remoteOrigin)
@@ -573,15 +575,18 @@ export class CollaborativeDocumentProvider {
     try {
       this.bodyVersion = frame.bodyVersion!
       this.canEdit = frame.canEdit
+      this.canSuggest = frame.canSuggest === true
       Y.applyUpdate(this.options.document, frame.state, this.remoteOrigin)
       const snapshot = this.snapshot()
       await this.enqueueStorage(() =>
         this.store.saveSnapshot(this.scope, snapshot)
       )
       this.options.onCanEdit?.(this.canEdit === true)
+      // Someone who can only suggest still sends their updates; a structural
+      // command is an edit and needs edit access.
       if (
-        !this.canEdit &&
-        (this.pending.size || this.hasPendingStructuralCommand())
+        (!this.canEdit && !this.canSuggest && this.pending.size) ||
+        (!this.canEdit && this.hasPendingStructuralCommand())
       ) {
         this.requireRecovery('update-rejected')
         return
@@ -786,9 +791,11 @@ export class CollaborativeDocumentProvider {
   private flushPending() {
     if (!this.ready || !this.socket) return
     if (!this.canEdit) {
-      if (this.pending.size || this.hasPendingStructuralCommand())
-        this.requireRecovery('update-rejected')
-      return
+      if (this.hasPendingStructuralCommand() || !this.canSuggest) {
+        if (this.pending.size || this.hasPendingStructuralCommand())
+          this.requireRecovery('update-rejected')
+        return
+      }
     }
     const unsent = [...this.pending.values()].filter(
       (update) => !this.sentThisConnection.has(update.updateID)

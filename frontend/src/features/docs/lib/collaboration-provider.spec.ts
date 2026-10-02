@@ -430,6 +430,60 @@ describe('CollaborativeDocumentProvider', () => {
     provider.stop()
   })
 
+  it('sends offline updates when the server grants suggest access without edit access', async () => {
+    const serverDoc = new Y.Doc()
+    serverDoc.getText('body').insert(0, 'base')
+    const initialState = Y.encodeStateAsUpdate(serverDoc)
+    const offlineDoc = new Y.Doc()
+    Y.applyUpdate(offlineDoc, initialState)
+    const baseVector = Y.encodeStateVector(offlineDoc)
+    offlineDoc.getText('body').insert(4, ' suggested')
+    const offlineUpdate = Y.encodeStateAsUpdate(offlineDoc, baseVector)
+    const document = new Y.Doc()
+    const store = new MemoryStore()
+    store.updates.set('suggestion-update', {
+      updateID: 'suggestion-update',
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      update: offlineUpdate,
+    })
+    const socket = new FakeSocket()
+    const statuses: string[] = []
+    const provider = new CollaborativeDocumentProvider({
+      documentID: 'document-1',
+      workspaceID: 'workspace-1',
+      userID: 'user-1',
+      token: 'jwt-token',
+      document,
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      store,
+      socketFactory: () => socket,
+      onStatus: (status) => statuses.push(status),
+    })
+
+    await provider.start()
+    socket.open()
+    socket.receive({
+      type: 'ready',
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      canEdit: false,
+      canSuggest: true,
+      state: base64(initialState),
+    })
+    await flushPromises()
+
+    expect(statuses.at(-1)).not.toBe('recovery-required')
+    expect(socket.sent.map((frame) => JSON.parse(frame).type)).toEqual([
+      'auth',
+      'update',
+    ])
+    provider.stop()
+  })
+
   it('refreshes and caches a new canonical epoch when a clean client receives resync', async () => {
     const initialDocument = new Y.Doc()
     initialDocument.getText('body').insert(0, 'epoch one')

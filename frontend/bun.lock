@@ -64,6 +64,7 @@
         "prosemirror-model": "1.25.4",
         "prosemirror-schema-list": "1.5.1",
         "prosemirror-state": "1.4.4",
+        "prosemirror-transform": "1.12.2",
         "prosemirror-view": "1.41.8",
         "react": "^19.2.5",
         "react-day-picker": "9.14.0",

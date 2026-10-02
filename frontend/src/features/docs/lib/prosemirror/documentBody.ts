@@ -5,6 +5,7 @@ import {
   type Node as ProseMirrorNode,
   type NodeSpec,
 } from 'prosemirror-model'
+import { authorColor } from '../author-color'
 import { indexDocumentBody, type DocumentBodyNode } from '../documentBody'
 
 type NodeDefinition = {
@@ -231,6 +232,8 @@ function suggestionDOM(mark: Mark, className: string): DOMOutputSpec {
       class: className,
       'data-suggestion-id': mark.attrs.id,
       'data-suggestion-author': mark.attrs.author,
+      // The author's color, for the line under or through the text.
+      style: `--suggest-color: ${authorColor(String(mark.attrs.author))}`,
     },
     0,
   ]
