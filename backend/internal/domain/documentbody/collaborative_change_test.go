@@ -64,6 +64,25 @@ func TestValidateCollaborativeChangeAgreesWithFullValidation(t *testing.T) {
 		{name: "attributes not an object", mutate: func(b *Body) {
 			findNode(b, ids["quote-paragraph"]).Attributes = json.RawMessage(`[]`)
 		}},
+		{name: "paragraph becomes heading", mutate: func(b *Body) {
+			n := findNode(b, ids["inline-paragraph"])
+			n.Type = "atx-heading"
+			n.Attributes = json.RawMessage(`{"level":2}`)
+		}},
+		{name: "paragraph becomes heading with invalid level", mutate: func(b *Body) {
+			n := findNode(b, ids["inline-paragraph"])
+			n.Type = "atx-heading"
+			n.Attributes = json.RawMessage(`{"level":7}`)
+		}},
+		{name: "paragraph becomes heading without level", mutate: func(b *Body) {
+			findNode(b, ids["inline-paragraph"]).Type = "atx-heading"
+		}},
+		{name: "heading becomes paragraph", mutate: func(b *Body) {
+			n := findNode(b, heading)
+			n.Type = "paragraph"
+			n.Attributes = json.RawMessage(`{}`)
+		}},
+		{name: "paragraph becomes code block", mutate: func(b *Body) { findNode(b, ids["inline-paragraph"]).Type = "code-block" }},
 		{name: "change node type", mutate: func(b *Body) { findNode(b, ids["quote-paragraph"]).Type = "html-block" }},
 		{name: "delete existing node", mutate: func(b *Body) { b.Nodes = withoutNode(b.Nodes, ids["quote-paragraph"]) }},
 		{name: "delete opaque block", mutate: func(b *Body) { b.Nodes = withoutNode(b.Nodes, ids["opaque-block"]) }},
@@ -106,5 +125,20 @@ func TestValidateCollaborativeChangeAgreesWithFullValidation(t *testing.T) {
 				t.Fatalf("ValidateCollaborativeChange() = %v, full validation = %v", got, want)
 			}
 		})
+	}
+}
+
+func TestValidateCollaborativeChangeAcceptsParagraphHeadingConversion(t *testing.T) {
+	before, ids := opaqueBody()
+	after := Body{DocumentID: before.DocumentID, RootNodeID: before.RootNodeID, Nodes: append([]Node(nil), before.Nodes...)}
+	n := findNode(&after, ids["inline-paragraph"])
+	n.Type = "atx-heading"
+	n.Attributes = json.RawMessage(`{"level":2}`)
+	if err := ValidateCollaborativeChange(before, after); err != nil {
+		t.Fatalf("paragraph to heading with a valid level: %v", err)
+	}
+	n.Attributes = json.RawMessage(`{"level":7}`)
+	if err := ValidateCollaborativeChange(before, after); err == nil {
+		t.Fatal("heading level 7 must stay rejected")
 	}
 }

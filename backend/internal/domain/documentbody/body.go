@@ -186,7 +186,8 @@ func ValidateOpaquePreservation(before, after Body) error {
 			parentID := *oldPathNode.ParentID
 			oldParent, oldParentExists := oldNodes[parentID]
 			newParent, newParentExists := newNodes[parentID]
-			if !oldParentExists || !newParentExists || oldParent.Type != newParent.Type {
+			if !oldParentExists || !newParentExists ||
+				(oldParent.Type != newParent.Type && !isParagraphHeadingConversion(oldParent.Type, newParent.Type)) {
 				return invalid("opaque node %s changed structural path", opaque.NodeID)
 			}
 			for _, oldSibling := range oldChildren[parentID] {
@@ -235,7 +236,7 @@ func ValidateExistingStructure(before, after Body, authorizedMoveNodeIDs map[uui
 		if !exists {
 			return invalid("existing node %s was deleted without DeleteNode", id)
 		}
-		if oldNode.Type != newNode.Type {
+		if oldNode.Type != newNode.Type && !isParagraphHeadingConversion(oldNode.Type, newNode.Type) {
 			return invalid("existing node %s changed type", id)
 		}
 		if !sameParent(oldNode.ParentID, newNode.ParentID) {
