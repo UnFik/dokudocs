@@ -99,10 +99,17 @@ async function prepareDocument(page: Page) {
   return editor;
 }
 
-// Click into a block and wait until the editor owns the caret, so the next key press is not lost.
+// Click into a block and wait until the editor owns the caret and ProseMirror has
+// read it, so the next key press is not handled against the previous selection.
 async function placeCaret(editor: Locator, block: Locator) {
   await block.click();
   await expect(editor).toBeFocused();
+  await expect
+    .poll(() => block.evaluate((el) => el.contains(getSelection()?.anchorNode ?? null)))
+    .toBe(true);
+  await editor.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
