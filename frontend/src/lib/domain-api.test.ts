@@ -484,6 +484,7 @@ describe('Dokudocs domain API adapter', () => {
       documentID: documentId,
       commandID: requestID,
       nodeID: workspaceId,
+      nodeIDs: [workspaceId],
       bodyEpoch: 2,
       bodyVersion: 8,
       changed: true,
@@ -496,7 +497,7 @@ describe('Dokudocs domain API adapter', () => {
         commandID: requestID,
         bodyEpoch: 1,
         bodySchemaVersion: 1,
-        nodeID: workspaceId,
+        nodeIDs: [workspaceId],
       })
     ).resolves.toEqual(result)
 

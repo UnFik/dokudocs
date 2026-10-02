@@ -26,7 +26,8 @@ export type PendingDeleteNodeCommand = {
   commandID: string
   bodyEpoch: number
   bodySchemaVersion: number
-  nodeID: string
+  /** Roots deleted together in one atomic command. */
+  nodeIDs: string[]
 }
 
 export type PendingMoveNodeCommand = {
@@ -662,11 +663,13 @@ function copyUpdate(row: UpdateRow): PendingCollaborationUpdate {
 }
 
 function copyDeleteCommand(row: DeleteCommandRow): PendingDeleteNodeCommand {
+  // Rows saved before batching hold one `nodeID` instead of `nodeIDs`.
+  const legacyNodeID = (row as { nodeID?: string }).nodeID
   return {
     commandID: row.commandID,
     bodyEpoch: row.bodyEpoch,
     bodySchemaVersion: row.bodySchemaVersion,
-    nodeID: row.nodeID,
+    nodeIDs: row.nodeIDs ?? (legacyNodeID ? [legacyNodeID] : []),
   }
 }
 

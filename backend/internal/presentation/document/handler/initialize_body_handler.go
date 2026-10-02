@@ -38,7 +38,10 @@ type deleteNodeRequest struct {
 	CommandID         uuid.UUID `json:"commandID"`
 	BodyEpoch         int64     `json:"bodyEpoch"`
 	BodySchemaVersion int       `json:"bodySchemaVersion"`
-	NodeID            uuid.UUID `json:"nodeID"`
+	// NodeIDs is the batch to delete atomically. NodeID is the single-node
+	// form older clients send; it is used only when NodeIDs is empty.
+	NodeIDs []uuid.UUID `json:"nodeIDs"`
+	NodeID  uuid.UUID   `json:"nodeID"`
 }
 
 type bodyInitializationRequest struct {
@@ -246,8 +249,8 @@ func (h *BodyHandler) MoveNode(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteNode removes a block through a durable structural command.
-// @Summary Delete a Markdown block
-// @Description Atomically deletes a block subtree and advances the document body epoch.
+// @Summary Delete Markdown blocks
+// @Description Atomically deletes one or more block subtrees and advances the document body epoch.
 // @Tags Document
 // @Accept json
 // @Produce json
@@ -278,9 +281,13 @@ func (h *BodyHandler) DeleteNode(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	nodeIDs := request.NodeIDs
+	if len(nodeIDs) == 0 {
+		nodeIDs = []uuid.UUID{request.NodeID}
+	}
 	result, err := h.deleter.Delete(r.Context(), collaboration.Actor{UserID: actorID}, collaboration.DeleteNodeCommand{
 		WorkspaceID: workspaceID, DocumentID: documentID, CommandID: request.CommandID,
-		BodyEpoch: request.BodyEpoch, BodySchemaVersion: request.BodySchemaVersion, NodeID: request.NodeID,
+		BodyEpoch: request.BodyEpoch, BodySchemaVersion: request.BodySchemaVersion, NodeIDs: nodeIDs,
 	})
 	if err != nil {
 		switch {

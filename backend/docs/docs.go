@@ -1019,7 +1019,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Atomically deletes a block subtree and advances the document body epoch.",
+                "description": "Atomically deletes one or more block subtrees and advances the document body epoch.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1029,7 +1029,7 @@ const docTemplate = `{
                 "tags": [
                     "Document"
                 ],
-                "summary": "Delete a Markdown block",
+                "summary": "Delete Markdown blocks",
                 "parameters": [
                     {
                         "type": "string",
@@ -4680,6 +4680,12 @@ const docTemplate = `{
                 },
                 "nodeID": {
                     "type": "string"
+                },
+                "nodeIDs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -5706,6 +5712,9 @@ const docTemplate = `{
                 "canEdit": {
                     "type": "boolean"
                 },
+                "canSuggest": {
+                    "type": "boolean"
+                },
                 "encodedState": {
                     "type": "array",
                     "items": {
@@ -5745,6 +5754,13 @@ const docTemplate = `{
                 },
                 "nodeID": {
                     "type": "string"
+                },
+                "nodeIDs": {
+                    "description": "NodeIDs is the batch to delete atomically. NodeID is the single-node\nform older clients send; it is used only when NodeIDs is empty.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

@@ -79,7 +79,7 @@ const deleteCommand = (nodeID: string): PendingDeleteNodeCommand => ({
   commandID: 'c1',
   bodyEpoch: 1,
   bodySchemaVersion: 1,
-  nodeID,
+  nodeIDs: [nodeID],
 })
 const moveCommand = (
   nodeID: string,
@@ -215,7 +215,7 @@ describe('resolveHeldCommand', () => {
     })
     expect(sent).toHaveLength(1)
     expect(sent[0]).toMatchObject({
-      nodeID: 'p2',
+      nodeIDs: ['p2'],
       bodyEpoch: 3,
       bodySchemaVersion: 1,
     })

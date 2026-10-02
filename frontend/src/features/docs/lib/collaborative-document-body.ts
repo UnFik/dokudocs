@@ -68,7 +68,7 @@ export async function mountCollaborativeDocumentBody(
     onCanonicalBody?: (body: MarkdownBodySnapshot) => void
     onHeldEdits?: (edits: HeldEdit[]) => void
     onBodyChange?: (body: DocumentBodyNode[]) => void
-    onDeleteNodeQueued?: (nodeID: string) => void
+    onDeleteNodeQueued?: (nodeIDs: string[]) => void
     onMoveNodeQueued?: (move: MoveNodeIntent) => void
     onTransactionError?: (error: unknown) => void
     onHistoryChange?: (history: EditorHistoryState) => void
@@ -157,7 +157,7 @@ export async function mountCollaborativeDocumentBody(
       nodeViews: blocks.nodeViews,
       onEditorReady: blocks.attach,
       onBodyChange: input.onBodyChange,
-      onDeleteNode: (nodeID) => provider!.deleteNode(nodeID),
+      onDeleteNode: (nodeIDs) => provider!.deleteNode(nodeIDs),
       onDeleteNodeQueued: input.onDeleteNodeQueued,
       onMoveNode: (move) => provider!.moveNode(move),
       onMoveNodeQueued: input.onMoveNodeQueued,

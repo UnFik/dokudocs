@@ -107,10 +107,10 @@ export function explainStructuralHold(
   ): HoldExplanation => ({ code, message, canForce, canReissue })
 
   if (input.kind === 'delete') {
-    const node = byID.get(input.command.nodeID)
-    if (node?.parentID === null)
+    const nodes = input.command.nodeIDs.map((id) => byID.get(id))
+    if (nodes.some((node) => node?.parentID === null))
       return hold('root', 'The document root cannot be deleted.')
-    if (node)
+    if (nodes.some(Boolean))
       return hold(
         'content-changed',
         'This block changed on the server after you deleted it. Deleting it now would remove text you have not seen.',
@@ -255,7 +255,8 @@ export async function resolveHeldCommand(input: {
 export type ReviewCommand = {
   kind: 'delete' | 'move'
   commandID: string
-  nodeID: string
+  /** The blocks the command touches; a delete can carry several. */
+  nodeIDs: string[]
   explanation: HoldExplanation
 }
 
@@ -288,7 +289,7 @@ export async function loadReviewModel(input: {
     ...stored.deleteCommands.map((command) => ({
       kind: 'delete' as const,
       commandID: command.commandID,
-      nodeID: command.nodeID,
+      nodeIDs: command.nodeIDs,
       explanation: explainStructuralHold({
         kind: 'delete',
         command,
@@ -299,7 +300,7 @@ export async function loadReviewModel(input: {
     ...stored.moveCommands.map((command) => ({
       kind: 'move' as const,
       commandID: command.commandID,
-      nodeID: command.nodeID,
+      nodeIDs: [command.nodeID],
       explanation: explainStructuralHold({
         kind: 'move',
         command,

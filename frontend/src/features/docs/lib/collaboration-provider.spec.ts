@@ -703,12 +703,12 @@ describe('CollaborativeDocumentProvider', () => {
         value: false,
       })
       await provider.start()
-      await provider.deleteNode('node-to-delete')
+      await provider.deleteNode(['node-to-delete'])
       const [pending] = store.deleteCommands.values()
       expect(pending).toMatchObject({
         bodyEpoch: 1,
         bodySchemaVersion: 1,
-        nodeID: 'node-to-delete',
+        nodeIDs: ['node-to-delete'],
       })
       expect(document.getText('body').toString()).toBe('base')
 
@@ -1015,7 +1015,7 @@ describe('CollaborativeDocumentProvider', () => {
 
     try {
       await provider.start()
-      await provider.deleteNode('node-to-delete')
+      await provider.deleteNode(['node-to-delete'])
       sockets[0]!.open()
       sockets[0]!.receive({
         type: 'ready',
@@ -1078,7 +1078,7 @@ describe('CollaborativeDocumentProvider', () => {
       commandID: 'delete-command',
       bodyEpoch: 1,
       bodySchemaVersion: 1,
-      nodeID: 'node-to-delete',
+      nodeIDs: ['node-to-delete'],
     })
     const socket = new FakeSocket()
     let deleteAttempts = 0
@@ -1402,7 +1402,7 @@ describe('CollaborativeDocumentProvider structural command retarget', () => {
       commandID: 'old-command',
       bodyEpoch: 1,
       bodySchemaVersion: 1,
-      nodeID: ids.p2,
+      nodeIDs: [ids.p2],
     }
     const store = storedWithPending({ delete: original })
     const sent: PendingDeleteNodeCommand[] = []
@@ -1423,7 +1423,7 @@ describe('CollaborativeDocumentProvider structural command retarget', () => {
         commandID: expect.not.stringMatching(/^old-command$/),
         bodyEpoch: 2,
         bodySchemaVersion: 1,
-        nodeID: ids.p2,
+        nodeIDs: [ids.p2],
       },
     ])
     expect(store.snapshot?.bodyEpoch).toBe(2)
@@ -1436,7 +1436,7 @@ describe('CollaborativeDocumentProvider structural command retarget', () => {
       commandID: 'old-command',
       bodyEpoch: 1,
       bodySchemaVersion: 1,
-      nodeID: ids.p2,
+      nodeIDs: [ids.p2],
     }
     const store = storedWithPending({ delete: original })
     const { provider, statuses, bodies } = providerAtEpoch2(
@@ -1464,7 +1464,7 @@ describe('CollaborativeDocumentProvider structural command retarget', () => {
       commandID: 'old-command',
       bodyEpoch: 1,
       bodySchemaVersion: 1,
-      nodeID: ids.p2,
+      nodeIDs: [ids.p2],
     }
     const store = storedWithPending({ delete: original })
     const grown = [
@@ -1607,7 +1607,7 @@ describe('CollaborativeDocumentProvider structural command retarget', () => {
         commandID: 'old-command',
         bodyEpoch: 1,
         bodySchemaVersion: 1,
-        nodeID: ids.p2,
+        nodeIDs: [ids.p2],
       },
     })
     const first = providerAtEpoch2(store, allNodes(), {

@@ -123,7 +123,7 @@ export function ConflictReviewPanel({
         <div key={command.commandID} className='flex flex-col gap-2'>
           <p className='font-mono text-[11px] text-muted-foreground'>
             {command.kind === 'delete' ? 'delete block' : 'move block'}{' '}
-            {command.nodeID.slice(0, 8)}
+            {command.nodeIDs.map((id) => id.slice(0, 8)).join(', ')}
           </p>
           <p className='text-sm'>{command.explanation.message}</p>
           <div className='flex flex-wrap gap-2'>
@@ -321,7 +321,7 @@ function VersionBlock({ label, text }: { label: string; text: string | null }) {
       {text === null ? (
         <p className='text-sm text-muted-foreground'>Not in this version.</p>
       ) : (
-        <pre className='font-sans text-sm whitespace-pre-wrap [overflow-wrap:anywhere]'>
+        <pre className='font-sans text-sm [overflow-wrap:anywhere] whitespace-pre-wrap'>
           {text}
         </pre>
       )}

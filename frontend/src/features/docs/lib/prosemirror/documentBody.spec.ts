@@ -1,4 +1,4 @@
-import { EditorState, TextSelection } from 'prosemirror-state'
+import { AllSelection, EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { describe, expect, it } from 'vitest'
 import {
@@ -776,8 +776,8 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     const mount = document.createElement('div')
     const deleteRequests: string[] = []
     const editor = createDocumentBodyEditor(mount, ydoc, {
-      onDeleteNode: async (nodeID) => {
-        deleteRequests.push(nodeID)
+      onDeleteNode: async (nodeIDs) => {
+        deleteRequests.push(...nodeIDs)
       },
     })
 
@@ -805,8 +805,8 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     const yStateBefore = Y.encodeStateAsUpdate(ydoc)
     const deleteRequests: string[] = []
     const editor = createDocumentBodyEditor(host, ydoc, {
-      onDeleteNode: (nodeID) => {
-        deleteRequests.push(nodeID)
+      onDeleteNode: (nodeIDs) => {
+        deleteRequests.push(...nodeIDs)
       },
     })
 
@@ -828,6 +828,117 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
 
       expect(deleteRequests).toEqual(['p2'])
       expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
+  it('queues one DeleteNode batch when every block is selected and Backspace is pressed', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const yStateBefore = Y.encodeStateAsUpdate(ydoc)
+    const batches: string[][] = []
+    const editor = createDocumentBodyEditor(host, ydoc, {
+      onDeleteNode: (nodeIDs) => {
+        batches.push(nodeIDs)
+      },
+    })
+
+    try {
+      editor.view.dispatch(
+        editor.view.state.tr.setSelection(
+          new AllSelection(editor.view.state.doc)
+        )
+      )
+      const event = new KeyboardEvent('keydown', {
+        key: 'Backspace',
+        bubbles: true,
+        cancelable: true,
+      })
+      editor.view.dom.dispatchEvent(event)
+      await waitUntil(async () => batches.length === 1)
+
+      expect(event.defaultPrevented).toBe(true)
+      expect(batches).toEqual([['p1', 'p2']])
+      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
+  it('queues one DeleteNode batch when a transaction removes two whole blocks', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const batches: string[][] = []
+    const errors: unknown[] = []
+    const editor = createDocumentBodyEditor(host, ydoc, {
+      onDeleteNode: (nodeIDs) => {
+        batches.push(nodeIDs)
+      },
+      onTransactionError: (error) => errors.push(error),
+    })
+
+    try {
+      const { doc } = editor.view.state
+      editor.view.dispatch(editor.view.state.tr.delete(1, doc.content.size - 1))
+      await waitUntil(async () => batches.length === 1)
+
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['p1', 'p2']])
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+      host.remove()
+    }
+  })
+
+  it('does not delete blocks when the selection only covers part of the first block', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const batches: string[][] = []
+    const editor = createDocumentBodyEditor(host, ydoc, {
+      onDeleteNode: (nodeIDs) => {
+        batches.push(nodeIDs)
+      },
+    })
+
+    try {
+      const start = runPosition(editor.view.state.doc, 'first')
+      editor.view.dispatch(
+        editor.view.state.tr.setSelection(
+          TextSelection.create(
+            editor.view.state.doc,
+            start + 2,
+            runPosition(editor.view.state.doc, 'second') + 8
+          )
+        )
+      )
+      editor.view.dom.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Backspace',
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      expect(batches).toEqual([])
     } finally {
       editor.destroy()
       ydoc.destroy()
@@ -1003,8 +1114,8 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     const deleteRequests: string[] = []
     const errors: unknown[] = []
     const editor = createDocumentBodyEditor(host, ydoc, {
-      onDeleteNode: (nodeID) => {
-        deleteRequests.push(nodeID)
+      onDeleteNode: (nodeIDs) => {
+        deleteRequests.push(...nodeIDs)
       },
       onTransactionError: (error) => {
         errors.push(error)
@@ -1076,8 +1187,11 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     const store = new IndexedDBCollaborationStore()
     const host = document.createElement('div')
     document.body.append(host)
-    const commands: { commandID: string; bodyEpoch: number; nodeID: string }[] =
-      []
+    const commands: {
+      commandID: string
+      bodyEpoch: number
+      nodeIDs: string[]
+    }[] = []
     let canonicalEpoch = 0
     let queuedNodeID = ''
     let signalReady!: () => void
@@ -1117,7 +1231,7 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
         canonicalEpoch = body.bodyEpoch
       },
       onDeleteNodeQueued: (value) => {
-        queuedNodeID = value
+        queuedNodeID = value[0]!
       },
     })
 
@@ -1150,7 +1264,7 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
       expect(commands[0]).toMatchObject({
         bodyEpoch: 1,
         bodySchemaVersion: 1,
-        nodeID,
+        nodeIDs: [nodeID],
       })
       expect(session.editor.getBody()).toEqual(initialBody)
       expect(
@@ -1786,7 +1900,7 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
       commandID: crypto.randomUUID(),
       bodyEpoch: 4,
       bodySchemaVersion: 1,
-      nodeID: crypto.randomUUID(),
+      nodeIDs: [crypto.randomUUID()],
     }
 
     await store.saveDeleteCommand(scope, snapshot, command)
@@ -1859,7 +1973,7 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
         commandID: crypto.randomUUID(),
         bodyEpoch: 1,
         bodySchemaVersion: 1,
-        nodeID: oldNodeID,
+        nodeIDs: [oldNodeID],
       }
     )
 
@@ -2046,7 +2160,7 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
       commandID: crypto.randomUUID(),
       bodyEpoch: 4,
       bodySchemaVersion: 1,
-      nodeID: deletedParagraphID,
+      nodeIDs: [deletedParagraphID],
     })
 
     const recovered = await recoverPendingMarkdown(scope)

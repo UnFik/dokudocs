@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -492,7 +493,7 @@ func TestMoveNodeCommitsReceiptAndFencesOldEpoch(t *testing.T) {
 	}
 
 	retry, err := writer.MoveNode(ctx, actor, command)
-	if err != nil || retry != first {
+	if err != nil || !reflect.DeepEqual(retry, first) {
 		t.Fatalf("retry MoveNode() = (%+v, %v), want original receipt %+v", retry, err, first)
 	}
 	reusedID := command
@@ -589,7 +590,7 @@ func TestDeleteNodeCommitsReceiptAndFencesOldEpoch(t *testing.T) {
 	actor := collaboration.Actor{UserID: userID}
 	command := collaboration.DeleteNodeCommand{
 		WorkspaceID: workspaceID, DocumentID: documentID, CommandID: uuid.New(),
-		BodyEpoch: 1, BodySchemaVersion: yjs.BodySchemaVersionV1, NodeID: deletedID,
+		BodyEpoch: 1, BodySchemaVersion: yjs.BodySchemaVersionV1, NodeIDs: []uuid.UUID{deletedID},
 	}
 	first, err := writer.DeleteNode(ctx, actor, command)
 	if err != nil {
@@ -598,11 +599,11 @@ func TestDeleteNodeCommitsReceiptAndFencesOldEpoch(t *testing.T) {
 	if !first.Changed || first.BodyVersion != 2 || first.BodyEpoch != 2 {
 		t.Fatalf("DeleteNode receipt = %+v, want changed at version/epoch 2", first)
 	}
-	if retry, err := writer.DeleteNode(ctx, actor, command); err != nil || retry != first {
+	if retry, err := writer.DeleteNode(ctx, actor, command); err != nil || !reflect.DeepEqual(retry, first) {
 		t.Fatalf("retry DeleteNode() = (%+v, %v), want original receipt %+v", retry, err, first)
 	}
 	reusedID := command
-	reusedID.NodeID = siblingID
+	reusedID.NodeIDs = []uuid.UUID{siblingID}
 	if _, err := writer.DeleteNode(ctx, actor, reusedID); !errors.Is(err, collaboration.ErrDeleteCommandReplay) {
 		t.Fatalf("reused command ID error = %v, want %v", err, collaboration.ErrDeleteCommandReplay)
 	}

@@ -290,7 +290,7 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 					epochChanged = true
 				case "delete":
 					var deleteErr error
-					after, deleteErr = documentbody.DeleteNode(after, documentbody.DeleteNodeCommand{NodeID: operation.NodeID})
+					after, deleteErr = documentbody.DeleteNode(after, documentbody.DeleteNodeCommand{NodeIDs: []uuid.UUID{operation.NodeID}})
 					if deleteErr != nil {
 						if err := markSuggestionConflicted(ctx, tx, documentID, suggestionID, deciderID, "delete"); err != nil {
 							return err

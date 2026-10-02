@@ -84,7 +84,7 @@ describe('ConflictReviewPanel', () => {
               {
                 kind: 'delete',
                 commandID: 'c1',
-                nodeID: 'p2',
+                nodeIDs: ['p2'],
                 explanation: {
                   code: 'content-changed',
                   message:
@@ -118,7 +118,7 @@ describe('ConflictReviewPanel', () => {
               {
                 kind: 'move',
                 commandID: 'm1',
-                nodeID: 'p2',
+                nodeIDs: ['p2'],
                 explanation: {
                   code: 'target-missing',
                   message:
@@ -211,7 +211,7 @@ describe('ConflictReviewPanel', () => {
               {
                 kind: 'move',
                 commandID: 'm1',
-                nodeID: 'p2',
+                nodeIDs: ['p2'],
                 explanation: {
                   code: 'before-missing',
                   message:

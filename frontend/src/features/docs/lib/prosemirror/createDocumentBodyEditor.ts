@@ -84,8 +84,8 @@ export function createDocumentBodyEditor(
     nodeViews?: EditorProps['nodeViews']
     onEditorReady?: (view: EditorView) => void
     onBodyChange?: (body: DocumentBodyNode[]) => void
-    onDeleteNode?: (nodeID: string) => void | Promise<void>
-    onDeleteNodeQueued?: (nodeID: string) => void
+    onDeleteNode?: (nodeIDs: string[]) => void | Promise<void>
+    onDeleteNodeQueued?: (nodeIDs: string[]) => void
     onMoveNode?: (move: MoveNodeIntent) => void | Promise<void>
     onMoveNodeQueued?: (move: MoveNodeIntent) => void
     onTransactionError?: (error: unknown) => void
@@ -266,13 +266,13 @@ export function createDocumentBodyEditor(
     }
   }
   const viewHolder: { current?: EditorView } = {}
-  const queueDeleteNode = (nodeID: string) => {
+  const queueDeleteNode = (nodeIDs: string[]) => {
     if (!options.onDeleteNode) return false
     structuralCommandPending = true
     viewHolder.current?.setProps({ editable: () => false })
     void Promise.resolve()
-      .then(() => options.onDeleteNode!(nodeID))
-      .then(() => options.onDeleteNodeQueued?.(nodeID))
+      .then(() => options.onDeleteNode!(nodeIDs))
+      .then(() => options.onDeleteNodeQueued?.(nodeIDs))
       .catch((cause: unknown) => options.onTransactionError?.(cause))
     return true
   }
@@ -317,7 +317,7 @@ export function createDocumentBodyEditor(
     } catch (error) {
       if (
         error instanceof DeleteNodeRequiredError &&
-        queueDeleteNode(error.nodeID)
+        queueDeleteNode(error.nodeIDs)
       )
         return
       if (error instanceof MoveNodeRequiredError && options.onMoveNode) {
@@ -360,8 +360,8 @@ export function createDocumentBodyEditor(
         !event.shiftKey &&
         (event.key === 'Backspace' || event.key === 'Delete')
       ) {
-        const nodeID = fullySelectedBlockNodeID(editorView.state.selection)
-        if (nodeID && queueDeleteNode(nodeID)) {
+        const nodeIDs = fullySelectedBlockNodeIDs(editorView.state.selection)
+        if (nodeIDs && queueDeleteNode(nodeIDs)) {
           event.preventDefault()
           return true
         }
@@ -548,6 +548,51 @@ function blockNodeIDAt(doc: EditorState['doc'], position: number) {
       return node.attrs.nodeID as string
   }
   throw new Error('comment anchor is outside a stable block')
+}
+
+/** IDs of the blocks a selection covers completely, or null when it covers none. */
+function fullySelectedBlockNodeIDs(selection: EditorState['selection']) {
+  if (selection.empty) return null
+  const single = fullySelectedBlockNodeID(selection)
+  if (single) return [single]
+  return fullySelectedSiblingNodeIDs(selection)
+}
+
+/**
+ * Several sibling blocks selected from the start of the first to the end of
+ * the last (select all included). The parent must stay valid without them.
+ */
+function fullySelectedSiblingNodeIDs(selection: EditorState['selection']) {
+  let { $from, $to } = selection
+  let range = $from.blockRange($to)
+  // Select all spans the one root `document` node; look at the blocks inside it.
+  if (range?.depth === 0 && range.parent.childCount === 1) {
+    const { doc } = selection.$from
+    $from = doc.resolve(1)
+    $to = doc.resolve(doc.content.size - 1)
+    range = $from.blockRange($to)
+  }
+  if (!range || range.endIndex - range.startIndex < 2) return null
+  for (let depth = range.depth + 1; depth < $from.depth; depth++)
+    if ($from.index(depth) !== 0) return null
+  if ($from.depth > range.depth && $from.parentOffset !== 0) return null
+  for (let depth = range.depth + 1; depth < $to.depth; depth++)
+    if ($to.index(depth) !== $to.node(depth).childCount - 1) return null
+  if ($to.depth > range.depth && $to.parentOffset !== $to.parent.content.size)
+    return null
+
+  const { parent } = range
+  const nodes = Array.from(
+    { length: range.endIndex - range.startIndex },
+    (_, i) => parent.child(range.startIndex + i)
+  )
+  const nodeIDs = nodes.map((node) => node.attrs.nodeID)
+  if (!nodeIDs.every((nodeID) => typeof nodeID === 'string' && nodeID))
+    return null
+  const remaining = parent.content
+    .cut(0, range.start - range.$from.start(range.depth))
+    .append(parent.content.cut(range.end - range.$from.start(range.depth)))
+  return parent.type.validContent(remaining) ? (nodeIDs as string[]) : null
 }
 
 function fullySelectedBlockNodeID(selection: EditorState['selection']) {

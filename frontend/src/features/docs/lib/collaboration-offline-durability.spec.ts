@@ -66,7 +66,7 @@ describe('offline durability of the device store (#17)', () => {
         commandID: 'c1',
         bodyEpoch: 1,
         bodySchemaVersion: 1,
-        nodeID: 'p1',
+        nodeIDs: ['p1'],
       }
     )
     const reopened = await new IndexedDBCollaborationStore().load(scope)

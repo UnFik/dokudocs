@@ -149,8 +149,8 @@ function applyDeleteCommands(
     children.set(node.parentID, siblings)
   }
   const deleted = new Set<string>()
-  for (const { nodeID } of commands) {
-    const pending = [nodeID]
+  for (const { nodeIDs } of commands) {
+    const pending = [...nodeIDs]
     while (pending.length) {
       const current = pending.pop()!
       if (deleted.has(current)) continue

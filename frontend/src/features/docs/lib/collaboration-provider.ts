@@ -317,7 +317,8 @@ export class CollaborativeDocumentProvider {
     this.stopped = true
     this.ready = false
     const activeKey = `${this.scope.userID}:${this.scope.documentID}`
-    if (activeProviders.get(activeKey) === this) activeProviders.delete(activeKey)
+    if (activeProviders.get(activeKey) === this)
+      activeProviders.delete(activeKey)
     this.options.document.off('update', this.handleYUpdate)
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     if (this.batchTimer) clearTimeout(this.batchTimer)
@@ -330,8 +331,9 @@ export class CollaborativeDocumentProvider {
     return this.ready && this.socket ? this.socket.sendCursor(selection) : false
   }
 
-  async deleteNode(nodeID: string) {
-    if (!nodeID) throw new Error('node ID is required')
+  async deleteNode(nodeIDs: string[]) {
+    if (!nodeIDs.length || nodeIDs.some((nodeID) => !nodeID))
+      throw new Error('node ID is required')
     if (this.hasPendingStructuralCommand())
       throw new Error('a structural command is already pending')
     if (this.stopped || this.terminal || this.storageFailed)
@@ -340,7 +342,7 @@ export class CollaborativeDocumentProvider {
       commandID: crypto.randomUUID(),
       bodyEpoch: this.options.bodyEpoch,
       bodySchemaVersion: this.options.bodySchemaVersion,
-      nodeID,
+      nodeIDs: [...nodeIDs],
     }
     await this.enqueueStorage(() =>
       this.store.saveDeleteCommand(this.scope, this.snapshot(), command)
@@ -1049,7 +1051,7 @@ export class CollaborativeDocumentProvider {
       )
         return false
       const verdict = deleteCommand
-        ? deleteStillMakesSense(body.nodes, deleteCommand.nodeID)
+        ? deleteStillMakesSense(body.nodes, deleteCommand.nodeIDs)
         : moveStillMakesSense(body.nodes, moveCommand!)
       if (verdict === 'unsafe') return false
       if (deleteCommand && verdict === 'reissue') {
@@ -1058,10 +1060,8 @@ export class CollaborativeDocumentProvider {
         const seen = (await this.store.load(this.scope)).snapshot
         if (
           !seen ||
-          !sameSubtree(
-            projectState(seen.encodedState),
-            body.nodes,
-            deleteCommand.nodeID
+          !remainingDeleteIDs(body.nodes, deleteCommand.nodeIDs).every((id) =>
+            sameSubtree(projectState(seen.encodedState), body.nodes, id)
           )
         )
           return false
@@ -1088,6 +1088,8 @@ export class CollaborativeDocumentProvider {
           ...deleteCommand,
           commandID: crypto.randomUUID(),
           bodyEpoch: body.bodyEpoch,
+          // The server rejects unknown IDs, so drop blocks already gone.
+          nodeIDs: remainingDeleteIDs(body.nodes, deleteCommand.nodeIDs),
         }
         await this.enqueueStorage(() =>
           this.store.replaceDeleteCommand(
@@ -1429,7 +1431,7 @@ export async function executeDeleteNode(
   const receipt = await deleteMarkdownNode(workspaceID, documentID, command)
   if (
     receipt.commandID !== command.commandID ||
-    receipt.nodeID !== command.nodeID
+    !sameIDs(receipt.nodeIDs, command.nodeIDs)
   )
     throw new Error('DeleteNode receipt does not match the pending command')
   const body = await getMarkdownBody(workspaceID, documentID)
@@ -1469,13 +1471,23 @@ function projectState(state: Uint8Array): DocumentBodyNode[] {
 
 type StructuralNode = { nodeID: string; parentID: string | null }
 
+function remainingDeleteIDs(nodes: StructuralNode[], nodeIDs: string[]) {
+  const present = new Set(nodes.map((node) => node.nodeID))
+  return nodeIDs.filter((nodeID) => present.has(nodeID))
+}
+
+function sameIDs(left: string[], right: string[]) {
+  return left.length === right.length && left.every((id, i) => id === right[i])
+}
+
 function deleteStillMakesSense(
   nodes: StructuralNode[],
-  nodeID: string
+  nodeIDs: string[]
 ): 'done' | 'reissue' | 'unsafe' {
-  const node = nodes.find((candidate) => candidate.nodeID === nodeID)
-  if (!node) return 'done'
-  return node.parentID === null ? 'unsafe' : 'reissue'
+  const byID = new Map(nodes.map((node) => [node.nodeID, node]))
+  const found = nodeIDs.flatMap((nodeID) => byID.get(nodeID) ?? [])
+  if (!found.length) return 'done'
+  return found.some((node) => node.parentID === null) ? 'unsafe' : 'reissue'
 }
 
 function moveStillMakesSense(

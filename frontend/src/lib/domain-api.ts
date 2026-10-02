@@ -147,6 +147,7 @@ const deleteNodeResultSchema = z.object({
   documentID: z.string().uuid(),
   commandID: z.string().uuid(),
   nodeID: z.string().uuid(),
+  nodeIDs: z.array(z.string().uuid()).min(1),
   bodyEpoch: z.number().int().positive(),
   bodyVersion: z.number().int().positive(),
   changed: z.boolean(),
@@ -280,7 +281,7 @@ export type DeleteMarkdownNodeInput = {
   commandID: string
   bodyEpoch: number
   bodySchemaVersion: number
-  nodeID: string
+  nodeIDs: string[]
 }
 export type DeleteMarkdownNodeResult = z.infer<typeof deleteNodeResultSchema>
 export type MoveMarkdownNodeInput = {

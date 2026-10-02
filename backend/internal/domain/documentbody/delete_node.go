@@ -3,17 +3,24 @@ package documentbody
 import "github.com/google/uuid"
 
 type DeleteNodeCommand struct {
-	NodeID uuid.UUID
+	NodeIDs []uuid.UUID
 }
 
-// DeleteNode removes an existing non-root subtree. Opaque source stays intact
-// until an importer or restore replaces the complete body explicitly.
+// DeleteNode removes existing non-root subtrees in one step. Opaque source
+// stays intact until an importer or restore replaces the complete body
+// explicitly. Listing a node together with its ancestor is allowed; the
+// descendant goes away with the ancestor.
 func DeleteNode(body Body, command DeleteNodeCommand) (Body, error) {
 	if err := Validate(body); err != nil {
 		return Body{}, err
 	}
-	if command.NodeID == uuid.Nil || command.NodeID == body.RootNodeID {
-		return Body{}, invalid("root or missing node cannot be deleted")
+	if len(command.NodeIDs) == 0 {
+		return Body{}, invalid("no node to delete")
+	}
+	for _, id := range command.NodeIDs {
+		if id == uuid.Nil || id == body.RootNodeID {
+			return Body{}, invalid("root or missing node cannot be deleted")
+		}
 	}
 
 	children := make(map[uuid.UUID][]Node, len(body.Nodes))
@@ -24,15 +31,20 @@ func DeleteNode(body Body, command DeleteNodeCommand) (Body, error) {
 			children[*node.ParentID] = append(children[*node.ParentID], node)
 		}
 	}
-	if _, found := nodesByID[command.NodeID]; !found {
-		return Body{}, invalid("node %s does not exist", command.NodeID)
+	for _, id := range command.NodeIDs {
+		if _, found := nodesByID[id]; !found {
+			return Body{}, invalid("node %s does not exist", id)
+		}
 	}
 
 	deleted := make(map[uuid.UUID]struct{})
-	stack := []uuid.UUID{command.NodeID}
+	stack := append([]uuid.UUID(nil), command.NodeIDs...)
 	for len(stack) > 0 {
 		id := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
+		if _, seen := deleted[id]; seen {
+			continue
+		}
 		node := nodesByID[id]
 		if isOpaque(node.Type) {
 			return Body{}, invalid("opaque node %s cannot be deleted", node.NodeID)
