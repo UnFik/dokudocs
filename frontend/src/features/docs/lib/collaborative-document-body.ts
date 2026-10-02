@@ -77,6 +77,7 @@ export async function mountCollaborativeDocumentBody(
     onLinkRequest?: () => void
     onSuggestRefused?: (message: string) => void
     onSuggestionCards?: (cards: SuggestionCard[]) => void
+    onSuggestionClick?: (id: string) => void
   }
 ) {
   const document = new Y.Doc()
@@ -171,6 +172,7 @@ export async function mountCollaborativeDocumentBody(
       suggestAuthor: input.userID,
       onSuggestRefused: input.onSuggestRefused,
       onSuggestionCards: input.onSuggestionCards,
+      onSuggestionClick: input.onSuggestionClick,
       onSelectionChange: cursorSender.send,
     })
     showRemoteCursors = (cursors) => editor.setRemoteCursors(cursors)

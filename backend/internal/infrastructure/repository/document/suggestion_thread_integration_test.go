@@ -33,13 +33,16 @@ func TestSuggestionThreadRepliesAndResolve(t *testing.T) {
 		}
 		return id
 	}
-	proposerID, otherID := addMember("comment"), addMember("comment")
-	suggestion := typedSuggestion(documentID, proposerID, `[{"op":"replace_text","nodeID":"`+runID.String()+`","content":"plain!","baseContent":"plain"}]`)
-	if err := repo.CreateSuggestion(ctx, workspaceID, suggestion); err != nil {
-		t.Fatalf("CreateSuggestion(): %v", err)
+	proposerID, otherID, viewerID := addMember("comment"), addMember("comment"), addMember("view")
+	suggestionID := uuid.New()
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO document_suggestions (document_id, suggestion_id, proposer_id)
+		VALUES ($1, $2, $3)
+	`, documentID, suggestionID, proposerID); err != nil {
+		t.Fatalf("seed suggestion index: %v", err)
 	}
 	reply := func(authorID uuid.UUID, body string) model.SuggestionReply {
-		return model.SuggestionReply{DocumentID: documentID, SuggestionID: suggestion.SuggestionID, ReplyID: uuid.New(), AuthorID: authorID, Body: body}
+		return model.SuggestionReply{DocumentID: documentID, SuggestionID: suggestionID, ReplyID: uuid.New(), AuthorID: authorID, Body: body}
 	}
 
 	first := reply(proposerID, "why this change")
@@ -52,9 +55,11 @@ func TestSuggestionThreadRepliesAndResolve(t *testing.T) {
 	if err := repo.CreateSuggestionReply(ctx, workspaceID, reply(ownerID, "makes sense")); err != nil {
 		t.Fatalf("editor reply: %v", err)
 	}
-	// Another commenter cannot see the suggestion, so cannot join its thread.
-	if err := repo.CreateSuggestionReply(ctx, workspaceID, reply(otherID, "me too")); !errors.Is(err, constant.ErrForbidden) {
-		t.Fatalf("reply by someone who cannot see it = %v, want forbidden", err)
+	if err := repo.CreateSuggestionReply(ctx, workspaceID, reply(otherID, "me too")); err != nil {
+		t.Fatalf("reply by another commenter: %v", err)
+	}
+	if err := repo.CreateSuggestionReply(ctx, workspaceID, reply(viewerID, "viewer reply")); !errors.Is(err, constant.ErrForbidden) {
+		t.Fatalf("reply by viewer = %v, want forbidden", err)
 	}
 	missing := reply(ownerID, "ghost")
 	missing.SuggestionID = uuid.New()
@@ -63,22 +68,25 @@ func TestSuggestionThreadRepliesAndResolve(t *testing.T) {
 	}
 
 	items, err := repo.ListSuggestions(ctx, workspaceID, documentID, proposerID)
-	if err != nil || len(items) != 1 || len(items[0].Replies) != 2 {
-		t.Fatalf("ListSuggestions() = (%+v, %v), want one suggestion with two replies", items, err)
+	if err != nil || len(items) != 1 || len(items[0].Replies) != 3 {
+		t.Fatalf("ListSuggestions() = (%+v, %v), want one suggestion with three replies", items, err)
 	}
-	if items[0].Replies[0].Body != "why this change" || items[0].Replies[1].Body != "makes sense" {
-		t.Fatalf("replies = %+v, want oldest first", items[0].Replies)
+	if items[0].Replies[0].Body != "why this change" || items[0].Replies[1].Body != "makes sense" || items[0].Replies[2].Body != "me too" {
+		t.Fatalf("replies = %+v, want all replies oldest first", items[0].Replies)
 	}
-	if hidden, err := repo.ListSuggestions(ctx, workspaceID, documentID, otherID); err != nil || len(hidden) != 0 {
-		t.Fatalf("other commenter sees %+v, %v; replies must stay as hidden as the suggestion", hidden, err)
+	if visible, err := repo.ListSuggestions(ctx, workspaceID, documentID, otherID); err != nil || len(visible) != 1 || len(visible[0].Replies) != 3 {
+		t.Fatalf("other commenter sees %+v, %v; readers must see all suggestions and replies", visible, err)
+	}
+	if visible, err := repo.ListSuggestions(ctx, workspaceID, documentID, viewerID); err != nil || len(visible) != 1 || len(visible[0].Replies) != 3 {
+		t.Fatalf("viewer sees %+v, %v; readers must see all suggestions and replies", visible, err)
 	}
 
 	// Resolving works while pending, never changes the suggestion's status, and
-	// is allowed to its proposer and to editors only.
-	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestion.SuggestionID, otherID, true); !errors.Is(err, constant.ErrForbidden) {
-		t.Fatalf("resolve by someone who cannot see it = %v, want forbidden", err)
+	// is allowed to commenters and editors, but not viewers.
+	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestionID, viewerID, true); !errors.Is(err, constant.ErrForbidden) {
+		t.Fatalf("resolve by viewer = %v, want forbidden", err)
 	}
-	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestion.SuggestionID, proposerID, true); err != nil {
+	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestionID, proposerID, true); err != nil {
 		t.Fatalf("resolve by proposer: %v", err)
 	}
 	items, _ = repo.ListSuggestions(ctx, workspaceID, documentID, ownerID)
@@ -89,7 +97,7 @@ func TestSuggestionThreadRepliesAndResolve(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT content FROM document_nodes WHERE document_id = $1 AND node_id = $2`, documentID, runID).Scan(&content); err != nil || content != "plain" {
 		t.Fatalf("body after resolve = %q, %v; resolve must not touch the text", content, err)
 	}
-	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestion.SuggestionID, ownerID, true); err != nil {
+	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestionID, ownerID, true); err != nil {
 		t.Fatalf("resolving twice must be a no-op: %v", err)
 	}
 	items, _ = repo.ListSuggestions(ctx, workspaceID, documentID, ownerID)
@@ -102,13 +110,13 @@ func TestSuggestionThreadRepliesAndResolve(t *testing.T) {
 		t.Fatalf("reply to a resolved thread: %v", err)
 	}
 	items, _ = repo.ListSuggestions(ctx, workspaceID, documentID, ownerID)
-	if items[0].ResolvedAt != nil || len(items[0].Replies) != 3 {
-		t.Fatalf("after replying = resolvedAt %v, %d replies, want reopened with three", items[0].ResolvedAt, len(items[0].Replies))
+	if items[0].ResolvedAt != nil || len(items[0].Replies) != 4 {
+		t.Fatalf("after replying = resolvedAt %v, %d replies, want reopened with four", items[0].ResolvedAt, len(items[0].Replies))
 	}
-	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestion.SuggestionID, ownerID, true); err != nil {
+	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestionID, ownerID, true); err != nil {
 		t.Fatalf("resolve by editor: %v", err)
 	}
-	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestion.SuggestionID, proposerID, false); err != nil {
+	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestionID, proposerID, false); err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
 	items, _ = repo.ListSuggestions(ctx, workspaceID, documentID, ownerID)

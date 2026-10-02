@@ -86,24 +86,18 @@ type DocumentAccess struct {
 }
 
 type DocumentSuggestion struct {
-	DocumentID             uuid.UUID         `json:"documentId"`
-	SuggestionID           uuid.UUID         `json:"suggestionId"`
-	ProposerID             uuid.UUID         `json:"proposerId"`
-	DeciderID              *uuid.UUID        `json:"deciderId,omitempty"`
-	BaseBodyVersion        int64             `json:"baseBodyVersion"`
-	BaseBodyEpoch          int64             `json:"baseBodyEpoch"`
-	OperationSchemaVersion int               `json:"operationSchemaVersion"`
-	Provenance             string            `json:"provenance"`
-	Operations             json.RawMessage   `json:"operations"`
-	Summary                string            `json:"summary"`
-	Reason                 string            `json:"reason"`
-	ConflictReason         string            `json:"conflictReason"`
-	Status                 string            `json:"status"`
-	CreatedAt              time.Time         `json:"createdAt"`
-	DecidedAt              *time.Time        `json:"decidedAt,omitempty"`
-	ResolvedAt             *time.Time        `json:"resolvedAt,omitempty"`
-	ResolvedBy             *uuid.UUID        `json:"resolvedBy,omitempty"`
-	Replies                []SuggestionReply `json:"replies"`
+	DocumentID     uuid.UUID         `json:"documentId"`
+	SuggestionID   uuid.UUID         `json:"suggestionId"`
+	ProposerID     uuid.UUID         `json:"proposerId"`
+	ProposerName   string            `json:"proposerName"`
+	DeciderID      *uuid.UUID        `json:"deciderId,omitempty"`
+	ConflictReason string            `json:"conflictReason"`
+	Status         string            `json:"status"`
+	CreatedAt      time.Time         `json:"createdAt"`
+	DecidedAt      *time.Time        `json:"decidedAt,omitempty"`
+	ResolvedAt     *time.Time        `json:"resolvedAt,omitempty"`
+	ResolvedBy     *uuid.UUID        `json:"resolvedBy,omitempty"`
+	Replies        []SuggestionReply `json:"replies"`
 }
 
 // SuggestionReply is one message in a suggestion's discussion thread.

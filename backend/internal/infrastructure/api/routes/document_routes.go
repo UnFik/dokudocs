@@ -14,9 +14,7 @@ import (
 	"backend/internal/config"
 	collabws "backend/internal/infrastructure/collaboration/websocket"
 	docrepo "backend/internal/infrastructure/repository/document"
-	projectrepo "backend/internal/infrastructure/repository/project"
 	userrepo "backend/internal/infrastructure/repository/user"
-	workspacerepo "backend/internal/infrastructure/repository/workspace"
 	"backend/internal/infrastructure/runtime/container"
 	dochandler "backend/internal/presentation/document/handler"
 	"backend/internal/presentation/middleware"
@@ -39,7 +37,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) func
 	bodyMover := appcollab.NewMoveNodeUseCase(bodyRepository)
 	bodyDeleter := appcollab.NewDeleteNodeUseCase(bodyRepository)
 	bodyHandler := dochandler.NewBodyHandler(bodyInitialization, bodyReader, bodyMover, bodyDeleter)
-	suggestionService := appdoc.NewSuggestionUseCase(bodyRepository, bodyRepository, workspacerepo.NewRepository(c.DB), projectrepo.NewRepository(c.DB))
+	suggestionService := appdoc.NewSuggestionUseCase(bodyRepository)
 	suggestionHandler := dochandler.NewSuggestionHandler(suggestionService)
 	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel))
 	publicBodyHandler := dochandler.NewPublicBodyHandler(publicBodyReader)
@@ -64,9 +62,6 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) func
 	docGroup.Post("/{id}/body/initialize", bodyHandler.InitializeBody)
 	docGroup.Get("/{id}/body", bodyHandler.GetBody)
 	docGroup.Get("/{id}/suggestions", suggestionHandler.List)
-	docGroup.Post("/{id}/suggestions", suggestionHandler.Propose)
-	docGroup.Post("/{id}/suggestions/{suggestionID}/reject", suggestionHandler.Reject)
-	docGroup.Post("/{id}/suggestions/{suggestionID}/accept", suggestionHandler.Accept)
 	docGroup.Post("/{id}/suggestions/{suggestionID}/replies", suggestionHandler.Reply)
 	docGroup.Post("/{id}/suggestions/{suggestionID}/resolve", suggestionHandler.Resolve)
 	docGroup.Post("/{id}/suggestions/{suggestionID}/reopen", suggestionHandler.Reopen)
