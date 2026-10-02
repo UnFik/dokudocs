@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from 'react'
 import { Edit3, Eye, FilePenLine } from 'lucide-react'
+import type { MarkdownPreviewMode } from '@/stores/editor-preference-store'
 import { cn } from '@/lib/utils'
 import {
   Tooltip,
@@ -7,7 +8,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
-export type EditorMode = 'view' | 'edit' | 'suggest'
+export type EditorMode = MarkdownPreviewMode
 
 export type ModeTabState = { disabledReason: string | null }
 
@@ -48,7 +49,8 @@ export function resolveMode(
   allowed: { canEdit: boolean; suggestEnabled: boolean }
 ): EditorMode {
   if (mode === 'edit' && !allowed.canEdit) return 'view'
-  if (mode === 'suggest' && !allowed.suggestEnabled) return 'view'
+  if (mode === 'suggest' && !allowed.suggestEnabled)
+    return allowed.canEdit ? 'edit' : 'view'
   return mode
 }
 

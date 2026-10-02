@@ -159,6 +159,12 @@ test("@live: typing in Suggest mode becomes a pending suggestion that an editor 
     );
     expect(overflow).toBeLessThanOrEqual(0);
 
+    await commenter.reload();
+    await expect(tab("Suggest")).toHaveAttribute("aria-selected", "true");
+    await expect(
+      commenter.getByRole("complementary", { name: "Suggestions" }),
+    ).toBeVisible();
+
     await page.goto(`/docs/${documentID}`);
     const ownerEditor = page.locator(".ProseMirror");
     await expect(ownerEditor).toContainText("Original phrase");
