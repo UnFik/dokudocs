@@ -39,7 +39,7 @@ export function HistoryButtons({
       <Button
         size='icon'
         variant='ghost'
-        className='size-8 max-sm:size-11'
+        className='size-8 max-sm:size-11 pointer-coarse:size-11'
         aria-label='Undo'
         title='Undo (Ctrl+Z)'
         disabled={disabled || !history.canUndo}
@@ -51,7 +51,7 @@ export function HistoryButtons({
       <Button
         size='icon'
         variant='ghost'
-        className='size-8 max-sm:size-11'
+        className='size-8 max-sm:size-11 pointer-coarse:size-11'
         aria-label='Redo'
         title='Redo (Ctrl+Shift+Z)'
         disabled={disabled || !history.canRedo}
@@ -136,7 +136,7 @@ export function SelectionToolbar({
             key={mark}
             size='icon'
             variant={inline.marks[mark] ? 'secondary' : 'ghost'}
-            className='size-8 max-sm:size-11'
+            className='size-8 max-sm:size-11 pointer-coarse:size-11'
             aria-label={label}
             aria-pressed={inline.marks[mark]}
             title={`${label} (${shortcut})`}
@@ -150,7 +150,7 @@ export function SelectionToolbar({
           <Button
             size='icon'
             variant='ghost'
-            className='size-8 max-sm:size-11'
+            className='size-8 max-sm:size-11 pointer-coarse:size-11'
             aria-label='Remove link'
             title='Remove link'
             onMouseDown={keepSelection}
@@ -162,7 +162,7 @@ export function SelectionToolbar({
         <Button
           size='icon'
           variant={inline.link ? 'secondary' : 'ghost'}
-          className='size-8 max-sm:size-11'
+          className='size-8 max-sm:size-11 pointer-coarse:size-11'
           aria-label='Link'
           aria-pressed={Boolean(inline.link)}
           title='Link (Ctrl+K)'
@@ -195,12 +195,17 @@ export function SelectionToolbar({
               autoFocus
               aria-label='Link address'
               aria-invalid={Boolean(error)}
-              className='h-8 w-40 sm:w-56'
+              className='h-8 w-40 max-sm:h-11 sm:w-56 pointer-coarse:h-11'
               placeholder='https://example.com'
               value={href}
               onChange={(event) => setHref(event.target.value)}
             />
-            <Button type='submit' size='sm' variant='default'>
+            <Button
+              type='submit'
+              size='sm'
+              variant='default'
+              className='max-sm:h-11 pointer-coarse:h-11'
+            >
               Apply link
             </Button>
           </div>
