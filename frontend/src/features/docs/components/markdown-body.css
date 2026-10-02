@@ -160,6 +160,17 @@
   pointer-events: none;
 }
 
+/* A 2px line needs 3:1 against the page. On the dark surface the saturated
+   collaborator colors fall to about 2.7 to 3.1, so the line (not the label,
+   which keeps its own text contrast) is lightened toward white. */
+.dark .markdown-body .remote-cursor {
+  border-left-color: color-mix(
+    in srgb,
+    var(--cursor-color, var(--signal)) 70%,
+    white
+  );
+}
+
 .markdown-body .remote-cursor::after {
   content: attr(data-name);
   position: absolute;
