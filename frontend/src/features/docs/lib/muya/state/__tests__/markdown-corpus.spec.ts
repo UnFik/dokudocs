@@ -48,4 +48,19 @@ describe('versioned Markdown compatibility corpus', () => {
       expect(inlineNodesToMarkdown(inline)).toBe(source)
     }
   )
+
+  for (const id of ['inline-opaque', 'inline-html-opaque']) {
+    it(`keeps ${id} opaque source byte-exact after editing the text around it`, () => {
+      const source = fixtures[`../fixtures/v1/${id}.md`]!
+      const edited = markdownToInlineNodes(source).map((node) =>
+        node.type === 'run' && node.content.startsWith('Keep ')
+          ? { ...node, content: node.content.replace('Keep ', 'Preserve ') }
+          : node
+      )
+
+      expect(inlineNodesToMarkdown(edited)).toBe(
+        source.replace('Keep ', 'Preserve ')
+      )
+    })
+  }
 })
