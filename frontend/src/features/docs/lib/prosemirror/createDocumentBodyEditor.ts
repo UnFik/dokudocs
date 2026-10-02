@@ -1,3 +1,4 @@
+import 'prosemirror-view/style/prosemirror.css'
 import { inputRules } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
 import {
