@@ -1,4 +1,4 @@
-import { EditorState, TextSelection } from 'prosemirror-state'
+import { AllSelection, EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { describe, expect, it } from 'vitest'
 import {
@@ -839,6 +839,43 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
       expect(errors).toEqual([])
       expect(batches).toEqual([['a', 'b', 'c']])
       expect(editor.getBody()).toEqual(body)
+      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+    }
+  })
+
+  it('deletes every block when everything is selected and deleted', async () => {
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const yStateBefore = Y.encodeStateAsUpdate(ydoc)
+    const batches: string[][] = []
+    const errors: unknown[] = []
+    const editor = createDocumentBodyEditor(
+      document.createElement('div'),
+      ydoc,
+      {
+        onDeleteNode: (nodeIDs) => {
+          batches.push(nodeIDs)
+        },
+        onTransactionError: (error) => errors.push(error),
+      }
+    )
+
+    try {
+      // Select all replaces the whole document node, not just its blocks.
+      editor.view.dispatch(
+        editor.view.state.tr
+          .setSelection(new AllSelection(editor.view.state.doc))
+          .deleteSelection()
+      )
+      await waitUntil(async () => batches.length === 1)
+
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['p1', 'p2']])
       expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
     } finally {
       editor.destroy()
