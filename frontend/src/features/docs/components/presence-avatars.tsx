@@ -1,24 +1,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { authorColor } from '../lib/author-color'
 import type { PresenceUser } from '../lib/collaboration-socket'
 
 const maxVisible = 4
-
-const palette = [
-  'bg-rose-500',
-  'bg-amber-500',
-  'bg-emerald-500',
-  'bg-sky-500',
-  'bg-violet-500',
-  'bg-fuchsia-500',
-  'bg-teal-500',
-  'bg-orange-500',
-]
-
-function colorFor(userID: string) {
-  let hash = 0
-  for (const char of userID) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return palette[hash % palette.length]
-}
 
 function initials(name: string | undefined) {
   const words = name?.trim().split(/\s+/).filter(Boolean) ?? []
@@ -48,13 +32,14 @@ export function PresenceAvatars({
         const label = `${user.name || 'Anonymous'}${user.userID === currentUserID ? ' (you)' : ''}`
         return (
           <li key={user.userID} aria-label={label} title={label}>
-            <Avatar className='size-6 ring-2 ring-background'>
+            <Avatar
+              className='size-6 border-2 ring-2 ring-background'
+              style={{ borderColor: authorColor(user.userID) }}
+            >
               {user.avatarURL ? (
                 <AvatarImage src={user.avatarURL} alt='' />
               ) : null}
-              <AvatarFallback
-                className={`${colorFor(user.userID)} text-[10px] font-semibold text-white`}
-              >
+              <AvatarFallback className='bg-muted text-[10px] font-semibold text-foreground'>
                 {initials(user.name)}
               </AvatarFallback>
             </Avatar>
