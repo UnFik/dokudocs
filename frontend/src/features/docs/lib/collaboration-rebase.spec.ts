@@ -132,4 +132,37 @@ describe('rebasePendingEdits', () => {
     expect(result.conflicts).toEqual([])
     expect(result.nodes.filter((n) => n.nodeID === 'r1b')).toHaveLength(1)
   })
+  it('applies clean edits and holds only the conflicting node when both kinds exist', () => {
+    const b = base()
+    const local = withContent(withContent(b, 'r1', 'hello world'), 'r2', 'mine')
+    const canonical = withContent(b, 'r2', 'theirs')
+    const result = rebasePendingEdits({ base: b, local, canonical })
+    expect(result.conflicts).toEqual([
+      { nodeID: 'r2', reason: 'concurrent-edit' },
+    ])
+    expect(result.applied).toBe(1)
+    expect(result.nodes.find((n) => n.nodeID === 'r1')?.content).toBe(
+      'hello world'
+    )
+    expect(result.nodes.find((n) => n.nodeID === 'r2')?.content).toBe('theirs')
+    expect(result.held).toEqual([
+      {
+        nodeID: 'r2',
+        reason: 'concurrent-edit',
+        local: local.find((n) => n.nodeID === 'r2'),
+        canonical: canonical.find((n) => n.nodeID === 'r2') ?? null,
+      },
+    ])
+  })
+
+  it('reports zero applied edits when everything conflicts', () => {
+    const canonical = without(base(), 'p1', 'r1')
+    const result = rebasePendingEdits({
+      base: base(),
+      local: withContent(base(), 'r1', 'x'),
+      canonical,
+    })
+    expect(result.applied).toBe(0)
+    expect(result.held[0]?.canonical).toBeNull()
+  })
 })

@@ -19,23 +19,34 @@ import {
 } from '@/lib/domain-api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
-import type { CollaborativeDocumentStatus } from '../lib/collaboration-provider'
+import {
+  executeDeleteNode,
+  executeMoveNode,
+  type CollaborativeDocumentStatus,
+} from '../lib/collaboration-provider'
 import {
   clearLocalMarkdown,
   loadOfflineMarkdownBody,
   recoverPendingMarkdown,
 } from '../lib/collaboration-recovery'
+import {
+  acceptHeldEdit,
+  loadReviewModel,
+  resolveHeldCommand,
+} from '../lib/collaboration-review'
 import type { PresenceUser } from '../lib/collaboration-socket'
-import type {
-  PendingDeleteNodeCommand,
-  PendingMoveNodeCommand,
-  PendingCollaborationUpdate,
+import {
+  IndexedDBCollaborationStore,
+  type PendingCollaborationUpdate,
+  type PendingDeleteNodeCommand,
+  type PendingMoveNodeCommand,
 } from '../lib/collaboration-store'
 import { mountCollaborativeDocumentBody } from '../lib/collaborative-document-body'
 import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
 } from '../lib/muya/state/documentBodyToMarkdown'
+import { ConflictReviewPanel } from './conflict-review-panel'
 import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
 import {
   emptyInlineState,
@@ -64,6 +75,7 @@ export function RemoteMarkdownDocEditor({
   focusNodeID?: string
 }) {
   const queryClient = useQueryClient()
+  const [localStateNonce, setLocalStateNonce] = useState(0)
   const bodyQuery = useQuery({
     queryKey: ['markdown-body', workspaceID, document.id, userID, offline],
     queryFn: async ({ signal }) => {
@@ -193,13 +205,14 @@ export function RemoteMarkdownDocEditor({
         </p>
       ) : bodyQuery.data ? (
         <CollaborativeMarkdownBody
-          key={`${document.id}:${bodyQuery.data.bodyEpoch}:${bodyQuery.data.bodyVersion}`}
+          key={`${document.id}:${bodyQuery.data.bodyEpoch}:${bodyQuery.data.bodyVersion}:${localStateNonce}`}
           documentID={document.id}
           workspaceID={workspaceID}
           userID={userID}
           offline={offline}
           snapshot={bodyQuery.data}
           focusNodeID={focusNodeID}
+          onLocalStateChanged={() => setLocalStateNonce((value) => value + 1)}
           onCanonicalBody={(body) =>
             queryClient.setQueryData(
               ['markdown-body', workspaceID, document.id, userID, offline],
@@ -269,6 +282,7 @@ function CollaborativeMarkdownBody({
   snapshot,
   focusNodeID,
   onCanonicalBody,
+  onLocalStateChanged,
   onMarkdownChange,
   onAccessUnavailable,
 }: {
@@ -279,6 +293,7 @@ function CollaborativeMarkdownBody({
   snapshot: Awaited<ReturnType<typeof getMarkdownBody>>
   focusNodeID?: string
   onCanonicalBody: (body: Awaited<ReturnType<typeof getMarkdownBody>>) => void
+  onLocalStateChanged: () => void
   onMarkdownChange: (markdown: string) => void
   onAccessUnavailable: () => void
 }) {
@@ -299,8 +314,11 @@ function CollaborativeMarkdownBody({
   const [error, setError] = useState('')
   const [presence, setPresence] = useState<PresenceUser[]>([])
   const [recoveryPendingCount, setRecoveryPendingCount] = useState(0)
-  const [isExportingRecovery, setIsExportingRecovery] = useState(false)
+  const [, setIsExportingRecovery] = useState(false)
+  const [hasHeldEdits, setHasHeldEdits] = useState(false)
+  const [reviewKey, setReviewKey] = useState(0)
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false)
+  const reviewStore = useMemo(() => new IndexedDBCollaborationStore(), [])
   const [history, setHistory] = useState<EditorHistoryState>({
     canUndo: false,
     canRedo: false,
@@ -325,6 +343,13 @@ function CollaborativeMarkdownBody({
     const mount = mountRef.current
     if (!mount) return
     let disposed = false
+
+    void new IndexedDBCollaborationStore()
+      .load({ userID, documentID })
+      .then((stored) => {
+        if (!disposed && stored.heldEdits.length) setHasHeldEdits(true)
+      })
+      .catch(() => {})
 
     void mountCollaborativeDocumentBody(mount, {
       documentID,
@@ -363,6 +388,7 @@ function CollaborativeMarkdownBody({
         setError(`Local changes need review (${reason}).`)
       },
       onCanonicalBody,
+      onHeldEdits: () => setHasHeldEdits(true),
       onDeleteNodeQueued: () =>
         setError('Block deletion is queued; editing is paused until it syncs.'),
       onMoveNodeQueued: () =>
@@ -502,21 +528,60 @@ function CollaborativeMarkdownBody({
           {error}
         </p>
       ) : null}
-      {status === 'recovery-required' && recoveryPendingCount > 0 ? (
-        <div className='flex items-center gap-3 border-b px-4 py-2'>
-          <p className='text-xs text-muted-foreground'>
-            Local changes were not applied to the current document version.
-          </p>
-          <Button
-            size='sm'
-            variant='outline'
-            className='ml-auto shrink-0'
-            disabled={isExportingRecovery}
-            onClick={() => void exportPendingChanges()}
-          >
-            {isExportingRecovery ? 'Checking access…' : 'Export local changes'}
-          </Button>
-        </div>
+      {(status === 'recovery-required' && recoveryPendingCount > 0) ||
+      hasHeldEdits ? (
+        <ConflictReviewPanel
+          key={reviewKey}
+          load={() =>
+            loadReviewModel({
+              scope: { userID, documentID },
+              includePendingDiff: statusRef.current === 'recovery-required',
+              store: reviewStore,
+              fetchBody: () => getMarkdownBody(workspaceID, documentID),
+            })
+          }
+          actions={{
+            copyText: (text) => navigator.clipboard.writeText(text),
+            acceptHeld: async (nodeID) => {
+              await acceptHeldEdit({
+                scope: { userID, documentID },
+                store: reviewStore,
+                nodeID,
+                fetchBody: () => getMarkdownBody(workspaceID, documentID),
+              })
+              onLocalStateChanged()
+            },
+            exportLocal: exportPendingChanges,
+            dismissHeld: async () => {
+              await reviewStore.clearHeldEdits({ userID, documentID })
+              setHasHeldEdits(false)
+            },
+            discardLocal: async () => {
+              const body = await getMarkdownBody(workspaceID, documentID)
+              await clearLocalMarkdown({ userID, documentID })
+              setHasHeldEdits(false)
+              setRecoveryPendingCount(0)
+              setError('')
+              onCanonicalBody(body)
+            },
+            resolveCommand: async (kind, commandID, choice) => {
+              const body = await resolveHeldCommand({
+                scope: { userID, documentID },
+                store: reviewStore,
+                kind,
+                commandID,
+                choice,
+                fetchBody: () => getMarkdownBody(workspaceID, documentID),
+                executeDelete: (command) =>
+                  executeDeleteNode(workspaceID, documentID, command),
+                executeMove: (command) =>
+                  executeMoveNode(workspaceID, documentID, command),
+              })
+              setReviewKey((value) => value + 1)
+              onCanonicalBody(body)
+            },
+          }}
+        />
       ) : null}
       <div className='markdown-body min-h-0 flex-1 overflow-auto p-6'>
         <div ref={mountRef} />
