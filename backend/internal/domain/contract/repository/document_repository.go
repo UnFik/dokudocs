@@ -60,4 +60,6 @@ type SuggestionRepository interface {
 	ListSuggestions(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.DocumentSuggestion, error)
 	RejectSuggestion(ctx context.Context, workspaceID, documentID, suggestionID, deciderID uuid.UUID) error
 	AcceptSuggestion(ctx context.Context, workspaceID, documentID, suggestionID, deciderID uuid.UUID) error
+	CreateSuggestionReply(ctx context.Context, workspaceID uuid.UUID, reply model.SuggestionReply) error
+	SetSuggestionResolved(ctx context.Context, workspaceID, documentID, suggestionID, actorID uuid.UUID, resolved bool) error
 }
