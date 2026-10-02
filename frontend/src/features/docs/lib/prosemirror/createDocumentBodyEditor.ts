@@ -90,7 +90,7 @@ export function createDocumentBodyEditor(
     nodeViews?: EditorProps['nodeViews']
     onEditorReady?: (view: EditorView) => void
     onBodyChange?: (body: DocumentBodyNode[]) => void
-    onDeleteNode?: (nodeID: string) => void | Promise<void>
+    onDeleteNode?: (nodeIDs: string[]) => void | Promise<void>
     onDeleteNodeQueued?: (nodeID: string) => void
     onMoveNode?: (move: MoveNodeIntent) => void | Promise<void>
     onMoveNodeQueued?: (move: MoveNodeIntent) => void
@@ -275,13 +275,13 @@ export function createDocumentBodyEditor(
     }
   }
   const viewHolder: { current?: EditorView } = {}
-  const queueDeleteNode = (nodeID: string) => {
+  const queueDeleteNode = (nodeIDs: string[]) => {
     if (!options.onDeleteNode) return false
     structuralCommandPending = true
     viewHolder.current?.setProps({ editable: () => false })
     void Promise.resolve()
-      .then(() => options.onDeleteNode!(nodeID))
-      .then(() => options.onDeleteNodeQueued?.(nodeID))
+      .then(() => options.onDeleteNode!(nodeIDs))
+      .then(() => options.onDeleteNodeQueued?.(nodeIDs[0]!))
       .catch((cause: unknown) => options.onTransactionError?.(cause))
     return true
   }
@@ -340,7 +340,7 @@ export function createDocumentBodyEditor(
     } catch (error) {
       if (
         error instanceof DeleteNodeRequiredError &&
-        queueDeleteNode(error.nodeID)
+        queueDeleteNode(error.nodeIDs)
       )
         return
       if (error instanceof MoveNodeRequiredError && options.onMoveNode) {
@@ -387,7 +387,7 @@ export function createDocumentBodyEditor(
         (event.key === 'Backspace' || event.key === 'Delete')
       ) {
         const nodeID = fullySelectedBlockNodeID(editorView.state.selection)
-        if (nodeID && queueDeleteNode(nodeID)) {
+        if (nodeID && queueDeleteNode([nodeID])) {
           event.preventDefault()
           return true
         }
@@ -428,12 +428,21 @@ export function createDocumentBodyEditor(
     },
   })
   viewHolder.current = view
+  // Deleting every block leaves an empty body; give the user a line to type on.
+  const ensureEmptyParagraph = () => {
+    const body = state.doc.firstChild
+    if (!canEdit() || suggestMode || body?.childCount !== 0) return
+    view.dispatch(
+      state.tr.insert(1, documentBodySchema.nodes.paragraph!.create())
+    )
+  }
   options.onEditorReady?.(view)
   if (view.state !== state) view.updateState(state)
   const undoManager = yUndoPluginKey.getState(state)?.undoManager
   undoManager?.on('stack-item-added', publishHistory)
   undoManager?.on('stack-item-popped', publishHistory)
   undoManager?.on('stack-cleared', publishHistory)
+  ensureEmptyParagraph()
 
   return {
     view,
@@ -514,6 +523,7 @@ export function createDocumentBodyEditor(
     setReadOnly: (next: boolean) => {
       readOnly = next
       view.setProps({ editable: () => !readOnly && !structuralCommandPending })
+      if (!next) ensureEmptyParagraph()
     },
     destroy: () => {
       undoManager?.off('stack-item-added', publishHistory)

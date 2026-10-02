@@ -15,8 +15,8 @@ function suggestEditor(...texts: string[]) {
   const deletes: string[] = []
   const mounted = mountTestEditor(paragraphsBody(...texts), {
     onSuggestTransaction: (result) => results.push(result),
-    onDeleteNode: (nodeID) => {
-      deletes.push(nodeID)
+    onDeleteNode: (nodeIDs) => {
+      deletes.push(...nodeIDs)
     },
   })
   mounted.editor.setSuggestMode(true)

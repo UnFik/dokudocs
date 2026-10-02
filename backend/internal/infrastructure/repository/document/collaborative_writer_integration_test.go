@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -492,7 +493,7 @@ func TestMoveNodeCommitsReceiptAndFencesOldEpoch(t *testing.T) {
 	}
 
 	retry, err := writer.MoveNode(ctx, actor, command)
-	if err != nil || retry != first {
+	if err != nil || !reflect.DeepEqual(retry, first) {
 		t.Fatalf("retry MoveNode() = (%+v, %v), want original receipt %+v", retry, err, first)
 	}
 	reusedID := command
@@ -598,7 +599,7 @@ func TestDeleteNodeCommitsReceiptAndFencesOldEpoch(t *testing.T) {
 	if !first.Changed || first.BodyVersion != 2 || first.BodyEpoch != 2 {
 		t.Fatalf("DeleteNode receipt = %+v, want changed at version/epoch 2", first)
 	}
-	if retry, err := writer.DeleteNode(ctx, actor, command); err != nil || retry != first {
+	if retry, err := writer.DeleteNode(ctx, actor, command); err != nil || !reflect.DeepEqual(retry, first) {
 		t.Fatalf("retry DeleteNode() = (%+v, %v), want original receipt %+v", retry, err, first)
 	}
 	reusedID := command
@@ -698,4 +699,133 @@ func readCollaborationState(ctx context.Context, db *sql.DB, documentID uuid.UUI
 	var state []byte
 	err := db.QueryRowContext(ctx, `SELECT encoded_state FROM document_collab_states WHERE document_id = $1`, documentID).Scan(&state)
 	return state, err
+}
+
+func TestDeleteNodesRemovesSeveralBlocksInOneEpoch(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("pgx", integrationDatabaseURL(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID := insertAccessTestUser(t, ctx, db)
+	workspaceID, documentID := uuid.New(), uuid.New()
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM workspaces WHERE id = $1`, workspaceID)
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM users WHERE id = $1`, userID)
+		_ = db.Close()
+	})
+	if _, err := db.ExecContext(ctx, `INSERT INTO workspaces (id, name, slug, created_by) VALUES ($1, 'DeleteNodes test', $2, $3)`, workspaceID, "delete-nodes-"+workspaceID.String(), userID); err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, workspaceID, userID); err != nil {
+		t.Fatalf("add workspace owner: %v", err)
+	}
+	rootID, firstID, secondID, thirdID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	body := documentbody.Body{DocumentID: documentID, RootNodeID: rootID, Nodes: []documentbody.Node{
+		{DocumentID: documentID, NodeID: rootID, Type: "document", Attributes: []byte(`{}`), Version: 1},
+		{DocumentID: documentID, NodeID: firstID, ParentID: &rootID, SiblingOrder: 1, Type: "paragraph", Content: "one", Attributes: []byte(`{}`), Version: 1},
+		{DocumentID: documentID, NodeID: secondID, ParentID: &rootID, SiblingOrder: 2, Type: "paragraph", Content: "two", Attributes: []byte(`{}`), Version: 1},
+		{DocumentID: documentID, NodeID: thirdID, ParentID: &rootID, SiblingOrder: 3, Type: "paragraph", Content: "three", Attributes: []byte(`{}`), Version: 1},
+	}}
+	state, err := yjs.EncodeBodyV1(body)
+	if err != nil {
+		t.Fatalf("encode initial body: %v", err)
+	}
+	if err := seedCollaborativeDocument(ctx, db, workspaceID, documentID, userID, body, state); err != nil {
+		t.Fatalf("seed collaborative document: %v", err)
+	}
+	writer := NewRepository(database.NewSQLDB(db))
+	actor := collaboration.Actor{UserID: userID}
+	command := collaboration.DeleteNodeCommand{
+		WorkspaceID: workspaceID, DocumentID: documentID, CommandID: uuid.New(),
+		BodyEpoch: 1, BodySchemaVersion: yjs.BodySchemaVersionV1, NodeIDs: []uuid.UUID{firstID, thirdID},
+	}
+	first, err := writer.DeleteNode(ctx, actor, command)
+	if err != nil {
+		t.Fatalf("DeleteNode() batch: %v", err)
+	}
+	if !first.Changed || first.BodyVersion != 2 || first.BodyEpoch != 2 || len(first.NodeIDs) != 2 {
+		t.Fatalf("batch receipt = %+v, want one change at version/epoch 2 naming both nodes", first)
+	}
+	if retry, err := writer.DeleteNode(ctx, actor, command); err != nil || !reflect.DeepEqual(retry, first) {
+		t.Fatalf("retry batch = (%+v, %v), want original receipt %+v", retry, err, first)
+	}
+	changed := command
+	changed.NodeIDs = []uuid.UUID{firstID, secondID}
+	if _, err := writer.DeleteNode(ctx, actor, changed); !errors.Is(err, collaboration.ErrDeleteCommandReplay) {
+		t.Fatalf("reused command ID with other nodes = %v, want %v", err, collaboration.ErrDeleteCommandReplay)
+	}
+	stale := changed
+	stale.CommandID = uuid.New()
+	if _, err := writer.DeleteNode(ctx, actor, stale); !errors.Is(err, collaboration.ErrStaleBodyEpoch) {
+		t.Fatalf("batch at the old epoch = %v, want %v", err, collaboration.ErrStaleBodyEpoch)
+	}
+
+	snapshot, err := writer.ReadBody(ctx, actor, workspaceID, documentID)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if snapshot.BodyEpoch != 2 || len(snapshot.Body.Nodes) != 2 {
+		t.Fatalf("body = %+v at epoch %d, want root and the second paragraph only", snapshot.Body.Nodes, snapshot.BodyEpoch)
+	}
+
+	// Deleting every remaining block leaves an empty document.
+	all := collaboration.DeleteNodeCommand{
+		WorkspaceID: workspaceID, DocumentID: documentID, CommandID: uuid.New(),
+		BodyEpoch: 2, BodySchemaVersion: yjs.BodySchemaVersionV1, NodeID: secondID,
+	}
+	if _, err := writer.DeleteNode(ctx, actor, all); err != nil {
+		t.Fatalf("delete the last block: %v", err)
+	}
+	snapshot, err = writer.ReadBody(ctx, actor, workspaceID, documentID)
+	if err != nil || len(snapshot.Body.Nodes) != 1 || snapshot.BodyEpoch != 3 {
+		t.Fatalf("emptied body = (%+v, %v), want only the root at epoch 3", snapshot.Body.Nodes, err)
+	}
+}
+
+func TestDeleteNodesIsAllOrNothing(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("pgx", integrationDatabaseURL(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID := insertAccessTestUser(t, ctx, db)
+	workspaceID, documentID := uuid.New(), uuid.New()
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM workspaces WHERE id = $1`, workspaceID)
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM users WHERE id = $1`, userID)
+		_ = db.Close()
+	})
+	if _, err := db.ExecContext(ctx, `INSERT INTO workspaces (id, name, slug, created_by) VALUES ($1, 'DeleteNodes atomic', $2, $3)`, workspaceID, "delete-nodes-atomic-"+workspaceID.String(), userID); err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, workspaceID, userID); err != nil {
+		t.Fatalf("add workspace owner: %v", err)
+	}
+	rootID, paragraphID, opaqueID := uuid.New(), uuid.New(), uuid.New()
+	body := documentbody.Body{DocumentID: documentID, RootNodeID: rootID, Nodes: []documentbody.Node{
+		{DocumentID: documentID, NodeID: rootID, Type: "document", Attributes: []byte(`{}`), Version: 1},
+		{DocumentID: documentID, NodeID: paragraphID, ParentID: &rootID, SiblingOrder: 1, Type: "paragraph", Content: "kept", Attributes: []byte(`{}`), Version: 1},
+		{DocumentID: documentID, NodeID: opaqueID, ParentID: &rootID, SiblingOrder: 2, Type: "opaque", Content: "source", Attributes: []byte(`{}`), Version: 1},
+	}}
+	state, err := yjs.EncodeBodyV1(body)
+	if err != nil {
+		t.Fatalf("encode initial body: %v", err)
+	}
+	if err := seedCollaborativeDocument(ctx, db, workspaceID, documentID, userID, body, state); err != nil {
+		t.Fatalf("seed collaborative document: %v", err)
+	}
+	writer := NewRepository(database.NewSQLDB(db))
+	actor := collaboration.Actor{UserID: userID}
+	_, err = writer.DeleteNode(ctx, actor, collaboration.DeleteNodeCommand{
+		WorkspaceID: workspaceID, DocumentID: documentID, CommandID: uuid.New(),
+		BodyEpoch: 1, BodySchemaVersion: yjs.BodySchemaVersionV1, NodeIDs: []uuid.UUID{paragraphID, opaqueID},
+	})
+	if !errors.Is(err, collaboration.ErrInvalidDeleteNode) {
+		t.Fatalf("batch containing an opaque node = %v, want %v", err, collaboration.ErrInvalidDeleteNode)
+	}
+	snapshot, err := writer.ReadBody(ctx, actor, workspaceID, documentID)
+	if err != nil || snapshot.BodyEpoch != 1 || len(snapshot.Body.Nodes) != 3 {
+		t.Fatalf("body after the refused batch = (%+v, %v) at epoch %d, want it untouched", snapshot.Body.Nodes, err, snapshot.BodyEpoch)
+	}
 }
