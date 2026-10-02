@@ -19,6 +19,7 @@ import * as monaco from 'monaco-editor'
 import { toast } from 'sonner'
 import {
   type EditorViewMode,
+  type MarkdownPreviewMode,
   useEditorPreferenceStore,
 } from '@/stores/editor-preference-store'
 import { getLocalUserScope, isLocalUserScopeCurrent } from '@/lib/user-storage'
@@ -591,7 +592,7 @@ export function UnifiedMonacoEditor({
   }
 
   const handleSwitchViewMode = useCallback(
-    (newViewMode: EditorViewMode, newPreviewMode?: 'view' | 'edit') => {
+    (newViewMode: EditorViewMode, newPreviewMode?: MarkdownPreviewMode) => {
       if (editorRef.current) {
         const val = editorRef.current.getValue()
         if (val !== lastEmittedValueRef.current) {

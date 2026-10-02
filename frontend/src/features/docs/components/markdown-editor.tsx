@@ -73,7 +73,10 @@ export function MarkdownEditor({
   const setViewMode = useEditorPreferenceStore((state) => state.setViewMode)
 
   const showToc = userPreference?.showOutline ?? false
-  const previewMode = userPreference?.previewMode ?? 'edit'
+  // The local editor has no suggestions; a stored Suggest mode shows as View.
+  const storedPreviewMode = userPreference?.previewMode ?? 'edit'
+  const previewMode =
+    storedPreviewMode === 'suggest' ? 'view' : storedPreviewMode
 
   const handleContentChange = (newContent: string) => {
     onChange(newContent)

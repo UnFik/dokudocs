@@ -112,6 +112,16 @@ describe('Editor Mode Switching & Store Mutation Persistence', () => {
     expect(codeDoc?.content).toBe('# Modified in Monaco\n\nTyping code here.')
   })
 
+  it('stores the suggest preview mode per user', () => {
+    act(() => {
+      useEditorPreferenceStore.getState().setPreviewMode('test-user', 'suggest')
+    })
+    expect(
+      useEditorPreferenceStore.getState().preferencesByUser['test-user']
+        ?.previewMode
+    ).toBe('suggest')
+  })
+
   it('switches previewMode between view and edit cleanly', async () => {
     const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'))
 

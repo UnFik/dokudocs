@@ -36,6 +36,31 @@ describe('Document Editors (Markdown, DBML, Mermaid)', () => {
         .toBeInTheDocument()
     })
 
+    it('treats a stored suggest mode as View in the local editor', async () => {
+      useEditorPreferenceStore.getState().setPreviewMode('guest', 'suggest')
+      useEditorPreferenceStore.getState().setViewMode('guest', 'preview')
+      const screen = await render(
+        <MarkdownEditor
+          docId='doc-md-suggest'
+          content='# Hello'
+          onChange={vi.fn()}
+        />
+      )
+      await expect
+        .element(screen.getByTestId('preview-mode-view'))
+        .toHaveClass('font-semibold')
+      await expect
+        .element(screen.getByTestId('preview-mode-edit'))
+        .not.toHaveClass('font-semibold')
+      await expect
+        .poll(() =>
+          document.querySelector('.muya-container [contenteditable="true"]')
+        )
+        .toBeNull()
+      useEditorPreferenceStore.getState().setPreviewMode('guest', 'edit')
+      await screen.unmount()
+    })
+
     it('preserves Markdown when switching between source editor and preview', async () => {
       const handleChange = vi.fn()
       const initialContent = '# Initial heading\n\nInitial paragraph.\n'

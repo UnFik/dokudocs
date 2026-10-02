@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
-import { Eye, Edit3 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
@@ -46,6 +45,12 @@ import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
 } from '../lib/muya/state/documentBodyToMarkdown'
+import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
+import {
+  emptyInlineState,
+  type InlineMarkName,
+  type InlineState,
+} from '../lib/prosemirror/inlineMarks'
 import {
   buildDeleteBlockSuggestion,
   buildFormatSuggestion,
@@ -55,21 +60,21 @@ import {
   overlayCss,
   pendingOverlay,
   type FormatMark,
+  type TextEditTranslation,
   type SuggestionDraft,
 } from '../lib/suggestion-operations'
 import { ConflictReviewPanel } from './conflict-review-panel'
-import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
-import {
-  emptyInlineState,
-  type InlineMarkName,
-  type InlineState,
-} from '../lib/prosemirror/inlineMarks'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
 import { EditorHeader } from './editor-header'
+import {
+  EditorModeTabs,
+  modeTabStates,
+  resolveMode,
+  type EditorMode,
+} from './editor-mode-tabs'
 import './markdown-body.css'
 import { MuyaEditor } from './muya-editor/MuyaEditor'
-import { PresenceAvatars } from './presence-avatars'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
 export function RemoteMarkdownDocEditor({
@@ -165,6 +170,7 @@ export function RemoteMarkdownDocEditor({
   }, [bodyQuery.data, document.content])
   const markdown = markdownOverride ?? canonicalMarkdown
   const [accessUnavailable, setAccessUnavailable] = useState(false)
+  const [presence, setPresence] = useState<PresenceUser[]>([])
   const restoreRevision = (revision: DocumentRevision) => {
     const requestID =
       restoreRequestIDs.current.get(revision.id) ?? crypto.randomUUID()
@@ -186,6 +192,8 @@ export function RemoteMarkdownDocEditor({
         isDirty={false}
         lastSaved={new Date(document.updatedAt)}
         onTitleChange={(title) => titleMutation.mutate(title)}
+        presenceUsers={presence}
+        currentUserID={userID}
         titleReadOnly={offline || !bodyQuery.data?.canEdit || accessUnavailable}
         onToggleHistory={
           offline ? undefined : () => setIsHistoryOpen((open) => !open)
@@ -231,6 +239,7 @@ export function RemoteMarkdownDocEditor({
             )
           }
           onMarkdownChange={setMarkdownOverride}
+          onPresence={setPresence}
           onAccessUnavailable={() => {
             setAccessUnavailable(true)
             setMarkdownOverride('')
@@ -295,6 +304,7 @@ function CollaborativeMarkdownBody({
   onCanonicalBody,
   onLocalStateChanged,
   onMarkdownChange,
+  onPresence,
   onAccessUnavailable,
 }: {
   documentID: string
@@ -306,15 +316,20 @@ function CollaborativeMarkdownBody({
   onCanonicalBody: (body: Awaited<ReturnType<typeof getMarkdownBody>>) => void
   onLocalStateChanged: () => void
   onMarkdownChange: (markdown: string) => void
+  onPresence: (users: PresenceUser[]) => void
   onAccessUnavailable: () => void
 }) {
   const mountRef = useRef<HTMLDivElement>(null)
   const sessionRef = useRef<Awaited<
     ReturnType<typeof mountCollaborativeDocumentBody>
   > | null>(null)
-  const mode = useEditorPreferenceStore(
+  const storedMode = useEditorPreferenceStore(
     (state) => state.preferencesByUser[userID || 'guest']?.previewMode ?? 'edit'
   )
+  // The stored mode is the user's choice. When it cannot be used right now
+  // (offline, no suggest access) the editor shows a fallback and leaves the
+  // stored value alone, so Suggest returns once it is possible again.
+  const requestedMode: EditorMode = storedMode
   const setPreviewMode = useEditorPreferenceStore(
     (state) => state.setPreviewMode
   )
@@ -323,7 +338,6 @@ function CollaborativeMarkdownBody({
   const statusRef = useRef(status)
   const [canEdit, setCanEdit] = useState(snapshot.canEdit)
   const [error, setError] = useState('')
-  const [presence, setPresence] = useState<PresenceUser[]>([])
   const [recoveryPendingCount, setRecoveryPendingCount] = useState(0)
   const [, setIsExportingRecovery] = useState(false)
   const [hasHeldEdits, setHasHeldEdits] = useState(false)
@@ -336,8 +350,74 @@ function CollaborativeMarkdownBody({
   })
   const [inline, setInline] = useState<InlineState>(emptyInlineState)
   const [linkRequest, setLinkRequest] = useState(0)
-  const modeRef = useRef(mode)
+  const modeRef = useRef<EditorMode>(requestedMode)
+  const lastEffectiveRef = useRef<EditorMode | null>(null)
   const canEditRef = useRef(canEdit)
+  const suggestEnabled =
+    Boolean(snapshot.canSuggest) && !offline && status === 'ready'
+  const mode = resolveMode(requestedMode, { canEdit, suggestEnabled })
+  const queryClient = useQueryClient()
+
+  const applyEditorMode = () => {
+    const editor = sessionRef.current?.editor
+    if (!editor) return
+    // The collaboration session locks the editor itself in these states.
+    if (
+      statusRef.current === 'closed' ||
+      statusRef.current === 'recovery-required'
+    )
+      return
+    const effective = resolveMode(modeRef.current, {
+      canEdit: canEditRef.current,
+      suggestEnabled:
+        Boolean(snapshot.canSuggest) &&
+        !offline &&
+        statusRef.current === 'ready',
+    })
+    editor.setSuggestMode(effective === 'suggest')
+    editor.setReadOnly(effective === 'view')
+    if (effective === 'suggest' && lastEffectiveRef.current !== 'suggest')
+      setIsSuggestionsOpen(true)
+    lastEffectiveRef.current = effective
+  }
+
+  function submitTypedSuggestion(result: TextEditTranslation) {
+    if (!result.ok) {
+      toast.error(result.message)
+      return
+    }
+    const operation = result.draft.operations[0]
+    const original = sessionRef.current?.editor
+      .getBody()
+      .find((node) => node.nodeID === operation?.nodeID)?.content
+    void (async () => {
+      try {
+        const latest = await getMarkdownBody(workspaceID, documentID)
+        const current = latest.nodes.find(
+          (node) => node.nodeID === operation?.nodeID
+        )
+        if (!latest.canSuggest || current?.content !== original)
+          throw new Error('The text changed while you were typing; try again')
+        await createDocumentSuggestion(workspaceID, documentID, {
+          suggestionID: crypto.randomUUID(),
+          baseBodyVersion: latest.bodyVersion,
+          baseBodyEpoch: latest.bodyEpoch,
+          operationSchemaVersion: 1,
+          provenance: 'human',
+          operations: result.draft.operations,
+          summary: result.draft.summary,
+        })
+        await queryClient.invalidateQueries({
+          queryKey: ['document-suggestions', workspaceID, documentID],
+        })
+        toast.success('Suggestion submitted', { id: 'typed-suggestion' })
+      } catch (cause) {
+        toast.error(
+          cause instanceof Error ? cause.message : 'Could not submit suggestion'
+        )
+      }
+    })()
+  }
 
   function hideBodyAfterAccessLoss(clearStoredData: boolean) {
     setRecoveryPendingCount(0)
@@ -369,7 +449,12 @@ function CollaborativeMarkdownBody({
       token: () => useAuthStore.getState().auth.accessToken,
       snapshot,
       focusNodeID,
-      readOnly: modeRef.current === 'view',
+      readOnly:
+        resolveMode(modeRef.current, {
+          canEdit: snapshot.canEdit,
+          suggestEnabled: false,
+        }) === 'view',
+      onSuggestTransaction: submitTypedSuggestion,
       onStatus: (next) => {
         statusRef.current = next
         setStatus(next)
@@ -379,15 +464,15 @@ function CollaborativeMarkdownBody({
         } else if (next === 'unauthorized') {
           hideBodyAfterAccessLoss(false)
           setError('Sign in again to load this document.')
+        } else {
+          applyEditorMode()
         }
       },
-      onPresence: setPresence,
+      onPresence,
       onCanEdit: (next) => {
         canEditRef.current = next
         setCanEdit(next)
-        sessionRef.current?.editor.setReadOnly(
-          modeRef.current === 'view' || !next
-        )
+        applyEditorMode()
       },
       onRecovery: (
         reason,
@@ -426,12 +511,12 @@ function CollaborativeMarkdownBody({
         }
         sessionRef.current = session
         onMarkdownChange(documentBodyToMarkdown(session.editor.getBody()))
-        session.editor.setReadOnly(
-          modeRef.current === 'view' ||
-            !canEditRef.current ||
-            statusRef.current === 'closed' ||
-            statusRef.current === 'recovery-required'
+        applyEditorMode()
+        if (
+          statusRef.current === 'closed' ||
+          statusRef.current === 'recovery-required'
         )
+          session.editor.setReadOnly(true)
       })
       .catch((cause) => {
         if (!disposed)
@@ -447,12 +532,10 @@ function CollaborativeMarkdownBody({
     }
   })
 
-  const changeMode = (next: 'view' | 'edit') => {
+  const changeMode = (next: EditorMode) => {
     modeRef.current = next
     setPreviewMode(userID, next)
-    sessionRef.current?.editor.setReadOnly(
-      next === 'view' || !canEditRef.current
-    )
+    applyEditorMode()
   }
 
   const exportPendingChanges = async () => {
@@ -492,24 +575,22 @@ function CollaborativeMarkdownBody({
     }
   }
 
+  const showSuggestionPanel =
+    !offline && status !== 'forbidden' && status !== 'unauthorized'
+
   return (
     <section className='flex min-h-0 flex-1 flex-col'>
-      <div className='flex items-center gap-2 border-b px-4 py-2'>
-        <Button
-          size='sm'
-          variant={mode === 'view' ? 'secondary' : 'ghost'}
-          onClick={() => changeMode('view')}
-        >
-          <Eye /> View
-        </Button>
-        <Button
-          size='sm'
-          variant={mode === 'edit' ? 'secondary' : 'ghost'}
-          disabled={!canEdit}
-          onClick={() => changeMode('edit')}
-        >
-          <Edit3 /> Edit
-        </Button>
+      <div className='flex flex-wrap items-center gap-2 border-b px-4 py-2'>
+        <EditorModeTabs
+          mode={mode}
+          states={modeTabStates({
+            canEdit,
+            canSuggest: Boolean(snapshot.canSuggest),
+            online: !offline,
+            synced: status === 'ready',
+          })}
+          onChange={changeMode}
+        />
         {mode === 'edit' && canEdit ? (
           <HistoryButtons
             history={history}
@@ -524,7 +605,18 @@ function CollaborativeMarkdownBody({
           />
         ) : null}
         <div className='ml-auto flex items-center gap-3'>
-          <PresenceAvatars users={presence} currentUserID={userID} />
+          {showSuggestionPanel ? (
+            <Button
+              size='sm'
+              variant='outline'
+              className='h-11 md:h-8'
+              aria-expanded={isSuggestionsOpen}
+              aria-controls='suggestion-panel'
+              onClick={() => setIsSuggestionsOpen((open) => !open)}
+            >
+              {isSuggestionsOpen ? 'Hide suggestions' : 'Suggestions'}
+            </Button>
+          ) : null}
           <span role='status' className='text-xs text-muted-foreground'>
             {status === 'ready'
               ? 'Synced'
@@ -594,50 +686,52 @@ function CollaborativeMarkdownBody({
           }}
         />
       ) : null}
-      <div className='markdown-body min-h-0 flex-1 overflow-auto p-6'>
-        <div ref={mountRef} />
+      <div className='flex min-h-0 flex-1 flex-col md:flex-row'>
+        <div className='markdown-body min-h-0 min-w-0 flex-1 overflow-auto p-6'>
+          <div ref={mountRef} />
+        </div>
+        {mode === 'edit' && canEdit ? (
+          <SelectionToolbar
+            inline={inline}
+            linkRequest={linkRequest}
+            onToggleMark={(mark: InlineMarkName) => {
+              sessionRef.current?.editor.toggleMark(mark)
+              sessionRef.current?.editor.focus()
+            }}
+            onSetLink={(href) => {
+              const applied = sessionRef.current?.editor.setLink(href) ?? false
+              if (applied) sessionRef.current?.editor.focus()
+              return applied
+            }}
+            onRemoveLink={() => {
+              sessionRef.current?.editor.removeLink()
+              sessionRef.current?.editor.focus()
+            }}
+          />
+        ) : null}
+        {showSuggestionPanel ? (
+          <SuggestionPanel
+            open={isSuggestionsOpen}
+            onOpenChange={setIsSuggestionsOpen}
+            workspaceID={workspaceID}
+            documentID={documentID}
+            canDecide={canEdit}
+            canSuggest={Boolean(snapshot.canSuggest) && status === 'ready'}
+            captureBlock={() => {
+              if (!mountRef.current) throw new Error('Editor is not ready')
+              return captureSelectedNodeID(mountRef.current)
+            }}
+            captureSelection={() => {
+              if (!mountRef.current || !sessionRef.current)
+                throw new Error('Editor is not ready')
+              return captureSelectedRun(
+                mountRef.current,
+                sessionRef.current.editor.getBody()
+              )
+            }}
+          />
+        ) : null}
       </div>
-      {mode === 'edit' && canEdit ? (
-        <SelectionToolbar
-          inline={inline}
-          linkRequest={linkRequest}
-          onToggleMark={(mark: InlineMarkName) => {
-            sessionRef.current?.editor.toggleMark(mark)
-            sessionRef.current?.editor.focus()
-          }}
-          onSetLink={(href) => {
-            const applied = sessionRef.current?.editor.setLink(href) ?? false
-            if (applied) sessionRef.current?.editor.focus()
-            return applied
-          }}
-          onRemoveLink={() => {
-            sessionRef.current?.editor.removeLink()
-            sessionRef.current?.editor.focus()
-          }}
-        />
-      ) : null}
-      {!offline && status !== 'forbidden' && status !== 'unauthorized' ? (
-        <SuggestionPanel
-          open={isSuggestionsOpen}
-          onOpenChange={setIsSuggestionsOpen}
-          workspaceID={workspaceID}
-          documentID={documentID}
-          canDecide={canEdit}
-          canSuggest={Boolean(snapshot.canSuggest) && status === 'ready'}
-          captureBlock={() => {
-            if (!mountRef.current) throw new Error('Editor is not ready')
-            return captureSelectedNodeID(mountRef.current)
-          }}
-          captureSelection={() => {
-            if (!mountRef.current || !sessionRef.current)
-              throw new Error('Editor is not ready')
-            return captureSelectedRun(
-              mountRef.current,
-              sessionRef.current.editor.getBody()
-            )
-          }}
-        />
-      ) : null}
     </section>
   )
 }
@@ -838,266 +932,269 @@ function SuggestionPanel({
   }
   const overlay = overlayCss(pendingOverlay(suggestionsQuery.data ?? []))
   return (
-    <aside className='border-t bg-muted/20'>
+    <>
       {overlay ? <style>{overlay}</style> : null}
-      <div className='flex flex-wrap items-center gap-2 px-4 py-2'>
-        <Button size='sm' variant='outline' onClick={() => onOpenChange(!open)}>
-          {open ? 'Hide suggestions' : 'Suggestions'}
-        </Button>
-        {canSuggest ? (
-          <Button
-            size='sm'
-            variant='outline'
-            onClick={() => {
-              try {
-                const selection = captureSelection()
-                setDraft(selection)
-                setReplacement(selection.selectedText)
-                onOpenChange(true)
-              } catch (error) {
-                toast.error(
-                  error instanceof Error ? error.message : 'Select text first'
-                )
-              }
-            }}
-          >
-            Suggest change
-          </Button>
-        ) : null}
-        {canSuggest ? (
-          <div
-            className='flex flex-wrap items-center gap-2'
-            role='group'
-            aria-label='Propose a change to the current block'
-          >
-            {(['bold', 'italic'] as FormatMark[]).map((mark) => (
+      {open ? (
+        <aside
+          id='suggestion-panel'
+          aria-label='Suggestions'
+          className='max-h-[40vh] min-w-0 shrink-0 overflow-auto border-t bg-card md:max-h-none md:w-80 md:border-t-0 md:border-l'
+        >
+          <div className='flex flex-wrap items-center gap-2 px-4 py-2'>
+            {canSuggest ? (
               <Button
-                key={mark}
                 size='sm'
                 variant='outline'
-                disabled={structureMutation.isPending}
-                onClick={() =>
-                  propose((nodes, nodeID) =>
-                    buildFormatSuggestion(nodes, nodeID, mark)
-                  )
-                }
+                onClick={() => {
+                  try {
+                    const selection = captureSelection()
+                    setDraft(selection)
+                    setReplacement(selection.selectedText)
+                    onOpenChange(true)
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : 'Select text first'
+                    )
+                  }
+                }}
               >
-                Suggest {mark}
+                Suggest change
               </Button>
-            ))}
-            <Button
-              size='sm'
-              variant='outline'
-              disabled={structureMutation.isPending}
-              onClick={() =>
-                propose((nodes, nodeID) =>
-                  buildMoveBlockSuggestion(nodes, nodeID, 'up')
-                )
-              }
-            >
-              Suggest move up
-            </Button>
-            <Button
-              size='sm'
-              variant='outline'
-              disabled={structureMutation.isPending}
-              onClick={() =>
-                propose((nodes, nodeID) =>
-                  buildMoveBlockSuggestion(nodes, nodeID, 'down')
-                )
-              }
-            >
-              Suggest move down
-            </Button>
-            <Button
-              size='sm'
-              variant='outline'
-              onClick={() => {
-                try {
-                  setInsertAnchor(captureBlock())
-                  onOpenChange(true)
-                } catch (error) {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : 'Select a block first'
-                  )
-                }
-              }}
-            >
-              Suggest insert below
-            </Button>
-            <Button
-              size='sm'
-              variant='outline'
-              disabled={structureMutation.isPending}
-              onClick={() => propose(buildDeleteBlockSuggestion)}
-            >
-              Suggest delete block
-            </Button>
+            ) : null}
+            {canSuggest ? (
+              <div
+                className='flex flex-wrap items-center gap-2'
+                role='group'
+                aria-label='Propose a change to the current block'
+              >
+                {(['bold', 'italic'] as FormatMark[]).map((mark) => (
+                  <Button
+                    key={mark}
+                    size='sm'
+                    variant='outline'
+                    disabled={structureMutation.isPending}
+                    onClick={() =>
+                      propose((nodes, nodeID) =>
+                        buildFormatSuggestion(nodes, nodeID, mark)
+                      )
+                    }
+                  >
+                    Suggest {mark}
+                  </Button>
+                ))}
+                <Button
+                  size='sm'
+                  variant='outline'
+                  disabled={structureMutation.isPending}
+                  onClick={() =>
+                    propose((nodes, nodeID) =>
+                      buildMoveBlockSuggestion(nodes, nodeID, 'up')
+                    )
+                  }
+                >
+                  Suggest move up
+                </Button>
+                <Button
+                  size='sm'
+                  variant='outline'
+                  disabled={structureMutation.isPending}
+                  onClick={() =>
+                    propose((nodes, nodeID) =>
+                      buildMoveBlockSuggestion(nodes, nodeID, 'down')
+                    )
+                  }
+                >
+                  Suggest move down
+                </Button>
+                <Button
+                  size='sm'
+                  variant='outline'
+                  onClick={() => {
+                    try {
+                      setInsertAnchor(captureBlock())
+                      onOpenChange(true)
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : 'Select a block first'
+                      )
+                    }
+                  }}
+                >
+                  Suggest insert below
+                </Button>
+                <Button
+                  size='sm'
+                  variant='outline'
+                  disabled={structureMutation.isPending}
+                  onClick={() => propose(buildDeleteBlockSuggestion)}
+                >
+                  Suggest delete block
+                </Button>
+              </div>
+            ) : null}
+            <span className='text-xs text-muted-foreground'>
+              Pending changes stay outside the canonical body until accepted.
+            </span>
           </div>
-        ) : null}
-        {open ? (
-          <span className='text-xs text-muted-foreground'>
-            Pending changes stay outside the canonical body until accepted.
-          </span>
-        ) : null}
-      </div>
-      {open ? (
-        <div className='max-h-56 space-y-2 overflow-auto px-4 pb-3'>
-          {insertAnchor ? (
-            <form
-              className='space-y-2 rounded border bg-background p-3'
-              onSubmit={(event) => {
-                event.preventDefault()
-                structureMutation.mutate({
-                  nodeID: insertAnchor,
-                  build: (nodes, nodeID) =>
-                    buildInsertParagraphSuggestion(
-                      nodes,
-                      nodeID,
-                      insertText,
-                      () => crypto.randomUUID()
-                    ),
-                })
-              }}
-            >
-              <label className='block text-xs' htmlFor='inserted-text'>
-                New paragraph text
-              </label>
-              <textarea
-                id='inserted-text'
-                className='min-h-16 w-full rounded border bg-background p-2 text-sm'
-                value={insertText}
-                onChange={(event) => setInsertText(event.target.value)}
-              />
-              <div className='flex gap-2'>
+          <div className='space-y-2 px-4 pb-3'>
+            {insertAnchor ? (
+              <form
+                className='space-y-2 rounded border bg-background p-3'
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  structureMutation.mutate({
+                    nodeID: insertAnchor,
+                    build: (nodes, nodeID) =>
+                      buildInsertParagraphSuggestion(
+                        nodes,
+                        nodeID,
+                        insertText,
+                        () => crypto.randomUUID()
+                      ),
+                  })
+                }}
+              >
+                <label className='block text-xs' htmlFor='inserted-text'>
+                  New paragraph text
+                </label>
+                <textarea
+                  id='inserted-text'
+                  className='min-h-16 w-full rounded border bg-background p-2 text-sm'
+                  value={insertText}
+                  onChange={(event) => setInsertText(event.target.value)}
+                />
+                <div className='flex gap-2'>
+                  <Button
+                    size='sm'
+                    type='submit'
+                    disabled={structureMutation.isPending}
+                  >
+                    Submit insert
+                  </Button>
+                  <Button
+                    size='sm'
+                    type='button'
+                    variant='outline'
+                    onClick={() => setInsertAnchor(null)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : null}
+            {draft ? (
+              <form
+                className='space-y-2 rounded border bg-background p-3'
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  createMutation.mutate()
+                }}
+              >
+                <p className='text-xs text-muted-foreground'>
+                  Selected: {draft.selectedText || '(insertion point)'}
+                </p>
+                <label className='block text-xs' htmlFor='suggested-text'>
+                  Proposed text
+                </label>
+                <textarea
+                  id='suggested-text'
+                  className='min-h-16 w-full rounded border bg-background p-2 text-sm'
+                  value={replacement}
+                  onChange={(event) => setReplacement(event.target.value)}
+                />
+                <label className='block text-xs' htmlFor='suggestion-reason'>
+                  Reason (optional)
+                </label>
+                <input
+                  id='suggestion-reason'
+                  className='w-full rounded border bg-background px-2 py-1 text-sm'
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                />
                 <Button
                   size='sm'
                   type='submit'
-                  disabled={structureMutation.isPending}
+                  disabled={createMutation.isPending}
                 >
-                  Submit insert
+                  Submit suggestion
                 </Button>
-                <Button
-                  size='sm'
-                  type='button'
-                  variant='outline'
-                  onClick={() => setInsertAnchor(null)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          ) : null}
-          {draft ? (
-            <form
-              className='space-y-2 rounded border bg-background p-3'
-              onSubmit={(event) => {
-                event.preventDefault()
-                createMutation.mutate()
-              }}
-            >
+              </form>
+            ) : null}
+            {suggestionsQuery.isPending ? (
               <p className='text-xs text-muted-foreground'>
-                Selected: {draft.selectedText || '(insertion point)'}
+                Loading suggestions…
               </p>
-              <label className='block text-xs' htmlFor='suggested-text'>
-                Proposed text
-              </label>
-              <textarea
-                id='suggested-text'
-                className='min-h-16 w-full rounded border bg-background p-2 text-sm'
-                value={replacement}
-                onChange={(event) => setReplacement(event.target.value)}
-              />
-              <label className='block text-xs' htmlFor='suggestion-reason'>
-                Reason (optional)
-              </label>
-              <input
-                id='suggestion-reason'
-                className='w-full rounded border bg-background px-2 py-1 text-sm'
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-              />
-              <Button
-                size='sm'
-                type='submit'
-                disabled={createMutation.isPending}
-              >
-                Submit suggestion
-              </Button>
-            </form>
-          ) : null}
-          {suggestionsQuery.isPending ? (
-            <p className='text-xs text-muted-foreground'>
-              Loading suggestions…
-            </p>
-          ) : suggestionsQuery.error ? (
-            <p className='text-xs text-destructive'>
-              Could not load suggestions.
-            </p>
-          ) : suggestionsQuery.data?.length ? (
-            suggestionsQuery.data.map((suggestion) => (
-              <div
-                key={suggestion.suggestionId}
-                className='flex items-start gap-3 rounded border bg-background p-2 text-xs'
-              >
-                <div className='min-w-0 flex-1'>
-                  <p className='font-medium'>
-                    {suggestion.summary || 'Suggestion'}
-                  </p>
-                  <p className='text-muted-foreground'>
-                    {suggestion.status} · {suggestion.provenance}
-                  </p>
-                  {suggestion.reason ? <p>{suggestion.reason}</p> : null}
-                  {conflictReviewMessage(
-                    suggestion.status,
-                    suggestion.conflictReason
-                  ) ? (
-                    <p className='mt-1 text-destructive'>
-                      {conflictReviewMessage(
-                        suggestion.status,
-                        suggestion.conflictReason
-                      )}
+            ) : suggestionsQuery.error ? (
+              <p className='text-xs text-destructive'>
+                Could not load suggestions.
+              </p>
+            ) : suggestionsQuery.data?.length ? (
+              suggestionsQuery.data.map((suggestion) => (
+                <div
+                  key={suggestion.suggestionId}
+                  className='flex items-start gap-3 rounded border bg-background p-2 text-xs'
+                >
+                  <div className='min-w-0 flex-1'>
+                    <p className='font-medium'>
+                      {suggestion.summary || 'Suggestion'}
                     </p>
+                    <p className='text-muted-foreground'>
+                      {suggestion.status} · {suggestion.provenance}
+                    </p>
+                    {suggestion.reason ? <p>{suggestion.reason}</p> : null}
+                    {conflictReviewMessage(
+                      suggestion.status,
+                      suggestion.conflictReason
+                    ) ? (
+                      <p className='mt-1 text-destructive'>
+                        {conflictReviewMessage(
+                          suggestion.status,
+                          suggestion.conflictReason
+                        )}
+                      </p>
+                    ) : null}
+                  </div>
+                  {canDecide && suggestion.status === 'pending' ? (
+                    <div className='flex shrink-0 gap-1'>
+                      <Button
+                        size='sm'
+                        disabled={decisionMutation.isPending}
+                        onClick={() =>
+                          decisionMutation.mutate({
+                            suggestionID: suggestion.suggestionId,
+                            decision: 'accept',
+                          })
+                        }
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        disabled={decisionMutation.isPending}
+                        onClick={() =>
+                          decisionMutation.mutate({
+                            suggestionID: suggestion.suggestionId,
+                            decision: 'reject',
+                          })
+                        }
+                      >
+                        Reject
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
-                {canDecide && suggestion.status === 'pending' ? (
-                  <div className='flex shrink-0 gap-1'>
-                    <Button
-                      size='sm'
-                      disabled={decisionMutation.isPending}
-                      onClick={() =>
-                        decisionMutation.mutate({
-                          suggestionID: suggestion.suggestionId,
-                          decision: 'accept',
-                        })
-                      }
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      size='sm'
-                      variant='outline'
-                      disabled={decisionMutation.isPending}
-                      onClick={() =>
-                        decisionMutation.mutate({
-                          suggestionID: suggestion.suggestionId,
-                          decision: 'reject',
-                        })
-                      }
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            ))
-          ) : (
-            <p className='text-xs text-muted-foreground'>No suggestions.</p>
-          )}
-        </div>
+              ))
+            ) : (
+              <p className='text-xs text-muted-foreground'>No suggestions.</p>
+            )}
+          </div>
+        </aside>
       ) : null}
-    </aside>
+    </>
   )
 }
