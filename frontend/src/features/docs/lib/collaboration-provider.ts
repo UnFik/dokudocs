@@ -14,7 +14,9 @@ import {
   type CollaborationSocketOptions,
   decodeBase64,
   encodeBase64,
+  type CursorSelection,
   type PresenceUser,
+  type RemoteCursor,
 } from './collaboration-socket'
 import {
   IndexedDBCollaborationStore,
@@ -68,6 +70,8 @@ export type CollaborativeDocumentProviderOptions = Omit<
   onBodyVersion?: (version: number) => void
   onCanEdit?: (canEdit: boolean) => void
   onPresence?: (users: PresenceUser[]) => void
+  /** Current cursors of other connections; [] after a disconnect. */
+  onRemoteCursors?: (cursors: RemoteCursor[]) => void
   batchIntervalMs?: number
   executeDeleteNode?: (
     command: PendingDeleteNodeCommand
@@ -107,6 +111,7 @@ export class CollaborativeDocumentProvider {
   >()
   private readonly sentThisConnection = new Set<string>()
   private socket?: CollaborationSocket
+  private readonly remoteCursors = new Map<string, RemoteCursor>()
   private status: CollaborativeDocumentStatus = 'connecting'
   private canEdit?: boolean
   private bodyVersion: number
@@ -318,6 +323,11 @@ export class CollaborativeDocumentProvider {
     this.setStatus('closed')
   }
 
+  /** Shares the local selection (null clears it). Never queued or stored. */
+  sendCursor(selection: CursorSelection | null) {
+    return this.ready && this.socket ? this.socket.sendCursor(selection) : false
+  }
+
   async deleteNode(nodeID: string) {
     if (!nodeID) throw new Error('node ID is required')
     if (this.hasPendingStructuralCommand())
@@ -415,6 +425,14 @@ export class CollaborativeDocumentProvider {
         return
       case 'presence':
         this.options.onPresence?.(frame.users ?? [])
+        return
+      case 'cursor':
+      case 'cursor_leave':
+        if (!frame.cursor) return
+        if (frame.type === 'cursor')
+          this.remoteCursors.set(frame.cursor.connectionID, frame.cursor)
+        else this.remoteCursors.delete(frame.cursor.connectionID)
+        this.options.onRemoteCursors?.([...this.remoteCursors.values()])
         return
       case 'ack':
         void this.acknowledge(frame)
@@ -1350,6 +1368,8 @@ export class CollaborativeDocumentProvider {
 
   private disconnected() {
     this.options.onPresence?.([])
+    this.remoteCursors.clear()
+    this.options.onRemoteCursors?.([])
     if (this.stopped || this.terminal || this.storageFailed) return
     this.ready = false
     this.sentThisConnection.clear()

@@ -128,6 +128,7 @@ function nodeSpec(bodyType: string, definition: NodeDefinition): NodeSpec {
     ...(definition.content && { content: definition.content }),
     ...(definition.group && { group: definition.group }),
     ...(definition.group === 'inline' && { inline: true }),
+    ...(textContentTypes.has(bodyType) && bodyType !== 'run' && { marks: '' }),
     attrs: bodyAttributes,
     ...(definition.atom && {
       atom: true,

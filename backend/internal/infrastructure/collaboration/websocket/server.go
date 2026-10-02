@@ -15,6 +15,7 @@ import (
 
 	appauth "backend/internal/application/auth/dto"
 	"backend/internal/application/collaboration"
+	"backend/internal/domain/documentbody"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -22,11 +23,13 @@ import (
 )
 
 const (
-	maxMessageBytes   = 16 << 20
-	writeTimeout      = 5 * time.Second
-	writePerMB        = time.Second
-	readTimeout       = 10 * time.Second
-	resyncInterval    = 5 * time.Second
+	maxMessageBytes = 16 << 20
+	writeTimeout    = 5 * time.Second
+	writePerMB      = time.Second
+	readTimeout     = 10 * time.Second
+	resyncInterval  = 5 * time.Second
+	// idleRevisionFlush matches the debounce of the rolling auto revision.
+	idleRevisionFlush = 10 * time.Second
 	peerQueueSize     = 64
 	fanoutTimeout     = 5 * time.Second
 	heartbeatInterval = 30 * time.Second
@@ -62,27 +65,31 @@ type ProfileReader interface {
 const presenceRefresh = 10 * time.Second
 
 type Server struct {
-	verifier       TokenVerifier
-	presenceStore  collaboration.PresenceStore
-	presenceEvery  time.Duration
-	presenceOnce   sync.Once
-	roomReader     collaboration.RoomReader
-	resyncEvery    time.Duration
-	pollers        map[uuid.UUID]context.CancelFunc
-	profiles       ProfileReader
-	reader         BodyReader
-	updates        *collaboration.UseCase
-	broker         collaboration.Broker
-	allowedOrigin  string
-	writeBase      time.Duration
-	heartbeatEvery time.Duration
-	heartbeatWait  time.Duration
-	instanceID     uuid.UUID
-	brokerCtx      context.Context
-	brokerCancel   context.CancelFunc
-	brokerClose    sync.Once
-	brokerStarted  bool
-	brokerCloseErr error
+	verifier          TokenVerifier
+	presenceStore     collaboration.PresenceStore
+	presenceCloseOnce sync.Once
+	revisionFlusher   collaboration.RevisionFlusher
+	idleFlushAfter    time.Duration
+	presenceCloseErr  error
+	presenceEvery     time.Duration
+	presenceOnce      sync.Once
+	roomReader        collaboration.RoomReader
+	resyncEvery       time.Duration
+	pollers           map[uuid.UUID]context.CancelFunc
+	profiles          ProfileReader
+	reader            BodyReader
+	updates           *collaboration.UseCase
+	broker            collaboration.Broker
+	allowedOrigin     string
+	writeBase         time.Duration
+	heartbeatEvery    time.Duration
+	heartbeatWait     time.Duration
+	instanceID        uuid.UUID
+	brokerCtx         context.Context
+	brokerCancel      context.CancelFunc
+	brokerClose       sync.Once
+	brokerStarted     bool
+	brokerCloseErr    error
 
 	mu       sync.RWMutex
 	rooms    map[uuid.UUID]map[*peer]struct{}
@@ -111,6 +118,7 @@ type peer struct {
 	connectionID  uuid.UUID
 	profile       PresenceUser
 	wantsPresence bool
+	wantsCursor   bool
 	present       bool
 	presenceKey   string
 }
@@ -131,6 +139,8 @@ type clientMessage struct {
 	Update            []byte    `json:"update,omitempty"`
 	// Capabilities lists optional server frames the client understands.
 	Capabilities []string `json:"capabilities,omitempty"`
+	// Cursor is the sender's selection; nil with type "cursor" clears it.
+	Cursor *CursorSelection `json:"cursor,omitempty"`
 }
 
 type serverMessage struct {
@@ -145,12 +155,21 @@ type serverMessage struct {
 	State             []byte         `json:"state,omitempty"`
 	Update            []byte         `json:"update,omitempty"`
 	Users             []PresenceUser `json:"users,omitempty"`
+	Cursor            *RemoteCursor  `json:"cursor,omitempty"`
 }
 
 // WithPresenceStore shares presence across server instances. Without it,
 // presence covers only the connections of this instance.
 func (s *Server) WithPresenceStore(store collaboration.PresenceStore) *Server {
 	s.presenceStore = store
+	return s
+}
+
+// WithRevisionFlusher makes the server bring the rolling auto revision up to
+// the latest body when the last peer leaves a room and when a room has had no
+// new body version for idleFlushAfter.
+func (s *Server) WithRevisionFlusher(flusher collaboration.RevisionFlusher) *Server {
+	s.revisionFlusher = flusher
 	return s
 }
 
@@ -164,7 +183,7 @@ func NewServer(verifier TokenVerifier, reader BodyReader, writer UpdateWriter, a
 	brokerCtx, brokerCancel := context.WithCancel(context.Background())
 	server := &Server{
 		verifier: verifier, reader: reader, allowedOrigin: allowedOrigin,
-		resyncEvery: resyncInterval, presenceEvery: presenceRefresh, pollers: make(map[uuid.UUID]context.CancelFunc),
+		resyncEvery: resyncInterval, idleFlushAfter: idleRevisionFlush, presenceEvery: presenceRefresh, pollers: make(map[uuid.UUID]context.CancelFunc),
 		writeBase: writeTimeout, heartbeatEvery: heartbeatInterval, heartbeatWait: pongTimeout,
 		rooms: make(map[uuid.UUID]map[*peer]struct{}), broker: broker,
 		instanceID: uuid.New(), brokerCtx: brokerCtx, brokerCancel: brokerCancel,
@@ -262,6 +281,7 @@ func (s *Server) servePeer(ctx context.Context, conn *ws.Conn, documentID uuid.U
 		pong:        make(chan uuid.UUID, 1),
 		bodyVersion: snapshot.BodyVersion, bodyEpoch: snapshot.BodyEpoch, canEdit: snapshot.CanEdit,
 		connectionID: uuid.New(), profile: PresenceUser{UserID: userID}, wantsPresence: hasCapability(auth.Capabilities, "presence"),
+		wantsCursor: hasCapability(auth.Capabilities, "cursor"),
 	}
 	if s.profiles != nil {
 		if profile, err := s.profiles.PresenceProfile(ctx, userID); err == nil {
@@ -288,8 +308,7 @@ func (s *Server) servePeer(ctx context.Context, conn *ws.Conn, documentID uuid.U
 	// The snapshot can be large, so the deadline grows with its size; a client
 	// that stops reading must not hold this goroutine indefinitely.
 	_ = conn.SetWriteDeadline(time.Now().Add(s.writeBase + time.Duration(len(snapshot.EncodedState)>>20)*writePerMB))
-	sendErr := ws.JSON.Send(conn, snapshotMessage("ready", snapshot))
-	if sendErr != nil {
+	if err := ws.JSON.Send(conn, snapshotMessage("ready", snapshot)); err != nil {
 		return
 	}
 	close(peer.started)
@@ -319,6 +338,16 @@ func (p *peer) readLoop(ctx context.Context) {
 				default:
 				}
 			}
+			continue
+		}
+		if message.Type == "cursor" {
+			if message.Cursor != nil && !validCursor(message.Cursor) {
+				if p.sendAndWait(serverMessage{Type: "error", Code: "invalid_message"}) != nil {
+					return
+				}
+				continue
+			}
+			p.server.relayCursor(p, message.Cursor)
 			continue
 		}
 		if message.Type != "update" || message.UpdateID == uuid.Nil || len(message.Update) == 0 {
@@ -715,7 +744,8 @@ func (s *Server) addPeer(p *peer) bool {
 func (s *Server) removePeer(p *peer) {
 	s.mu.Lock()
 	delete(s.rooms[p.documentID], p)
-	if len(s.rooms[p.documentID]) == 0 {
+	roomEmptied := len(s.rooms[p.documentID]) == 0
+	if roomEmptied {
 		delete(s.rooms, p.documentID)
 		if cancel, ok := s.pollers[p.documentID]; ok {
 			cancel()
@@ -723,6 +753,10 @@ func (s *Server) removePeer(p *peer) {
 		}
 	}
 	s.mu.Unlock()
+	s.relayCursor(p, nil)
+	if roomEmptied {
+		s.flushRevision(p.documentID)
+	}
 	if s.presenceStore != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), fanoutTimeout)
 		_ = s.presenceStore.Leave(ctx, p.documentID, p.connectionID)
@@ -731,6 +765,17 @@ func (s *Server) removePeer(p *peer) {
 	}
 	s.broadcastPresence(p.documentID)
 	s.wg.Done()
+}
+
+// flushRevision writes the pending rolling auto revision of a document. A
+// failure is dropped: the next commit or flush rewrites the same revision.
+func (s *Server) flushRevision(documentID uuid.UUID) {
+	if s.revisionFlusher == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fanoutTimeout)
+	defer cancel()
+	_ = s.revisionFlusher.FlushAutoRevision(ctx, documentID)
 }
 
 // markPresent makes the peer visible to the room once its ready frame is sent.
@@ -953,10 +998,21 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}()
 	select {
 	case <-done:
-		return s.closeBroker()
+		return errors.Join(s.closeBroker(), s.closePresenceStore())
 	case <-ctx.Done():
-		return errors.Join(ctx.Err(), s.closeBroker())
+		return errors.Join(ctx.Err(), s.closeBroker(), s.closePresenceStore())
 	}
+}
+
+// closePresenceStore releases the store's connection once peers have left, if
+// the store holds one.
+func (s *Server) closePresenceStore() error {
+	closer, ok := s.presenceStore.(io.Closer)
+	if !ok {
+		return nil
+	}
+	s.presenceCloseOnce.Do(func() { s.presenceCloseErr = closer.Close() })
+	return s.presenceCloseErr
 }
 
 func (s *Server) closeBroker() error {
@@ -983,6 +1039,8 @@ func updateErrorCode(err error) string {
 		return "schema_mismatch"
 	case errors.Is(err, collaboration.ErrBodyNotInitialized):
 		return "body_not_initialized"
+	case errors.Is(err, documentbody.ErrTooLarge):
+		return "document_too_large"
 	case isTransientStoreError(err):
 		return "unavailable"
 	default:
@@ -1087,24 +1145,39 @@ func (s *Server) pollRoom(ctx context.Context, documentID, workspaceID uuid.UUID
 	defer s.wg.Done()
 	ticker := time.NewTicker(s.resyncEvery)
 	defer ticker.Stop()
+	var observed collaboration.RoomHead
+	var observedAt time.Time
+	var flushedVersion, flushedEpoch int64
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.checkRoom(ctx, documentID, workspaceID)
+			head, ok := s.checkRoom(ctx, documentID, workspaceID)
+			if !ok || s.revisionFlusher == nil {
+				continue
+			}
+			if observedAt.IsZero() || head.BodyVersion != observed.BodyVersion || head.BodyEpoch != observed.BodyEpoch {
+				observed, observedAt = head, time.Now()
+				continue
+			}
+			if time.Since(observedAt) >= s.idleFlushAfter &&
+				(flushedVersion != head.BodyVersion || flushedEpoch != head.BodyEpoch) {
+				s.flushRevision(documentID)
+				flushedVersion, flushedEpoch = head.BodyVersion, head.BodyEpoch
+			}
 		}
 	}
 }
 
-func (s *Server) checkRoom(ctx context.Context, documentID, workspaceID uuid.UUID) {
+func (s *Server) checkRoom(ctx context.Context, documentID, workspaceID uuid.UUID) (collaboration.RoomHead, bool) {
 	_, peers := s.presenceSnapshot(documentID)
 	if len(peers) == 0 {
-		return
+		return collaboration.RoomHead{}, false
 	}
 	head, err := s.roomReader.ReadRoomHead(ctx, workspaceID, documentID, distinctUsers(peers))
 	if err != nil {
-		return
+		return collaboration.RoomHead{}, false
 	}
 	for _, p := range peers {
 		access := head.Access[p.actor.UserID]
@@ -1122,6 +1195,7 @@ func (s *Server) checkRoom(ctx context.Context, documentID, workspaceID uuid.UUI
 		}
 		s.resendPresenceIfChanged(p)
 	}
+	return head, true
 }
 
 // behind reports whether the peer must be resynced to match the head.

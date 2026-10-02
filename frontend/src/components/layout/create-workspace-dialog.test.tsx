@@ -70,6 +70,6 @@ describe('CreateWorkspaceDialog', () => {
     expect(JSON.parse(String(fetch.mock.calls[1][1]?.body))).toEqual({
       name: 'Architecture Team',
     })
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    await vi.waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
   })
 })
