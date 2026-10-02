@@ -264,7 +264,11 @@ export function blockMenuPlugin() {
         )
           return false
         const { selection } = view.state
-        const parent = selection.$from.parent
+        const { $from } = selection
+        const parent =
+          $from.parent.type === documentBodySchema.nodes.run
+            ? $from.node($from.depth - 1)
+            : $from.parent
         if (
           !selection.empty ||
           parent.type !== documentBodySchema.nodes.paragraph ||

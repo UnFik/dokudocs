@@ -1,4 +1,4 @@
-import { EditorState } from 'prosemirror-state'
+import { EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
 import { documentBodySchema, documentBodyToProseMirror } from '../documentBody'
@@ -76,7 +76,12 @@ describe('block menu', () => {
         view.state.tr.insert(2, documentBodySchema.nodes.run.create())
       )
     )
-    expect(view.state.selection.$from.parent.content.size).toBeGreaterThan(0)
+    view.updateState(
+      view.state.apply(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, 3))
+      )
+    )
+    expect(view.state.selection.$from.parent.type.name).toBe('run')
     view.focus()
     expect(press(view.dom, '/').defaultPrevented).toBe(true)
     expect(mountEl.querySelector('[role="combobox"]')).not.toBeNull()
