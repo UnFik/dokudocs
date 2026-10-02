@@ -15,7 +15,6 @@ import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { useDocEditor } from '../hooks/use-doc-editor'
 import { DbmlEditor } from './dbml-editor'
 import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
-import { ShareDocDialog } from './dialogs/share-doc-dialog'
 import { EditorHeader } from './editor-header'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
@@ -173,7 +172,6 @@ function ScopedDocEditor({ docId }: { docId: string }) {
 
   const [isMermaidExportOpen, setIsMermaidExportOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
-  const [isShareOpen, setIsShareOpen] = useState(false)
 
   const toggleStarDocument = useDokudocsStore(
     (state) => state.toggleStarDocument
@@ -310,7 +308,6 @@ function ScopedDocEditor({ docId }: { docId: string }) {
         commentsCount={doc.type === 'markdown' ? unresolvedCount : undefined}
         onToggleHistory={() => setIsHistoryOpen(!isHistoryOpen)}
         isHistoryOpen={isHistoryOpen}
-        onOpenShare={() => setIsShareOpen(true)}
         isStarred={doc.isStarred}
         onToggleStar={handleToggleStar}
       />
@@ -340,12 +337,6 @@ function ScopedDocEditor({ docId }: { docId: string }) {
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         onRestoreContent={setContent}
-      />
-
-      <ShareDocDialog
-        open={isShareOpen}
-        onOpenChange={setIsShareOpen}
-        document={doc}
       />
 
       {doc.type === 'mermaid' && (
