@@ -56,6 +56,16 @@ Schema and projection only, no UI.
 - Done when: a body full of suggestions yields exactly the canonical `document_nodes`; search, RAG, revisions, duplicate, and public link tests show no suggestion text.
 - Tests: Go projection unit tests for every kind, integration test through the real commit path, codec round trips.
 
+**Status: done.** The projection skips inserted text, runs, and blocks and ignores delete and format proposals (Go and TypeScript, checked against one shared fixture); every suggestion shape is validated and an id with two authors is rejected; `SuggestionsV1` lists suggestions for P2 and P4; a suggestion update through `CommitUpdate` is stored and shared without moving `body_version` or `document_nodes`; the authenticated body carries the shared state and the public link carries the canonical body only.
+
+Found while building it: `DeleteNode` and `MoveNode` rebuild the shared Yjs state from the canonical body, which has no suggestions, so they would erase every pending one. They now refuse with `ErrSuggestionsPending` (409) while any suggestion exists. That is only a guard. It collides with ADR 0027, where accepting a deletion uses `DeleteNodes`, so it is fixed in P1b.
+
+### P1b. Structural commands keep the suggestion layer
+- `DeleteNode`, `DeleteNodes`, and `MoveNode` apply their change to the stored Yjs document (delete or move the element by node ID) instead of rebuilding the state from the canonical body, so unrelated suggestions survive. Remove the `ErrSuggestionsPending` guard.
+- Restoring a revision replaces the whole body; it drops pending suggestions by design and says so in the restore confirmation.
+- Done when: with suggestions pending, deleting or moving an unrelated block leaves every suggestion intact; accepting a suggested block deletion removes the block and the other suggestions stay; the epoch behavior of ADR 0014 is unchanged.
+- Backend only. Needs P1; must land before P4's accept and reject.
+
 ### P2. Write path for comment-only users
 - The WebSocket accepts updates from comment access under the two-part rule in "Why comment-only users need a write path". The snapshot tells the client it can suggest.
 - Done when: a comment user's suggestion reaches an editor live; adversarial updates (edit canonical text, delete a canonical node, touch another user's suggestion, forge the author) are all rejected.
