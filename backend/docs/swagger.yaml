@@ -14,6 +14,11 @@ definitions:
         type: string
       nodeID:
         type: string
+      nodeIDs:
+        description: NodeIDs is set instead of NodeID for a batch delete.
+        items:
+          type: string
+        type: array
     type: object
   backend_internal_application_collaboration.MoveNodeResult:
     properties:
@@ -687,6 +692,8 @@ definitions:
         type: integer
       canEdit:
         type: boolean
+      canSuggest:
+        type: boolean
       encodedState:
         items:
           type: integer
@@ -713,6 +720,12 @@ definitions:
         type: string
       nodeID:
         type: string
+      nodeIDs:
+        description: NodeIDs deletes several blocks atomically; send it instead of
+          nodeID.
+        items:
+          type: string
+        type: array
     type: object
   internal_presentation_document_handler.moveNodeRequest:
     properties:
@@ -1369,8 +1382,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Atomically deletes a block subtree and advances the document body
-        epoch.
+      description: Atomically deletes one block subtree (nodeID) or several (nodeIDs)
+        in a single body epoch.
       parameters:
       - description: Workspace ID (UUID)
         in: header
@@ -1422,7 +1435,7 @@ paths:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
       security:
       - BearerAuth: []
-      summary: Delete a Markdown block
+      summary: Delete Markdown blocks
       tags:
       - Document
   /documents/{id}/body/initialize:

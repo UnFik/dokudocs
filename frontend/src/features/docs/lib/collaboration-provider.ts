@@ -20,6 +20,7 @@ import {
 } from './collaboration-socket'
 import {
   IndexedDBCollaborationStore,
+  deleteTargets,
   type CollaborationScope,
   type CollaborationSnapshot,
   type CollaborationStore,
@@ -317,7 +318,8 @@ export class CollaborativeDocumentProvider {
     this.stopped = true
     this.ready = false
     const activeKey = `${this.scope.userID}:${this.scope.documentID}`
-    if (activeProviders.get(activeKey) === this) activeProviders.delete(activeKey)
+    if (activeProviders.get(activeKey) === this)
+      activeProviders.delete(activeKey)
     this.options.document.off('update', this.handleYUpdate)
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     if (this.batchTimer) clearTimeout(this.batchTimer)
@@ -330,8 +332,11 @@ export class CollaborativeDocumentProvider {
     return this.ready && this.socket ? this.socket.sendCursor(selection) : false
   }
 
-  async deleteNode(nodeID: string) {
-    if (!nodeID) throw new Error('node ID is required')
+  /** Deletes one subtree, or several at once in a single body epoch. */
+  async deleteNode(target: string | string[]) {
+    const nodeIDs = Array.isArray(target) ? [...new Set(target)] : [target]
+    if (!nodeIDs.length || nodeIDs.some((nodeID) => !nodeID))
+      throw new Error('node ID is required')
     if (this.hasPendingStructuralCommand())
       throw new Error('a structural command is already pending')
     if (this.stopped || this.terminal || this.storageFailed)
@@ -340,7 +345,8 @@ export class CollaborativeDocumentProvider {
       commandID: crypto.randomUUID(),
       bodyEpoch: this.options.bodyEpoch,
       bodySchemaVersion: this.options.bodySchemaVersion,
-      nodeID,
+      nodeID: nodeIDs[0]!,
+      ...(nodeIDs.length > 1 ? { nodeIDs } : {}),
     }
     await this.enqueueStorage(() =>
       this.store.saveDeleteCommand(this.scope, this.snapshot(), command)
@@ -1049,19 +1055,21 @@ export class CollaborativeDocumentProvider {
       )
         return false
       const verdict = deleteCommand
-        ? deleteStillMakesSense(body.nodes, deleteCommand.nodeID)
+        ? deleteStillMakesSense(body.nodes, deleteTargets(deleteCommand))
         : moveStillMakesSense(body.nodes, moveCommand!)
       if (verdict === 'unsafe') return false
+      // Targets someone else already deleted are dropped from a re-issued batch.
+      let remaining: string[] = []
       if (deleteCommand && verdict === 'reissue') {
+        const present = new Set(body.nodes.map((node) => node.nodeID))
+        remaining = deleteTargets(deleteCommand).filter((id) => present.has(id))
         // Deleting a block someone else has since filled would destroy content
         // this user never saw, so only an unchanged subtree is deleted unseen.
         const seen = (await this.store.load(this.scope)).snapshot
         if (
           !seen ||
-          !sameSubtree(
-            projectState(seen.encodedState),
-            body.nodes,
-            deleteCommand.nodeID
+          !remaining.every((id) =>
+            sameSubtree(projectState(seen.encodedState), body.nodes, id)
           )
         )
           return false
@@ -1084,8 +1092,11 @@ export class CollaborativeDocumentProvider {
         )
         this.pendingDeleteCommands.delete(command.commandID)
       } else if (deleteCommand) {
-        const reissued = {
-          ...deleteCommand,
+        const { nodeIDs: _previous, ...single } = deleteCommand
+        const reissued: PendingDeleteNodeCommand = {
+          ...single,
+          nodeID: remaining[0]!,
+          ...(remaining.length > 1 ? { nodeIDs: remaining } : {}),
           commandID: crypto.randomUUID(),
           bodyEpoch: body.bodyEpoch,
         }
@@ -1427,9 +1438,12 @@ export async function executeDeleteNode(
   command: PendingDeleteNodeCommand
 ) {
   const receipt = await deleteMarkdownNode(workspaceID, documentID, command)
+  const targets = deleteTargets(command)
+  const answered = receipt.nodeIDs ?? (receipt.nodeID ? [receipt.nodeID] : [])
   if (
     receipt.commandID !== command.commandID ||
-    receipt.nodeID !== command.nodeID
+    answered.length !== targets.length ||
+    answered.some((id, index) => id !== targets[index])
   )
     throw new Error('DeleteNode receipt does not match the pending command')
   const body = await getMarkdownBody(workspaceID, documentID)
@@ -1471,11 +1485,13 @@ type StructuralNode = { nodeID: string; parentID: string | null }
 
 function deleteStillMakesSense(
   nodes: StructuralNode[],
-  nodeID: string
+  nodeIDs: string[]
 ): 'done' | 'reissue' | 'unsafe' {
-  const node = nodes.find((candidate) => candidate.nodeID === nodeID)
-  if (!node) return 'done'
-  return node.parentID === null ? 'unsafe' : 'reissue'
+  const targets = nodeIDs
+    .map((nodeID) => nodes.find((candidate) => candidate.nodeID === nodeID))
+    .filter((node): node is StructuralNode => node !== undefined)
+  if (!targets.length) return 'done'
+  return targets.some((node) => node.parentID === null) ? 'unsafe' : 'reissue'
 }
 
 function moveStillMakesSense(

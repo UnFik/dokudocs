@@ -1,5 +1,4 @@
 import * as Y from 'yjs'
-import type { TextEditTranslation } from './suggestion-operations'
 import type { MarkdownBodySnapshot } from '@/lib/domain-api'
 import {
   CollaborativeDocumentProvider,
@@ -29,6 +28,7 @@ import {
   type MoveNodeIntent,
 } from './prosemirror/createDocumentBodyEditor'
 import type { InlineState } from './prosemirror/inlineMarks'
+import type { TextEditTranslation } from './suggestion-operations'
 
 type CollaborativeBodySnapshot = {
   bodyVersion: number
@@ -159,7 +159,7 @@ export async function mountCollaborativeDocumentBody(
       nodeViews: blocks.nodeViews,
       onEditorReady: blocks.attach,
       onBodyChange: input.onBodyChange,
-      onDeleteNode: (nodeID) => provider!.deleteNode(nodeID),
+      onDeleteNode: (nodeIDs) => provider!.deleteNode(nodeIDs),
       onDeleteNodeQueued: input.onDeleteNodeQueued,
       onMoveNode: (move) => provider!.moveNode(move),
       onMoveNodeQueued: input.onMoveNodeQueued,

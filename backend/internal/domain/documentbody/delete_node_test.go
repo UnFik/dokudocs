@@ -56,3 +56,53 @@ func TestDeleteNodeRejectsRootMissingAndOpaqueSubtrees(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteNodesRemovesEverySubtreeOrNone(t *testing.T) {
+	documentID := uuid.New()
+	rootID, firstID, firstRunID, secondID, thirdID, opaqueID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	root := node(documentID, rootID, nil, 0, "document")
+	first := node(documentID, firstID, &rootID, 0, "paragraph")
+	firstRun := node(documentID, firstRunID, &firstID, 0, "run")
+	firstRun.Content = "gone"
+	second := node(documentID, secondID, &rootID, 1, "paragraph")
+	third := node(documentID, thirdID, &rootID, 2, "paragraph")
+	opaque := node(documentID, opaqueID, &rootID, 3, "opaque")
+	opaque.Content = "keep"
+	body := Body{DocumentID: documentID, RootNodeID: rootID, Nodes: []Node{root, first, firstRun, second, third, opaque}}
+
+	deleted, err := DeleteNodes(body, []uuid.UUID{firstID, thirdID, firstRunID, firstID})
+	if err != nil {
+		t.Fatalf("DeleteNodes(): %v", err)
+	}
+	if len(deleted.Nodes) != 3 || deleted.Nodes[1].NodeID != secondID || deleted.Nodes[2].NodeID != opaqueID {
+		t.Fatalf("DeleteNodes() nodes = %+v, want root, second paragraph, opaque", deleted.Nodes)
+	}
+
+	if _, err := DeleteNodes(body, []uuid.UUID{firstID, opaqueID}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("DeleteNodes() with an opaque node = %v, want %v", err, ErrInvalid)
+	}
+	if len(body.Nodes) != 6 {
+		t.Fatalf("DeleteNodes() changed its input")
+	}
+	for name, ids := range map[string][]uuid.UUID{
+		"none": nil, "root": {firstID, rootID}, "missing": {firstID, uuid.New()},
+	} {
+		if _, err := DeleteNodes(body, ids); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("DeleteNodes(%s) = %v, want %v", name, err, ErrInvalid)
+		}
+	}
+}
+
+func TestDeleteNodesCanEmptyTheDocument(t *testing.T) {
+	documentID := uuid.New()
+	rootID, firstID, secondID := uuid.New(), uuid.New(), uuid.New()
+	body := Body{DocumentID: documentID, RootNodeID: rootID, Nodes: []Node{
+		node(documentID, rootID, nil, 0, "document"),
+		node(documentID, firstID, &rootID, 0, "paragraph"),
+		node(documentID, secondID, &rootID, 1, "paragraph"),
+	}}
+	deleted, err := DeleteNodes(body, []uuid.UUID{firstID, secondID})
+	if err != nil || len(deleted.Nodes) != 1 || deleted.Nodes[0].NodeID != rootID {
+		t.Fatalf("DeleteNodes() = (%+v, %v), want only the root", deleted.Nodes, err)
+	}
+}

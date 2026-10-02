@@ -26,7 +26,15 @@ export type PendingDeleteNodeCommand = {
   commandID: string
   bodyEpoch: number
   bodySchemaVersion: number
+  /** The first node deleted; the only one in a single delete. */
   nodeID: string
+  /** Every subtree root of a batch delete (two or more), in order. */
+  nodeIDs?: string[]
+}
+
+/** The subtree roots a delete command removes. */
+export function deleteTargets(command: PendingDeleteNodeCommand): string[] {
+  return command.nodeIDs?.length ? command.nodeIDs : [command.nodeID]
 }
 
 export type PendingMoveNodeCommand = {
@@ -667,6 +675,7 @@ function copyDeleteCommand(row: DeleteCommandRow): PendingDeleteNodeCommand {
     bodyEpoch: row.bodyEpoch,
     bodySchemaVersion: row.bodySchemaVersion,
     nodeID: row.nodeID,
+    ...(row.nodeIDs?.length ? { nodeIDs: row.nodeIDs.slice() } : {}),
   }
 }
 

@@ -146,7 +146,8 @@ const documentRestoreResultSchema = z.object({
 const deleteNodeResultSchema = z.object({
   documentID: z.string().uuid(),
   commandID: z.string().uuid(),
-  nodeID: z.string().uuid(),
+  nodeID: z.string().uuid().optional(),
+  nodeIDs: z.array(z.string().uuid()).optional(),
   bodyEpoch: z.number().int().positive(),
   bodyVersion: z.number().int().positive(),
   changed: z.boolean(),
@@ -281,6 +282,8 @@ export type DeleteMarkdownNodeInput = {
   bodyEpoch: number
   bodySchemaVersion: number
   nodeID: string
+  /** Two or more subtree roots deleted atomically; sent instead of nodeID. */
+  nodeIDs?: string[]
 }
 export type DeleteMarkdownNodeResult = z.infer<typeof deleteNodeResultSchema>
 export type MoveMarkdownNodeInput = {
@@ -515,7 +518,21 @@ export async function deleteMarkdownNode(
     await apiFetch<unknown>(`/api/v1/documents/${documentId}/body/delete`, {
       method: 'POST',
       headers: workspaceHeaders(workspaceId),
-      body: JSON.stringify(input),
+      body: JSON.stringify(
+        input.nodeIDs && input.nodeIDs.length > 1
+          ? {
+              commandID: input.commandID,
+              bodyEpoch: input.bodyEpoch,
+              bodySchemaVersion: input.bodySchemaVersion,
+              nodeIDs: input.nodeIDs,
+            }
+          : {
+              commandID: input.commandID,
+              bodyEpoch: input.bodyEpoch,
+              bodySchemaVersion: input.bodySchemaVersion,
+              nodeID: input.nodeID,
+            }
+      ),
     })
   )
 }
