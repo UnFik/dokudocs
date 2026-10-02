@@ -139,3 +139,39 @@
 .markdown-body input[type='checkbox'] {
   margin-right: 0.4em;
 }
+
+/* Remote collaborators: color is per-person data (see DESIGN.md, collaborator colors). */
+.markdown-body .remote-selection {
+  background-color: color-mix(
+    in srgb,
+    var(--cursor-color, var(--signal)) 22%,
+    transparent
+  );
+}
+
+.markdown-body .remote-cursor {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 1.2em;
+  margin-inline: -1px;
+  border-left: 2px solid var(--cursor-color, var(--signal));
+  vertical-align: text-bottom;
+  pointer-events: none;
+}
+
+.markdown-body .remote-cursor::after {
+  content: attr(data-name);
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background-color: var(--cursor-color, var(--signal));
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  user-select: none;
+}

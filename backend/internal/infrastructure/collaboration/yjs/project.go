@@ -113,7 +113,8 @@ func projectDoc(doc *crdt.Doc, documentID uuid.UUID) (documentbody.Body, error) 
 }
 
 func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID *uuid.UUID, siblingOrder float64) error {
-	nodeID, err := nodeID(element)
+	values := element.GetAttributeValues()
+	nodeID, err := nodeIDFromValues(element, values)
 	if err != nil {
 		return err
 	}
@@ -121,7 +122,7 @@ func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID 
 	if !ok {
 		return projectionError("unsupported ProseMirror node %q", element.NodeName)
 	}
-	bodyAttributes, bodyContent, err := elementBodyAttributes(element, nodeID)
+	bodyAttributes, bodyContent, err := elementBodyAttributes(values, nodeID)
 	if err != nil {
 		return err
 	}
@@ -237,8 +238,7 @@ type crdtXMLNode interface {
 	ToXML() string
 }
 
-func elementBodyAttributes(element *crdt.YXmlElement, id uuid.UUID) (json.RawMessage, string, error) {
-	values := element.GetAttributeValues()
+func elementBodyAttributes(values map[string]any, id uuid.UUID) (json.RawMessage, string, error) {
 	if len(values) != 3 {
 		return nil, "", projectionError("node %s must have only nodeID, bodyAttributes, and bodyContent", id)
 	}
@@ -250,16 +250,23 @@ func elementBodyAttributes(element *crdt.YXmlElement, id uuid.UUID) (json.RawMes
 		}
 	}
 	attributeText, ok := values["bodyAttributes"].(string)
-	if !ok || !json.Valid([]byte(attributeText)) {
-		return nil, "", projectionError("node %s has invalid bodyAttributes", id)
-	}
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(attributeText), &object); err != nil || object == nil {
-		return nil, "", projectionError("node %s bodyAttributes must be an object", id)
-	}
-	canonical, err := json.Marshal(object)
-	if err != nil {
-		return nil, "", projectionError("node %s bodyAttributes cannot be serialized", id)
+	var canonical json.RawMessage
+	if ok && attributeText == "{}" {
+		// Most nodes carry no attributes; skip the parse and re-encode.
+		canonical = json.RawMessage("{}")
+	} else {
+		if !ok || !json.Valid([]byte(attributeText)) {
+			return nil, "", projectionError("node %s has invalid bodyAttributes", id)
+		}
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(attributeText), &object); err != nil || object == nil {
+			return nil, "", projectionError("node %s bodyAttributes must be an object", id)
+		}
+		var err error
+		canonical, err = json.Marshal(object)
+		if err != nil {
+			return nil, "", projectionError("node %s bodyAttributes cannot be serialized", id)
+		}
 	}
 	content, ok := values["bodyContent"].(string)
 	if !ok {
@@ -269,7 +276,10 @@ func elementBodyAttributes(element *crdt.YXmlElement, id uuid.UUID) (json.RawMes
 }
 
 func nodeID(element *crdt.YXmlElement) (uuid.UUID, error) {
-	values := element.GetAttributeValues()
+	return nodeIDFromValues(element, element.GetAttributeValues())
+}
+
+func nodeIDFromValues(element *crdt.YXmlElement, values map[string]any) (uuid.UUID, error) {
 	raw, ok := values["nodeID"].(string)
 	if !ok {
 		return uuid.Nil, projectionError("node %q has no string nodeID", element.NodeName)
