@@ -1,0 +1,227 @@
+.dd-image {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.dd-image img {
+  display: block;
+  max-width: 100%;
+  border-radius: 4px;
+}
+.dd-image-blocked {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.dd-image-edit {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--input);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--foreground);
+  font: 11px var(--font-mono, ui-monospace, monospace);
+  opacity: 0;
+  cursor: pointer;
+}
+.dd-image:hover .dd-image-edit,
+.dd-image-edit:focus-visible {
+  opacity: 1;
+}
+.dd-image-edit:focus-visible,
+.dd-tb button:focus-visible,
+.dd-slash [role='option']:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+.dd-math {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.dd-math-source,
+.dd-block-source {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.dd-block {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+}
+.dd-block-preview {
+  padding: 12px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+.dd-block-source {
+  margin: 0;
+  padding: 8px 12px;
+  white-space: pre-wrap;
+}
+[data-preview-error] {
+  color: var(--destructive);
+  font-size: 12px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+[data-preview-empty] {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.dd-host {
+  position: relative;
+}
+.dd-tb {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+.dd-tb button,
+.dd-image-form button {
+  flex: none;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--foreground);
+  font: 12px var(--font-mono, ui-monospace, monospace);
+  cursor: pointer;
+}
+.dd-tb button:hover {
+  background: var(--secondary);
+}
+.dd-tb button[aria-disabled='true'] {
+  color: var(--muted-foreground);
+  cursor: default;
+}
+@media (pointer: coarse) {
+  .dd-tb button,
+  .dd-image-form button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+.dd-image-form {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+.dd-image-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.dd-image-form input {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--input);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13px;
+}
+.dd-image-form [role='alert'] {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 12px;
+}
+.dd-handle {
+  position: absolute;
+  left: -28px;
+  width: 24px;
+  min-height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: 12px var(--font-mono, ui-monospace, monospace);
+  cursor: grab;
+}
+.dd-handle:hover,
+.dd-handle:focus-visible {
+  background: var(--secondary);
+}
+.dd-handle:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .dd-handle {
+    left: 0;
+    width: 32px;
+    min-height: 32px;
+    background: var(--card);
+    border: 1px solid var(--border);
+  }
+}
+.dd-slash {
+  position: absolute;
+  z-index: 20;
+  width: min(280px, calc(100% - 16px));
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--popover);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
+.dd-slash-input {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--input);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13px;
+}
+.dd-slash-input:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+.dd-slash ul {
+  max-height: 240px;
+  margin: 4px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.dd-slash-option {
+  display: flex;
+  justify-content: space-between;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.dd-slash-option[aria-selected='true'] {
+  background: var(--secondary);
+}
+.dd-slash-hint,
+.dd-slash-empty {
+  color: var(--muted-foreground);
+  font: 11px var(--font-mono, ui-monospace, monospace);
+}
+.dd-slash-empty {
+  padding: 8px;
+}
+
+@media (hover: none) {
+  .dd-image-edit {
+    opacity: 1;
+  }
+}

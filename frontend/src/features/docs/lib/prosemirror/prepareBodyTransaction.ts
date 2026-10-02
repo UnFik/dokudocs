@@ -251,26 +251,18 @@ function splitRunsWithMixedMarks(transaction: Transaction) {
     return true
   })
 
+  // Split in place so the selection maps through the edit instead of
+  // collapsing; the first part keeps the run ID and assignNodeIDs issues the rest.
   for (const { node, position } of mixedRuns.reverse()) {
-    const groups: ProseMirrorNode[][] = []
+    const boundaries: number[] = []
+    let offset = 0
     for (let i = 0; i < node.childCount; i++) {
       const child = node.child(i)
-      const current = groups.at(-1)
-      if (current && sameMarks(current[0]!.marks, child.marks))
-        current.push(child)
-      else groups.push([child])
+      if (i > 0 && !sameMarks(node.child(i - 1).marks, child.marks))
+        boundaries.push(position + 1 + offset)
+      offset += child.nodeSize
     }
-    const replacements = groups.map((children, index) =>
-      node.type.create(
-        {
-          ...node.attrs,
-          nodeID: index === 0 ? node.attrs.nodeID : null,
-        },
-        children,
-        node.marks
-      )
-    )
-    transaction.replaceWith(position, position + node.nodeSize, replacements)
+    for (const boundary of boundaries.reverse()) transaction.split(boundary)
   }
 }
 
