@@ -38,6 +38,8 @@ export type CollaborationFrame = {
   bodyEpoch?: number
   bodySchemaVersion?: number
   canEdit?: boolean
+  /** The user may suggest without being able to edit. */
+  canSuggest?: boolean
   state?: Uint8Array
   update?: Uint8Array
   users?: PresenceUser[]
@@ -263,6 +265,8 @@ function isServerEnvelope(value: unknown): value is ServerEnvelope {
   if (value.update !== undefined && typeof value.update !== 'string')
     return false
   if (value.canEdit !== undefined && typeof value.canEdit !== 'boolean')
+    return false
+  if (value.canSuggest !== undefined && typeof value.canSuggest !== 'boolean')
     return false
   for (const key of ['bodyVersion', 'bodyEpoch', 'bodySchemaVersion']) {
     const number = value[key]

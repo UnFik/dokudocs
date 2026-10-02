@@ -195,26 +195,42 @@
   user-select: none;
 }
 
-/* Suggestions: inserted text is underlined, deleted text struck through.
-   Own suggestions use the accent; other people's use the ink color. */
+/* Suggestions (ADR 0027). The author's color (--suggest-color, set per author)
+   marks the line and the tint, never the text color, so the text keeps its
+   contrast. Inserted text is underlined, deleted text is struck through, a
+   proposed format change is dashed under. A whole block is tinted and outlined,
+   not given a colored stripe. */
 .markdown-body .suggest-ins,
-.markdown-body .suggest-del {
-  --suggest-color: var(--muted-foreground);
-  text-decoration-color: var(--suggest-color);
-  text-decoration-thickness: 1px;
-  background-color: color-mix(in srgb, var(--suggest-color) 10%, transparent);
-}
-
-.markdown-body .suggest-own {
+.markdown-body .suggest-del,
+.markdown-body .suggest-fmt {
   --suggest-color: var(--signal);
+  text-decoration-color: var(--suggest-color);
+  text-decoration-thickness: 2px;
+  background-color: color-mix(in srgb, var(--suggest-color) 12%, transparent);
 }
 
 .markdown-body .suggest-ins {
-  color: var(--suggest-color);
   text-decoration-line: underline;
   text-underline-offset: 3px;
 }
 
 .markdown-body .suggest-del {
   text-decoration-line: line-through;
+}
+
+.markdown-body .suggest-fmt {
+  border-bottom: 1px dashed var(--suggest-color);
+}
+
+.markdown-body .suggest-block-ins,
+.markdown-body .suggest-block-del {
+  --suggest-color: var(--signal);
+  background-color: color-mix(in srgb, var(--suggest-color) 10%, transparent);
+  outline: 1px dashed var(--suggest-color);
+  outline-offset: 2px;
+}
+
+.markdown-body .suggest-block-del {
+  text-decoration: line-through;
+  text-decoration-color: var(--suggest-color);
 }

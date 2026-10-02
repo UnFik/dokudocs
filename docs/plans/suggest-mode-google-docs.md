@@ -85,6 +85,8 @@ What P3 must know:
 - Done when: the three card kinds appear from real keystrokes, an editor accepts and rejects, and the server body and a reload agree.
 - Tests: unit tests per ProseMirror step type and per grouping rule; e2e with a commenter and an editor.
 
+**Status: in review.** The pure engine is in PR #83. The live editor wiring, suggestion cards, and two-user browser e2e are in the follow-up PR. The e2e covers Add, Replace, accept, reject, withdraw, live sync, canonical body, and reload. Enter and multi-line paste remain in P5; format shortcuts remain in P6.
+
 ### P4. The review rail, and the old UI goes
 - Rail with cards, accept, reject, withdraw, threads, Resolve; click sync; author colors from one palette; Accept all, Reject all; preview control; viewer visibility; the index table maintained by the server.
 - Remove the toolbar buttons and forms, the REST propose, accept, and reject routes, `suggestion-operations.ts`, `suggestion-draft.ts`, and `suggestionLayer.ts`. Reject legacy pending suggestions with a note in the migration.

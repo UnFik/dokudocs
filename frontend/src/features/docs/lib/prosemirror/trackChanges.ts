@@ -2,8 +2,10 @@ import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model'
 import {
   TextSelection,
   type EditorState,
+  type Selection,
   type Transaction,
 } from 'prosemirror-state'
+import { ReplaceStep } from 'prosemirror-transform'
 import { documentBodySchema } from './documentBody'
 import { nodeSuggestionOf, withNodeSuggestion } from './nodeSuggestion'
 
@@ -21,6 +23,8 @@ export type TrackOptions = {
   newID?: () => string
   /** Where the caret goes after a deletion: before the deleted text (Backspace) or after it (Delete). Typing always ends after the typed text. */
   caret?: 'start' | 'end'
+  /** False after the caret moves or a remote edit; adjacent older marks start a new card. */
+  continueAdjacent?: boolean
 }
 
 /** A change Suggest mode cannot record as a suggestion. */
@@ -140,7 +144,9 @@ export function suggestReplace(
   let id: string | null = null
   const suggestionID = () =>
     (id ??=
-      ownIDNextTo(chunks, from, to, options.author) ??
+      (options.continueAdjacent === false
+        ? null
+        : ownIDNextTo(chunks, from, to, options.author)) ??
       (options.newID ?? (() => crypto.randomUUID()))())
 
   // Work from the right, so earlier positions stay valid.
@@ -283,4 +289,142 @@ export function suggestDelete(
   for (const operation of operations.sort((a, b) => b.at - a.at))
     operation.apply(tr, id)
   return tr
+}
+
+type Unit = { start: number; end: number; char: string; deleted: boolean }
+
+/** The characters of a textblock, one per code point, with where they sit. */
+function unitsOf(block: { node: ProseMirrorNode; start: number }): Unit[] {
+  const units: Unit[] = []
+  for (const chunk of chunksOf(block)) {
+    const text = block.node.textBetween(
+      chunk.start - block.start,
+      chunk.end - block.start
+    )
+    let at = chunk.start
+    for (const char of text) {
+      units.push({
+        start: at,
+        end: at + char.length,
+        char,
+        deleted: markOf(chunk, 'delete') !== undefined,
+      })
+      at += char.length
+    }
+  }
+  return units
+}
+
+const wordChar = /[\p{L}\p{N}_]/u
+
+/** Backspace or Delete as a suggestion: a selection is deleted, a caret deletes the character, or word, on its side. */
+export function suggestDeleteKey(
+  state: EditorState,
+  selection: Selection,
+  key: { forward: boolean; word?: boolean },
+  options: TrackOptions
+): Transaction {
+  const doc = state.doc
+  if (!selection.empty) {
+    const first = textblockAt(doc, selection.from)
+    const last = textblockAt(doc, selection.to)
+    if (first && last && first.start === last.start)
+      return suggestReplace(state, selection.from, selection.to, '', {
+        ...options,
+        caret: 'start',
+      })
+    const tr = suggestDelete(state, selection.from, selection.to, options)
+    return tr.docChanged
+      ? tr.setSelection(
+          TextSelection.near(tr.doc.resolve(tr.mapping.map(selection.from, -1)))
+        )
+      : tr
+  }
+
+  let caret = selection.from
+  const block = textblockAt(doc, caret)
+  if (!block) return state.tr
+  const units = unitsOf(block)
+  const gap = (a: number, b: number) => Math.abs(a - b) <= runGap
+
+  // Text already deleted is stepped over, not deleted again.
+  let index = -1
+  if (key.forward)
+    index = units.findIndex(
+      (unit) => unit.start >= caret && gap(unit.start, caret)
+    )
+  else
+    for (let i = units.length - 1; i >= 0; i--)
+      if (units[i]!.end <= caret && gap(units[i]!.end, caret)) {
+        index = i
+        break
+      }
+  const step = key.forward ? 1 : -1
+  while (index >= 0 && index < units.length && units[index]!.deleted) {
+    caret = key.forward ? units[index]!.end : units[index]!.start
+    index += step
+  }
+  const target = units[index]
+  if (!target || index < 0) {
+    return caret === selection.from
+      ? state.tr
+      : state.tr.setSelection(TextSelection.create(doc, caret))
+  }
+
+  // A word is the whitespace and then the run of letters next to the caret.
+  let last = index
+  if (key.word) {
+    const kind = (unit: Unit) =>
+      /\s/.test(unit.char)
+        ? 'space'
+        : wordChar.test(unit.char)
+          ? 'word'
+          : 'other'
+    let phase = kind(target)
+    while (true) {
+      const next = units[last + step]
+      if (!next || next.deleted) break
+      const nextKind = kind(next)
+      if (phase === 'space' && nextKind !== 'space') phase = nextKind
+      else if (nextKind !== phase) break
+      last += step
+    }
+  }
+  const from = key.forward ? target.start : units[last]!.start
+  const to = key.forward ? units[last]!.end : target.end
+  return suggestReplace(state, from, to, '', {
+    ...options,
+    caret: key.forward ? 'end' : 'start',
+  })
+}
+
+/**
+ * A transaction the browser or an input method made itself, as a suggestion. Only
+ * a plain text replacement can be recorded; anything else is refused.
+ */
+export function trackTransaction(
+  state: EditorState,
+  transaction: Transaction,
+  options: TrackOptions
+): Transaction {
+  const [step] = transaction.steps
+  if (
+    transaction.steps.length === 1 &&
+    step instanceof ReplaceStep &&
+    step.slice.openStart === 0 &&
+    step.slice.openEnd === 0 &&
+    step.slice.content.childCount <= 1 &&
+    (step.slice.content.childCount === 0 ||
+      step.slice.content.firstChild!.isText)
+  )
+    return suggestReplace(
+      state,
+      step.from,
+      step.to,
+      step.slice.content.firstChild?.text ?? '',
+      options
+    )
+  throw new UnsupportedSuggestionError(
+    'This change cannot be recorded as a suggestion yet.'
+  )
 }
