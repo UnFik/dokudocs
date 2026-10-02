@@ -186,3 +186,28 @@ func TestPresenceOfACrashedInstanceDisappearsOnceItsEntriesExpire(t *testing.T) 
 
 	awaitPresence(t, clientA, a)
 }
+
+type closableStore struct {
+	*memoryPresence
+	closes atomic.Int32
+}
+
+func (c *closableStore) Close() error {
+	c.closes.Add(1)
+	return nil
+}
+
+func TestShutdownClosesThePresenceStore(t *testing.T) {
+	store := &closableStore{memoryPresence: newMemoryPresence()}
+	server := NewServer(nil, nil, nil, "https://docs.example.test", nil).WithPresenceStore(store)
+
+	if err := server.Shutdown(context.Background()); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if err := server.Shutdown(context.Background()); err != nil {
+		t.Fatalf("second shutdown: %v", err)
+	}
+	if got := store.closes.Load(); got != 1 {
+		t.Fatalf("presence store closed %d times, want exactly 1", got)
+	}
+}

@@ -1,7 +1,12 @@
 import { inputRules } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
-import { EditorState, type Command, type Transaction } from 'prosemirror-state'
-import { EditorView } from 'prosemirror-view'
+import {
+  EditorState,
+  Plugin,
+  type Command,
+  type Transaction,
+} from 'prosemirror-state'
+import { Decoration, DecorationSet, EditorView } from 'prosemirror-view'
 import {
   absolutePositionToRelativePosition,
   redo as redoYjs,
@@ -14,6 +19,7 @@ import {
   yXmlFragmentToProseMirrorRootNode,
 } from 'y-prosemirror'
 import * as Y from 'yjs'
+import type { RemoteCursor } from '../collaboration-socket'
 import type { DocumentBodyNode } from '../documentBody'
 import {
   headingInputRule,
@@ -50,6 +56,14 @@ export interface EditorHistoryState {
   canRedo: boolean
 }
 
+/** The local selection as two encoded Yjs relative positions. */
+export interface DocumentBodySelection {
+  anchor: Uint8Array
+  head: Uint8Array
+}
+
+const safeColor = /^#[0-9A-Fa-f]{6}$/
+
 export interface DocumentBodyAnchor {
   nodeID: string
   start: Uint8Array
@@ -70,16 +84,25 @@ export function createDocumentBodyEditor(
     onHistoryChange?: (history: EditorHistoryState) => void
     onInlineStateChange?: (state: InlineState) => void
     onLinkRequest?: () => void
+    /** Fires when the local selection moves; null when the editor loses focus. */
+    onSelectionChange?: (selection: DocumentBodySelection | null) => void
   } = {}
 ) {
   const fragment = ydoc.getXmlFragment('body')
   let readOnly = options.readOnly ?? false
   let structuralCommandPending = false
+  let remoteCursors: RemoteCursor[] = []
+  const remoteCursorPlugin = new Plugin({
+    props: {
+      decorations: (editorState) => remoteCursorDecorations(editorState),
+    },
+  })
   let state = EditorState.create({
     doc: yXmlFragmentToProseMirrorRootNode(fragment, documentBodySchema),
     plugins: [
       ySyncPlugin(fragment),
       yUndoPlugin(),
+      remoteCursorPlugin,
       inputRules({ rules: [headingInputRule] }),
       keymap({
         Enter: () => runBlock(splitTextBlock),
@@ -158,6 +181,80 @@ export function createDocumentBodyEditor(
     lastHistory = next
     options.onHistoryChange?.(next)
   }
+
+  const resolveRelative = (
+    editorState: EditorState,
+    encoded: Uint8Array
+  ): number | null => {
+    try {
+      const mapping = ySyncPluginKey.getState(editorState)?.binding.mapping
+      if (!mapping) return null
+      const position = relativePositionToAbsolutePosition(
+        ydoc,
+        fragment,
+        Y.decodeRelativePosition(encoded),
+        mapping
+      )
+      return position !== null && position <= editorState.doc.content.size
+        ? position
+        : null
+    } catch {
+      return null
+    }
+  }
+
+  const remoteCursorDecorations = (editorState: EditorState) => {
+    const decorations: Decoration[] = []
+    for (const cursor of remoteCursors) {
+      if (!cursor.anchor || !cursor.head) continue
+      const anchor = resolveRelative(editorState, cursor.anchor)
+      const head = resolveRelative(editorState, cursor.head)
+      if (anchor === null || head === null) continue
+      const color =
+        cursor.color && safeColor.test(cursor.color) ? cursor.color : null
+      const style = color ? `--cursor-color: ${color}` : ''
+      if (anchor !== head)
+        decorations.push(
+          Decoration.inline(Math.min(anchor, head), Math.max(anchor, head), {
+            class: 'remote-selection',
+            style,
+          })
+        )
+      decorations.push(
+        Decoration.widget(
+          head,
+          () => {
+            const caret = document.createElement('span')
+            caret.className = 'remote-cursor'
+            if (color) caret.style.setProperty('--cursor-color', color)
+            const label = document.createElement('span')
+            label.className = 'remote-cursor-label'
+            label.textContent = cursor.name || 'Collaborator'
+            caret.append(label)
+            return caret
+          },
+          { key: `cursor-${cursor.connectionID}-${head}-${color}`, side: 1 }
+        )
+      )
+    }
+    return DecorationSet.create(editorState.doc, decorations)
+  }
+
+  const toRelativeSelection = (
+    editorState: EditorState
+  ): DocumentBodySelection | null => {
+    const mapping = ySyncPluginKey.getState(editorState)?.binding.mapping
+    if (!mapping) return null
+    const { anchor, head } = editorState.selection
+    return {
+      anchor: Y.encodeRelativePosition(
+        absolutePositionToRelativePosition(anchor, fragment, mapping)
+      ),
+      head: Y.encodeRelativePosition(
+        absolutePositionToRelativePosition(head, fragment, mapping)
+      ),
+    }
+  }
   const viewHolder: { current?: EditorView } = {}
   const queueDeleteNode = (nodeID: string) => {
     if (!options.onDeleteNode) return false
@@ -199,6 +296,14 @@ export function createDocumentBodyEditor(
       if (result.transactions.some((item) => item.docChanged))
         options.onBodyChange?.(prosemirrorToDocumentBody(state.doc))
       publishInline()
+      if (
+        options.onSelectionChange &&
+        !remote &&
+        (transaction.selectionSet || transaction.docChanged)
+      ) {
+        const selection = toRelativeSelection(state)
+        if (selection) options.onSelectionChange(selection)
+      }
     } catch (error) {
       if (
         error instanceof DeleteNodeRequiredError &&
@@ -227,6 +332,12 @@ export function createDocumentBodyEditor(
     state,
     dispatchTransaction,
     editable: () => !readOnly && !structuralCommandPending,
+    handleDOMEvents: {
+      blur: () => {
+        options.onSelectionChange?.(null)
+        return false
+      },
+    },
     handleKeyDown: (editorView, event) => {
       if (readOnly || structuralCommandPending) return false
       if (
@@ -348,6 +459,15 @@ export function createDocumentBodyEditor(
     focus: () => view.focus(),
     undo: () => canEdit() && undoYjs(state),
     redo: () => canEdit() && redoYjs(state),
+    resolveSelection: (selection: DocumentBodySelection) => {
+      const anchor = resolveRelative(state, selection.anchor)
+      const head = resolveRelative(state, selection.head)
+      return anchor === null || head === null ? null : { anchor, head }
+    },
+    setRemoteCursors: (cursors: RemoteCursor[]) => {
+      remoteCursors = cursors
+      view.dispatch(view.state.tr.setMeta(remoteCursorPlugin, 'refresh'))
+    },
     setReadOnly: (next: boolean) => {
       readOnly = next
       view.setProps({ editable: () => !readOnly && !structuralCommandPending })

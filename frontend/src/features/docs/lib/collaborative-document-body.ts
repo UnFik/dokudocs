@@ -9,6 +9,7 @@ import {
   decodeBase64,
   type CollaborationSocketOptions,
   type PresenceUser,
+  type RemoteCursor,
 } from './collaboration-socket'
 import {
   IndexedDBCollaborationStore,
@@ -21,6 +22,7 @@ import type { DocumentBodyNode } from './documentBody'
 import {
   createDocumentBodyEditor,
   type EditorHistoryState,
+  type DocumentBodySelection,
   type MoveNodeIntent,
 } from './prosemirror/createDocumentBodyEditor'
 import type { InlineState } from './prosemirror/inlineMarks'
@@ -79,6 +81,10 @@ export async function mountCollaborativeDocumentBody(
     editorReadOnly = readOnly
   }
   let destroyEditor = () => {}
+  let showRemoteCursors: (cursors: RemoteCursor[]) => void = () => {}
+  const cursorSender = createCursorSender((selection) =>
+    provider?.sendCursor(selection)
+  )
   let bodyDestroyed = false
   const destroyBody = () => {
     if (bodyDestroyed) return
@@ -123,6 +129,7 @@ export async function mountCollaborativeDocumentBody(
       },
       onRecovery: input.onRecovery,
       onPresence: input.onPresence,
+      onRemoteCursors: (cursors) => showRemoteCursors(cursors),
       onCanonicalBody: input.onCanonicalBody,
       onCanEdit: (canEdit) => {
         setEditorReadOnly(forceReadOnly || !canEdit)
@@ -150,7 +157,9 @@ export async function mountCollaborativeDocumentBody(
       onHistoryChange: input.onHistoryChange,
       onInlineStateChange: input.onInlineStateChange,
       onLinkRequest: input.onLinkRequest,
+      onSelectionChange: cursorSender.send,
     })
+    showRemoteCursors = (cursors) => editor.setRemoteCursors(cursors)
     if (input.focusNodeID) {
       requestAnimationFrame(() => {
         const target = Array.from(
@@ -167,6 +176,7 @@ export async function mountCollaborativeDocumentBody(
     destroyEditor = () => {
       if (editorDestroyed) return
       editorDestroyed = true
+      cursorSender.cancel()
       editor.destroy()
     }
     return {
@@ -184,5 +194,41 @@ export async function mountCollaborativeDocumentBody(
     destroyEditor()
     destroyBody()
     throw error
+  }
+}
+
+const cursorIntervalMs = 100
+
+/**
+ * Sends the first selection change at once, then at most one per interval
+ * (the latest wins). A null selection (focus lost) is sent immediately so
+ * others stop seeing a cursor that is no longer there.
+ */
+function createCursorSender(
+  send: (selection: DocumentBodySelection | null) => void
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let pending: DocumentBodySelection | null | undefined
+  const flush = () => {
+    timer = undefined
+    if (pending === undefined) return
+    const next = pending
+    pending = undefined
+    send(next)
+    timer = setTimeout(flush, cursorIntervalMs)
+  }
+  return {
+    send(selection: DocumentBodySelection | null) {
+      pending = selection
+      if (selection === null || timer === undefined) {
+        if (timer) clearTimeout(timer)
+        flush()
+      }
+    },
+    cancel() {
+      if (timer) clearTimeout(timer)
+      timer = undefined
+      pending = undefined
+    },
   }
 }

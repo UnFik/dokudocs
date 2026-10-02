@@ -18,6 +18,9 @@ func ValidateCollaborativeChange(before, after Body) error {
 	if before.DocumentID != after.DocumentID || before.RootNodeID != after.RootNodeID {
 		return invalid("collaborative projection must keep the document root")
 	}
+	if len(after.Nodes) > MaxCollaborativeNodes && len(after.Nodes) > len(before.Nodes) {
+		return ErrTooLarge
+	}
 	old := make(map[uuid.UUID]Node, len(before.Nodes))
 	for _, node := range before.Nodes {
 		old[node.NodeID] = node
