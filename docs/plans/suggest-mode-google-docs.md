@@ -66,6 +66,8 @@ Found while building it: `DeleteNode` and `MoveNode` rebuild the shared Yjs stat
 - Done when: with suggestions pending, deleting or moving an unrelated block leaves every suggestion intact; accepting a suggested block deletion removes the block and the other suggestions stay; the epoch behavior of ADR 0014 is unchanged.
 - Backend only. Needs P1; must land before P4's accept and reject.
 
+**Status: done.** `yjs.DeleteSubtreesV1` and `yjs.MoveSubtreeV1` edit the stored document in place and check their result against the body the command computed. A move copies the subtree, marks and suggestions included, to its new place and deletes the original in one transaction, because Yjs has no move. The two writers use them, and `ErrSuggestionsPending` is gone. Restoring a revision still replaces the whole body and drops pending suggestions on purpose: it is a wholesale replacement, so the restore confirmation has to say so (P4). The old suggestion accept (`suggestion_query.go`) still rebuilds the state with `EncodeBodyV1`; it disappears with the old model in P4.
+
 ### P2. Write path for comment-only users
 - The WebSocket accepts updates from comment access under the two-part rule in "Why comment-only users need a write path". The snapshot tells the client it can suggest.
 - Done when: a comment user's suggestion reaches an editor live; adversarial updates (edit canonical text, delete a canonical node, touch another user's suggestion, forge the author) are all rejected.

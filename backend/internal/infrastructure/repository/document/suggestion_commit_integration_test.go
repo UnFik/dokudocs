@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
 	"strings"
 	"testing"
 
@@ -151,10 +152,10 @@ func TestSuggestionUpdateIsSharedButDoesNotChangeTheCanonicalBody(t *testing.T) 
 	}
 }
 
-// DeleteNode and MoveNode rebuild the Yjs state from the canonical body, which has
-// no suggestions. Until they carry the suggestion layer across, they must refuse
-// instead of silently erasing other people's pending suggestions.
-func TestStructuralCommandsRefuseWhileSuggestionsArePending(t *testing.T) {
+// DeleteNode and MoveNode change the stored Yjs state in place, so a suggestion in
+// a block they do not touch is still there afterwards, and the canonical text is
+// still the one without it.
+func TestStructuralCommandsKeepPendingSuggestions(t *testing.T) {
 	ctx := context.Background()
 	db, err := sql.Open("pgx", integrationDatabaseURL(t))
 	if err != nil {
@@ -198,29 +199,75 @@ func TestStructuralCommandsRefuseWhileSuggestionsArePending(t *testing.T) {
 		t.Fatalf("CommitUpdate() with a suggestion: %v", err)
 	}
 
-	_, err = repo.DeleteNode(ctx, actor, collaboration.DeleteNodeCommand{
-		WorkspaceID: workspaceID, DocumentID: documentID, CommandID: uuid.New(), BodyEpoch: 1, BodySchemaVersion: 1, NodeID: secondID,
-	})
-	if !errors.Is(err, collaboration.ErrSuggestionsPending) {
-		t.Fatalf("DeleteNode() with a pending suggestion = %v, want %v", err, collaboration.ErrSuggestionsPending)
+	pendingSuggestions := func(label string) {
+		t.Helper()
+		stored, err := readCollaborationState(ctx, db, documentID)
+		if err != nil {
+			t.Fatalf("%s: read state: %v", label, err)
+		}
+		suggestions, err := yjs.SuggestionsV1(stored)
+		if err != nil || len(suggestions) != 1 || suggestions[0].ID != suggestionID {
+			t.Fatalf("%s: suggestions = (%+v, %v), want the one pending suggestion kept", label, suggestions, err)
+		}
 	}
-	_, err = repo.MoveNode(ctx, actor, collaboration.MoveNodeCommand{
+	epochAndVersion := func() (epoch, version int64) {
+		t.Helper()
+		if err := db.QueryRowContext(ctx, `SELECT body_epoch, body_version FROM documents WHERE id = $1`, documentID).Scan(&epoch, &version); err != nil {
+			t.Fatalf("read epoch and version: %v", err)
+		}
+		return epoch, version
+	}
+	_, versionBefore := epochAndVersion()
+
+	// An unrelated block moves above the one that carries the suggestion.
+	moved, err := repo.MoveNode(ctx, actor, collaboration.MoveNodeCommand{
 		WorkspaceID: workspaceID, DocumentID: documentID, CommandID: uuid.New(), BodyEpoch: 1, BodySchemaVersion: 1,
 		NodeID: secondID, TargetParentID: rootID, BeforeNodeID: &firstID,
 	})
-	if !errors.Is(err, collaboration.ErrSuggestionsPending) {
-		t.Fatalf("MoveNode() with a pending suggestion = %v, want %v", err, collaboration.ErrSuggestionsPending)
+	if err != nil || !moved.Changed || moved.BodyEpoch != 2 || moved.BodyVersion != versionBefore+1 {
+		t.Fatalf("MoveNode() with a pending suggestion = (%+v, %v), want it applied at epoch 2, version %d", moved, err, versionBefore+1)
+	}
+	pendingSuggestions("after the move")
+	snapshot, err := repo.ReadBody(ctx, actor, workspaceID, documentID)
+	if err != nil {
+		t.Fatalf("ReadBody() after the move: %v", err)
+	}
+	var order []uuid.UUID
+	for _, node := range snapshot.Body.Nodes {
+		if node.ParentID != nil && *node.ParentID == rootID {
+			order = append(order, node.NodeID)
+		}
+	}
+	sort.Slice(order, func(i, j int) bool {
+		return siblingOrder(snapshot.Body, order[i]) < siblingOrder(snapshot.Body, order[j])
+	})
+	if len(order) != 2 || order[0] != secondID || order[1] != firstID {
+		t.Fatalf("top-level order after the move = %v, want the moved block first", order)
 	}
 
-	stored, err := readCollaborationState(ctx, db, documentID)
-	if err != nil {
-		t.Fatalf("read state: %v", err)
+	// The block that was moved is deleted again; the suggestion in the other
+	// block is still there, and its text is still the canonical one.
+	deleted, err := repo.DeleteNode(ctx, actor, collaboration.DeleteNodeCommand{
+		WorkspaceID: workspaceID, DocumentID: documentID, CommandID: uuid.New(), BodyEpoch: 2, BodySchemaVersion: 1, NodeID: secondID,
+	})
+	if err != nil || !deleted.Changed || deleted.BodyEpoch != 3 {
+		t.Fatalf("DeleteNode() with a pending suggestion = (%+v, %v), want it applied at epoch 3", deleted, err)
 	}
-	if suggestions, err := yjs.SuggestionsV1(stored); err != nil || len(suggestions) != 1 {
-		t.Fatalf("suggestions after the refused commands = (%+v, %v), want the one still there", suggestions, err)
+	pendingSuggestions("after the delete")
+	var content string
+	if err := db.QueryRowContext(ctx, `SELECT content FROM document_nodes WHERE document_id = $1 AND node_id = $2`, documentID, firstRunID).Scan(&content); err != nil || content != "plain" {
+		t.Fatalf("run = %q (%v), want the canonical \"plain\", not the suggested text", content, err)
 	}
-	var epoch int64
-	if err := db.QueryRowContext(ctx, `SELECT body_epoch FROM documents WHERE id = $1`, documentID).Scan(&epoch); err != nil || epoch != 1 {
-		t.Fatalf("body epoch = %d (%v), want 1: a refused command must not start a new epoch", epoch, err)
+	if err := db.QueryRowContext(ctx, `SELECT content FROM document_nodes WHERE document_id = $1 AND node_id = $2`, documentID, secondID).Scan(&content); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("deleted block still in document_nodes (%q, %v)", content, err)
 	}
+}
+
+func siblingOrder(body documentbody.Body, id uuid.UUID) float64 {
+	for _, node := range body.Nodes {
+		if node.NodeID == id {
+			return node.SiblingOrder
+		}
+	}
+	return 0
 }

@@ -120,12 +120,9 @@ func (r *Repository) DeleteNode(ctx context.Context, actor collaboration.Actor, 
 		if stateSchemaVersion != bodySchemaVersion {
 			return collaboration.ErrBodySchemaMismatch
 		}
-		persistedBody, suggestions, err := yjs.ProjectWithSuggestionsV1(persisted, command.DocumentID)
+		persistedBody, err := yjs.ProjectV1(persisted, command.DocumentID)
 		if err != nil {
 			return err
-		}
-		if len(suggestions) > 0 {
-			return collaboration.ErrSuggestionsPending
 		}
 		if err := setNodeVersions(before, &persistedBody); err != nil {
 			return err
@@ -145,7 +142,9 @@ func (r *Repository) DeleteNode(ctx context.Context, actor collaboration.Actor, 
 			DocumentID: command.DocumentID, CommandID: command.CommandID, NodeID: command.NodeID, NodeIDs: command.NodeIDs,
 			BodyEpoch: bodyEpoch + 1, BodyVersion: bodyVersion + 1, Changed: true,
 		}
-		encodedState, err := yjs.EncodeBodyV1(after)
+		// The stored state is edited in place so pending suggestions survive;
+		// rebuilding it from the canonical body would erase them.
+		encodedState, err := yjs.DeleteSubtreesV1(persisted, command.Targets(), after)
 		if err != nil {
 			return err
 		}

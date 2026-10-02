@@ -107,12 +107,9 @@ func (r *Repository) MoveNode(ctx context.Context, actor collaboration.Actor, co
 		if stateSchemaVersion != bodySchemaVersion {
 			return collaboration.ErrBodySchemaMismatch
 		}
-		persistedBody, suggestions, err := yjs.ProjectWithSuggestionsV1(persisted, command.DocumentID)
+		persistedBody, err := yjs.ProjectV1(persisted, command.DocumentID)
 		if err != nil {
 			return err
-		}
-		if len(suggestions) > 0 {
-			return collaboration.ErrSuggestionsPending
 		}
 		if err := setNodeVersions(before, &persistedBody); err != nil {
 			return err
@@ -139,7 +136,9 @@ func (r *Repository) MoveNode(ctx context.Context, actor collaboration.Actor, co
 			}
 			result.BodyEpoch++
 			result.BodyVersion++
-			encodedState, err := yjs.EncodeBodyV1(after)
+			// The stored state is edited in place so pending suggestions survive;
+			// rebuilding it from the canonical body would erase them.
+			encodedState, err := yjs.MoveSubtreeV1(persisted, command.NodeID, command.TargetParentID, command.BeforeNodeID, after)
 			if err != nil {
 				return err
 			}
