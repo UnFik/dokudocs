@@ -165,32 +165,30 @@ async function pendingCommandCount(
     | "pending-move-commands"
     | "pending-updates",
 ) {
-  return page.evaluate(
-    () =>
-      new Promise<number>((resolve, reject) => {
-        const request = indexedDB.open("dokudocs-collaboration");
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          const db = request.result;
-          if (!db.objectStoreNames.contains(storeName)) {
-            db.close();
-            resolve(0);
-            return;
-          }
-          const count = db
-            .transaction(storeName, "readonly")
-            .objectStore(storeName)
-            .count();
-          count.onsuccess = () => {
-            db.close();
-            resolve(count.result);
-          };
-          count.onerror = () => reject(count.error);
-        };
-      }),
-  );
+  // A source string keeps storeName in scope inside the page and the
+  // Playwright TS transform from injecting helpers the page does not have.
+  return page.evaluate<number>(`new Promise((resolve, reject) => {
+    const request = indexedDB.open("dokudocs-collaboration");
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(${JSON.stringify(storeName)})) {
+        db.close();
+        resolve(0);
+        return;
+      }
+      const count = db
+        .transaction(${JSON.stringify(storeName)}, "readonly")
+        .objectStore(${JSON.stringify(storeName)})
+        .count();
+      count.onsuccess = () => {
+        db.close();
+        resolve(count.result);
+      };
+      count.onerror = () => reject(count.error);
+    };
+  })`);
 }
-
 
 async function bodyNodes(
   page: Page,
@@ -259,11 +257,7 @@ test("@live: partial rebase applies the clean offline edit and holds only the co
     .toContain("MY2 second");
 });
 
-// FIXME(#17): not passing yet. With a persistent profile the offline edit never
-// reached IndexedDB pending-updates in my runs (poll timed out), and a later run hung
-// before typing, so the harness around launchPersistentContext is unverified. The
-// partial-rebase test above passes against the real stack.
-test.fixme("@live: an unsent offline edit survives a browser restart while the server changed", async () => {
+test("@live: an unsent offline edit survives a browser restart while the server changed", async () => {
   test.setTimeout(150000);
   const baseURL = test.info().project.use.baseURL!;
   const profile = mkdtempSync(join(tmpdir(), "dokudocs-restart-"));

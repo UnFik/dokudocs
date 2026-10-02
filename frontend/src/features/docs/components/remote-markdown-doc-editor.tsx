@@ -232,12 +232,15 @@ export function RemoteMarkdownDocEditor({
           snapshot={bodyQuery.data}
           focusNodeID={focusNodeID}
           onLocalStateChanged={() => setLocalStateNonce((value) => value + 1)}
-          onCanonicalBody={(body) =>
+          onCanonicalBody={(body) => {
             queryClient.setQueryData(
               ['markdown-body', workspaceID, document.id, userID, offline],
               body
             )
-          }
+            // A rebase at startup lands on the body this page already loaded,
+            // so the key alone would not remount onto the rebased state.
+            setLocalStateNonce((value) => value + 1)
+          }}
           onMarkdownChange={setMarkdownOverride}
           onPresence={setPresence}
           onAccessUnavailable={() => {
