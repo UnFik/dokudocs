@@ -1,6 +1,7 @@
 import { inputRules } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
 import {
+  AllSelection,
   EditorState,
   Plugin,
   type Command,
@@ -152,6 +153,10 @@ export function createDocumentBodyEditor(
             options.onLinkRequest?.()
             return true
           },
+          a: () => {
+            selectAllContent()
+            return true
+          },
           z: () => runHistory(undoYjs),
           'Shift-z': () => runHistory(redoYjs),
           y: () => runHistory(redoYjs),
@@ -160,6 +165,22 @@ export function createDocumentBodyEditor(
     ],
   })
   const canEdit = () => !readOnly && !structuralCommandPending
+  // Select all stays inside the document body. In read-only mode there is no
+  // caret, so the selection is set on the DOM instead.
+  const selectAllContent = () => {
+    const view = viewHolder.current
+    if (!view) return
+    if (readOnly || structuralCommandPending) {
+      const range = window.document.createRange()
+      range.selectNodeContents(view.dom)
+      const selection = window.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+      return
+    }
+    view.focus()
+    view.dispatch(view.state.tr.setSelection(new AllSelection(state.doc)))
+  }
   // A shortcut swallowed while read-only must not fall through to the browser's
   // own contenteditable history, which would bypass the Yjs undo manager.
   const runHistory = (action: (state: EditorState) => boolean) => {
@@ -506,6 +527,7 @@ export function createDocumentBodyEditor(
     insertBlock: (kind: InsertableBlock) =>
       canEdit() && insertBlockCommand(kind)(state, view.dispatch),
     focus: () => view.focus(),
+    selectAll: selectAllContent,
     undo: () => canEdit() && !suggestMode && undoYjs(state),
     redo: () => canEdit() && !suggestMode && redoYjs(state),
     resolveSelection: (selection: DocumentBodySelection) => {

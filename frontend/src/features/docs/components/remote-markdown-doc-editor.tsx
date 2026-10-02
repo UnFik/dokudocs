@@ -51,6 +51,7 @@ import {
   type InlineMarkName,
   type InlineState,
 } from '../lib/prosemirror/inlineMarks'
+import { shouldSelectDocumentBody } from '../lib/select-all-scope'
 import {
   buildDeleteBlockSuggestion,
   buildFormatSuggestion,
@@ -528,8 +529,19 @@ function CollaborativeMarkdownBody({
           )
       })
 
+    // Select all selects the document body, not every word on the page.
+    const selectDocumentBody = (event: KeyboardEvent) => {
+      if (!shouldSelectDocumentBody(event, mount)) return
+      const editor = sessionRef.current?.editor
+      if (!editor) return
+      event.preventDefault()
+      editor.selectAll()
+    }
+    window.addEventListener('keydown', selectDocumentBody)
+
     return () => {
       disposed = true
+      window.removeEventListener('keydown', selectDocumentBody)
       sessionRef.current?.destroy()
       sessionRef.current = null
     }
