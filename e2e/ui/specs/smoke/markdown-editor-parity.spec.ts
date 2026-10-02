@@ -291,13 +291,16 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
       `${apiURL}/api/v1/documents/${documentID}/body`,
       { headers },
     );
-    return ((await response.json()).data.nodes ?? []) as {
-      nodeID: string;
-      parentID: string | null;
-      type: string;
-      content: string;
-      attributes: Record<string, unknown>;
-    }[];
+    return inDocumentOrder(
+      ((await response.json()).data.nodes ?? []) as {
+        nodeID: string;
+        parentID: string | null;
+        siblingOrder: number;
+        type: string;
+        content: string;
+        attributes: Record<string, unknown>;
+      }[],
+    );
   };
   // The server body holds the marks as run attributes and the nested list as
   // a list inside the outer list item.
