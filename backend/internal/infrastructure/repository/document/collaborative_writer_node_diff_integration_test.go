@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -237,7 +238,7 @@ func TestCommitUpdateLatencyReport(t *testing.T) {
 	if os.Getenv("COMMIT_LATENCY") == "" {
 		t.Skip("set COMMIT_LATENCY=1 to print commit latency")
 	}
-	for _, paragraphs := range []int{100, 1000, 5000} {
+	for _, paragraphs := range []int{100, 1000, 2500, 5000} {
 		f := newNodeDiffFixture(t, paragraphs)
 		texts := make([]*crdt.YXmlText, paragraphs)
 		for i := range texts {
@@ -265,6 +266,12 @@ func TestCommitUpdateUnderConcurrentWritersKeepsEveryEditAndEveryVersion(t *test
 	gate := os.Getenv("COMMIT_LOAD") != ""
 	if gate {
 		writers, commitsPerWriter, paragraphs, interval = 10, 20, 1000, 500*time.Millisecond
+		// COMMIT_LOAD_PARAGRAPHS sizes the document for the sizing runs in ADR 0023.
+		if raw := os.Getenv("COMMIT_LOAD_PARAGRAPHS"); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil && n >= writers {
+				paragraphs = n - n%writers
+			}
+		}
 	}
 	f := newNodeDiffFixture(t, paragraphs)
 	ctx := context.Background()
@@ -366,4 +373,29 @@ func TestCommitUpdateUnderConcurrentWritersKeepsEveryEditAndEveryVersion(t *test
 	if gate && p95 > 200*time.Millisecond {
 		t.Fatalf("p95 commit latency %v exceeds the 200 ms G6 gate", p95)
 	}
+}
+
+// TestCommitUpdateProfileRun commits many one-character edits to a 2,001-node
+// document so a CPU profile (-cpuprofile) shows where commit time goes.
+// Run with COMMIT_PROFILE=1.
+func TestCommitUpdateProfileRun(t *testing.T) {
+	if os.Getenv("COMMIT_PROFILE") == "" {
+		t.Skip("set COMMIT_PROFILE=1 to run the profiling loop")
+	}
+	const paragraphs = 1000
+	f := newNodeDiffFixture(t, paragraphs)
+	texts := make([]*crdt.YXmlText, paragraphs)
+	for i := range texts {
+		paragraph := f.root().Children()[i].(*crdt.YXmlElement)
+		texts[i] = paragraph.Children()[0].(*crdt.YXmlElement).Children()[0].(*crdt.YXmlText)
+	}
+	durations := make([]time.Duration, 0, 400)
+	for i := 0; i < 400; i++ {
+		text := texts[(i*37)%paragraphs]
+		start := time.Now()
+		f.commit(t, func(tx *crdt.Transaction) { text.Insert(tx, text.Len(), "x", nil) })
+		durations = append(durations, time.Since(start))
+	}
+	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
+	t.Logf("PROFILE nodes=%d p50=%v p95=%v", paragraphs*2+1, durations[len(durations)/2], durations[len(durations)*95/100])
 }

@@ -1686,6 +1686,86 @@ describe('CollaborativeDocumentProvider presence', () => {
   })
 })
 
+describe('CollaborativeDocumentProvider remote cursors', () => {
+  it('tracks cursors per connection, removes them on leave, and clears them on disconnect', async () => {
+    const document = new Y.Doc()
+    const socket = new FakeSocket()
+    const seen: Array<Array<{ connectionID: string; name?: string }>> = []
+    const provider = new CollaborativeDocumentProvider({
+      documentID: 'document-1',
+      workspaceID: 'workspace-1',
+      userID: 'user-1',
+      token: 'jwt-token',
+      document,
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      store: new MemoryStore(),
+      socketFactory: () => socket,
+      onRemoteCursors: (cursors) => seen.push(cursors),
+    })
+
+    try {
+      await provider.start()
+      socket.open()
+      socket.receive({
+        type: 'ready',
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: base64(Y.encodeStateAsUpdate(document)),
+      })
+      await flushPromises()
+
+      socket.receive({
+        type: 'cursor',
+        cursor: {
+          connectionID: 'c1',
+          userID: 'u2',
+          name: 'Bo',
+          color: '#0369A1',
+          anchor: 'AQ==',
+          head: 'Ag==',
+        },
+      })
+      socket.receive({
+        type: 'cursor',
+        cursor: {
+          connectionID: 'c2',
+          userID: 'u3',
+          name: 'Cy',
+          color: '#B45309',
+          anchor: 'AQ==',
+          head: 'Ag==',
+        },
+      })
+      expect(seen.at(-1)?.map((cursor) => cursor.connectionID)).toEqual([
+        'c1',
+        'c2',
+      ])
+
+      socket.receive({
+        type: 'cursor_leave',
+        cursor: { connectionID: 'c1', userID: 'u2' },
+      })
+      expect(seen.at(-1)?.map((cursor) => cursor.connectionID)).toEqual(['c2'])
+
+      expect(
+        provider.sendCursor({
+          anchor: new Uint8Array([1]),
+          head: new Uint8Array([2]),
+        })
+      ).toBe(true)
+
+      socket.close()
+      expect(seen.at(-1)).toEqual([])
+    } finally {
+      provider.stop()
+    }
+  })
+})
+
 describe('CollaborativeDocumentProvider epoch rebase', () => {
   it('rebases pending text edits onto a new epoch instead of requiring recovery', async () => {
     const baseState = stateOf(twoParagraphs())
