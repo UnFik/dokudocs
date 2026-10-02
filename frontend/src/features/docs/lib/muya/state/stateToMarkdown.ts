@@ -517,10 +517,9 @@ export default class ExportMarkdown {
       state.sourceMarkdown &&
       sourceTableMatchesState(state.sourceMarkdown, state)
     ) {
-      return `${indent}${state.sourceMarkdown.replace(
-        /(\r\n|\r|\n)/g,
-        (lineBreak) => `${lineBreak}${indent}`
-      )}\n`
+      return `${indent}${state.sourceMarkdown
+        .replace(/(\r\n|\r|\n)+$/, '')
+        .replace(/(\r\n|\r|\n)/g, (lineBreak) => `${lineBreak}${indent}`)}\n`
     }
 
     const result: string[] = []

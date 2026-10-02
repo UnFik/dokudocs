@@ -57,3 +57,36 @@ func TestAutoRevisionSnapshotIsWrittenAtMostOncePerDebounceInterval(t *testing.T
 		t.Fatalf("revision once the interval passed = %+v, want the same row brought up to body_version 5", got)
 	}
 }
+
+func TestFlushAutoRevisionBringsTheRollingRevisionUpToTheLatestBody(t *testing.T) {
+	f := newNodeDiffFixture(t, 3)
+	paragraph := f.root().Children()[0].(*crdt.YXmlElement)
+	text := paragraph.Children()[0].(*crdt.YXmlElement).Children()[0].(*crdt.YXmlText)
+	edit := func() {
+		f.commit(t, func(tx *crdt.Transaction) { text.Insert(tx, text.Len(), "x", nil) })
+	}
+
+	f.writer.revisionDebounce = time.Hour
+	edit()
+	edit()
+	edit()
+	stale := latestAutoRevision(t, f)
+	if stale.bodyVersion != 2 {
+		t.Fatalf("setup: revision body_version = %d, want it trailing at 2 while the body is at 4", stale.bodyVersion)
+	}
+
+	if err := f.writer.FlushAutoRevision(context.Background(), f.documentID); err != nil {
+		t.Fatalf("FlushAutoRevision(): %v", err)
+	}
+	got := latestAutoRevision(t, f)
+	if got.count != stale.count || got.bodyVersion != 4 {
+		t.Fatalf("revision after flush = %+v, want the same row at body_version 4", got)
+	}
+
+	if err := f.writer.FlushAutoRevision(context.Background(), f.documentID); err != nil {
+		t.Fatalf("second FlushAutoRevision(): %v", err)
+	}
+	if again := latestAutoRevision(t, f); again != got {
+		t.Fatalf("flush of an up-to-date revision rewrote it: %+v, want %+v", again, got)
+	}
+}
