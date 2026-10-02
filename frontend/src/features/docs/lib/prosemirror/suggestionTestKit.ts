@@ -30,7 +30,7 @@ export type Piece =
       bold?: boolean
     }
 
-export function suggestionMark(
+function suggestionMark(
   kind: 'insert' | 'delete',
   author: string,
   id: string
