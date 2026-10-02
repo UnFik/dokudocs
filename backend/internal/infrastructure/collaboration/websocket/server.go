@@ -2,8 +2,10 @@ package websocket
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -16,6 +18,7 @@ import (
 	"backend/internal/domain/documentbody"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	ws "golang.org/x/net/websocket"
 )
 
@@ -1139,9 +1142,35 @@ func updateErrorCode(err error) string {
 		return "body_not_initialized"
 	case errors.Is(err, documentbody.ErrTooLarge):
 		return "document_too_large"
+	case isTransientStoreError(err):
+		return "unavailable"
 	default:
 		return "update_rejected"
 	}
+}
+
+// isTransientStoreError reports an outage of the store rather than a verdict on
+// the update: the client must keep the update and retry it, not review it.
+func isTransientStoreError(err error) bool {
+	var netErr net.Error
+	var pgErr *pgconn.PgError
+	switch {
+	case errors.As(err, &netErr),
+		errors.Is(err, io.ErrUnexpectedEOF), errors.Is(err, io.EOF),
+		errors.Is(err, driver.ErrBadConn),
+		errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return true
+	case errors.As(err, &pgErr):
+		switch {
+		case strings.HasPrefix(pgErr.Code, "08"), // connection exception
+			strings.HasPrefix(pgErr.Code, "53"),          // insufficient resources
+			strings.HasPrefix(pgErr.Code, "57"),          // operator intervention, failover shutdown
+			pgErr.Code == "25006",                        // read-only transaction: demoted primary
+			pgErr.Code == "40001", pgErr.Code == "40P01": // serialization failure, deadlock
+			return true
+		}
+	}
+	return false
 }
 
 func distinctUsers(peers []*peer) []uuid.UUID {
