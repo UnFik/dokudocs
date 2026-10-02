@@ -1,3 +1,5 @@
+> Superseded by [ADR 0027](0027-suggestions-live-in-the-body.md). The reply table and the resolved columns stay; the stored operations and the local typing layer go.
+
 # Suggest mode is a typing layer over stored suggestions
 
 Suggest behaves like Google Docs: the user keeps editing, and the edits become suggestions that an editor later accepts, rejects, or resolves. Storage does not change. Suggestions stay in `document_suggestions`, outside the Yjs body and the canonical AST, as ADR 0006 requires. Inline marks in Yjs were considered and rejected because they would put unapproved text into the Markdown export, RAG evidence, and the offline conflict flow.

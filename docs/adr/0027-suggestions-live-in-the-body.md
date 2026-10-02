@@ -1,0 +1,19 @@
+# Suggestions live in the body, as marked content
+
+Suggest mode works like Google Docs. A user in Suggest mode edits normally, and every change is recorded in the Yjs body as content marked with a suggestion: inserted runs and blocks carry an insert mark, text to remove carries a delete mark, a format or block-type change carries the proposed new value beside the unchanged current one. Typing, Enter, paste, formats, images, and tables are ordinary ProseMirror edits that a track-changes layer rewrites into marks, so undo and redo work. Accepting or rejecting is an ordinary Yjs edit made by an editor.
+
+This replaces [ADR 0006](0006-track-changes-outside-canonical-body.md) and [ADR 0025](0025-suggest-mode-as-a-local-typing-layer-over-stored-suggestions.md), which kept suggestions in a table as a list of operations. That model needs one operation, one diff, and one replay path for every kind of edit (paragraph splits, multi-line paste, tables, formats), and none of them exists. A body that carries the marks gets all of them from the editor.
+
+**The canonical body does not change.** The projection from Yjs to `document_nodes` skips inserted runs, blocks, and split markers, ignores delete marks, and keeps the current value under a format or block-type suggestion. Search, RAG, revisions, public links, duplicate, and thumbnails read `document_nodes`, so none of them sees a suggestion. Unapproved content still never becomes canonical or chatbot evidence.
+
+**Who may write.** Today only users with edit access can send Yjs updates. A user with comment access gets a restricted write path with one rule: the canonical projection after the update must equal the one before, and the update may only add, change, or remove suggestions whose author is that user. Edit access can change anything, as now. An update that touches canonical content or someone else's suggestion from a comment-only user is rejected.
+
+**Deciding.** An editor accepts or rejects in the editor. Accepting an insertion clears its mark. Accepting a deletion removes the text, and when a whole run or block goes it uses the batch `DeleteNodes` of [ADR 0026](0026-batch-delete-nodes.md). Accepting a split or a join copies the affected runs into the new shape and deletes the originals the same way, instead of moving them. Rejecting an insertion deletes content that was never canonical, so the structural-delete rule does not apply. The author may reject their own. Accept all and Reject all are one transaction plus one batch.
+
+**What a card says.** The title is worked out from the marks, not stored: insert only is Add, delete only is Delete, delete and insert that touch is Replace. Typing straight after a deletion, or deleting next to the text just typed, joins the same suggestion; a caret that moves, another user's edit between them, or a decision ends it. There is no timer. An edit inside someone else's insertion is a separate suggestion, and rejecting the insertion rejects it with it. Deleting your own insertion removes it.
+
+**Who sees it.** Everyone who can read the document sees every suggestion. A viewer sees them in read mode and cannot decide or reply. A public link shows the canonical body without suggestions. This drops the visibility limit of ADR 0006.
+
+**The index.** `document_suggestions` stops holding operations. The server keeps a row per suggestion (id, author, summary, status, decision time), made and closed by reading what each Yjs update adds and removes. Replies and resolve stay in their tables. Pending suggestions made under the old model are rejected with a note when the new one ships.
+
+**Cost.** The body grows with unapproved content, the projection and the write rules carry the main risk and need adversarial tests, and an accept that deletes a whole run or block still starts a new body epoch. In exchange the editor, not a replay engine, defines what a suggestion can be.
