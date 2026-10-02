@@ -104,7 +104,8 @@
   color: var(--muted-foreground);
   cursor: default;
 }
-@media (pointer: coarse) {
+/* 44px targets on touch screens and phone widths (DESIGN.md allows 32px for a mouse). */
+@media (max-width: 640px), (pointer: coarse) {
   .dd-tb button,
   .dd-image-form button {
     min-height: 44px;
@@ -161,10 +162,14 @@
 @media (max-width: 640px), (pointer: coarse) {
   .dd-handle {
     left: 0;
-    width: 32px;
-    min-height: 32px;
+    width: 44px;
+    min-height: 44px;
     background: var(--card);
     border: 1px solid var(--border);
+  }
+  /* The handle has no side gutter on a phone, so give it one instead of covering text. */
+  .dd-host > .ProseMirror {
+    padding-left: 44px;
   }
 }
 .dd-slash {
@@ -210,6 +215,14 @@
 }
 .dd-slash-option[aria-selected='true'] {
   background: var(--secondary);
+}
+/* After the base rules above so the larger touch size wins. */
+@media (max-width: 640px), (pointer: coarse) {
+  .dd-image-form input,
+  .dd-slash-input,
+  .dd-slash-option {
+    min-height: 44px;
+  }
 }
 .dd-slash-hint,
 .dd-slash-empty {
