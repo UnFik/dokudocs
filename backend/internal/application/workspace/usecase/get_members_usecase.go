@@ -13,7 +13,7 @@ func (u *useCase) GetMembers(ctx context.Context, workspaceID uuid.UUID, userID 
 	if err != nil {
 		return nil, err
 	}
-	data, err = u.workspaceRepo.GetMembers(ctx, workspaceID)
+	data, err = u.workspaceRepo.GetMembers(ctx, workspaceID, userID)
 	if err != nil {
 		return data, err
 	}

@@ -13,8 +13,10 @@ import (
 type RepositoryFactory func(database.Queryer) repocontract.UserRepository
 
 type useCase struct {
-	users  repocontract.UserRepository
-	tokens *appjwt.Manager
+	db      database.DB
+	users   repocontract.UserRepository
+	factory RepositoryFactory
+	tokens  *appjwt.Manager
 }
 
 func NewUseCase(db database.DB, jwtSecret string, accessTokenTTL time.Duration) usecasecontract.AuthUseCase {
@@ -25,8 +27,10 @@ func NewUseCase(db database.DB, jwtSecret string, accessTokenTTL time.Duration) 
 
 func NewUseCaseWithFactory(db database.DB, jwtSecret string, accessTokenTTL time.Duration, factory RepositoryFactory) *useCase {
 	return &useCase{
-		users:  factory(db),
-		tokens: appjwt.NewManager(jwtSecret, accessTokenTTL),
+		db:      db,
+		users:   factory(db),
+		factory: factory,
+		tokens:  appjwt.NewManager(jwtSecret, accessTokenTTL),
 	}
 }
 

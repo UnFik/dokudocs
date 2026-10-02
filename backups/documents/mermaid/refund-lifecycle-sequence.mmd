@@ -1,0 +1,14 @@
+sequenceDiagram
+  autonumber
+  actor Admin as Operations Admin
+  participant API as Payment API
+  participant Gate as Stripe Gateway
+  participant DB as Database
+
+  Admin->>API: POST /refunds (orderId, amount)
+  API->>DB: Verify original transaction status
+  DB-->>API: Status = PAID
+  API->>Gate: Create refund charge
+  Gate-->>API: Refund processed (ref_id)
+  API->>DB: Store refund transaction
+  API-->>Admin: 200 OK (Refund Completed)

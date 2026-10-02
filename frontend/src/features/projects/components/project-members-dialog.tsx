@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
 import {
   Mail,
-  ShieldCheck,
   Trash2,
   UserPlus,
   Users,
@@ -62,7 +61,7 @@ export function ProjectMembersDialog({
     toast.success(`Added ${trimmed} as ${inviteRole}`)
   }
 
-  const handleRoleChange = (memberId: string, email: string, role: ProjectMemberRole) => {
+  const handleRoleChange = (_memberId: string, email: string, role: ProjectMemberRole) => {
     setProjectMember(project.id, email, role)
     toast.success(`Updated role for ${email} to ${role}`)
   }

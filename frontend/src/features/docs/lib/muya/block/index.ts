@@ -1,4 +1,4 @@
-import Frontmatter from './/extra/frontmatter'
+import Frontmatter from './extra/frontmatter'
 import AtxHeading from './commonMark/atxHeading'
 // container block
 import BlockQuote from './commonMark/blockQuote'

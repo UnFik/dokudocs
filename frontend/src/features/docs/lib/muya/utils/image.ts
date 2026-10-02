@@ -24,6 +24,29 @@ export function getImageInfo(image: HTMLElement): IImageInfo {
   }
 }
 
+const ABSOLUTE_LOCAL_REG = /^(?:\/|\\\\|[a-z]:\\|[a-z]:\/).+/i
+
+function resolveRelativePath(base: string, relative: string): string {
+  const normalizedBase = base.replace(/\\/g, '/').replace(/\/+$/, '')
+  const combined = `${normalizedBase}/${relative.replace(/\\/g, '/')}`
+  const root =
+    combined.match(/^\/\/[^/]+\/[^/]+/)?.[0] ??
+    combined.match(/^[a-z]:/i)?.[0] ??
+    ''
+  const body = root ? combined.slice(root.length) : combined
+  const resolved: string[] = []
+
+  for (const segment of body.split('/')) {
+    if (segment === '' || segment === '.') continue
+    if (segment === '..') resolved.pop()
+    else resolved.push(segment)
+  }
+
+  const tail = resolved.join('/')
+  if (!root) return `/${tail}`
+  return tail ? `${root}/${tail}` : root
+}
+
 export function getImageSrc(src: string) {
   const EXT_REG = /\.(?:jpeg|jpg|png|gif|svg|webp)(?=\?|$)/i
   const URL_REG =
@@ -31,30 +54,25 @@ export function getImageSrc(src: string) {
   const DATA_URL_REG =
     /^data:image\/[\w+-]+(?:;[\w-]+=[\w-]+|;base64)*,[a-zA-Z0-9+/]+={0,2}$/
   const imageExtension = EXT_REG.test(src)
-  const isUrl =
-    URL_REG.test(src) ||
-    DATA_URL_REG.test(src) ||
-    src.startsWith('blob:') ||
-    src.startsWith('/')
+  const isFileUrl = /^file:\/\//i.test(src)
+  const isUrl = URL_REG.test(src) || (imageExtension && isFileUrl)
 
-  if (isUrl) {
-    return {
-      isUnknownType: false,
-      src,
-    }
-  }
+  if (src.startsWith('blob:')) return { isUnknownType: false, src }
 
   if (imageExtension) {
-    return {
-      isUnknownType: false,
-      src,
-    }
+    const baseUrl = typeof window !== 'undefined' ? window.DIRNAME : undefined
+    if (isUrl) return { isUnknownType: false, src }
+    if (!ABSOLUTE_LOCAL_REG.test(src) && baseUrl)
+      return {
+        isUnknownType: false,
+        src: `file://${resolveRelativePath(baseUrl, src)}`,
+      }
+    return { isUnknownType: false, src: `file://${src}` }
   }
 
-  return {
-    isUnknownType: false,
-    src,
-  }
+  if (isUrl) return { isUnknownType: true, src }
+  if (DATA_URL_REG.test(src)) return { isUnknownType: false, src }
+  return { isUnknownType: false, src: '' }
 }
 
 export async function loadImage(

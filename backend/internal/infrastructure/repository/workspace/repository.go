@@ -6,8 +6,9 @@ import (
 
 type Repository struct {
 	db database.Queryer
+	tx database.DB
 }
 
-func NewRepository(db database.Queryer) *Repository {
-	return &Repository{db: db}
+func NewRepository(db database.DB) *Repository {
+	return &Repository{db: db, tx: db}
 }

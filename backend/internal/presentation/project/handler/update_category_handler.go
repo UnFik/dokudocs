@@ -9,6 +9,24 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// UpdateCategory updates an existing category in a project.
+// @Summary Update project category
+// @Description Update category name or color
+// @Tags Project
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Project ID (UUID)"
+// @Param categoryId path string true "Category ID (UUID)"
+// @Param request body presenter.UpdateCategoryRequest true "Category update payload"
+// @Success 200 {object} response.Envelope{data=map[string]string}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /projects/{id}/categories/{categoryId} [put]
 func (h *Handler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {

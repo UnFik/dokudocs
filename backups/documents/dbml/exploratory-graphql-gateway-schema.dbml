@@ -1,0 +1,5 @@
+Table graphql_resolvers {
+  id int [pk]
+  name varchar(100)
+  target_service varchar(100)
+}

@@ -12,7 +12,7 @@ func (u *useCase) ListMembers(ctx context.Context, projectID, workspaceID, userI
 	if _, err = u.GetProject(ctx, projectID, workspaceID, userID); err != nil {
 		return nil, err
 	}
-	data, err = u.projectRepo.ListMembers(ctx, projectID)
+	data, err = u.projectRepo.ListMembers(ctx, projectID, workspaceID, userID)
 	if err != nil {
 		return data, err
 	}

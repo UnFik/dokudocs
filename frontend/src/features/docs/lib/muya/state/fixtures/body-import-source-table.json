@@ -1,0 +1,66 @@
+[
+  {
+    "name": "table",
+    "sourceMarkdown": "|a|b|\n|---|---|\n|x|y|",
+    "children": [
+      {
+        "name": "table.row",
+        "children": [
+          {
+            "name": "table.cell",
+            "meta": { "align": "none" },
+            "text": "a",
+            "inline": [
+              {
+                "type": "run",
+                "content": "a",
+                "attributes": { "source": "a" }
+              }
+            ]
+          },
+          {
+            "name": "table.cell",
+            "meta": { "align": "none" },
+            "text": "b",
+            "inline": [
+              {
+                "type": "run",
+                "content": "b",
+                "attributes": { "source": "b" }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "table.row",
+        "children": [
+          {
+            "name": "table.cell",
+            "meta": { "align": "none" },
+            "text": "x",
+            "inline": [
+              {
+                "type": "run",
+                "content": "x",
+                "attributes": { "source": "x" }
+              }
+            ]
+          },
+          {
+            "name": "table.cell",
+            "meta": { "align": "none" },
+            "text": "y",
+            "inline": [
+              {
+                "type": "run",
+                "content": "y",
+                "attributes": { "source": "y" }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

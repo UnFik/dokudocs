@@ -1,6 +1,6 @@
 import diff from 'fast-diff'
-import TreeNode from '../../block/base/treeNode'
-import { ScrollPage } from '../../block/scrollPage'
+import TreeNode from './treeNode'
+import { ScrollPage } from '../scrollPage'
 import { BACK_HASH, BRACKET_HASH, EVENT_KEYS, isFirefox } from '../../config'
 import type { IHighlight } from '../../inlineRenderer/types'
 import type { Muya } from '../../muya'

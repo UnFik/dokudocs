@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import './theme.css';
+@import './fonts.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -9,6 +10,10 @@
     @apply border-border outline-ring/50;
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
+  }
+  .ProseMirror:focus,
+  .ProseMirror:focus-visible {
+    outline: none;
   }
   html {
     @apply overflow-x-hidden;

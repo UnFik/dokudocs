@@ -115,9 +115,9 @@ export function SetDocCategoryDialog({
                       key={c}
                       type='button'
                       onClick={() => handleToggle(c)}
-                      className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${
+                      className={`inline-flex cursor-pointer items-center gap-1 rounded-sm border px-2.5 py-1 text-xs font-medium transition-all ${
                         isSelected
-                          ? `${palette.bg} ${palette.text} ${palette.border} shadow-2xs ring-1 ring-primary/40`
+                          ? `${palette.bg} ${palette.text} ${palette.border} ring-1 ring-primary/40`
                           : 'border-border/80 bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
                       }`}
                     >

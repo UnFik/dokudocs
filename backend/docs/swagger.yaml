@@ -1,0 +1,3620 @@
+basePath: /api/v1
+definitions:
+  backend_internal_application_collaboration.DeleteNodeResult:
+    properties:
+      bodyEpoch:
+        type: integer
+      bodyVersion:
+        type: integer
+      changed:
+        type: boolean
+      commandID:
+        type: string
+      documentID:
+        type: string
+      nodeID:
+        type: string
+    type: object
+  backend_internal_application_collaboration.MoveNodeResult:
+    properties:
+      bodyEpoch:
+        type: integer
+      bodyVersion:
+        type: integer
+      changed:
+        type: boolean
+      commandID:
+        type: string
+      documentID:
+        type: string
+    type: object
+  backend_internal_domain_model.Document:
+    properties:
+      author:
+        $ref: '#/definitions/backend_internal_domain_model.UserAuthor'
+      authorId:
+        type: string
+      categories:
+        items:
+          type: string
+        type: array
+      category:
+        description: Primary / first category
+        type: string
+      content:
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      deletedBy:
+        type: string
+      deletedByUser:
+        $ref: '#/definitions/backend_internal_domain_model.UserAuthor'
+      id:
+        type: string
+      isDraft:
+        type: boolean
+      isShared:
+        type: boolean
+      isStarred:
+        type: boolean
+      lastViewedAt:
+        type: string
+      projectId:
+        type: string
+      projectName:
+        type: string
+      starredAt:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      thumbnail:
+        type: string
+      thumbnailDark:
+        type: string
+      thumbnailPreview:
+        type: string
+      thumbnailPreviewDark:
+        type: string
+      title:
+        type: string
+      type:
+        description: markdown, dbdiagram, mermaid
+        type: string
+      updatedAt:
+        type: string
+      viewCount:
+        type: integer
+      visibility:
+        description: workspace, private, public_link, inherit
+        type: string
+      workspaceId:
+        type: string
+    type: object
+  backend_internal_domain_model.DocumentAccess:
+    properties:
+      accessLevel:
+        description: owner, edit, comment, view
+        type: string
+      createdAt:
+        type: string
+      documentId:
+        type: string
+      user:
+        $ref: '#/definitions/backend_internal_domain_model.UserAuthor'
+      userId:
+        type: string
+    type: object
+  backend_internal_domain_model.DocumentRestoreResult:
+    properties:
+      bodyEpoch:
+        type: integer
+      bodyVersion:
+        type: integer
+      documentId:
+        type: string
+      revisionId:
+        type: string
+      sourceRevisionId:
+        type: string
+    type: object
+  backend_internal_domain_model.DocumentRevision:
+    properties:
+      astSnapshot:
+        items:
+          type: integer
+        type: array
+      authorId:
+        type: string
+      bodySchemaVersion:
+        type: integer
+      bodyVersion:
+        type: integer
+      content:
+        type: string
+      createdAt:
+        type: string
+      documentId:
+        type: string
+      id:
+        type: string
+      isNamed:
+        type: boolean
+      title:
+        type: string
+      updatedAt:
+        type: string
+      versionNumber:
+        type: integer
+    type: object
+  backend_internal_domain_model.Project:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/backend_internal_domain_model.ProjectCategory'
+        type: array
+      categoryColors:
+        additionalProperties:
+          type: string
+        type: object
+      categoryNames:
+        items:
+          type: string
+        type: array
+      colorBadge:
+        type: string
+      createdAt:
+        type: string
+      createdBy:
+        type: string
+      deletedAt:
+        type: string
+      description:
+        type: string
+      documentCount:
+        type: integer
+      id:
+        type: string
+      isStarred:
+        type: boolean
+      logoUrl:
+        type: string
+      name:
+        type: string
+      role:
+        description: User's role in this project (if direct member)
+        type: string
+      starredAt:
+        type: string
+      updatedAt:
+        type: string
+      visibility:
+        type: string
+      workspaceId:
+        type: string
+    type: object
+  backend_internal_domain_model.ProjectCategory:
+    properties:
+      colorId:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      projectId:
+        type: string
+      sortOrder:
+        type: integer
+    type: object
+  backend_internal_domain_model.ProjectMember:
+    properties:
+      createdAt:
+        type: string
+      id:
+        description: projectID:userID composite or string
+        type: string
+      projectId:
+        type: string
+      role:
+        description: '''manager'', ''editor'', ''viewer'''
+        type: string
+      user:
+        $ref: '#/definitions/backend_internal_domain_model.ProjectMemberUser'
+      userId:
+        type: string
+    type: object
+  backend_internal_domain_model.ProjectMemberUser:
+    properties:
+      avatar:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  backend_internal_domain_model.TrashItem:
+    properties:
+      daysRemaining:
+        type: integer
+      deletedAt:
+        type: string
+      deletedBy:
+        $ref: '#/definitions/backend_internal_domain_model.UserAuthor'
+      docId:
+        type: string
+      document:
+        $ref: '#/definitions/backend_internal_domain_model.Document'
+      id:
+        type: string
+    type: object
+  backend_internal_domain_model.UserAuthor:
+    properties:
+      avatar:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  backend_internal_domain_model.UserProfile:
+    properties:
+      accountNo:
+        type: string
+      avatarUrl:
+        type: string
+      bio:
+        type: string
+      createdAt:
+        type: string
+      email:
+        type: string
+      fullName:
+        type: string
+      id:
+        type: string
+      phoneNumber:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  backend_internal_domain_model.UserSettings:
+    properties:
+      direction:
+        type: string
+      editorPrefs:
+        description: JSON string
+        type: string
+      fontFamily:
+        type: string
+      language:
+        type: string
+      notificationPrefs:
+        description: JSON string
+        type: string
+      theme:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  backend_internal_domain_model.UserSummary:
+    properties:
+      avatarUrl:
+        type: string
+      email:
+        type: string
+      fullName:
+        type: string
+      id:
+        type: string
+    type: object
+  backend_internal_domain_model.Workspace:
+    properties:
+      createdAt:
+        type: string
+      createdBy:
+        type: string
+      id:
+        type: string
+      logoUrl:
+        type: string
+      name:
+        type: string
+      plan:
+        type: string
+      role:
+        description: Current user's role in this workspace
+        type: string
+      slug:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  backend_internal_domain_model.WorkspaceMember:
+    properties:
+      avatarUrl:
+        type: string
+      email:
+        type: string
+      fullName:
+        type: string
+      joinedAt:
+        type: string
+      role:
+        type: string
+      userId:
+        type: string
+      workspaceId:
+        type: string
+    type: object
+  backend_internal_presentation_auth_presenter.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  backend_internal_presentation_auth_presenter.LoginResponse:
+    properties:
+      accessToken:
+        type: string
+      user:
+        $ref: '#/definitions/backend_internal_presentation_auth_presenter.ResponseUser'
+    type: object
+  backend_internal_presentation_auth_presenter.RegisterRequest:
+    properties:
+      email:
+        type: string
+      fullName:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  backend_internal_presentation_auth_presenter.ResponseUser:
+    properties:
+      accountNo:
+        type: string
+      email:
+        type: string
+      exp:
+        type: integer
+      id:
+        type: string
+      role:
+        items:
+          type: string
+        type: array
+    type: object
+  backend_internal_presentation_document_presenter.AddAccessRequest:
+    properties:
+      email:
+        type: string
+      level:
+        type: string
+    type: object
+  backend_internal_presentation_document_presenter.CreateDocumentRequest:
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      content:
+        type: string
+      initialBody:
+        $ref: '#/definitions/backend_internal_presentation_document_presenter.CreateMarkdownBodyRequest'
+      isDraft:
+        type: boolean
+      projectId:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      type:
+        type: string
+      visibility:
+        type: string
+    type: object
+  backend_internal_presentation_document_presenter.CreateMarkdownBodyNode:
+    properties:
+      attributes:
+        items:
+          type: integer
+        type: array
+      content:
+        type: string
+      nodeID:
+        type: string
+      parentID:
+        type: string
+      siblingOrder:
+        type: number
+      type:
+        type: string
+    type: object
+  backend_internal_presentation_document_presenter.CreateMarkdownBodyRequest:
+    properties:
+      bodySchemaVersion:
+        type: integer
+      documentID:
+        type: string
+      nodes:
+        items:
+          $ref: '#/definitions/backend_internal_presentation_document_presenter.CreateMarkdownBodyNode'
+        type: array
+      rootNodeID:
+        type: string
+    type: object
+  backend_internal_presentation_document_presenter.MoveRequest:
+    properties:
+      targetProjectId:
+        type: string
+    type: object
+  backend_internal_presentation_document_presenter.ThumbnailsRequest:
+    properties:
+      thumbnail:
+        type: string
+      thumbnailDark:
+        type: string
+      thumbnailPreview:
+        type: string
+      thumbnailPreviewDark:
+        type: string
+    type: object
+  backend_internal_presentation_document_presenter.UpdateDocumentRequest:
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      content:
+        type: string
+      isDraft:
+        type: boolean
+      projectId:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      visibility:
+        type: string
+    type: object
+  backend_internal_presentation_project_presenter.AddCategoryRequest:
+    properties:
+      colorId:
+        type: string
+      name:
+        type: string
+    type: object
+  backend_internal_presentation_project_presenter.AddMemberRequest:
+    properties:
+      email:
+        type: string
+      role:
+        type: string
+    type: object
+  backend_internal_presentation_project_presenter.CreateProjectRequest:
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      colorBadge:
+        type: string
+      description:
+        type: string
+      logoUrl:
+        type: string
+      name:
+        type: string
+      visibility:
+        type: string
+    type: object
+  backend_internal_presentation_project_presenter.ReorderCategoriesRequest:
+    properties:
+      categoryIds:
+        items:
+          type: string
+        type: array
+    type: object
+  backend_internal_presentation_project_presenter.UpdateCategoryRequest:
+    properties:
+      colorId:
+        type: string
+      name:
+        type: string
+    type: object
+  backend_internal_presentation_project_presenter.UpdateProjectRequest:
+    properties:
+      colorBadge:
+        type: string
+      description:
+        type: string
+      logoUrl:
+        type: string
+      name:
+        type: string
+      visibility:
+        type: string
+    type: object
+  backend_internal_presentation_response.Envelope:
+    properties:
+      data: {}
+    type: object
+  backend_internal_presentation_response.ErrorEnvelope:
+    properties:
+      title:
+        type: string
+    type: object
+  backend_internal_presentation_user_presenter.UpdateProfileRequest:
+    properties:
+      avatarUrl:
+        type: string
+      bio:
+        type: string
+      fullName:
+        type: string
+      phoneNumber:
+        type: string
+    type: object
+  backend_internal_presentation_user_presenter.UpdateSettingsRequest:
+    properties:
+      direction:
+        type: string
+      editorPrefs:
+        items:
+          type: integer
+        type: array
+      fontFamily:
+        type: string
+      language:
+        type: string
+      notificationPrefs:
+        items:
+          type: integer
+        type: array
+      theme:
+        type: string
+    type: object
+  backend_internal_presentation_workspace_presenter.AddMemberRequest:
+    properties:
+      email:
+        type: string
+      role:
+        type: string
+    required:
+    - email
+    type: object
+  backend_internal_presentation_workspace_presenter.CreateWorkspaceRequest:
+    properties:
+      logoUrl:
+        type: string
+      name:
+        type: string
+      plan:
+        type: string
+    required:
+    - name
+    type: object
+  backend_internal_presentation_workspace_presenter.UpdateWorkspaceRequest:
+    properties:
+      logoUrl:
+        type: string
+      name:
+        type: string
+      plan:
+        type: string
+    type: object
+  internal_presentation_document_handler.bodyInitializationNode:
+    properties:
+      attributes:
+        items:
+          type: integer
+        type: array
+      content:
+        type: string
+      nodeID:
+        type: string
+      parentID:
+        type: string
+      siblingOrder:
+        type: number
+      type:
+        type: string
+    type: object
+  internal_presentation_document_handler.bodyInitializationRequest:
+    properties:
+      baseBodyVersion:
+        type: integer
+      bodySchemaVersion:
+        type: integer
+      nodes:
+        items:
+          $ref: '#/definitions/internal_presentation_document_handler.bodyInitializationNode'
+        type: array
+      rootNodeID:
+        type: string
+      sourceFingerprint:
+        type: string
+    type: object
+  internal_presentation_document_handler.bodyNodeResponse:
+    properties:
+      attributes:
+        items:
+          type: integer
+        type: array
+      content:
+        type: string
+      nodeID:
+        type: string
+      parentID:
+        type: string
+      siblingOrder:
+        type: number
+      type:
+        type: string
+      version:
+        type: integer
+    type: object
+  internal_presentation_document_handler.bodySnapshotResponse:
+    properties:
+      bodyEpoch:
+        type: integer
+      bodySchemaVersion:
+        type: integer
+      bodyVersion:
+        type: integer
+      canEdit:
+        type: boolean
+      encodedState:
+        items:
+          type: integer
+        type: array
+      nodes:
+        items:
+          $ref: '#/definitions/internal_presentation_document_handler.bodyNodeResponse'
+        type: array
+      rootNodeID:
+        type: string
+    type: object
+  internal_presentation_document_handler.createNamedRevisionRequest:
+    properties:
+      title:
+        type: string
+    type: object
+  internal_presentation_document_handler.deleteNodeRequest:
+    properties:
+      bodyEpoch:
+        type: integer
+      bodySchemaVersion:
+        type: integer
+      commandID:
+        type: string
+      nodeID:
+        type: string
+    type: object
+  internal_presentation_document_handler.moveNodeRequest:
+    properties:
+      beforeNodeID:
+        type: string
+      bodyEpoch:
+        type: integer
+      bodySchemaVersion:
+        type: integer
+      commandID:
+        type: string
+      nodeID:
+        type: string
+      targetParentID:
+        type: string
+    type: object
+  internal_presentation_document_handler.publicBodySnapshotResponse:
+    properties:
+      bodySchemaVersion:
+        type: integer
+      bodyVersion:
+        type: integer
+      nodes:
+        items:
+          $ref: '#/definitions/internal_presentation_document_handler.bodyNodeResponse'
+        type: array
+      rootNodeID:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: API documentation for Dokudocs backend service.
+  title: Dokudocs API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with credentials and return JWT token
+      parameters:
+      - description: Login request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_auth_presenter.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_presentation_auth_presenter.LoginResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      summary: User login
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      description: Retrieve current user info from JWT claims
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_presentation_auth_presenter.ResponseUser'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user with email, password, and full name
+      parameters:
+      - description: Register request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_auth_presenter.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_presentation_auth_presenter.LoginResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      summary: User registration
+      tags:
+      - Auth
+  /documents:
+    get:
+      description: Get list of documents in the active workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Filter tab (e.g. all, recent, starred, draft)
+        in: query
+        name: filterTab
+        type: string
+      - description: Search term
+        in: query
+        name: search
+        type: string
+      - description: Category filter
+        in: query
+        name: category
+        type: string
+      - description: Sort field (e.g. updated_at, title)
+        in: query
+        name: sortField
+        type: string
+      - description: Sort order (asc, desc)
+        in: query
+        name: sortOrder
+        type: string
+      - description: Filter by project ID (UUID)
+        in: query
+        name: projectId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.Document'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List documents
+      tags:
+      - Document
+    post:
+      consumes:
+      - application/json
+      description: Create a document. Markdown may include an initial AST body stored
+        atomically with its metadata.
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Stable request ID (UUID); reuse on retry
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Document creation payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_document_presenter.CreateDocumentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Document'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create document
+      tags:
+      - Document
+  /documents/{id}:
+    delete:
+      description: Soft-delete a document by moving it to the trash
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Move document to trash
+      tags:
+      - Document
+    get:
+      description: Get document details by ID
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Document'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get document
+      tags:
+      - Document
+    put:
+      consumes:
+      - application/json
+      description: Update document details
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Document update payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_document_presenter.UpdateDocumentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Document'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update document
+      tags:
+      - Document
+  /documents/{id}/accesses:
+    get:
+      description: Get list of collaborators and their permissions for a document
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.DocumentAccess'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List document accesses
+      tags:
+      - Document
+    post:
+      consumes:
+      - application/json
+      description: Grant document access to a user by email
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Add access payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_document_presenter.AddAccessRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Add or update document access
+      tags:
+      - Document
+  /documents/{id}/accesses/{accessId}:
+    delete:
+      description: Remove collaborator access from a document
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Collaborator User ID (UUID)
+        in: path
+        name: accessId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Revoke document access
+      tags:
+      - Document
+  /documents/{id}/body:
+    get:
+      description: Returns the canonical AST and matching Yjs state for a Markdown
+        document.
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_presentation_document_handler.bodySnapshotResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get Markdown body
+      tags:
+      - Document
+  /documents/{id}/body/delete:
+    post:
+      consumes:
+      - application/json
+      description: Atomically deletes a block subtree and advances the document body
+        epoch.
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Delete command
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_presentation_document_handler.deleteNodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_application_collaboration.DeleteNodeResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Delete a Markdown block
+      tags:
+      - Document
+  /documents/{id}/body/initialize:
+    post:
+      consumes:
+      - application/json
+      description: Atomically stores the AST and initial Yjs state for an uninitialized
+        Markdown document.
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Parsed body and source fingerprint
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_presentation_document_handler.bodyInitializationRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Initialize Markdown body
+      tags:
+      - Document
+  /documents/{id}/body/move:
+    post:
+      consumes:
+      - application/json
+      description: Applies one idempotent structural move and returns the resulting
+        body epoch/version.
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Move command
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_presentation_document_handler.moveNodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_application_collaboration.MoveNodeResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Move a Markdown block
+      tags:
+      - Document
+  /documents/{id}/duplicate:
+    post:
+      description: Create a duplicate of an existing document
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Stable request ID (UUID); reuse on retry
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Document'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Duplicate document
+      tags:
+      - Document
+  /documents/{id}/move:
+    put:
+      consumes:
+      - application/json
+      description: Move document to a target project or null for root
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Move destination payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_document_presenter.MoveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Move document
+      tags:
+      - Document
+  /documents/{id}/permanent:
+    delete:
+      description: Completely remove a document from the system
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Permanently delete document
+      tags:
+      - Document
+  /documents/{id}/restore:
+    post:
+      description: Restore a trashed document back to active status
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Restore document
+      tags:
+      - Document
+  /documents/{id}/revisions:
+    get:
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.DocumentRevision'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List document revisions
+      tags:
+      - Document
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Revision title
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_presentation_document_handler.createNamedRevisionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.DocumentRevision'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create named document revision
+      tags:
+      - Document
+  /documents/{id}/revisions/{revisionID}/restore:
+    post:
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Stable restore request ID (UUID); reuse on retry
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Revision ID
+        in: path
+        name: revisionID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.DocumentRestoreResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Restore document revision
+      tags:
+      - Document
+  /documents/{id}/share-token:
+    post:
+      description: Generate a public share token for a document
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create share token
+      tags:
+      - Document
+  /documents/{id}/star:
+    post:
+      description: Toggle starred status for a document
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Toggle document star
+      tags:
+      - Document
+  /documents/{id}/thumbnails:
+    put:
+      consumes:
+      - application/json
+      description: Update thumbnail URLs for a document
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Thumbnails payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_document_presenter.ThumbnailsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update document thumbnails
+      tags:
+      - Document
+  /documents/{id}/view:
+    post:
+      description: Record user view of a document
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Record document view
+      tags:
+      - Document
+  /health:
+    get:
+      description: Returns service health status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+      summary: Health check
+      tags:
+      - Health
+  /projects:
+    get:
+      description: Get all projects accessible to the user within the active workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.Project'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List projects
+      tags:
+      - Project
+    post:
+      consumes:
+      - application/json
+      description: Create a new project within the active workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project creation payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_project_presenter.CreateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Project'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create project
+      tags:
+      - Project
+  /projects/{id}:
+    delete:
+      description: Delete a project within the active workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Delete project
+      tags:
+      - Project
+    get:
+      description: Get details of a project by ID within the active workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Project'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get project
+      tags:
+      - Project
+    put:
+      consumes:
+      - application/json
+      description: Update an existing project within the active workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Project update payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_project_presenter.UpdateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Project'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update project
+      tags:
+      - Project
+  /projects/{id}/categories:
+    get:
+      description: Get all categories defined in a project
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.ProjectCategory'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List project categories
+      tags:
+      - Project
+    post:
+      consumes:
+      - application/json
+      description: Add a new category to a project
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Category creation payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_project_presenter.AddCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.ProjectCategory'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Add project category
+      tags:
+      - Project
+  /projects/{id}/categories/{categoryId}:
+    delete:
+      description: Delete a category from a project
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Category ID (UUID)
+        in: path
+        name: categoryId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Delete project category
+      tags:
+      - Project
+    put:
+      consumes:
+      - application/json
+      description: Update category name or color
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Category ID (UUID)
+        in: path
+        name: categoryId
+        required: true
+        type: string
+      - description: Category update payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_project_presenter.UpdateCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update project category
+      tags:
+      - Project
+  /projects/{id}/categories/reorder:
+    put:
+      consumes:
+      - application/json
+      description: Reorder categories within a project by passing ordered array of
+        category IDs
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Reorder categories payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_project_presenter.ReorderCategoriesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Reorder project categories
+      tags:
+      - Project
+  /projects/{id}/members:
+    get:
+      description: Get all members of a project
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.ProjectMember'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List project members
+      tags:
+      - Project
+    post:
+      consumes:
+      - application/json
+      description: Add a member by email or update role in a project
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Add member payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_project_presenter.AddMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Add or update project member
+      tags:
+      - Project
+  /projects/{id}/members/{userId}:
+    delete:
+      description: Remove a user from a project
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Member User ID (UUID)
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Remove project member
+      tags:
+      - Project
+  /projects/{id}/star:
+    post:
+      description: Toggle starred status for a project
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Project ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Toggle project star
+      tags:
+      - Project
+  /public/documents/{shareToken}:
+    get:
+      description: View a public document using a shared token
+      parameters:
+      - description: Document Share Token
+        in: path
+        name: shareToken
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Document'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      summary: Get public document
+      tags:
+      - Document
+  /public/documents/{shareToken}/body:
+    get:
+      description: Returns a shared document's canonical AST without exposing its
+        CRDT state.
+      parameters:
+      - description: Document Share Token
+        in: path
+        name: shareToken
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_presentation_document_handler.publicBodySnapshotResponse'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      summary: Get public Markdown body
+      tags:
+      - Document
+  /trash:
+    delete:
+      description: Permanently remove all items from the workspace trash (admin or
+        owner only)
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Empty trash
+      tags:
+      - Document
+    get:
+      description: Get list of soft-deleted documents in the workspace trash
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.TrashItem'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List trash items
+      tags:
+      - Document
+  /user/profile:
+    get:
+      description: Retrieve current authenticated user profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.UserProfile'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get user profile
+      tags:
+      - User
+    put:
+      consumes:
+      - application/json
+      description: Update profile details of authenticated user
+      parameters:
+      - description: Update profile payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_user_presenter.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.UserProfile'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update user profile
+      tags:
+      - User
+  /user/search:
+    get:
+      description: Search users by email or name query
+      parameters:
+      - description: Search query string
+        in: query
+        name: q
+        type: string
+      - default: 10
+        description: Max results count
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.UserSummary'
+                  type: array
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Search users
+      tags:
+      - User
+  /user/settings:
+    get:
+      description: Retrieve settings for authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.UserSettings'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get user settings
+      tags:
+      - User
+    put:
+      consumes:
+      - application/json
+      description: Update settings for authenticated user
+      parameters:
+      - description: Update settings payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_user_presenter.UpdateSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.UserSettings'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update user settings
+      tags:
+      - User
+  /workspaces:
+    get:
+      description: Get list of workspaces accessible by current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.Workspace'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List workspaces
+      tags:
+      - Workspace
+    post:
+      consumes:
+      - application/json
+      description: Create a new workspace for the authenticated user
+      parameters:
+      - description: Workspace creation payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_workspace_presenter.CreateWorkspaceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Workspace'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create workspace
+      tags:
+      - Workspace
+  /workspaces/{id}:
+    delete:
+      description: Permanently delete a workspace (owner only)
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Delete workspace
+      tags:
+      - Workspace
+    get:
+      description: Get details of a workspace by ID
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Workspace'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get workspace
+      tags:
+      - Workspace
+    put:
+      consumes:
+      - application/json
+      description: Update workspace details (name, plan, logo)
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Workspace update payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_workspace_presenter.UpdateWorkspaceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.Workspace'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update workspace
+      tags:
+      - Workspace
+  /workspaces/{id}/invites:
+    post:
+      consumes:
+      - application/json
+      description: Add a member by email to the workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Add member payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_workspace_presenter.AddMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Add workspace member
+      tags:
+      - Workspace
+  /workspaces/{id}/members:
+    get:
+      description: List members of the specified workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.WorkspaceMember'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get workspace members
+      tags:
+      - Workspace
+  /workspaces/{id}/members/{userId}:
+    delete:
+      description: Remove a member from the workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Member User ID (UUID)
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Remove workspace member
+      tags:
+      - Workspace
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

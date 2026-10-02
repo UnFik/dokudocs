@@ -412,7 +412,7 @@ export function MermaidExportDialog({
                             }`}
                           >
                             <span
-                              className='size-3 rounded-full border border-border/80 shadow-xs'
+                              className='size-3 rounded-full border border-border/80'
                               style={{ backgroundColor: opt.color }}
                             />
                             <span className='text-[10px] truncate w-full text-center'>{opt.label}</span>
@@ -442,7 +442,7 @@ export function MermaidExportDialog({
                             }`}
                           >
                             <div
-                              className='size-4 rounded-full border border-border/80 shadow-xs'
+                              className='size-4 rounded-full border border-border/80'
                               style={{
                                 backgroundColor: preset.id === 'custom' ? customBgColor : preset.color,
                                 backgroundImage: preset.id === 'transparent' ? CHECKERBOARD_BG : undefined,
@@ -512,7 +512,7 @@ export function MermaidExportDialog({
                 type='button'
                 onClick={handleDownload}
                 disabled={isExporting}
-                className='w-full h-8 gap-1.5 text-xs font-semibold shadow-sm'
+                className='w-full h-8 gap-1.5 text-xs font-semibold'
               >
                 <Download className='size-3.5' />
                 <span>{isExporting ? 'Exporting...' : `Download ${format.toUpperCase()}`}</span>
@@ -525,7 +525,7 @@ export function MermaidExportDialog({
                   onClick={handleCopyClipboard}
                   className='w-full h-7 gap-1.5 text-xs font-medium'
                 >
-                  {hasCopied ? <Check className='size-3.5 text-emerald-500' /> : <Copy className='size-3.5' />}
+                  {hasCopied ? <Check className='size-3.5 text-ok' /> : <Copy className='size-3.5' />}
                   <span>{hasCopied ? 'Copied to Clipboard!' : `Copy ${format.toUpperCase()}`}</span>
                 </Button>
               )}
@@ -554,7 +554,7 @@ export function MermaidExportDialog({
                 </div>
               ) : activeSvg ? (
                 <div
-                  className='size-full max-h-full max-w-full flex items-center justify-center overflow-auto [&_svg]:max-w-full [&_svg]:max-h-full [&_svg]:w-auto [&_svg]:h-auto [&_svg]:object-contain drop-shadow-sm'
+                  className='size-full max-h-full max-w-full flex items-center justify-center overflow-auto [&_svg]:max-w-full [&_svg]:max-h-full [&_svg]:w-auto [&_svg]:h-auto [&_svg]:object-contain'
                   dangerouslySetInnerHTML={{ __html: activeSvg }}
                 />
               ) : (

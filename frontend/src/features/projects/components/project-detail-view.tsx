@@ -174,7 +174,7 @@ export function ProjectDetailView() {
             <Star
               className={`size-3.5 ${
                 project.isStarred
-                  ? 'fill-amber-400 text-amber-500'
+                  ? 'fill-foreground text-foreground'
                   : 'text-muted-foreground/70'
               }`}
             />
@@ -212,7 +212,7 @@ export function ProjectDetailView() {
                 <img
                   src={project.logoUrl}
                   alt={project.name}
-                  className='size-11 shrink-0 rounded-xl border border-border object-cover shadow-2xs'
+                  className='size-11 shrink-0 rounded-xl border border-border object-cover'
                 />
               ) : (
                 <div className='flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary'>
@@ -254,7 +254,7 @@ export function ProjectDetailView() {
 
           <div className='mt-2 flex flex-wrap items-center justify-between gap-3'>
             <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-              <span className='rounded-full bg-muted px-2.5 py-0.5 font-medium text-foreground'>
+              <span className='rounded-sm bg-muted px-2.5 py-0.5 font-medium text-foreground'>
                 {project.totalDocsCount}{' '}
                 {project.totalDocsCount === 1 ? 'document' : 'documents'}
               </span>

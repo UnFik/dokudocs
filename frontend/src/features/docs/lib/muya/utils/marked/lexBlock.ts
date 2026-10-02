@@ -38,6 +38,10 @@ export function lexBlock(
     const { token, src: newSrc } = fm(src)
     if (token) {
       tokens.push(token)
+      // The front matter regexp swallows the blank lines that follow it;
+      // hand them back as a space token so the next block keeps its gap.
+      const gap = token.raw.match(/(?:\r\n|\r|\n)+$/)?.[0] ?? ''
+      if (gap.length > 1) tokens.push({ type: 'space', raw: gap })
       src = newSrc
     }
   }

@@ -102,13 +102,13 @@ export function CommandMenu() {
                       <div className='flex min-w-0 flex-1 items-center gap-2.5'>
                         <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-foreground'>
                           {doc.type === 'markdown' && (
-                            <FileText className='size-3.5 text-blue-500' />
+                            <FileText className='size-3.5 text-muted-foreground' />
                           )}
                           {doc.type === 'dbdiagram' && (
-                            <Database className='size-3.5 text-emerald-500' />
+                            <Database className='size-3.5 text-muted-foreground' />
                           )}
                           {doc.type === 'mermaid' && (
-                            <GitFork className='size-3.5 text-purple-500' />
+                            <GitFork className='size-3.5 text-muted-foreground' />
                           )}
                         </div>
                         <div className='flex min-w-0 flex-col truncate'>
@@ -138,14 +138,14 @@ export function CommandMenu() {
                             return (
                               <>
                                 <span
-                                  className={`rounded-full border px-2 py-0.5 text-[9px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
+                                  className={`rounded-sm border px-2 py-0.5 text-[9px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
                                 >
                                   {firstCat}
                                 </span>
                                 {remainingCount > 0 && (
                                   <span
                                     title={docCats.slice(1).join(', ')}
-                                    className='rounded-full border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
+                                    className='rounded-sm border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
                                   >
                                     +{remainingCount}
                                   </span>
@@ -188,7 +188,7 @@ export function CommandMenu() {
                             <img
                               src={proj.logoUrl}
                               alt={proj.name}
-                              className='size-6 shrink-0 rounded-md border border-border object-cover shadow-2xs'
+                              className='size-6 shrink-0 rounded-md border border-border object-cover'
                             />
                           ) : (
                             <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary'>
@@ -222,7 +222,7 @@ export function CommandMenu() {
                 value='action-create-markdown-document-fsd'
                 onSelect={() => handleCreateDocAction('markdown')}
               >
-                <div className='flex size-5 items-center justify-center rounded-sm bg-blue-500/10 text-blue-600 dark:text-blue-400'>
+                <div className='flex size-5 items-center justify-center rounded-sm bg-secondary text-muted-foreground'>
                   <FileText className='size-3' />
                 </div>
                 <span>New Markdown Document</span>
@@ -232,7 +232,7 @@ export function CommandMenu() {
                 value='action-create-dbdiagram-database-diagram-dbml'
                 onSelect={() => handleCreateDocAction('dbdiagram')}
               >
-                <div className='flex size-5 items-center justify-center rounded-sm bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'>
+                <div className='flex size-5 items-center justify-center rounded-sm bg-secondary text-muted-foreground'>
                   <Database className='size-3' />
                 </div>
                 <span>New Database Diagram (DBML)</span>
@@ -242,7 +242,7 @@ export function CommandMenu() {
                 value='action-create-mermaid-flowchart-diagram'
                 onSelect={() => handleCreateDocAction('mermaid')}
               >
-                <div className='flex size-5 items-center justify-center rounded-sm bg-purple-500/10 text-purple-600 dark:text-purple-400'>
+                <div className='flex size-5 items-center justify-center rounded-sm bg-secondary text-muted-foreground'>
                   <GitFork className='size-3' />
                 </div>
                 <span>New Flowchart Diagram (Mermaid)</span>

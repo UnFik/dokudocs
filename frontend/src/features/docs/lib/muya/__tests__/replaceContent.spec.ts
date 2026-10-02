@@ -61,6 +61,7 @@ function domHtml(muya: Muya): string {
   clone.querySelectorAll('*').forEach((el) => {
     el.removeAttribute('id')
     el.removeAttribute('data-key')
+    el.removeAttribute('data-slug')
     el.removeAttribute('class')
     el.removeAttribute('contenteditable')
     el.removeAttribute('spellcheck')

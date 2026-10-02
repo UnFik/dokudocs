@@ -9,20 +9,40 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r *Repository) ListTrash(ctx context.Context, workspaceID uuid.UUID) ([]model.TrashItem, error) {
-	const query = `
-		SELECT d.id, d.workspace_id, d.project_id, COALESCE(p.name, ''), d.title, d.type::text,
+func (r *Repository) ListTrash(ctx context.Context, workspaceID, userID uuid.UUID) ([]model.TrashItem, error) {
+	query := `
+		SELECT d.id, d.workspace_id, d.project_id,
+		       CASE WHEN p.id IS NOT NULL AND ` + projectMetadataPredicate("$2", "p") + ` THEN p.name ELSE '' END,
+		       d.title, d.type::text,
 		       d.author_id, u.full_name, u.email, COALESCE(u.avatar_url, ''),
 		       d.created_at, d.updated_at, d.deleted_at, d.deleted_by,
 		       COALESCE(du.full_name, ''), COALESCE(du.email, ''), COALESCE(du.avatar_url, '')
 		FROM documents d
-		LEFT JOIN projects p ON p.id = d.project_id
+		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 		JOIN users u ON u.id = d.author_id
 		LEFT JOIN users du ON du.id = d.deleted_by
 		WHERE d.workspace_id = $1 AND d.deleted_at IS NOT NULL
+		  AND EXISTS (
+			SELECT 1 FROM workspace_members wm
+			WHERE wm.workspace_id = d.workspace_id AND wm.user_id = $2
+		  )
+		  AND (
+			EXISTS (
+				SELECT 1 FROM document_accesses da_owner
+				WHERE da_owner.document_id = d.id
+				  AND da_owner.user_id = $2
+				  AND da_owner.access_level = 'owner'
+			)
+			OR EXISTS (
+				SELECT 1 FROM workspace_members wm_admin
+				WHERE wm_admin.workspace_id = d.workspace_id
+				  AND wm_admin.user_id = $2
+				  AND wm_admin.role IN ('owner', 'admin')
+			)
+		  )
 		ORDER BY d.deleted_at DESC
 	`
-	rows, err := r.db.QueryContext(ctx, query, workspaceID)
+	rows, err := r.db.QueryContext(ctx, query, workspaceID, userID)
 	if err != nil {
 		return nil, err
 	}

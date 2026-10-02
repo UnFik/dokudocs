@@ -1,0 +1,132 @@
+import { redirect } from '@tanstack/react-router'
+import { synchronizeSession, useAuthStore } from '@/stores/auth-store'
+import { currentUserApi } from '@/features/auth/api/auth-api'
+import { readTokenClaims } from '@/features/auth/api/auth-schema'
+import { ApiError } from './api-client'
+import { switchLocalUser } from './local-user-data'
+import { queryClient } from './query-client'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { hasOfflineMarkdownBody } from '@/features/docs/lib/collaboration-store'
+
+export function safeRedirect(value?: string) {
+  if (
+    !value ||
+    !value.startsWith('/') ||
+    /[\\%\s]/.test(value) ||
+    value.startsWith('//')
+  )
+    return '/'
+  const url = new URL(value, window.location.origin)
+  if (
+    !/^\/(?:$|account\/?$|projects(?:\/[^/]+)?\/?$|docs\/[^/]+\/?$|drafts\/?$|trash\/?$|users\/?$|settings(?:\/(?:account|appearance|display|notifications))?\/?$|help-center\/?$)/.test(
+      url.pathname
+    )
+  )
+    return '/'
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
+export async function restoreSession() {
+  synchronizeSession()
+  const auth = useAuthStore.getState().auth
+  if (!auth.accessToken) return null
+  if (!readTokenClaims(auth.accessToken)) {
+    auth.reset()
+    return null
+  }
+  if (auth.status === 'authenticated') {
+    switchLocalUser(auth.user.id)
+    return auth.user
+  }
+  try {
+    const user = await queryClient.fetchQuery({
+      queryKey: ['current-user', auth.revision],
+      queryFn: ({ signal }) => currentUserApi(signal),
+      staleTime: Infinity,
+      retry: false,
+    })
+    synchronizeSession()
+    if (useAuthStore.getState().auth.revision !== auth.revision)
+      return restoreSession()
+    if (!useAuthStore.getState().auth.restoreUser(user, auth.revision)) {
+      useAuthStore.getState().auth.reset()
+      return null
+    }
+    return user
+  } catch (error) {
+    if (useAuthStore.getState().auth.revision !== auth.revision)
+      return restoreSession()
+    if (error instanceof ApiError && error.status === 401) return null
+    throw error
+  }
+}
+
+export async function requireAuth({
+  location,
+}: {
+  location: { href: string }
+}) {
+  if (!(await restoreSession()))
+    throw redirect({
+      to: '/sign-in',
+      search: { redirect: safeRedirect(location.href) },
+      replace: true,
+    })
+}
+export async function requireDocumentAuth({
+  params,
+  location,
+}: {
+  params: { docId: string }
+  location: { href: string }
+}) {
+  try {
+    if (await restoreSession()) return
+  } catch (error) {
+    const offlineFailure =
+      (typeof navigator !== 'undefined' && !navigator.onLine) ||
+      error instanceof TypeError
+    if (offlineFailure && (await restoreCachedDocument(params.docId))) return
+    throw error
+  }
+  throw redirect({
+    to: '/sign-in',
+    search: { redirect: safeRedirect(location.href) },
+    replace: true,
+  })
+}
+
+async function restoreCachedDocument(documentID: string) {
+  const auth = useAuthStore.getState().auth
+  const claims = readTokenClaims(auth.accessToken)
+  if (!claims) return false
+
+  switchLocalUser(claims.sub)
+  const document = useDokudocsStore
+    .getState()
+    .documents.find((item) => item.id === documentID)
+  if (
+    !document ||
+    document.type !== 'markdown' ||
+    !document.workspaceId ||
+    document.deletedAt
+  )
+    return false
+
+  try {
+    if (
+      !(await hasOfflineMarkdownBody({
+        userID: claims.sub,
+        documentID,
+      }))
+    )
+      return false
+  } catch {
+    return false
+  }
+  return useAuthStore.getState().auth.enterOffline(auth.accessToken)
+}
+
+export async function requireGuest() {
+  if (await restoreSession()) throw redirect({ to: '/', replace: true })
+}

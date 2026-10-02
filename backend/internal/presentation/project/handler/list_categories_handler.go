@@ -5,9 +5,25 @@ import (
 	"net/http"
 
 	"backend/constant"
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/response"
 )
 
+// ListCategories retrieves categories of a project.
+// @Summary List project categories
+// @Description Get all categories defined in a project
+// @Tags Project
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Project ID (UUID)"
+// @Success 200 {object} response.Envelope{data=[]model.ProjectCategory}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /projects/{id}/categories [get]
 func (h *Handler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {

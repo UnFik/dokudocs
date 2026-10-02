@@ -348,7 +348,7 @@ export class Editor {
       fromEvent(domNode, 'dragstart'),
       fromEvent(domNode, 'dragover'),
       fromEvent(domNode, 'drop')
-    ).subscribe((event) => {
+    ).subscribe((event: any) => {
       if (this._muya.options.readOnly) {
         if (
           event.type === 'beforeinput' ||

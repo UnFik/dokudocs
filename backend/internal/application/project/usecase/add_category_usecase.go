@@ -30,7 +30,7 @@ func (u *useCase) AddCategory(ctx context.Context, projectID, workspaceID, userI
 		Name:      name,
 		ColorID:   colorID,
 	}
-	data, err = u.projectRepo.AddCategory(ctx, cat)
+	data, err = u.projectRepo.AddCategory(ctx, cat, workspaceID, userID)
 	if err != nil {
 		return data, err
 	}

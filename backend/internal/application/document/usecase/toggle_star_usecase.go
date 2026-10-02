@@ -7,12 +7,5 @@ import (
 )
 
 func (u *useCase) ToggleStar(ctx context.Context, id, workspaceID, userID uuid.UUID) (data bool, err error) {
-	if _, err = u.GetDocument(ctx, id, workspaceID, userID); err != nil {
-		return false, err
-	}
-	data, err = u.docRepo.ToggleStar(ctx, id, userID)
-	if err != nil {
-		return data, err
-	}
-	return data, nil
+	return u.docRepo.ToggleStar(ctx, id, workspaceID, userID)
 }

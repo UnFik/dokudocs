@@ -1,0 +1,10 @@
+graph TD
+  Start([User Enters Password]) --> CheckMfa{MFA Enabled?}
+  CheckMfa -- No --> IssueToken[Issue Session JWT]
+  CheckMfa -- Yes --> PromptOTP[Prompt TOTP Authenticator]
+  PromptOTP --> ValidateOTP{Valid Code?}
+  ValidateOTP -- Yes --> IssueToken
+  ValidateOTP -- No --> LockoutCheck{Failed Attempts >= 5?}
+  LockoutCheck -- Yes --> LockAccount[Temporary 15m Lockout]
+  LockoutCheck -- No --> PromptOTP
+  IssueToken --> Complete([Dashboard Access])

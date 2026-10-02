@@ -13,31 +13,34 @@ import (
 )
 
 func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.Document, error) {
-	const query = `
-		SELECT d.id, d.workspace_id, d.project_id, COALESCE(p.name, ''), d.title, d.type::text,
-		       d.content, d.author_id, u.full_name, u.email, COALESCE(u.avatar_url, ''),
+	query := `
+		SELECT d.id, d.workspace_id, d.project_id,
+		       CASE WHEN p.id IS NOT NULL AND ` + projectMetadataPredicate("$2", "p") + ` THEN p.name ELSE '' END,
+		       d.title, d.type::text,
+		       CASE WHEN d.type = 'markdown' AND d.root_node_id IS NOT NULL THEN '' ELSE d.content END,
+		       d.author_id, u.full_name, u.email, COALESCE(u.avatar_url, ''),
 		       COALESCE(array_to_string(d.tags, ','), ''), d.is_draft, d.visibility::text,
-		       COALESCE(d.share_token, ''), COALESCE(d.thumbnail, ''), COALESCE(d.thumbnail_dark, ''),
+		       COALESCE(d.thumbnail, ''), COALESCE(d.thumbnail_dark, ''),
 		       COALESCE(d.thumbnail_preview, ''), COALESCE(d.thumbnail_preview_dark, ''),
 		       (ds.document_id IS NOT NULL) AS is_starred, ds.starred_at,
 		       (da.document_id IS NOT NULL) AS is_shared,
 		       COALESCE(dv.view_count, 0) AS view_count, dv.last_viewed_at,
 		       d.created_at, d.updated_at
 		FROM documents d
-		LEFT JOIN projects p ON p.id = d.project_id
+		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 		JOIN users u ON u.id = d.author_id
 		LEFT JOIN document_stars ds ON ds.document_id = d.id AND ds.user_id = $2
 		LEFT JOIN document_accesses da ON da.document_id = d.id AND da.user_id = $2
 		LEFT JOIN document_views dv ON dv.document_id = d.id AND dv.user_id = $2
 		WHERE d.id = $1 AND d.deleted_at IS NULL
-	`
+	` + documentReadPredicate
 	var d model.Document
 	var tagsStr string
 	err := r.db.QueryRowContext(ctx, query, id, userID).Scan(
 		&d.ID, &d.WorkspaceID, &d.ProjectID, &d.ProjectName, &d.Title, &d.Type,
 		&d.Content, &d.AuthorID, &d.Author.Name, &d.Author.Email, &d.Author.Avatar,
 		&tagsStr, &d.IsDraft, &d.Visibility,
-		&d.ShareToken, &d.Thumbnail, &d.ThumbnailDark,
+		&d.Thumbnail, &d.ThumbnailDark,
 		&d.ThumbnailPreview, &d.ThumbnailPreviewDark,
 		&d.IsStarred, &d.StarredAt,
 		&d.IsShared,
@@ -57,7 +60,7 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 		d.Tags = make([]string, 0)
 	}
 
-	catMap, _ := r.fetchCategoriesForDocuments(ctx, []uuid.UUID{d.ID})
+	catMap, _ := r.fetchCategoriesForDocuments(ctx, []uuid.UUID{d.ID}, userID)
 	if cats, ok := catMap[d.ID]; ok {
 		d.Categories = cats
 		if len(cats) > 0 {

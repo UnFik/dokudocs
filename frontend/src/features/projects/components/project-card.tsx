@@ -74,7 +74,7 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
         <ContextMenuTrigger asChild>
           <div
             onClick={handleCardClick}
-            className='group relative flex transform-gpu cursor-pointer flex-col justify-between rounded-xl border border-border/80 bg-card p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out will-change-transform select-none hover:-translate-y-0.5 hover:border-sidebar-ring/60 hover:shadow-md'
+            className='group relative flex transform-gpu cursor-pointer flex-col justify-between rounded-xl border border-border/80 bg-card p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out will-change-transform select-none hover:-translate-y-0.5 hover:border-sidebar-ring/60'
           >
             <div>
               <div className='mb-3 flex items-start justify-between'>
@@ -83,7 +83,7 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
                     <img
                       src={project.logoUrl}
                       alt={project.name}
-                      className='size-9 shrink-0 rounded-lg border border-border/80 object-cover shadow-2xs'
+                      className='size-9 shrink-0 rounded-lg border border-border/80 object-cover'
                     />
                   ) : (
                     <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary'>

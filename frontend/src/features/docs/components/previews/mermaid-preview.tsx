@@ -79,11 +79,11 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
 
   return (
     <div className='relative flex h-full w-full flex-col overflow-hidden bg-background [background-image:radial-gradient(circle,rgba(0,0,0,0.06)_1.5px,transparent_1.5px)] [background-size:24px_24px] select-none dark:[background-image:radial-gradient(circle,rgba(255,255,255,0.07)_1.5px,transparent_1.5px)]'>
-      <div className='absolute top-3 right-3 z-30 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 p-1 shadow-md backdrop-blur-md'>
+      <div className='absolute top-3 right-3 z-30 flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/95 p-1'>
         {isRendering && (
           <>
-            <div className='flex animate-pulse items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400'>
-              <span className='size-1.5 rounded-full bg-purple-500' />
+            <div className='flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-muted-foreground'>
+              <span className='size-1.5 rounded-[1px] bg-muted-foreground' />
               <span>Rendering</span>
             </div>
             <div className='mx-0.5 h-4 w-px bg-border/60' />
@@ -134,7 +134,7 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
       </div>
 
       {!isValid && error && (
-        <div className='absolute top-14 right-4 left-4 z-20 flex animate-in items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-600 shadow-lg backdrop-blur-md duration-150 fade-in dark:text-amber-400'>
+        <div className='absolute top-14 right-4 left-4 z-20 flex animate-in items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2 text-xs text-amber-600 duration-150 fade-in dark:text-amber-400'>
           <div className='flex min-w-0 items-center gap-2'>
             <AlertTriangle className='size-4 shrink-0' />
             <span className='truncate font-mono font-medium'>
@@ -160,7 +160,7 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
       >
         {!content.trim() ? (
           <div className='flex h-full min-h-[300px] flex-col items-center justify-center gap-3 p-6 text-center text-xs text-muted-foreground'>
-            <div className='flex size-12 items-center justify-center rounded-2xl border border-purple-500/20 bg-purple-500/10 text-purple-500 shadow-sm'>
+            <div className='flex size-12 items-center justify-center rounded-2xl border border-purple-500/20 bg-purple-500/10 text-purple-500'>
               <Workflow className='size-6' />
             </div>
             <div>
@@ -175,7 +175,7 @@ export function MermaidPreview({ docId, content }: MermaidPreviewProps) {
           </div>
         ) : !isValid && !svg ? (
           <div className='flex h-full min-h-[300px] flex-col items-center justify-center gap-4 p-6 text-center text-xs select-text'>
-            <div className='flex size-12 items-center justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-500 shadow-sm'>
+            <div className='flex size-12 items-center justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10 text-amber-500'>
               <AlertTriangle className='size-6' />
             </div>
             <div className='max-w-md space-y-1.5'>

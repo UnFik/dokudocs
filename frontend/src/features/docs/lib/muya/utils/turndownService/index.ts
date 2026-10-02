@@ -1,7 +1,7 @@
 import * as turndownPluginGfm from 'joplin-turndown-plugin-gfm'
 import type { Filter, Node } from 'turndown'
 import TurndownService from 'turndown'
-import { identity, isHTMLElement, isHTMLInputElement } from '../../utils'
+import { identity, isHTMLElement, isHTMLInputElement } from '..'
 
 const DEFAULT_KEEPS: Filter = ['u', 'mark', 'ruby', 'rt', 'sub', 'sup']
 

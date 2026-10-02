@@ -15,7 +15,7 @@ func (r *Repository) GetUserAccessLevel(ctx context.Context, docID, userID uuid.
 	var level string
 	err := r.db.QueryRowContext(ctx, query, docID, userID).Scan(&level)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", constant.ErrForbidden
+		return "", constant.ErrAccessNotFound
 	}
 	return level, err
 }

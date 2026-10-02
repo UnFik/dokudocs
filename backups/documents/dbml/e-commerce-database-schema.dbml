@@ -1,0 +1,29 @@
+Table users {
+  id int [pk, increment]
+  email varchar(255) [unique, not null]
+  full_name varchar(150)
+  created_at timestamp
+}
+
+Table orders {
+  id int [pk, increment]
+  user_id int [ref: > users.id]
+  total_amount decimal(12,2)
+  status varchar(50)
+  created_at timestamp
+}
+
+Table order_items {
+  id int [pk, increment]
+  order_id int [ref: > orders.id]
+  product_id int
+  quantity int
+  unit_price decimal(10,2)
+}
+
+Table products {
+  id int [pk, increment]
+  sku varchar(100) [unique]
+  title varchar(200)
+  stock_count int
+}

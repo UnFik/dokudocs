@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"backend/internal/infrastructure/database"
 
@@ -11,27 +12,36 @@ import (
 )
 
 type Repository struct {
-	db database.Queryer
+	db      database.Queryer
+	tx      database.DB
+	commits *commitCache
+	// revisionDebounce limits how often a collaborative commit rewrites the
+	// rolling auto revision; structural commands always write it.
+	revisionDebounce time.Duration
 }
 
-func NewRepository(db database.Queryer) *Repository {
-	return &Repository{db: db}
+func NewRepository(db database.DB) *Repository {
+	return &Repository{db: db, tx: db, commits: newCommitCache(32), revisionDebounce: 10 * time.Second}
 }
 
-func (r *Repository) fetchCategoriesForDocuments(ctx context.Context, docIDs []uuid.UUID) (map[uuid.UUID][]string, error) {
+func (r *Repository) fetchCategoriesForDocuments(ctx context.Context, docIDs []uuid.UUID, actorID uuid.UUID) (map[uuid.UUID][]string, error) {
 	placeholders := make([]string, len(docIDs))
 	args := make([]any, len(docIDs))
 	for i, id := range docIDs {
 		placeholders[i] = fmt.Sprintf("$%d", i+1)
 		args[i] = id
 	}
+	actorPlaceholder := fmt.Sprintf("$%d", len(args)+1)
+	args = append(args, actorID)
 	query := fmt.Sprintf(`
 		SELECT dcm.document_id, pc.name
 		FROM document_category_mappings dcm
+		JOIN documents d ON d.id = dcm.document_id
 		JOIN project_categories pc ON pc.id = dcm.category_id
-		WHERE dcm.document_id IN (%s)
+		JOIN projects p ON p.id = pc.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
+		WHERE dcm.document_id IN (%s) AND d.project_id = pc.project_id AND %s
 		ORDER BY pc.sort_order ASC, pc.created_at ASC
-	`, strings.Join(placeholders, ", "))
+	`, strings.Join(placeholders, ", "), projectMetadataPredicate(actorPlaceholder, "p"))
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {

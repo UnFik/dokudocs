@@ -1,13 +1,7 @@
-import { useState } from 'react'
-import { z } from 'zod'
+import { type z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useNavigate } from '@tanstack/react-router'
 import { Loader2, LogIn } from 'lucide-react'
-import { toast } from 'sonner'
-import { IconFacebook, IconGithub } from '@/assets/brand-icons'
-import { useAuthStore } from '@/stores/auth-store'
-import { apiClient } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,26 +14,11 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/password-input'
+import { loginSchema } from '@/features/auth/api/auth-schema'
+import { GoogleButton } from '@/features/auth/google-button'
+import { useLoginMutation } from '@/features/auth/hooks/use-auth'
 
-const formSchema = z.object({
-  email: z.email({
-    error: (iss) => (iss.input === '' ? 'Please enter your email.' : undefined),
-  }),
-  password: z
-    .string()
-    .min(1, 'Please enter your password.')
-    .min(7, 'Password must be at least 7 characters long.'),
-})
-
-type LoginResponse = {
-  accessToken: string
-  user: {
-    accountNo: string
-    email: string
-    role: string[]
-    exp: number
-  }
-}
+const formSchema = loginSchema
 
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLFormElement> {
   redirectTo?: string
@@ -50,10 +29,6 @@ export function UserAuthForm({
   redirectTo,
   ...props
 }: UserAuthFormProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  const navigate = useNavigate()
-  const { auth } = useAuthStore()
-
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -62,27 +37,16 @@ export function UserAuthForm({
     },
   })
 
+  const loginMutation = useLoginMutation({
+    redirectTo,
+    onError: (err) => {
+      form.setError('root', { message: err.title })
+    },
+  })
+
   function onSubmit(data: z.infer<typeof formSchema>) {
-    setIsLoading(true)
-
-    toast.promise(apiClient.post<LoginResponse>('/api/v1/auth/login', data), {
-      loading: 'Signing in...',
-      success: ({ data: response }) => {
-        setIsLoading(false)
-
-        auth.setUser(response.user)
-        auth.setAccessToken(response.accessToken)
-
-        const targetPath = redirectTo || '/'
-        navigate({ to: targetPath, replace: true })
-
-        return `Welcome back, ${response.user.email}!`
-      },
-      error: () => {
-        setIsLoading(false)
-        return 'Error'
-      },
-    })
+    form.clearErrors('root')
+    loginMutation.mutate(data)
   }
 
   return (
@@ -115,17 +79,24 @@ export function UserAuthForm({
                 <PasswordInput placeholder='********' {...field} />
               </FormControl>
               <FormMessage />
-              <Link
-                to='/forgot-password'
-                className='absolute inset-e-0 -top-0.5 text-sm font-medium text-muted-foreground hover:opacity-75'
-              >
-                Forgot password?
-              </Link>
+              <p className='text-xs text-muted-foreground'>
+                Password recovery is not available yet.
+              </p>
             </FormItem>
           )}
         />
-        <Button className='mt-2' disabled={isLoading}>
-          {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
+        {form.formState.errors.root && (
+          <p role='alert' className='text-sm font-medium text-destructive'>
+            {form.formState.errors.root.message}
+          </p>
+        )}
+
+        <Button className='mt-2' disabled={loginMutation.isPending}>
+          {loginMutation.isPending ? (
+            <Loader2 className='animate-spin' />
+          ) : (
+            <LogIn />
+          )}
           Sign in
         </Button>
 
@@ -140,14 +111,10 @@ export function UserAuthForm({
           </div>
         </div>
 
-        <div className='grid grid-cols-2 gap-2'>
-          <Button variant='outline' type='button' disabled={isLoading}>
-            <IconGithub className='h-4 w-4' /> GitHub
-          </Button>
-          <Button variant='outline' type='button' disabled={isLoading}>
-            <IconFacebook className='h-4 w-4' /> Facebook
-          </Button>
-        </div>
+        <GoogleButton
+          redirectTo={redirectTo}
+          disabled={loginMutation.isPending}
+        />
       </form>
     </Form>
   )

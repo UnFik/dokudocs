@@ -1,0 +1,18 @@
+Table payment_transactions {
+  id varchar(36) [pk]
+  order_id varchar(36)
+  gateway_name varchar(50)
+  amount decimal(12,2)
+  currency varchar(3)
+  status varchar(30)
+  idempotency_key varchar(64) [unique]
+  created_at timestamp
+}
+
+Table payment_refunds {
+  id varchar(36) [pk]
+  transaction_id varchar(36) [ref: > payment_transactions.id]
+  refund_amount decimal(12,2)
+  reason text
+  created_at timestamp
+}

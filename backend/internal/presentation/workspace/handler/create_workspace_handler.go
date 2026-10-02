@@ -4,10 +4,24 @@ import (
 	"net/http"
 
 	"backend/internal/application/workspace/dto"
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/response"
 	"backend/internal/presentation/workspace/presenter"
 )
 
+// Create creates a new workspace.
+// @Summary Create workspace
+// @Description Create a new workspace for the authenticated user
+// @Tags Workspace
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body presenter.CreateWorkspaceRequest true "Workspace creation payload"
+// @Success 201 {object} response.Envelope{data=model.Workspace}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /workspaces [post]
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, err := getUserUUID(r)
 	if err != nil {

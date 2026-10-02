@@ -16,5 +16,5 @@ func (u *useCase) DeleteWorkspace(ctx context.Context, id uuid.UUID, userID uuid
 	if role != "owner" {
 		return constant.ErrForbidden
 	}
-	return u.workspaceRepo.Delete(ctx, id)
+	return u.workspaceRepo.Delete(ctx, id, userID)
 }

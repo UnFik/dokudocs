@@ -105,7 +105,7 @@ export function StarredNavGroup() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton tooltip={`Starred (${totalCount})`}>
-                  <Star className='size-4 fill-amber-400 text-amber-500' />
+                  <Star className='size-4 fill-foreground text-foreground' />
                   <span>Starred</span>
                   {totalCount > 0 && (
                     <Badge className='rounded-full px-1.5 py-0 text-[10px]'>
@@ -123,7 +123,7 @@ export function StarredNavGroup() {
               >
                 <DropdownMenuLabel className='flex items-center justify-between text-xs font-semibold'>
                   <span className='flex items-center gap-1.5'>
-                    <Star className='size-3.5 fill-amber-400 text-amber-500' />
+                    <Star className='size-3.5 fill-foreground text-foreground' />
                     Starred
                   </span>
                   <span className='text-[10px] font-normal text-muted-foreground'>
@@ -194,7 +194,7 @@ export function StarredNavGroup() {
                                   toast.success(`Unstarred "${p.name}"`)
                                 }}
                               >
-                                <StarOff className='mr-2 size-3.5 text-amber-500' />
+                                <StarOff className='mr-2 size-3.5 text-muted-foreground' />
                                 Unstar
                               </ContextMenuItem>
                               <ContextMenuSeparator />
@@ -231,7 +231,7 @@ export function StarredNavGroup() {
                                     : ''
                                 }`}
                               >
-                                <Icon className='size-3.5 shrink-0 text-blue-500' />
+                                <Icon className='size-3.5 shrink-0 text-muted-foreground' />
                                 <span className='truncate'>{doc.title}</span>
                               </Link>
                             </DropdownMenuItem>
@@ -245,7 +245,7 @@ export function StarredNavGroup() {
                                 })
                               }}
                             >
-                              <Icon className='mr-2 size-3.5 text-blue-500' />
+                              <Icon className='mr-2 size-3.5 text-muted-foreground' />
                               Open
                             </ContextMenuItem>
                             <ContextMenuItem
@@ -263,7 +263,7 @@ export function StarredNavGroup() {
                                 toast.success(`Unstarred "${doc.title}"`)
                               }}
                             >
-                              <StarOff className='mr-2 size-3.5 text-amber-500' />
+                              <StarOff className='mr-2 size-3.5 text-muted-foreground' />
                               Unstar
                             </ContextMenuItem>
                             <ContextMenuSeparator />
@@ -314,7 +314,7 @@ export function StarredNavGroup() {
           <SidebarMenuItem>
             <CollapsibleTrigger asChild>
               <SidebarMenuButton tooltip='Starred'>
-                <Star className='size-4 fill-amber-400 text-amber-500' />
+                <Star className='size-4 fill-foreground text-foreground' />
                 <span className='font-medium'>Starred</span>
                 <Badge
                   variant='secondary'
@@ -391,7 +391,7 @@ export function StarredNavGroup() {
                                     toast.success(`Unstarred "${p.name}"`)
                                   }}
                                 >
-                                  <StarOff className='mr-2 size-3.5 text-amber-500' />
+                                  <StarOff className='mr-2 size-3.5 text-muted-foreground' />
                                   Unstar
                                 </ContextMenuItem>
                                 <ContextMenuSeparator />
@@ -427,7 +427,7 @@ export function StarredNavGroup() {
                                   params={{ docId: doc.id }}
                                   onClick={() => setOpenMobile(false)}
                                 >
-                                  <Icon className='size-3.5 shrink-0 text-blue-500' />
+                                  <Icon className='size-3.5 shrink-0 text-muted-foreground' />
                                   <span className='truncate'>{doc.title}</span>
                                 </Link>
                               </SidebarMenuSubButton>
@@ -442,7 +442,7 @@ export function StarredNavGroup() {
                                   setOpenMobile(false)
                                 }}
                               >
-                                <Icon className='mr-2 size-3.5 text-blue-500' />
+                                <Icon className='mr-2 size-3.5 text-muted-foreground' />
                                 Open
                               </ContextMenuItem>
                               <ContextMenuItem
@@ -460,7 +460,7 @@ export function StarredNavGroup() {
                                   toast.success(`Unstarred "${doc.title}"`)
                                 }}
                               >
-                                <StarOff className='mr-2 size-3.5 text-amber-500' />
+                                <StarOff className='mr-2 size-3.5 text-muted-foreground' />
                                 Unstar
                               </ContextMenuItem>
                               <ContextMenuSeparator />

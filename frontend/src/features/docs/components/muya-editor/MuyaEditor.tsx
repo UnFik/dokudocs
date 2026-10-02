@@ -20,18 +20,16 @@ import {
   TableDragBar,
   TableRowColumMenu,
 } from '@muyajs/core'
-import 'github-markdown-css/github-markdown.css'
 import 'katex/dist/katex.min.css'
 import { AlignLeft, MessageSquare } from 'lucide-react'
-import {
-  getDecorationsForBlock,
-  useCommentStore,
-} from '@/stores/comment-store'
+import { getDecorationsForBlock, useCommentStore } from '@/stores/comment-store'
+import { getLocalUserScope, isLocalUserScopeCurrent } from '@/lib/user-storage'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import '@/features/docs/lib/muya/assets/styles/blockSyntax.css'
 import '@/features/docs/lib/muya/assets/styles/index.css'
 import '@/features/docs/lib/muya/assets/styles/inlineSyntax.css'
 import '@/features/docs/lib/muya/assets/styles/prismjs/light.theme.css'
+import { registerEditorWidgetFlush } from '../../lib/editor-flush'
 import './muya.css'
 
 export interface MuyaEditorHandle {
@@ -112,6 +110,7 @@ export function MuyaEditor({
   onNavigateToSource,
   onCommentTrigger,
 }: MuyaEditorProps) {
+  const [scope] = useState(getLocalUserScope)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const muyaRef = useRef<InstanceType<typeof Muya> | null>(null)
   const lastEmittedValueRef = useRef(content)
@@ -184,9 +183,7 @@ export function MuyaEditor({
             el.tagName.toLowerCase() === 'mark' ||
             el.classList.contains('doc-comment-highlight')
           ) {
-            const firstOpenThread = allThreads.find(
-              (t) => !t.isResolved
-            )
+            const firstOpenThread = allThreads.find((t) => !t.isResolved)
             if (firstOpenThread) threadId = firstOpenThread.id
           }
         }
@@ -401,6 +398,7 @@ export function MuyaEditor({
         clearTimeout(debounceTimerRef.current)
         debounceTimerRef.current = null
       }
+      if (!isLocalUserScopeCurrent(scope)) return
       try {
         const md = editor.getMarkdown()
         if (md !== lastEmittedValueRef.current) {
@@ -414,12 +412,16 @@ export function MuyaEditor({
       }
     }
 
+    const unregisterFlush = registerEditorWidgetFlush(scope, flushChange)
+
     const handleEditorChange = () => {
+      if (!isLocalUserScopeCurrent(scope)) return
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
       }
       debounceTimerRef.current = setTimeout(() => {
         debounceTimerRef.current = null
+        if (!isLocalUserScopeCurrent(scope)) return
         try {
           const markdown = editor.getMarkdown()
           if (markdown === lastEmittedValueRef.current) return
@@ -450,7 +452,8 @@ export function MuyaEditor({
 
     editor.on('muya-comment-trigger', (payload: CommentTriggerPayload) => {
       queueMicrotask(() => {
-        onCommentTriggerRef.current?.(payload)
+        if (isLocalUserScopeCurrent(scope))
+          onCommentTriggerRef.current?.(payload)
       })
     })
 
@@ -458,13 +461,14 @@ export function MuyaEditor({
       'history-change',
       (state: { canUndo: boolean; canRedo: boolean }) => {
         queueMicrotask(() => {
-          onHistoryChangeRef.current?.(state)
+          if (isLocalUserScopeCurrent(scope))
+            onHistoryChangeRef.current?.(state)
         })
-        flushChange()
       }
     )
 
     queueMicrotask(() => {
+      if (!isLocalUserScopeCurrent(scope)) return
       onHistoryChangeRef.current?.({
         canUndo: editor.canUndo(),
         canRedo: editor.canRedo(),
@@ -539,6 +543,7 @@ export function MuyaEditor({
 
     let lastThreadsJson = ''
     const unsubscribeStore = useCommentStore.subscribe((state) => {
+      if (!isLocalUserScopeCurrent(scope)) return
       const docThreads = state.threads.filter((t) => t.docId === docId)
       const key = JSON.stringify({
         activeId: state.activeThreadId,
@@ -619,6 +624,8 @@ export function MuyaEditor({
     }
 
     return () => {
+      unregisterFlush()
+      flushChange()
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
         debounceTimerRef.current = null
@@ -628,16 +635,6 @@ export function MuyaEditor({
       }
       if (rafIndicatorsTimerRef.current) {
         cancelAnimationFrame(rafIndicatorsTimerRef.current)
-      }
-      try {
-        const currentMd = editor.getMarkdown()
-        if (currentMd && currentMd !== lastEmittedValueRef.current) {
-          lastEmittedValueRef.current = currentMd
-          lastPropContentRef.current = currentMd
-          onChangeRef.current(currentMd)
-        }
-      } catch (err) {
-        void err
       }
       unsubscribeStore()
       container.removeEventListener('keydown', handleKeyDown, true)
@@ -661,17 +658,25 @@ export function MuyaEditor({
     }
     if (content !== lastPropContentRef.current) {
       lastPropContentRef.current = content
-      if (content !== lastEmittedValueRef.current && editor.getMarkdown() !== content) {
-        try {
-          lastEmittedValueRef.current = content
-          editor.replaceContent(content)
-          updateBlockOffsets(editor)
-          editor.forceUpdateDecorations()
-          setTocItems(editor.getTOC())
-          updateLineIndicators()
-        } catch (err) {
-          void err
-        }
+      if (content !== lastEmittedValueRef.current) {
+        requestAnimationFrame(() => {
+          if (
+            muyaRef.current !== editor ||
+            lastPropContentRef.current !== content
+          )
+            return
+          try {
+            if (editor.getMarkdown() === content) return
+            lastEmittedValueRef.current = content
+            editor.replaceContent(content)
+            updateBlockOffsets(editor)
+            editor.forceUpdateDecorations()
+            setTocItems(editor.getTOC())
+            updateLineIndicators()
+          } catch (err) {
+            void err
+          }
+        })
       }
     }
   }
@@ -752,7 +757,7 @@ export function MuyaEditor({
                     }
                     useCommentStore.getState().setSidebarOpen(true)
                   }}
-                  className='mu-line-indicator-btn size-6 cursor-pointer rounded-full border border-amber-500/50 bg-amber-500/15 text-amber-600 shadow-sm transition-all hover:scale-110 hover:bg-amber-500/25 dark:text-amber-400'
+                  className='mu-line-indicator-btn size-6 cursor-pointer rounded-md border border-input bg-secondary text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
                   title={`${ind.count} comment(s) on this line`}
                 >
                   <MessageSquare className='size-3' />

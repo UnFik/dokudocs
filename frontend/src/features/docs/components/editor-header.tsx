@@ -18,7 +18,6 @@ import {
   Star,
   Tag,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { Button } from '@/components/ui/button'
@@ -37,12 +36,14 @@ interface EditorHeaderProps {
   title: string
   type: DocType
   projectId: string | null
+  projectName?: string | null
   category?: string | null
   categories?: string[]
   isSaving: boolean
   isDirty: boolean
   lastSaved: Date | null
   onTitleChange: (newTitle: string) => void
+  titleReadOnly?: boolean
   onExportDiagram?: () => void
   onExportCode?: () => void
   onExportCopySvg?: () => void
@@ -63,12 +64,14 @@ export function EditorHeader({
   title,
   type,
   projectId,
+  projectName,
   category,
   categories,
   isSaving,
   isDirty,
   lastSaved,
   onTitleChange,
+  titleReadOnly = false,
   onExportDiagram,
   onExportCode,
   onExportCopySvg,
@@ -104,11 +107,6 @@ export function EditorHeader({
     }
   }
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/docs/${docId}`)
-    toast.success('Document share link copied to clipboard')
-  }
-
   const handleBack = () => {
     if (activeProject) {
       navigate({
@@ -121,7 +119,7 @@ export function EditorHeader({
   }
 
   return (
-    <header className='sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-border/80 bg-background/95 px-4 backdrop-blur-md'>
+    <header className='sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-border/80 bg-background/95 px-4'>
       <div className='flex min-w-0 flex-1 items-center gap-3'>
         <Button
           variant='ghost'
@@ -153,11 +151,15 @@ export function EditorHeader({
             />
           ) : (
             <h1
-              onClick={() => {
-                setTempTitle(title)
-                setIsEditingTitle(true)
-              }}
-              className='cursor-pointer truncate text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-primary'
+              onClick={
+                titleReadOnly
+                  ? undefined
+                  : () => {
+                      setTempTitle(title)
+                      setIsEditingTitle(true)
+                    }
+              }
+              className={`truncate text-sm font-semibold tracking-tight text-foreground ${titleReadOnly ? '' : 'cursor-pointer transition-colors hover:text-primary'}`}
             >
               {title}
             </h1>
@@ -166,15 +168,18 @@ export function EditorHeader({
 
         <div className='flex shrink-0 items-center gap-1.5 pl-1 text-[11px] font-medium'>
           {isSaving ? (
-            <span className='flex items-center gap-1 text-amber-500'>
+            <span className='flex items-center gap-1 text-muted-foreground'>
               <Loader2 className='size-3 animate-spin' />
               <span className='hidden sm:inline'>Saving...</span>
             </span>
           ) : isDirty ? (
-            <span className='text-muted-foreground/70'>Unsaved</span>
+            <span className='flex items-center gap-1.5 text-warn'>
+              <i className='size-1.5 rounded-[1px] bg-warn' aria-hidden='true' />
+              Unsaved
+            </span>
           ) : (
             <span
-              className='flex items-center gap-1 text-emerald-600 dark:text-emerald-400'
+              className='flex items-center gap-1 text-ok'
               title={
                 lastSaved
                   ? `Last saved at ${lastSaved.toLocaleTimeString()}`
@@ -205,6 +210,11 @@ export function EditorHeader({
               <ChevronDown className='size-3 shrink-0 opacity-60' />
             </button>
           </ProjectDocsHoverCard>
+        ) : projectName ? (
+          <span className='hidden items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/80 md:flex'>
+            <Folder className='size-3.5 shrink-0' />
+            <span className='max-w-36 truncate'>{projectName}</span>
+          </span>
         ) : (
           <span className='hidden items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground/80 md:flex'>
             <Folder className='size-3.5 shrink-0' />
@@ -223,7 +233,7 @@ export function EditorHeader({
               return (
                 <>
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
+                    className={`inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-[10px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
                   >
                     <Tag className='size-2.5 shrink-0' />
                     <span>{firstCat}</span>
@@ -231,7 +241,7 @@ export function EditorHeader({
                   {remainingCount > 0 && (
                     <span
                       title={docCategories.slice(1).join(', ')}
-                      className='rounded-full border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground'
+                      className='rounded-sm border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground'
                     >
                       +{remainingCount}
                     </span>
@@ -256,7 +266,7 @@ export function EditorHeader({
             <MessageSquare className='size-3.5' />
             <span className='hidden md:inline'>Comments</span>
             {typeof commentsCount === 'number' && commentsCount > 0 && (
-              <span className='flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground'>
+              <span className='flex h-4 min-w-4 items-center justify-center rounded-sm bg-primary px-1 text-[10px] font-semibold text-primary-foreground'>
                 {commentsCount}
               </span>
             )}
@@ -275,7 +285,7 @@ export function EditorHeader({
             <Star
               className={`size-3.5 ${
                 isStarred
-                  ? 'fill-amber-400 text-amber-500'
+                  ? 'fill-foreground text-foreground'
                   : 'text-muted-foreground/70'
               }`}
             />
@@ -302,7 +312,9 @@ export function EditorHeader({
         <Button
           variant='outline'
           size='sm'
-          onClick={onOpenShare || handleShare}
+          onClick={onOpenShare}
+          disabled={!onOpenShare}
+          title={onOpenShare ? 'Share document' : 'Sharing is unavailable'}
           className='h-8 gap-1.5 text-xs'
         >
           <Share2 className='size-3.5' />
@@ -341,7 +353,7 @@ export function EditorHeader({
                   onClick={onExportCopySvg}
                   className='gap-2 text-xs'
                 >
-                  <Code className='size-3.5 text-purple-500' />
+                  <Code className='size-3.5 text-muted-foreground' />
                   <span>Copy SVG Code</span>
                 </DropdownMenuItem>
               )}
@@ -350,7 +362,7 @@ export function EditorHeader({
                   onClick={onExportSvg}
                   className='gap-2 text-xs'
                 >
-                  <FileCode className='size-3.5 text-blue-500' />
+                  <FileCode className='size-3.5 text-muted-foreground' />
                   <span>Download as SVG</span>
                 </DropdownMenuItem>
               )}
@@ -359,7 +371,7 @@ export function EditorHeader({
                   onClick={onExportPng}
                   className='gap-2 text-xs'
                 >
-                  <ImageIcon className='size-3.5 text-emerald-500' />
+                  <ImageIcon className='size-3.5 text-muted-foreground' />
                   <span>Download as PNG</span>
                 </DropdownMenuItem>
               )}

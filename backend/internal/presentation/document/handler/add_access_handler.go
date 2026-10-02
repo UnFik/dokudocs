@@ -9,6 +9,23 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// AddAccess grants or updates user access to a document.
+// @Summary Add or update document access
+// @Description Grant document access to a user by email
+// @Tags Document
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Document ID (UUID)"
+// @Param request body presenter.AddAccessRequest true "Add access payload"
+// @Success 201 {object} response.Envelope{data=map[string]string}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /documents/{id}/accesses [post]
 func (h *Handler) AddAccess(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {
@@ -33,8 +50,8 @@ func (h *Handler) AddAccess(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, constant.ErrForbidden):
 			response.Error(w, http.StatusForbidden, "forbidden: insufficient permission")
-		case errors.Is(err, constant.ErrUserNotFound):
-			response.Error(w, http.StatusNotFound, "user not found")
+		case errors.Is(err, constant.ErrUserNotFound), errors.Is(err, constant.ErrDocumentNotFound), errors.Is(err, constant.ErrProjectNotFound):
+			writeDocumentError(w, err)
 		default:
 			response.Error(w, http.StatusBadRequest, err.Error())
 		}

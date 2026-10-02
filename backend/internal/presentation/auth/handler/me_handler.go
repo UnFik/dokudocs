@@ -9,6 +9,15 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// Me returns details of the currently authenticated user.
+// @Summary Get current user
+// @Description Retrieve current user info from JWT claims
+// @Tags Auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.Envelope{data=presenter.ResponseUser}
+// @Failure 401 {object} response.ErrorEnvelope
+// @Router /auth/me [get]
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	user, ok := middleware.UserFromContext(r.Context())
 	if !ok {

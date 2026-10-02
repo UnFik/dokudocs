@@ -133,7 +133,7 @@ export function EditCategoryDialog({
                               onClick={() => field.onChange(opt.id)}
                               className={`size-7 rounded-full ${opt.dot} flex items-center justify-center transition-all ${
                                 isSelected
-                                  ? 'scale-110 shadow-xs ring-2 ring-primary ring-offset-2'
+                                  ? 'scale-110 ring-2 ring-primary ring-offset-2'
                                   : 'opacity-80 hover:scale-105 hover:opacity-100'
                               }`}
                               title={opt.name}

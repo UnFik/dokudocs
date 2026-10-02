@@ -8,6 +8,22 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// RemoveMember removes a member from a project.
+// @Summary Remove project member
+// @Description Remove a user from a project
+// @Tags Project
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Project ID (UUID)"
+// @Param userId path string true "Member User ID (UUID)"
+// @Success 200 {object} response.Envelope{data=map[string]string}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /projects/{id}/members/{userId} [delete]
 func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {

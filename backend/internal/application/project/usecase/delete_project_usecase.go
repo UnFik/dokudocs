@@ -19,5 +19,5 @@ func (u *useCase) DeleteProject(ctx context.Context, id, workspaceID, userID uui
 		return constant.ErrForbidden
 	}
 
-	return u.projectRepo.SoftDelete(ctx, id)
+	return u.projectRepo.SoftDelete(ctx, id, workspaceID, userID)
 }

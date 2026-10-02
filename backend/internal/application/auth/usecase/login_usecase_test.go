@@ -46,9 +46,11 @@ func (s fakeUserStore) Search(context.Context, string, int) ([]model.UserSummary
 	return nil, nil
 }
 
-func (fakeDB) WithTransaction(context.Context, func(database.Queryer) error) error { return nil }
-func (fakeDB) Raw() *sql.DB                                                        { return nil }
-func (fakeDB) Close() error                                                        { return nil }
+func (f fakeDB) WithTransaction(ctx context.Context, fn func(database.Queryer) error) error {
+	return fn(f.Queryer)
+}
+func (fakeDB) Raw() *sql.DB { return nil }
+func (fakeDB) Close() error { return nil }
 
 func testUseCase(t *testing.T) (*useCase, model.AuthUser) {
 	t.Helper()

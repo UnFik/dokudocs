@@ -1,0 +1,29 @@
+[
+  {
+    "name": "paragraph",
+    "text": "**Ship** ~later~",
+    "inline": [
+      {
+        "type": "run",
+        "content": "Ship",
+        "attributes": {
+          "bold": true,
+          "boldMarker": "**",
+          "source": "Ship"
+        }
+      },
+      {
+        "type": "run",
+        "content": " ",
+        "attributes": {
+          "source": " "
+        }
+      },
+      {
+        "type": "opaque-inline",
+        "content": "~later~",
+        "attributes": {}
+      }
+    ]
+  }
+]

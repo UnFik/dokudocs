@@ -32,6 +32,11 @@ func (u *useCase) AddOrUpdateAccess(ctx context.Context, docID, workspaceID, act
 	if level == "" {
 		level = "view"
 	}
+	switch level {
+	case "owner", "edit", "comment", "view":
+	default:
+		return errors.New("invalid document access level")
+	}
 
-	return u.docRepo.AddOrUpdateAccess(ctx, docID, targetUser.ID, level)
+	return u.docRepo.AddOrUpdateAccess(ctx, docID, workspaceID, actorID, targetUser.ID, level)
 }

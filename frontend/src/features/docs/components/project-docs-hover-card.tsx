@@ -31,12 +31,12 @@ interface ProjectDocsHoverCardProps {
 function getDocTypeIcon(type: DocType) {
   switch (type) {
     case 'mermaid':
-      return <GitFork className='size-3.5 shrink-0 text-red-500' />
+      return <GitFork className='size-3.5 shrink-0 text-muted-foreground' />
     case 'dbdiagram':
-      return <Database className='size-3.5 shrink-0 text-sky-500' />
+      return <Database className='size-3.5 shrink-0 text-muted-foreground' />
     case 'markdown':
     default:
-      return <FileText className='size-3.5 shrink-0 text-violet-500' />
+      return <FileText className='size-3.5 shrink-0 text-muted-foreground' />
   }
 }
 
@@ -87,7 +87,7 @@ export function ProjectDocsHoverCard({
         sideOffset={8}
         onPointerDownOutside={() => setOpen(false)}
         onEscapeKeyDown={() => setOpen(false)}
-        className='flex max-h-[420px] w-80 flex-col overflow-hidden border-border/80 p-0 shadow-xl'
+        className='flex max-h-[420px] w-80 flex-col overflow-hidden border-border/80 p-0 shadow-sm'
       >
         {/* Header */}
         <div className='flex shrink-0 items-center justify-between border-b border-border/60 p-3 pb-2.5'>

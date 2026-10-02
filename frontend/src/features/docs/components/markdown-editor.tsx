@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { Edit3, Eye, ListTree, Redo2, Undo2 } from 'lucide-react'
-import { useAuthStore } from '@/stores/auth-store'
 import { useCommentStore } from '@/stores/comment-store'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
+import { getLocalUserScope } from '@/lib/user-storage'
 import { Button } from '@/components/ui/button'
 import { CommentsSidebar } from './comments/comments-sidebar'
 import { FloatingCommentPopover } from './comments/floating-comment-popover'
@@ -47,8 +47,8 @@ export function MarkdownEditor({
   content,
   onChange,
 }: MarkdownEditorProps) {
-  const { auth } = useAuthStore()
-  const userId = auth.user?.accountNo || auth.user?.email || 'guest'
+  const [scope] = useState(getLocalUserScope)
+  const userId = scope.userId || 'guest'
   const muyaEditorRef = useRef<MuyaEditorHandle | null>(null)
   const [historyState, setHistoryState] = useState({
     canUndo: false,
@@ -99,7 +99,7 @@ export function MarkdownEditor({
         onClick={() => setShowOutline(userId, !showToc)}
         className={`h-6 gap-1 px-2 text-[11px] ${
           showToc
-            ? 'bg-blue-500/15 font-medium text-blue-600 dark:text-blue-400'
+            ? 'bg-background font-medium text-foreground'
             : 'text-muted-foreground hover:text-foreground'
         }`}
         title='Toggle Outline / Table of Contents'
@@ -153,12 +153,12 @@ export function MarkdownEditor({
         onClick={handleSwitchToView}
         className={`flex cursor-pointer items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-all ${
           previewMode === 'view'
-            ? 'bg-background font-semibold text-foreground shadow-xs'
+            ? 'bg-background font-semibold text-foreground'
             : 'text-muted-foreground hover:text-foreground'
         }`}
         title='Read-only rendered document'
       >
-        <Eye className='size-3 text-blue-500' />
+        <Eye className='size-3 text-muted-foreground' />
         <span>View</span>
       </button>
 
@@ -168,12 +168,12 @@ export function MarkdownEditor({
         onClick={handleSwitchToEdit}
         className={`flex cursor-pointer items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium transition-all ${
           previewMode === 'edit'
-            ? 'bg-background font-semibold text-foreground shadow-xs'
+            ? 'bg-background font-semibold text-foreground'
             : 'text-muted-foreground hover:text-foreground'
         }`}
         title='In-place interactive rich editor'
       >
-        <Edit3 className='size-3 text-emerald-500' />
+        <Edit3 className='size-3 text-muted-foreground' />
         <span>Edit</span>
       </button>
     </div>

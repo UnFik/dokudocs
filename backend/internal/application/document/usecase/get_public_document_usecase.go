@@ -6,6 +6,7 @@ import (
 
 	"backend/constant"
 	"backend/internal/domain/model"
+	"backend/internal/domain/policy"
 )
 
 func (u *useCase) GetPublicDocument(ctx context.Context, shareToken string) (data model.Document, err error) {
@@ -16,6 +17,9 @@ func (u *useCase) GetPublicDocument(ctx context.Context, shareToken string) (dat
 	data, err = u.docRepo.GetByShareToken(ctx, shareToken)
 	if err != nil {
 		return data, err
+	}
+	if !policy.CanReadDocument(data, policy.DocumentAccessContext{PublicLinkTokenValid: true}) {
+		return model.Document{}, constant.ErrDocumentNotFound
 	}
 	return data, nil
 }

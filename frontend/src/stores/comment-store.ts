@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import { getUserStorage } from '@/lib/user-storage'
 
 export interface CommentAuthor {
   id: string
@@ -345,7 +346,7 @@ export const useCommentStore = create<CommentState>()(
     }),
     {
       name: 'dokudocs-comments-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => getUserStorage()),
     }
   )
 )

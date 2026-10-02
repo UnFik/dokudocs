@@ -122,10 +122,10 @@ export function CommentThreadCard({
       onClick={() => setActiveThreadId(thread.id)}
       className={`group rounded-xl border p-3.5 text-xs transition-all ${
         isActive
-          ? 'border-primary/50 bg-primary/5 shadow-sm ring-1 ring-primary/30'
+          ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/30'
           : thread.isResolved
             ? 'border-border/40 bg-muted/20 opacity-80'
-            : 'border-border/70 bg-card hover:border-border hover:shadow-xs'
+            : 'border-border/70 bg-card hover:border-border'
       }`}
     >
       {thread.sectionTitle && (
@@ -160,10 +160,10 @@ export function CommentThreadCard({
               e.stopPropagation()
               toggleResolveThread(thread.id, currentUser)
             }}
-            className={`size-6 rounded-full transition-colors ${
+            className={`size-6 rounded-md transition-colors ${
               thread.isResolved
-                ? 'text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-600'
-                : 'text-muted-foreground/50 hover:bg-emerald-500/10 hover:text-emerald-500'
+                ? 'text-ok hover:bg-accent'
+                : 'text-muted-foreground/50 hover:bg-accent hover:text-ok'
             }`}
             title={thread.isResolved ? 'Re-open thread' : 'Resolve thread'}
           >
@@ -179,7 +179,7 @@ export function CommentThreadCard({
               <Button
                 variant='ghost'
                 size='icon'
-                className='size-6 rounded-full text-muted-foreground hover:text-foreground'
+                className='size-6 rounded-md text-muted-foreground hover:text-foreground'
               >
                 <MoreHorizontal className='size-3.5' />
               </Button>

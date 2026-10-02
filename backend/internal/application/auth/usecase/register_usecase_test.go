@@ -19,7 +19,7 @@ func TestRegisterSuccess(t *testing.T) {
 	})
 	resp, err := uc.Register(context.Background(), dto.RegisterRequest{
 		Email:    "newuser@example.com",
-		Password: "password123",
+		Password: "password123456789",
 		FullName: "New User",
 	})
 	if err != nil {
@@ -38,7 +38,8 @@ func TestRegisterEmailExists(t *testing.T) {
 	_ = user
 	_, err := uc.Register(context.Background(), dto.RegisterRequest{
 		Email:    "admin@example.com",
-		Password: "password123",
+		Password: "password123456789",
+		FullName: "Existing User",
 	})
 	if !errors.Is(err, constant.ErrEmailAlreadyExists) {
 		t.Fatalf("expected ErrEmailAlreadyExists, got %v", err)

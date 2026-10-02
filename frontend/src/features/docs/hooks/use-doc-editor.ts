@@ -1,8 +1,14 @@
 import { useCallback, useRef, useState } from 'react'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getDocCategories } from '@/lib/doc-category-utils'
+import {
+  getLocalUserScope,
+  isLocalUserScopeCurrent,
+  registerLocalUserFlush,
+} from '@/lib/user-storage'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { generateDualThumbnailsAsync } from '../lib/doc-thumbnail-generator'
+import { flushEditorWidgets } from '../lib/editor-flush'
 
 interface EditorState {
   title: string
@@ -12,6 +18,8 @@ interface EditorState {
 }
 
 export function useDocEditor(docId: string) {
+  const [scope] = useState(getLocalUserScope)
+  const thumbnailVersion = useRef(0)
   const updateDocument = useDokudocsStore((s) => s.updateDocument)
   const recordAutoRevision = useDokudocsStore((s) => s.recordAutoRevision)
   const updateDocumentThumbnail = useDokudocsStore(
@@ -47,16 +55,30 @@ export function useDocEditor(docId: string) {
     setProjectId(doc?.projectId ?? null)
     setCategories(getDocCategories(doc))
     setIsDirty(false)
+    latestStateRef.current = null
+    isDirtyRef.current = false
+    thumbnailVersion.current += 1
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
   }
 
   useMountEffect(() => {
+    if (!isLocalUserScopeCurrent(scope)) return
     if (docId) {
       recordDocumentView(docId)
     }
 
     if (doc && !doc.thumbnail) {
-      generateDualThumbnailsAsync(doc.type, doc.content, doc.id).then(
-        (thumb) => {
+      const version = thumbnailVersion.current
+      void generateDualThumbnailsAsync(doc.type, doc.content, doc.id)
+        .then((thumb) => {
+          if (
+            !isLocalUserScopeCurrent(scope) ||
+            version !== thumbnailVersion.current
+          )
+            return
           if (thumb.thumbnail || thumb.thumbnailDark) {
             updateDocumentThumbnail(
               doc.id,
@@ -64,14 +86,17 @@ export function useDocEditor(docId: string) {
               thumb.thumbnailDark
             )
           }
-        }
-      )
+        })
+        .catch(() => {})
     }
 
-    return () => {
+    const flush = () => {
+      flushEditorWidgets(scope)
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
       }
+      if (!isLocalUserScopeCurrent(scope)) return
       if (isDirtyRef.current && latestStateRef.current) {
         const store = useDokudocsStore.getState()
         const currentDoc = store.documents.find((d) => d.id === docId)
@@ -94,23 +119,25 @@ export function useDocEditor(docId: string) {
             thumbnailDark: currentDoc.thumbnailDark,
           })
           store.recordAutoRevision(currentDoc.id, stateToSave.content)
+          isDirtyRef.current = false
         }
       }
+    }
+    const unregister = registerLocalUserFlush(flush)
+    return () => {
+      unregister()
+      thumbnailVersion.current += 1
+      flush()
     }
   })
 
   const performSave = useCallback(
     async (stateToSave: EditorState) => {
-      if (!doc) return
+      if (!doc || !isLocalUserScopeCurrent(scope)) return
+      const version = thumbnailVersion.current
       setIsSaving(true)
       const targetProject = projects.find((p) => p.id === stateToSave.projectId)
       const currentTitle = stateToSave.title.trim() || 'Untitled Document'
-
-      const thumb = await generateDualThumbnailsAsync(
-        doc.type,
-        stateToSave.content,
-        doc.id
-      )
 
       updateDocument(doc.id, {
         title: currentTitle,
@@ -120,20 +147,50 @@ export function useDocEditor(docId: string) {
         categories: stateToSave.categories,
         category: stateToSave.categories[0] ?? null,
         isDraft: !stateToSave.projectId,
-        thumbnail: thumb.thumbnail || doc.thumbnail,
-        thumbnailDark: thumb.thumbnailDark || doc.thumbnailDark,
       })
       recordAutoRevision(doc.id, stateToSave.content)
-      setIsSaving(false)
       setIsDirty(false)
       isDirtyRef.current = false
       setLastSaved(new Date())
+
+      try {
+        const thumb = await generateDualThumbnailsAsync(
+          doc.type,
+          stateToSave.content,
+          doc.id
+        )
+        if (
+          !isLocalUserScopeCurrent(scope) ||
+          version !== thumbnailVersion.current
+        )
+          return
+        updateDocumentThumbnail(
+          doc.id,
+          thumb.thumbnail || doc.thumbnail || '',
+          thumb.thumbnailDark || doc.thumbnailDark || ''
+        )
+      } finally {
+        if (
+          isLocalUserScopeCurrent(scope) &&
+          version === thumbnailVersion.current
+        ) {
+          setIsSaving(false)
+        }
+      }
     },
-    [doc, projects, updateDocument, recordAutoRevision]
+    [
+      doc,
+      scope,
+      projects,
+      updateDocument,
+      recordAutoRevision,
+      updateDocumentThumbnail,
+    ]
   )
 
   const triggerAutoSave = useCallback(
     (nextState: EditorState) => {
+      thumbnailVersion.current += 1
       latestStateRef.current = nextState
       isDirtyRef.current = true
       setIsDirty(true)
@@ -144,7 +201,7 @@ export function useDocEditor(docId: string) {
 
       saveTimerRef.current = setTimeout(() => {
         saveTimerRef.current = null
-        void performSave(nextState)
+        void performSave(nextState).catch(() => {})
       }, 1000)
     },
     [performSave]
@@ -152,34 +209,51 @@ export function useDocEditor(docId: string) {
 
   const handleSetContent = useCallback(
     (newContent: string) => {
+      if (!isLocalUserScopeCurrent(scope)) return
       setContent(newContent)
       updateDocument(docId, { content: newContent })
       triggerAutoSave({
-        title,
+        ...(latestStateRef.current ?? { title, content, projectId, categories }),
         content: newContent,
-        projectId,
-        categories,
       })
     },
-    [docId, updateDocument, title, projectId, categories, triggerAutoSave]
+    [
+      docId,
+      scope,
+      updateDocument,
+      title,
+      content,
+      projectId,
+      categories,
+      triggerAutoSave,
+    ]
   )
 
   const handleSetTitle = useCallback(
     (newTitle: string) => {
+      if (!isLocalUserScopeCurrent(scope)) return
       setTitle(newTitle)
       updateDocument(docId, { title: newTitle.trim() || 'Untitled Document' })
       triggerAutoSave({
+        ...(latestStateRef.current ?? { title, content, projectId, categories }),
         title: newTitle,
-        content,
-        projectId,
-        categories,
       })
     },
-    [docId, updateDocument, content, projectId, categories, triggerAutoSave]
+    [
+      docId,
+      scope,
+      updateDocument,
+      title,
+      content,
+      projectId,
+      categories,
+      triggerAutoSave,
+    ]
   )
 
   const handleSetProjectId = useCallback(
     (newProjectId: string | null) => {
+      if (!isLocalUserScopeCurrent(scope)) return
       setProjectId(newProjectId)
       const targetProject = projects.find((p) => p.id === newProjectId)
       updateDocument(docId, {
@@ -188,34 +262,42 @@ export function useDocEditor(docId: string) {
         isDraft: !newProjectId,
       })
       triggerAutoSave({
-        title,
-        content,
+        ...(latestStateRef.current ?? { title, content, projectId, categories }),
         projectId: newProjectId,
-        categories,
       })
     },
-    [docId, projects, updateDocument, title, content, categories, triggerAutoSave]
+    [
+      docId,
+      scope,
+      projects,
+      updateDocument,
+      title,
+      content,
+      projectId,
+      categories,
+      triggerAutoSave,
+    ]
   )
 
   const handleSetCategories = useCallback(
     (newCategories: string[]) => {
+      if (!isLocalUserScopeCurrent(scope)) return
       setCategories(newCategories)
       updateDocument(docId, {
         categories: newCategories,
         category: newCategories[0] ?? null,
       })
       triggerAutoSave({
-        title,
-        content,
-        projectId,
+        ...(latestStateRef.current ?? { title, content, projectId, categories }),
         categories: newCategories,
       })
     },
-    [docId, updateDocument, title, content, projectId, triggerAutoSave]
+    [docId, scope, updateDocument, title, content, projectId, categories, triggerAutoSave]
   )
 
   const handleSetCategory = useCallback(
     (newCategory: string | null) => {
+      if (!isLocalUserScopeCurrent(scope)) return
       const nextCategories = newCategory ? [newCategory] : []
       setCategories(nextCategories)
       updateDocument(docId, {
@@ -223,13 +305,11 @@ export function useDocEditor(docId: string) {
         category: newCategory,
       })
       triggerAutoSave({
-        title,
-        content,
-        projectId,
+        ...(latestStateRef.current ?? { title, content, projectId, categories }),
         categories: nextCategories,
       })
     },
-    [docId, updateDocument, title, content, projectId, triggerAutoSave]
+    [docId, scope, updateDocument, title, content, projectId, categories, triggerAutoSave]
   )
 
   return {

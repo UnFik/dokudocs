@@ -1,13 +1,10 @@
 import { useState, useMemo } from 'react'
 import {
   Copy,
-  Globe,
   Lock,
   Mail,
   Share2,
   Trash2,
-  User,
-  Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
@@ -58,8 +55,7 @@ export function ShareDocDialog({
     : `/docs/${doc.id}`
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(shareUrl)
-    toast.success('Document link copied to clipboard')
+    toast.info('Document sharing is not available yet')
   }
 
   const handleAddMember = () => {
@@ -74,7 +70,7 @@ export function ShareDocDialog({
     toast.success(`Access granted to ${trimmed}`)
   }
 
-  const handleRoleChange = (accessId: string, email: string, role: DocumentAccessLevel) => {
+  const handleRoleChange = (_accessId: string, email: string, role: DocumentAccessLevel) => {
     setDocumentAccess(doc.id, email, role)
     toast.success(`Updated access for ${email}`)
   }
@@ -97,7 +93,7 @@ export function ShareDocDialog({
                 Share Document
               </DialogTitle>
               <DialogDescription className='text-xs text-muted-foreground'>
-                Manage access and collaboration for &ldquo;{doc.title}&rdquo;
+                Sharing is not available yet. This document is stored locally.
               </DialogDescription>
             </div>
           </div>
@@ -107,22 +103,14 @@ export function ShareDocDialog({
         <div className='mt-2 space-y-2 rounded-lg border border-border/70 bg-muted/30 p-3'>
           <div className='flex items-center justify-between text-xs'>
             <div className='flex items-center gap-1.5 font-medium text-foreground'>
-              {doc.isShared ? (
-                <>
-                  <Globe className='size-3.5 text-blue-500' />
-                  <span>Public Link Sharing Active</span>
-                </>
-              ) : (
-                <>
-                  <Lock className='size-3.5 text-amber-500' />
-                  <span>Workspace Members Only</span>
-                </>
-              )}
+              <Lock className='size-3.5 text-muted-foreground' />
+              <span>Public sharing is not available yet</span>
             </div>
           </div>
           <div className='flex items-center gap-2'>
             <Input
               readOnly
+              disabled
               value={shareUrl}
               className='h-8 font-mono text-[11px] text-muted-foreground'
             />
@@ -130,6 +118,7 @@ export function ShareDocDialog({
               size='sm'
               variant='outline'
               onClick={handleCopyLink}
+              disabled
               className='h-8 shrink-0 gap-1.5 px-3 text-xs'
             >
               <Copy className='size-3.5' />
@@ -148,6 +137,7 @@ export function ShareDocDialog({
               <Mail className='absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground' />
               <Input
                 type='email'
+                disabled
                 placeholder='colleague@company.com'
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
@@ -158,6 +148,7 @@ export function ShareDocDialog({
               />
             </div>
             <Select
+              disabled
               value={inviteRole}
               onValueChange={(val) => setInviteRole(val as DocumentAccessLevel)}
             >
@@ -172,6 +163,7 @@ export function ShareDocDialog({
             </Select>
             <Button
               size='sm'
+              disabled
               onClick={handleAddMember}
               className='h-8 px-3 text-xs'
             >
@@ -184,7 +176,7 @@ export function ShareDocDialog({
         <div className='mt-4 space-y-2'>
           <div className='flex items-center justify-between'>
             <span className='text-xs font-semibold text-foreground'>
-              People with access
+              Local collaborator records
             </span>
             <span className='text-[10px] text-muted-foreground'>
               {docAccesses.length + 1} members
@@ -241,6 +233,7 @@ export function ShareDocDialog({
 
                   <div className='flex items-center gap-1.5'>
                     <Select
+                      disabled
                       value={access.accessLevel}
                       onValueChange={(val) =>
                         handleRoleChange(access.id, access.user.email, val as DocumentAccessLevel)
@@ -262,6 +255,7 @@ export function ShareDocDialog({
                       className='size-7 text-muted-foreground hover:text-destructive'
                       onClick={() => handleRemove(access.id, access.user.email)}
                       title='Remove access'
+                      disabled
                     >
                       <Trash2 className='size-3.5' />
                     </Button>

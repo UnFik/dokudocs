@@ -8,6 +8,22 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// DeleteCategory deletes a category from a project.
+// @Summary Delete project category
+// @Description Delete a category from a project
+// @Tags Project
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Project ID (UUID)"
+// @Param categoryId path string true "Category ID (UUID)"
+// @Success 200 {object} response.Envelope{data=map[string]string}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /projects/{id}/categories/{categoryId} [delete]
 func (h *Handler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {

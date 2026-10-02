@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { LayoutTemplate } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -144,7 +144,7 @@ export function MermaidEditor({
         className='h-6 gap-1 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground'
         title='Insert Mermaid Template'
       >
-        <Sparkles className='size-3 text-purple-500' />
+        <LayoutTemplate className='size-3 text-muted-foreground' />
         <span>Templates</span>
       </Button>
 
@@ -152,7 +152,7 @@ export function MermaidEditor({
         <DialogContent className='max-h-[85vh] overflow-y-auto sm:max-w-2xl'>
           <DialogHeader>
             <DialogTitle className='flex items-center gap-2 text-base font-bold'>
-              <Sparkles className='size-4 text-purple-500' />
+              <LayoutTemplate className='size-4 text-muted-foreground' />
               <span>Insert Mermaid Template</span>
             </DialogTitle>
             <DialogDescription className='text-xs'>
@@ -165,14 +165,14 @@ export function MermaidEditor({
               <div
                 key={tmpl.name}
                 onClick={() => handleSelectTemplate(tmpl.code)}
-                className='group flex cursor-pointer flex-col justify-between rounded-lg border border-border/80 bg-muted/20 p-3 transition-all hover:border-purple-500/60 hover:bg-purple-500/5'
+                className='group flex cursor-pointer flex-col justify-between rounded-lg border border-border/80 bg-muted/20 p-3 transition-all hover:border-input hover:bg-accent'
               >
                 <div>
                   <div className='mb-1.5 flex items-center justify-between'>
-                    <span className='text-xs font-bold text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400'>
+                    <span className='text-xs font-bold text-foreground '>
                       {tmpl.name}
                     </span>
-                    <span className='rounded bg-purple-500/10 px-1.5 py-0.5 font-mono text-[9px] font-medium text-purple-600 dark:text-purple-400'>
+                    <span className='rounded-sm bg-border px-1.5 py-0.5 font-mono text-[9px] font-medium text-foreground'>
                       {tmpl.category}
                     </span>
                   </div>
@@ -183,7 +183,7 @@ export function MermaidEditor({
                 <Button
                   size='sm'
                   variant='outline'
-                  className='h-7 w-full text-xs transition-colors group-hover:border-purple-500 group-hover:bg-purple-500 group-hover:text-white'
+                  className='h-7 w-full text-xs transition-colors group-hover:bg-primary group-hover:text-primary-foreground'
                 >
                   Use Template
                 </Button>

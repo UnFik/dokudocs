@@ -157,15 +157,16 @@ describe('format.backspaceHandler — plain-text boundaries (no markers involved
     expect(event.defaultPrevented).toBe(true)
   })
 
-  it('caret one char into leading text: trims that text char, markers untouched', () => {
-    // Offset 1 matches the `'foo '` text token's `range.start + 1`, so the
-    // leading `f` is dropped and the inline-format markers are left alone.
+  it('caret one char into leading text: leaves plain text to the native delete', () => {
+    // Only inline-format markers are rewritten by the handler. A plain text
+    // token is deleted by the browser's default action, so trimming it here
+    // as well would delete two characters per keypress.
     const content = caretInFirstBlock(bootMuya('foo **strong**\n'), 1)
     const event = pressBackspace(content)
 
-    expect(content.text).toBe('oo **strong**')
-    expect(content.getCursor()!.start.offset).toBe(0)
-    expect(event.defaultPrevented).toBe(true)
+    expect(content.text).toBe('foo **strong**')
+    expect(content.getCursor()!.start.offset).toBe(1)
+    expect(event.defaultPrevented).toBe(false)
   })
 
   it('caret mid-run, off any marker boundary (offset 6): no-op, defers to default', () => {

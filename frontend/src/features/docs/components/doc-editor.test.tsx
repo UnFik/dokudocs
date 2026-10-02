@@ -1,6 +1,7 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { DocumentItem, ProjectItem } from '@/types/dokudocs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render } from 'vitest-browser-react'
+import { render as renderView } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { DocEditor } from './doc-editor'
@@ -13,6 +14,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   return {
     ...actual,
     useParams: () => ({ docId: currentDocId }),
+    useSearch: () => ({ workspaceId: undefined, nodeId: undefined }),
     useNavigate: () => mockNavigate,
     Link: ({
       children,
@@ -29,6 +31,10 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     ),
   }
 })
+
+vi.mock('@/features/workspaces/hooks/use-workspaces', () => ({
+  useWorkspaces: () => ({ activeWorkspaceId: undefined, isLoading: false }),
+}))
 
 const sampleMarkdownDoc: DocumentItem = {
   id: 'doc-1',
@@ -109,6 +115,17 @@ const sampleProject: ProjectItem = {
   updatedAt: new Date().toISOString(),
 }
 
+async function renderDocEditor() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return renderView(
+    <QueryClientProvider client={queryClient}>
+      <DocEditor />
+    </QueryClientProvider>
+  )
+}
+
 describe('DocEditor component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -120,7 +137,7 @@ describe('DocEditor component', () => {
 
   it('renders not found state if document is absent', async () => {
     currentDocId = 'non-existent'
-    const screen = await render(<DocEditor />)
+    const screen = await renderDocEditor()
 
     await expect
       .element(screen.getByText('Document Not Found'))
@@ -132,7 +149,7 @@ describe('DocEditor component', () => {
 
   it('renders markdown document and header controls', async () => {
     currentDocId = 'doc-1'
-    const screen = await render(<DocEditor />)
+    const screen = await renderDocEditor()
 
     await expect
       .element(screen.getByRole('heading', { name: 'My Project Architecture' }))
@@ -144,7 +161,7 @@ describe('DocEditor component', () => {
 
   it('renders dbdiagram document type', async () => {
     currentDocId = 'doc-2'
-    const screen = await render(<DocEditor />)
+    const screen = await renderDocEditor()
 
     await expect
       .element(screen.getByRole('heading', { name: 'Database Schema' }))
@@ -156,7 +173,7 @@ describe('DocEditor component', () => {
 
   it('renders mermaid document type with templates button', async () => {
     currentDocId = 'doc-3'
-    const screen = await render(<DocEditor />)
+    const screen = await renderDocEditor()
 
     await expect
       .element(screen.getByRole('heading', { name: 'Flow Diagram' }))
@@ -169,7 +186,7 @@ describe('DocEditor component', () => {
   it('handles copying raw document code to clipboard', async () => {
     currentDocId = 'doc-1'
     const writeTextSpy = vi.spyOn(navigator.clipboard, 'writeText')
-    const screen = await render(<DocEditor />)
+    const screen = await renderDocEditor()
 
     const exportBtn = screen.getByRole('button', { name: /^Export$/i })
     await userEvent.click(exportBtn)
@@ -182,7 +199,7 @@ describe('DocEditor component', () => {
 
   it('opens mermaid export dialog directly when clicking Export in mermaid document', async () => {
     currentDocId = 'doc-3'
-    const screen = await render(<DocEditor />)
+    const screen = await renderDocEditor()
 
     const exportBtn = screen.getByRole('button', { name: /^Export$/i })
     await userEvent.click(exportBtn)
@@ -206,7 +223,7 @@ describe('DocEditor component', () => {
 
   it('navigates to project page when clicking back button', async () => {
     currentDocId = 'doc-1'
-    const screen = await render(<DocEditor />)
+    const screen = await renderDocEditor()
 
     const backBtn = screen.getByRole('button', { name: 'Back' })
     await userEvent.click(backBtn)

@@ -12,7 +12,7 @@ func (u *useCase) ListTrash(ctx context.Context, workspaceID, userID uuid.UUID) 
 	if _, err = u.checkWorkspaceMembership(ctx, workspaceID, userID); err != nil {
 		return nil, err
 	}
-	data, err = u.docRepo.ListTrash(ctx, workspaceID)
+	data, err = u.docRepo.ListTrash(ctx, workspaceID, userID)
 	if err != nil {
 		return data, err
 	}

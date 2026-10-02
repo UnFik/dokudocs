@@ -17,12 +17,13 @@ import {
 } from 'lucide-react'
 import * as monaco from 'monaco-editor'
 import { toast } from 'sonner'
-import { useAuthStore } from '@/stores/auth-store'
 import {
   type EditorViewMode,
   useEditorPreferenceStore,
 } from '@/stores/editor-preference-store'
+import { getLocalUserScope, isLocalUserScopeCurrent } from '@/lib/user-storage'
 import { useTheme } from '@/context/theme-provider'
+import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -31,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { registerEditorWidgetFlush } from '../lib/editor-flush'
 import { runDiagnostics } from '../lib/monaco-diagnostics'
 import { setupMonaco } from '../lib/monaco-setup'
 
@@ -77,8 +79,8 @@ export function UnifiedMonacoEditor({
   const { resolvedTheme, setTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
 
-  const { auth } = useAuthStore()
-  const userId = auth.user?.accountNo || auth.user?.email || 'guest'
+  const [scope] = useState(getLocalUserScope)
+  const userId = scope.userId || 'guest'
 
   const userPreference = useEditorPreferenceStore(
     (state) => state.preferencesByUser[userId]
@@ -139,15 +141,27 @@ export function UnifiedMonacoEditor({
     words: content ? content.trim().split(/\s+/).filter(Boolean).length : 0,
   }))
 
-  const flushChange = useCallback((value: string) => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
-      debounceTimerRef.current = null
-    }
-    lastEmittedValueRef.current = value
-    setHasPendingChanges(false)
-    onChangeRef.current(value)
-  }, [])
+  const flushChange = useCallback(
+    (value: string) => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
+      if (!isLocalUserScopeCurrent(scope)) return
+      lastEmittedValueRef.current = value
+      setHasPendingChanges(false)
+      onChangeRef.current(value)
+    },
+    [scope]
+  )
+
+  useMountEffect(() =>
+    registerEditorWidgetFlush(scope, () => {
+      const value = editorRef.current?.getValue()
+      if (value !== undefined && value !== lastEmittedValueRef.current)
+        flushChange(value)
+    })
+  )
 
   const triggerManualSync = useCallback(() => {
     if (!editorRef.current) return
@@ -228,10 +242,7 @@ export function UnifiedMonacoEditor({
         }
         if (editorRef.current) {
           const val = editorRef.current.getValue()
-          if (val !== lastEmittedValueRef.current) {
-            lastEmittedValueRef.current = val
-            onChangeRef.current(val)
-          }
+          if (val !== lastEmittedValueRef.current) flushChange(val)
           editorRef.current.dispose()
           editorRef.current = null
         }
@@ -303,12 +314,11 @@ export function UnifiedMonacoEditor({
       updateHistoryState()
 
       editor.onDidChangeModelContent(() => {
-        if (isUpdatingFromPropRef.current) return
+        if (isUpdatingFromPropRef.current || !isLocalUserScopeCurrent(scope))
+          return
         const val = editor.getValue()
         const model = editor.getModel()
         const lines = model ? model.getLineCount() : 1
-
-        lastEmittedValueRef.current = val
 
         setStats((prev) => ({
           lines,
@@ -324,14 +334,10 @@ export function UnifiedMonacoEditor({
 
         if (isLiveRenderActiveRef.current) {
           setHasPendingChanges(false)
-          debounceTimerRef.current = setTimeout(() => {
-            onChangeRef.current(val)
-          }, 300)
+          debounceTimerRef.current = setTimeout(() => flushChange(val), 300)
         } else {
           setHasPendingChanges(true)
-          debounceTimerRef.current = setTimeout(() => {
-            onChangeRef.current(val)
-          }, 500)
+          debounceTimerRef.current = setTimeout(() => flushChange(val), 500)
         }
       })
 
@@ -507,6 +513,7 @@ export function UnifiedMonacoEditor({
     },
     [
       isDark,
+      scope,
       language,
       syncScroll,
       showSyncScrollToggle,
@@ -584,10 +591,7 @@ export function UnifiedMonacoEditor({
   }
 
   const handleSwitchViewMode = useCallback(
-    (
-      newViewMode: EditorViewMode,
-      newPreviewMode?: 'view' | 'edit'
-    ) => {
+    (newViewMode: EditorViewMode, newPreviewMode?: 'view' | 'edit') => {
       if (editorRef.current) {
         const val = editorRef.current.getValue()
         if (val !== lastEmittedValueRef.current) {
@@ -735,6 +739,7 @@ export function UnifiedMonacoEditor({
     if (!container) return
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (!isLocalUserScopeCurrent(scope)) return
       const rect = container.getBoundingClientRect()
       if (rect.width <= 0) return
       const newPercent = Math.min(
@@ -814,7 +819,7 @@ export function UnifiedMonacoEditor({
                     onClick={toggleSyncScroll}
                     className={`h-6 gap-1 px-1.5 text-[11px] font-medium transition-colors ${
                       syncScroll
-                        ? 'text-blue-600 hover:bg-blue-500/10 dark:text-blue-400'
+                        ? 'text-signal hover:bg-accent'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title={
@@ -837,8 +842,8 @@ export function UnifiedMonacoEditor({
                     onClick={toggleLiveRender}
                     className={`h-6 gap-1 px-1.5 text-[11px] font-medium transition-colors ${
                       isLiveRenderActive
-                        ? 'text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400'
-                        : 'text-amber-600 hover:bg-amber-500/10 dark:text-amber-400'
+                        ? 'text-ok hover:bg-accent'
+                        : 'text-warn hover:bg-accent'
                     }`}
                     title={
                       isLiveRenderActive
@@ -870,7 +875,7 @@ export function UnifiedMonacoEditor({
                       variant='outline'
                       size='sm'
                       onClick={triggerManualSync}
-                      className='h-6 animate-pulse gap-1 border-primary/50 px-2 text-[11px] font-medium text-primary hover:bg-primary/10'
+                      className='h-6 gap-1 border-input px-2 text-[11px] font-medium text-foreground hover:bg-accent'
                       title='Synchronize Preview (Ctrl+Enter)'
                     >
                       <RefreshCw className='size-3' />
@@ -926,7 +931,7 @@ export function UnifiedMonacoEditor({
               </div>
               <div className='flex items-center gap-2'>
                 {hasPendingChanges && (
-                  <span className='animate-pulse text-[10px] font-medium text-amber-500'>
+                  <span className='text-[10px] font-medium text-warn'>
                     Unsynced changes
                   </span>
                 )}
@@ -981,7 +986,7 @@ export function UnifiedMonacoEditor({
                 </div>
                 <div className='flex shrink-0 items-center gap-2'>
                   {showLiveRenderToggle && !isLiveRenderActive && (
-                    <span className='rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400'>
+                    <span className='rounded-sm bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-warn'>
                       Paused
                     </span>
                   )}
@@ -1003,14 +1008,14 @@ export function UnifiedMonacoEditor({
                   : previewContent}
 
                 <div className='pointer-events-auto absolute right-5 bottom-5 z-30 select-none'>
-                  <div className='flex items-center gap-1 rounded-full border border-border/80 bg-background/90 p-1 shadow-md backdrop-blur-md transition-all hover:border-border hover:shadow-lg'>
+                  <div className='flex items-center gap-1 rounded-md border border-border/80 bg-background/90 p-1 transition-all hover:border-border'>
                     <Button
                       variant='ghost'
                       size='icon'
                       onClick={() =>
                         setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
                       }
-                      className='size-7 cursor-pointer rounded-full text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground'
+                      className='size-7 cursor-pointer rounded-md text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground'
                       title={
                         resolvedTheme === 'dark'
                           ? 'Switch to Light theme'
@@ -1019,9 +1024,9 @@ export function UnifiedMonacoEditor({
                       aria-label='Toggle theme'
                     >
                       {resolvedTheme === 'dark' ? (
-                        <Sun className='size-3.5 fill-amber-500/10 text-amber-500 transition-transform duration-300 hover:rotate-45' />
+                        <Sun className='size-3.5 text-muted-foreground transition-transform duration-300 hover:rotate-45' />
                       ) : (
-                        <Moon className='size-3.5 fill-indigo-500/10 text-indigo-500 transition-transform duration-300 hover:-rotate-12' />
+                        <Moon className='size-3.5 text-muted-foreground transition-transform duration-300 hover:-rotate-12' />
                       )}
                     </Button>
                   </div>
@@ -1033,14 +1038,14 @@ export function UnifiedMonacoEditor({
 
         {/* Floating sticky bottom-center view switcher */}
         <div className='pointer-events-auto absolute bottom-5 left-1/2 z-30 -translate-x-1/2 select-none'>
-          <div className='flex items-center gap-1 rounded-full border border-border/80 bg-background/90 p-1 shadow-md backdrop-blur-md transition-all hover:border-border hover:shadow-lg'>
+          <div className='flex items-center gap-1 rounded-md border border-border/80 bg-background/90 p-1 transition-all hover:border-border'>
             <Button
               variant={viewMode === 'code' ? 'default' : 'ghost'}
               size='sm'
               onClick={() => handleSwitchViewMode('code')}
-              className={`h-7 gap-1.5 rounded-full px-3 text-xs font-medium transition-all ${
+              className={`h-7 gap-1.5 rounded-md px-3 text-xs font-medium transition-all ${
                 viewMode === 'code'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               }`}
             >
@@ -1051,9 +1056,9 @@ export function UnifiedMonacoEditor({
               variant={viewMode === 'split' ? 'default' : 'ghost'}
               size='sm'
               onClick={() => handleSwitchViewMode('split', 'view')}
-              className={`h-7 gap-1.5 rounded-full px-3 text-xs font-medium transition-all ${
+              className={`h-7 gap-1.5 rounded-md px-3 text-xs font-medium transition-all ${
                 viewMode === 'split'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               }`}
             >
@@ -1064,9 +1069,9 @@ export function UnifiedMonacoEditor({
               variant={viewMode === 'preview' ? 'default' : 'ghost'}
               size='sm'
               onClick={() => handleSwitchViewMode('preview')}
-              className={`h-7 gap-1.5 rounded-full px-3 text-xs font-medium transition-all ${
+              className={`h-7 gap-1.5 rounded-md px-3 text-xs font-medium transition-all ${
                 viewMode === 'preview'
-                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               }`}
             >

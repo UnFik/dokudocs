@@ -1,13 +1,27 @@
 package handler
 
 import (
-	"errors"
 	"net/http"
 
-	"backend/constant"
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/response"
 )
 
+// Get retrieves a document by ID.
+// @Summary Get document
+// @Description Get document details by ID
+// @Tags Document
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Document ID (UUID)"
+// @Success 200 {object} response.Envelope{data=model.Document}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /documents/{id} [get]
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {
@@ -21,11 +35,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	doc, err := h.service.GetDocument(r.Context(), id, wsID, userID)
 	if err != nil {
-		if errors.Is(err, constant.ErrDocumentNotFound) {
-			response.Error(w, http.StatusNotFound, "document not found")
-			return
-		}
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		writeDocumentError(w, err)
 		return
 	}
 	_ = response.Data(w, http.StatusOK, doc)

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import type { DocumentRevision } from '@/types/dokudocs'
 import {
   History,
   RotateCcw,
@@ -16,21 +17,29 @@ import { toast } from 'sonner'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { formatRelativeTime } from '@/lib/time-utils'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import type { DocumentRevision } from '@/types/dokudocs'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { documentBodyToMarkdown } from '../lib/muya/state/documentBodyToMarkdown'
 
 interface VersionHistorySidebarProps {
   docId: string
   isOpen: boolean
   onClose: () => void
   onRestoreContent?: (content: string) => void
+  revisions?: DocumentRevision[]
+  canEdit?: boolean
+  isLoading?: boolean
+  loadError?: string
+  isSaving?: boolean
+  isRestoring?: boolean
+  onCreateSnapshot?: (title: string) => Promise<DocumentRevision>
+  onRestoreRevision?: (revision: DocumentRevision) => void
 }
 
 function formatRevisionTime(dateStr: string) {
@@ -48,22 +57,38 @@ export function VersionHistorySidebar({
   isOpen,
   onClose,
   onRestoreContent,
+  revisions,
+  canEdit = true,
+  isLoading = false,
+  loadError = '',
+  isSaving = false,
+  isRestoring = false,
+  onCreateSnapshot,
+  onRestoreRevision,
 }: VersionHistorySidebarProps) {
   const revisionsMap = useDokudocsStore((s) => s.revisions)
   const restoreRevision = useDokudocsStore((s) => s.restoreRevision)
-  const createRevisionSnapshot = useDokudocsStore((s) => s.createRevisionSnapshot)
+  const createRevisionSnapshot = useDokudocsStore(
+    (s) => s.createRevisionSnapshot
+  )
   const renameRevision = useDokudocsStore((s) => s.renameRevision)
 
-  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null)
+  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(
+    null
+  )
   const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false)
   const [snapshotTitle, setSnapshotTitle] = useState('')
   const [onlyNamed, setOnlyNamed] = useState(false)
-  const [editingRevisionId, setEditingRevisionId] = useState<string | null>(null)
+  const [editingRevisionId, setEditingRevisionId] = useState<string | null>(
+    null
+  )
   const [editTitle, setEditTitle] = useState('')
 
-  const docRevisions = useMemo(() => {
-    return revisionsMap[docId] || []
-  }, [revisionsMap, docId])
+  const docRevisions = useMemo(
+    () => revisions ?? revisionsMap[docId] ?? [],
+    [revisions, revisionsMap, docId]
+  )
+  const isRemote = revisions !== undefined
 
   const displayedRevisions = useMemo(() => {
     if (!onlyNamed) return docRevisions
@@ -81,10 +106,23 @@ export function VersionHistorySidebar({
     }
     return displayedRevisions[0]
   }, [displayedRevisions, selectedRevisionId])
+  const selectedRevisionContent = useMemo(() => {
+    if (!selectedRevision) return ''
+    if (!selectedRevision.astSnapshot) return selectedRevision.content
+    try {
+      return documentBodyToMarkdown(selectedRevision.astSnapshot.nodes)
+    } catch {
+      return 'This revision cannot be previewed with the current Markdown renderer.'
+    }
+  }, [selectedRevision])
 
   if (!isOpen) return null
 
   const handleRestore = (revision: DocumentRevision) => {
+    if (onRestoreRevision) {
+      onRestoreRevision(revision)
+      return
+    }
     restoreRevision(docId, revision.id)
     if (onRestoreContent) {
       onRestoreContent(revision.content)
@@ -92,9 +130,23 @@ export function VersionHistorySidebar({
     toast.success(`Restored to version ${revision.versionNumber}`)
   }
 
-  const handleCreateSnapshot = () => {
+  const handleCreateSnapshot = async () => {
     if (!snapshotTitle.trim()) {
       toast.error('Please enter a revision title')
+      return
+    }
+    if (onCreateSnapshot) {
+      try {
+        const created = await onCreateSnapshot(snapshotTitle.trim())
+        setSelectedRevisionId(created.id)
+        setSnapshotTitle('')
+        setIsCreatingSnapshot(false)
+        toast.success(`Created named version v${created.versionNumber}`)
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'Could not save revision'
+        )
+      }
       return
     }
     const created = createRevisionSnapshot(docId, snapshotTitle.trim())
@@ -118,26 +170,31 @@ export function VersionHistorySidebar({
   }
 
   return (
-    <aside className='fixed inset-y-0 right-0 z-40 flex w-80 flex-col border-s border-border/80 bg-background/95 shadow-xl backdrop-blur-md transition-all sm:w-96'>
+    <aside className='fixed inset-y-0 right-0 z-40 flex w-80 flex-col border-s border-border/80 bg-background/95 transition-all sm:w-96'>
       {/* Header */}
       <div className='flex h-14 items-center justify-between border-b border-border/80 px-4'>
         <div className='flex items-center gap-2'>
           <History className='size-4 text-primary' />
-          <h2 className='text-sm font-semibold text-foreground'>Version History</h2>
-          <span className='rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground'>
+          <h2 className='text-sm font-semibold text-foreground'>
+            Version History
+          </h2>
+          <span className='rounded-sm bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground'>
             {displayedRevisions.length}
           </span>
         </div>
         <div className='flex items-center gap-1'>
-          <Button
-            variant='ghost'
-            size='icon'
-            className='size-7'
-            onClick={() => setIsCreatingSnapshot(!isCreatingSnapshot)}
-            title='Create Named Milestone'
-          >
-            <Plus className='size-4' />
-          </Button>
+          {canEdit && (
+            <Button
+              variant='ghost'
+              size='icon'
+              className='size-7'
+              onClick={() => setIsCreatingSnapshot(!isCreatingSnapshot)}
+              title='Create Named Milestone'
+              disabled={isSaving}
+            >
+              <Plus className='size-4' />
+            </Button>
+          )}
           <Button
             variant='ghost'
             size='icon'
@@ -170,7 +227,7 @@ export function VersionHistorySidebar({
       </div>
 
       {/* Optional Create Snapshot Form */}
-      {isCreatingSnapshot && (
+      {isCreatingSnapshot && canEdit && (
         <div className='border-b border-border/70 bg-muted/30 p-3'>
           <p className='mb-2 text-xs font-medium text-muted-foreground'>
             Create a named milestone for current content:
@@ -182,13 +239,18 @@ export function VersionHistorySidebar({
               placeholder='e.g., v1.2 Pre-release draft'
               className='h-7 text-xs'
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreateSnapshot()
+                if (e.key === 'Enter') void handleCreateSnapshot()
                 if (e.key === 'Escape') setIsCreatingSnapshot(false)
               }}
               autoFocus
             />
-            <Button size='sm' className='h-7 px-2 text-xs' onClick={handleCreateSnapshot}>
-              Save
+            <Button
+              size='sm'
+              className='h-7 px-2 text-xs'
+              onClick={() => void handleCreateSnapshot()}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving…' : 'Save'}
             </Button>
           </div>
         </div>
@@ -197,11 +259,27 @@ export function VersionHistorySidebar({
       {/* Revisions List */}
       <div className='flex flex-1 flex-col overflow-hidden'>
         <ScrollArea className='flex-1 p-3'>
-          {displayedRevisions.length === 0 ? (
+          {loadError ? (
+            <p
+              role='alert'
+              className='py-8 text-center text-xs text-destructive'
+            >
+              {loadError}
+            </p>
+          ) : isLoading ? (
+            <p
+              role='status'
+              className='py-8 text-center text-xs text-muted-foreground'
+            >
+              Loading version history…
+            </p>
+          ) : displayedRevisions.length === 0 ? (
             <div className='flex flex-col items-center justify-center py-12 text-center text-xs text-muted-foreground'>
               <History className='mb-2 size-8 text-muted-foreground/50' />
               <p className='font-medium'>
-                {onlyNamed ? 'No named versions found' : 'No versions recorded yet'}
+                {onlyNamed
+                  ? 'No named versions found'
+                  : 'No versions recorded yet'}
               </p>
               <p className='mt-1 text-[11px]'>
                 {onlyNamed
@@ -213,13 +291,17 @@ export function VersionHistorySidebar({
             <div className='space-y-2'>
               {displayedRevisions.map((rev) => {
                 const isSelected = selectedRevision?.id === rev.id
+                const canRestore =
+                  canEdit &&
+                  !isRestoring &&
+                  (!isRemote || Boolean(rev.astSnapshot))
                 return (
                   <div
                     key={rev.id}
                     onClick={() => setSelectedRevisionId(rev.id)}
                     className={`cursor-pointer rounded-lg border p-3 text-xs transition-all ${
                       isSelected
-                        ? 'border-primary/60 bg-primary/5 shadow-xs'
+                        ? 'border-primary/60 bg-primary/5'
                         : 'border-border/60 bg-card/60 hover:border-border hover:bg-card'
                     }`}
                   >
@@ -262,7 +344,7 @@ export function VersionHistorySidebar({
                         <div className='min-w-0 flex-1'>
                           <div className='flex items-center gap-1.5'>
                             <span className='truncate font-semibold text-foreground'>
-                              {rev.isNamed && rev.title
+                              {rev.title
                                 ? rev.title
                                 : `v${rev.versionNumber} · ${formatRevisionTime(
                                     rev.updatedAt || rev.createdAt
@@ -299,17 +381,25 @@ export function VersionHistorySidebar({
                                 <MoreVertical className='size-3.5' />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align='end' className='w-38 text-xs'>
+                            <DropdownMenuContent
+                              align='end'
+                              className='w-38 text-xs'
+                            >
+                              {!isRemote && (
+                                <DropdownMenuItem
+                                  className='gap-2 text-xs'
+                                  onClick={() => handleStartRename(rev)}
+                                >
+                                  <Pencil className='size-3' />
+                                  <span>
+                                    {rev.isNamed
+                                      ? 'Rename version'
+                                      : 'Name this version'}
+                                  </span>
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
-                                className='gap-2 text-xs'
-                                onClick={() => handleStartRename(rev)}
-                              >
-                                <Pencil className='size-3' />
-                                <span>
-                                  {rev.isNamed ? 'Rename version' : 'Name this version'}
-                                </span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
+                                disabled={!canRestore}
                                 className='gap-2 text-xs'
                                 onClick={() => handleRestore(rev)}
                               >
@@ -325,11 +415,15 @@ export function VersionHistorySidebar({
                     <div className='mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground'>
                       <div className='flex items-center gap-1'>
                         <User className='size-3' />
-                        <span>{rev.author.name}</span>
+                        <span>
+                          {rev.author?.name ?? rev.authorId ?? 'Unknown'}
+                        </span>
                       </div>
                       <div className='flex items-center gap-1'>
                         <Calendar className='size-3' />
-                        <span>{new Date(rev.createdAt).toLocaleDateString()}</span>
+                        <span>
+                          {new Date(rev.createdAt).toLocaleDateString()}
+                        </span>
                       </div>
                     </div>
 
@@ -342,6 +436,7 @@ export function VersionHistorySidebar({
                           size='sm'
                           variant='outline'
                           className='h-6 gap-1 px-2 text-[11px] font-medium'
+                          disabled={!canRestore}
                           onClick={(e) => {
                             e.stopPropagation()
                             handleRestore(rev)
@@ -367,12 +462,12 @@ export function VersionHistorySidebar({
                 Preview (v{selectedRevision.versionNumber})
               </span>
               <span className='font-mono text-[10px] text-muted-foreground'>
-                {selectedRevision.content.length} chars
+                {selectedRevisionContent.length} chars
               </span>
             </div>
-            <pre className='max-h-36 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[10px] text-muted-foreground whitespace-pre-wrap select-all'>
-              {selectedRevision.content.slice(0, 500)}
-              {selectedRevision.content.length > 500 && '\n...'}
+            <pre className='max-h-36 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[10px] whitespace-pre-wrap text-muted-foreground select-all'>
+              {selectedRevisionContent.slice(0, 500)}
+              {selectedRevisionContent.length > 500 && '\n...'}
             </pre>
           </div>
         )}

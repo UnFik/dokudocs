@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "fixtures": [
+    {
+      "id": "inline-marks",
+      "syntax": "atx heading, emphasis, strong, inline code",
+      "classification": "exact-byte",
+      "file": "inline-marks.md"
+    },
+    {
+      "id": "inline-escapes-links",
+      "syntax": "escaped punctuation, entity, inline link and title",
+      "classification": "exact-byte",
+      "file": "inline-escapes-links.md"
+    },
+    {
+      "id": "inline-objects",
+      "syntax": "image, inline math, autolink and deleted text",
+      "classification": "exact-byte",
+      "file": "inline-objects.md"
+    },
+    {
+      "id": "inline-opaque",
+      "syntax": "superscript represented as opaque inline source",
+      "classification": "opaque",
+      "file": "inline-opaque.md"
+    },
+    {
+      "id": "inline-html-opaque",
+      "syntax": "custom inline HTML represented as opaque source",
+      "classification": "opaque",
+      "file": "inline-html-opaque.md"
+    },
+    {
+      "id": "reference-links",
+      "syntax": "reference link and definition",
+      "classification": "exact-byte",
+      "file": "reference-links.md"
+    },
+    {
+      "id": "blockquote",
+      "syntax": "block quote",
+      "classification": "exact-byte",
+      "file": "blockquote.md"
+    },
+    {
+      "id": "task-list",
+      "syntax": "checked and unchecked task list",
+      "classification": "exact-byte",
+      "file": "task-list.md"
+    },
+    {
+      "id": "fenced-code",
+      "syntax": "fenced code and info string",
+      "classification": "exact-byte",
+      "file": "fenced-code.md"
+    },
+    {
+      "id": "table-compact",
+      "syntax": "table cells without serializer padding",
+      "classification": "exact-byte",
+      "file": "table-compact.md"
+    },
+    {
+      "id": "table-nested",
+      "syntax": "compact tables inside block quote and list item",
+      "classification": "exact-byte",
+      "file": "table-nested.md"
+    },
+    {
+      "id": "front-matter",
+      "syntax": "YAML front matter followed by a blank line",
+      "classification": "exact-byte",
+      "file": "front-matter.md"
+    }
+  ]
+}

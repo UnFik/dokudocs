@@ -38,13 +38,13 @@ export function DraftsPage() {
       <div className='flex flex-col justify-between gap-4 border-b border-border/60 pb-5 sm:flex-row sm:items-center'>
         <div>
           <div className='flex items-center gap-2.5'>
-            <div className='flex size-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400'>
+            <div className='flex size-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground'>
               <FileEdit className='size-4' />
             </div>
             <h1 className='text-xl font-bold tracking-tight text-foreground'>
               My Drafts
             </h1>
-            <span className='rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground'>
+            <span className='rounded-sm bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground'>
               {draftDocs.length}
             </span>
           </div>
@@ -58,7 +58,7 @@ export function DraftsPage() {
           <Button
             variant='outline'
             size='sm'
-            className='h-8 gap-1.5 text-xs shadow-xs'
+            className='h-8 gap-1.5 text-xs'
             onClick={() => setImportDialogOpen(true)}
           >
             <Upload className='size-3.5' />
@@ -67,7 +67,7 @@ export function DraftsPage() {
 
           <Button
             size='sm'
-            className='h-8 gap-1.5 text-xs shadow-xs'
+            className='h-8 gap-1.5 text-xs'
             onClick={() => setCreateDialogOpen(true)}
           >
             <Plus className='size-3.5' />

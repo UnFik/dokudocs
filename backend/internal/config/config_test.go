@@ -34,6 +34,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AccessTokenTTL != 24*time.Hour || cfg.ReadTimeout != 5*time.Second || cfg.WriteTimeout != 10*time.Second || cfg.IdleTimeout != time.Minute || cfg.ShutdownTimeout != 10*time.Second {
 		t.Fatalf("unexpected duration defaults: %#v", cfg)
 	}
+	if cfg.RAGRequestTimeout != 2*time.Minute || cfg.RAGAnswerModel != "gpt-5-mini" || cfg.RAGEmbeddingModel != "text-embedding-3-small" {
+		t.Fatalf("unexpected RAG defaults: %#v", cfg)
+	}
 }
 
 func TestLoadConfigFallbackOnBadDuration(t *testing.T) {
@@ -46,5 +49,46 @@ func TestLoadConfigFallbackOnBadDuration(t *testing.T) {
 	}
 	if cfg.AccessTokenTTL != 24*time.Hour {
 		t.Fatalf("expected fallback 24h, got %v", cfg.AccessTokenTTL)
+	}
+}
+
+func TestLoadConfigDatabasePoolDefaultsKeepTodaysSizing(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.DBMaxOpenConns != 10 || cfg.DBMaxIdleConns != 10 || cfg.DBConnMaxLifetime != 30*time.Minute {
+		t.Fatalf("pool defaults = %d/%d/%s, want 10/10/30m", cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxLifetime)
+	}
+}
+
+func TestLoadConfigDatabasePoolIsTunableFromTheEnvironment(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("DB_MAX_OPEN_CONNS", "40")
+	t.Setenv("DB_MAX_IDLE_CONNS", "20")
+	t.Setenv("DB_CONN_MAX_LIFETIME", "5m")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.DBMaxOpenConns != 40 || cfg.DBMaxIdleConns != 20 || cfg.DBConnMaxLifetime != 5*time.Minute {
+		t.Fatalf("pool = %d/%d/%s, want 40/20/5m", cfg.DBMaxOpenConns, cfg.DBMaxIdleConns, cfg.DBConnMaxLifetime)
+	}
+}
+
+func TestLoadConfigIdleConnsNeverExceedOpenConns(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("DB_MAX_OPEN_CONNS", "8")
+	t.Setenv("DB_MAX_IDLE_CONNS", "30")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.DBMaxIdleConns != 8 {
+		t.Fatalf("idle = %d, want clamped to open = 8", cfg.DBMaxIdleConns)
 	}
 }

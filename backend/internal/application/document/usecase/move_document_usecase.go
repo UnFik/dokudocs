@@ -17,5 +17,11 @@ func (u *useCase) MoveDocument(ctx context.Context, id, workspaceID, userID uuid
 	if err != nil || !canManage {
 		return constant.ErrForbidden
 	}
-	return u.docRepo.Move(ctx, id, targetProjectID)
+	if sameProject(doc.ProjectID, targetProjectID) {
+		return nil
+	}
+	if err := u.checkProjectWorkspace(ctx, targetProjectID, doc.WorkspaceID, userID); err != nil {
+		return err
+	}
+	return u.docRepo.Move(ctx, id, doc.WorkspaceID, userID, targetProjectID)
 }

@@ -1,5 +1,4 @@
 import { Fragment } from 'react'
-import { useAuthStore } from '@/stores/auth-store'
 import { useLayout } from '@/context/layout-provider'
 import {
   Sidebar,
@@ -9,6 +8,7 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from '@/components/ui/sidebar'
+import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
 import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
 import { NavUser } from './nav-user'
@@ -18,15 +18,7 @@ import { StarredNavGroup } from './starred-nav-group'
 
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
-  const { auth } = useAuthStore()
-
-  const currentUser = auth.user
-    ? {
-        name: auth.user.accountNo || 'User',
-        email: auth.user.email || '',
-        avatar: sidebarData.user.avatar,
-      }
-    : sidebarData.user
+  const currentUser = useCurrentProfile()
 
   return (
     <Sidebar collapsible={collapsible} variant={variant}>

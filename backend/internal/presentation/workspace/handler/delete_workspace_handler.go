@@ -10,6 +10,20 @@ import (
 	"github.com/google/uuid"
 )
 
+// Delete deletes a workspace by ID.
+// @Summary Delete workspace
+// @Description Permanently delete a workspace (owner only)
+// @Tags Workspace
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Workspace ID (UUID)"
+// @Success 200 {object} response.Envelope{data=map[string]string}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /workspaces/{id} [delete]
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, err := getUserUUID(r)
 	if err != nil {
