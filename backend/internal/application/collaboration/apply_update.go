@@ -17,6 +17,12 @@ var (
 	ErrBodySchemaMismatch = errors.New("body schema mismatch")
 	ErrBodyNotInitialized = errors.New("document body is not initialized")
 	ErrSuggestionConflict = errors.New("suggestion conflict")
+	// ErrSuggesterUpdate refuses an update from a user without edit access that
+	// does more than add, change, or remove their own suggestions (ADR 0027).
+	ErrSuggesterUpdate = errors.New("a user without edit access may only change their own suggestions")
+	// ErrSuggestionLimit refuses an update that would give one user more
+	// suggestions on a document than the limit allows.
+	ErrSuggestionLimit = errors.New("too many suggestions from one user on this document")
 )
 
 type Actor struct {
