@@ -120,9 +120,12 @@ func (r *Repository) DeleteNode(ctx context.Context, actor collaboration.Actor, 
 		if stateSchemaVersion != bodySchemaVersion {
 			return collaboration.ErrBodySchemaMismatch
 		}
-		persistedBody, err := yjs.ProjectV1(persisted, command.DocumentID)
+		persistedBody, suggestions, err := yjs.ProjectWithSuggestionsV1(persisted, command.DocumentID)
 		if err != nil {
 			return err
+		}
+		if len(suggestions) > 0 {
+			return collaboration.ErrSuggestionsPending
 		}
 		if err := setNodeVersions(before, &persistedBody); err != nil {
 			return err

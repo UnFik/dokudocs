@@ -17,6 +17,10 @@ var (
 	ErrBodySchemaMismatch = errors.New("body schema mismatch")
 	ErrBodyNotInitialized = errors.New("document body is not initialized")
 	ErrSuggestionConflict = errors.New("suggestion conflict")
+	// ErrSuggestionsPending refuses a structural command (delete or move) on a
+	// document that has pending suggestions: the command rebuilds the shared state
+	// from the canonical body, which would erase them.
+	ErrSuggestionsPending = errors.New("the document has pending suggestions; accept or reject them before moving or deleting blocks")
 )
 
 type Actor struct {
