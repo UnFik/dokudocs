@@ -3,6 +3,7 @@ package collaboration
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -22,14 +23,14 @@ func TestDeleteNodeUseCase(t *testing.T) {
 	}
 	want := DeleteNodeResult{DocumentID: documentID, CommandID: commandID, NodeID: nodeID, BodyEpoch: 3, BodyVersion: 8, Changed: true}
 	useCase := NewDeleteNodeUseCase(deleteNodeWriterFunc(func(_ context.Context, actor Actor, got DeleteNodeCommand) (DeleteNodeResult, error) {
-		if actor.UserID != actorID || got != command {
+		if actor.UserID != actorID || !reflect.DeepEqual(got, command) {
 			t.Fatal("DeleteNode command did not reach writer intact")
 		}
 		return want, nil
 	}))
 
 	got, err := useCase.Delete(context.Background(), Actor{UserID: actorID}, command)
-	if err != nil || got != want {
+	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("Delete() = %+v, %v; want %+v", got, err, want)
 	}
 }
@@ -59,5 +60,25 @@ func TestDeleteNodeUseCaseRejectsInvalidEnvelopeAndReceipt(t *testing.T) {
 				t.Fatalf("Delete() error = %v, want %v", err, test.wantErr)
 			}
 		})
+	}
+}
+
+func TestDeleteNodeCommandValidity(t *testing.T) {
+	one, two := uuid.New(), uuid.New()
+	for name, test := range map[string]struct {
+		command DeleteNodeCommand
+		want    bool
+	}{
+		"single":            {DeleteNodeCommand{NodeID: one}, true},
+		"batch":             {DeleteNodeCommand{NodeIDs: []uuid.UUID{one, two}}, true},
+		"empty":             {DeleteNodeCommand{}, false},
+		"both":              {DeleteNodeCommand{NodeID: one, NodeIDs: []uuid.UUID{one, two}}, false},
+		"batch of one":      {DeleteNodeCommand{NodeIDs: []uuid.UUID{one}}, false},
+		"duplicate":         {DeleteNodeCommand{NodeIDs: []uuid.UUID{one, one}}, false},
+		"nil id in a batch": {DeleteNodeCommand{NodeIDs: []uuid.UUID{one, uuid.Nil}}, false},
+	} {
+		if got := test.command.Valid(); got != test.want {
+			t.Errorf("%s: Valid() = %v, want %v", name, got, test.want)
+		}
 	}
 }

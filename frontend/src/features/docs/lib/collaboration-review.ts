@@ -5,6 +5,7 @@ import { buildRebaseUpdate } from './collaboration-rebase-yjs'
 import { pendingBodyNodes, projectEncodedState } from './collaboration-recovery'
 import { decodeBase64 } from './collaboration-socket'
 import {
+  deleteTargets,
   type CollaborationScope,
   type CollaborationSnapshot,
   type CollaborationStore,
@@ -107,13 +108,18 @@ export function explainStructuralHold(
   ): HoldExplanation => ({ code, message, canForce, canReissue })
 
   if (input.kind === 'delete') {
-    const node = byID.get(input.command.nodeID)
-    if (node?.parentID === null)
+    const nodes = deleteTargets(input.command).flatMap((id) => {
+      const node = byID.get(id)
+      return node ? [node] : []
+    })
+    if (nodes.some((node) => node.parentID === null))
       return hold('root', 'The document root cannot be deleted.')
-    if (node)
+    if (nodes.length)
       return hold(
         'content-changed',
-        'This block changed on the server after you deleted it. Deleting it now would remove text you have not seen.',
+        nodes.length > 1
+          ? 'These blocks changed on the server after you deleted them. Deleting them now would remove text you have not seen.'
+          : 'This block changed on the server after you deleted it. Deleting it now would remove text you have not seen.',
         true
       )
     return hold('unknown', 'This deletion could not be checked.')
@@ -242,8 +248,18 @@ export async function resolveHeldCommand(input: {
     (command) => command.commandID === input.commandID
   )
   if (!held) throw new Error('held delete command not found')
+  // Targets someone else already deleted are dropped; none left means done.
+  const present = new Set(current.nodes.map((node) => node.nodeID))
+  const remaining = deleteTargets(held).filter((id) => present.has(id))
+  if (!remaining.length) {
+    await complete(current)
+    return current
+  }
+  const { nodeIDs: _held, ...single } = held
   const result = await input.executeDelete({
-    ...held,
+    ...single,
+    nodeID: remaining[0]!,
+    ...(remaining.length > 1 ? { nodeIDs: remaining } : {}),
     commandID: crypto.randomUUID(),
     bodyEpoch: current.bodyEpoch,
     bodySchemaVersion: current.bodySchemaVersion,
