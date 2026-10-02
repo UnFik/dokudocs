@@ -45,6 +45,7 @@ export function prepareBodyTransaction(
   if (!transaction.docChanged) return transaction
 
   const before = prosemirrorToDocumentBody(state.doc)
+  keepDocumentIdentity(state, transaction)
   wrapRawInlineText(transaction)
   splitRunsWithMixedMarks(transaction)
   assignNodeIDs(transaction)
@@ -74,6 +75,22 @@ export function prepareBodyTransaction(
     options.authorizedMoveNodeIDs ?? new Set()
   )
   return transaction
+}
+
+// Select-all then Delete (or typing) replaces the whole document node with a
+// fresh one that has no node ID, which would read as deleting the root. The
+// root is never replaced: only what it contains changes.
+function keepDocumentIdentity(state: EditorState, transaction: Transaction) {
+  const previous = state.doc.firstChild
+  const next = transaction.doc.firstChild
+  if (
+    !previous ||
+    !next ||
+    transaction.doc.childCount !== 1 ||
+    previous.attrs.nodeID === next.attrs.nodeID
+  )
+    return
+  transaction.setNodeMarkup(0, undefined, previous.attrs)
 }
 
 function singleMoveCommand(
