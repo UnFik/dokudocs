@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 const apiURL = process.env.API_URL ?? "http://localhost:8080";
@@ -97,6 +97,12 @@ async function prepareDocument(page: Page) {
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   return editor;
+}
+
+// Click into a block and wait until the editor owns the caret, so the next key press is not lost.
+async function placeCaret(editor: Locator, block: Locator) {
+  await block.click();
+  await expect(editor).toBeFocused();
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -207,7 +213,7 @@ for (const viewport of viewports) {
       await expectNoHorizontalOverflow(page);
 
       // Slash menu in the empty last paragraph.
-      await editor.locator("p").last().click();
+      await placeCaret(editor, editor.locator("p").last());
       await page.keyboard.press("/");
       const combobox = page.getByRole("combobox", { name: "Insert block" });
       await expect(combobox).toBeVisible();
@@ -226,7 +232,7 @@ test.describe("@live editor accessibility, keyboard only, 768px", () => {
   test("insert toolbar works with Tab, arrows, Enter and shows focus", async ({ page }) => {
     test.setTimeout(90000);
     const editor = await prepareDocument(page);
-    await editor.locator("p").filter({ hasText: "Alpha block" }).click();
+    await placeCaret(editor, editor.locator("p").filter({ hasText: "Alpha block" }));
 
     await page.keyboard.press("Shift+Tab");
     const toolbar = page.getByRole("toolbar", { name: "Insert and table tools" });
@@ -249,7 +255,7 @@ test.describe("@live editor accessibility, keyboard only, 768px", () => {
   test("slash menu works with Arrow, Enter and Escape and shows focus", async ({ page }) => {
     test.setTimeout(90000);
     const editor = await prepareDocument(page);
-    await editor.locator("p").last().click();
+    await placeCaret(editor, editor.locator("p").last());
 
     await page.keyboard.press("/");
     const combobox = page.getByRole("combobox", { name: "Insert block" });
@@ -261,18 +267,19 @@ test.describe("@live editor accessibility, keyboard only, 768px", () => {
 
     await page.keyboard.press("/");
     await expect(combobox).toBeFocused();
+    await page.keyboard.type("list");
+    await expect(page.getByRole("option")).toHaveCount(3);
     await page.keyboard.press("ArrowDown");
-    await expect(page.getByRole("option", { selected: true })).toHaveText(/Heading 2/);
+    await expect(page.getByRole("option", { selected: true })).toHaveText(/Numbered list/);
     await page.keyboard.press("Enter");
-    // Every heading level renders as <h1> today (documentBody.ts), so the level is not asserted.
-    await expect(editor.locator("h1")).toHaveCount(1);
+    await expect(editor.locator("ol")).toHaveCount(1);
     await expect(combobox).toHaveCount(0);
   });
 
   test("block handle is reachable by Tab and moves a block with arrows", async ({ page }) => {
     test.setTimeout(90000);
     const editor = await prepareDocument(page);
-    await editor.locator("p").filter({ hasText: "Alpha block" }).click();
+    await placeCaret(editor, editor.locator("p").filter({ hasText: "Alpha block" }));
 
     // No mouse movement: the handle must still be there for the caret's block.
     const handle = page.getByRole("button", { name: /move block/i });
@@ -296,7 +303,7 @@ test.describe("@live editor accessibility, keyboard only, 768px", () => {
   test("selection toolbar is reachable from the selection with Tab and Enter", async ({ page }) => {
     test.setTimeout(90000);
     const editor = await prepareDocument(page);
-    await editor.locator("p").filter({ hasText: "Alpha block" }).click();
+    await placeCaret(editor, editor.locator("p").filter({ hasText: "Alpha block" }));
     await page.keyboard.press("Home");
     await page.keyboard.press("Shift+End");
     const toolbar = page.getByRole("toolbar", { name: "Format selection" });
@@ -347,7 +354,7 @@ for (const scheme of ["light", "dark"] as const) {
       expect(contrast(pair.fg, pair.bg), `${scheme} toolbar "${pair.name}"`).toBeGreaterThanOrEqual(4.5);
 
     // Selection toolbar buttons (icons need 3:1, aria-labelled).
-    await editor.locator("p").filter({ hasText: "Alpha block" }).click();
+    await placeCaret(editor, editor.locator("p").filter({ hasText: "Alpha block" }));
     await page.keyboard.press("Home");
     await page.keyboard.press("Shift+End");
     const selection = page.getByRole("toolbar", { name: "Format selection" });
