@@ -238,10 +238,9 @@ export function createDocumentBodyEditor(
             const caret = document.createElement('span')
             caret.className = 'remote-cursor'
             if (color) caret.style.setProperty('--cursor-color', color)
-            const label = document.createElement('span')
-            label.className = 'remote-cursor-label'
-            label.textContent = cursor.name || 'Collaborator'
-            caret.append(label)
+            // The name is drawn by CSS from data-name so it never becomes
+            // document text: it must not be copied or break text assertions.
+            caret.dataset.name = cursor.name || 'Collaborator'
             return caret
           },
           { key: `cursor-${cursor.connectionID}-${head}-${color}`, side: 1 }
