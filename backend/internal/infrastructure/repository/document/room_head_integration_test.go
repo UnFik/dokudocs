@@ -92,7 +92,7 @@ func TestReadRoomHeadAgreesWithReadBodyForEveryRole(t *testing.T) {
 		for _, user := range users {
 			want := collaboration.RoomAccess{}
 			if snapshot, err := reader.ReadBody(ctx, collaboration.Actor{UserID: user}, workspaceID, documentID); err == nil {
-				want = collaboration.RoomAccess{CanRead: true, CanEdit: snapshot.CanEdit}
+				want = collaboration.RoomAccess{CanRead: true, CanEdit: snapshot.CanEdit, CanSuggest: snapshot.CanSuggest}
 			}
 			if got := head.Access[user]; got != want {
 				t.Fatalf("%s: user %s access = %+v, want %+v (as ReadBody reports)", name, user, got, want)

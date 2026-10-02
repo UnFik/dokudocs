@@ -85,7 +85,37 @@ type roomOrder struct {
 // fan-outs that run at the same time and need the same head read it once.
 type snapshotKey struct {
 	documentID uuid.UUID
-	canEdit    bool
+	level      writeLevel
+}
+
+// writeLevel is what a peer may write: nothing, suggestions only (comment access),
+// or anything. Snapshots are cached and compared per level, because the ready
+// frame tells each client which of these it has.
+type writeLevel int
+
+const (
+	readOnly writeLevel = iota
+	suggestOnly
+	fullEdit
+)
+
+func levelOf(canEdit, canSuggest bool) writeLevel {
+	switch {
+	case canEdit:
+		return fullEdit
+	case canSuggest:
+		return suggestOnly
+	default:
+		return readOnly
+	}
+}
+
+func snapshotLevel(snapshot collaboration.BodySnapshot) writeLevel {
+	return levelOf(snapshot.CanEdit, snapshot.CanSuggest)
+}
+
+func accessLevel(access collaboration.RoomAccess) writeLevel {
+	return levelOf(access.CanEdit, access.CanSuggest)
 }
 
 type snapshotEntry struct {
@@ -146,7 +176,7 @@ type peer struct {
 	mu          sync.Mutex
 	bodyVersion int64
 	bodyEpoch   int64
-	canEdit     bool
+	level       writeLevel
 
 	connectionID  uuid.UUID
 	profile       PresenceUser
@@ -185,6 +215,7 @@ type serverMessage struct {
 	BodyEpoch         int64          `json:"bodyEpoch,omitempty"`
 	BodySchemaVersion int            `json:"bodySchemaVersion,omitempty"`
 	CanEdit           *bool          `json:"canEdit,omitempty"`
+	CanSuggest        *bool          `json:"canSuggest,omitempty"`
 	State             []byte         `json:"state,omitempty"`
 	Update            []byte         `json:"update,omitempty"`
 	Users             []PresenceUser `json:"users,omitempty"`
@@ -313,7 +344,7 @@ func (s *Server) servePeer(ctx context.Context, conn *ws.Conn, documentID uuid.U
 		documentID: documentID, token: auth.Token, out: make(chan outbound, peerQueueSize),
 		done: make(chan struct{}), started: make(chan struct{}),
 		pong:        make(chan uuid.UUID, 1),
-		bodyVersion: snapshot.BodyVersion, bodyEpoch: snapshot.BodyEpoch, canEdit: snapshot.CanEdit,
+		bodyVersion: snapshot.BodyVersion, bodyEpoch: snapshot.BodyEpoch, level: snapshotLevel(snapshot),
 		connectionID: uuid.New(), profile: PresenceUser{UserID: userID}, wantsPresence: hasCapability(auth.Capabilities, "presence"),
 		wantsCursor: hasCapability(auth.Capabilities, "cursor"),
 	}
@@ -529,7 +560,7 @@ func (p *peer) enqueueResyncIfAhead(snapshot collaboration.BodySnapshot) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if snapshot.BodyEpoch == p.bodyEpoch {
-		if snapshot.BodyVersion < p.bodyVersion || (snapshot.BodyVersion == p.bodyVersion && snapshot.CanEdit == p.canEdit) {
+		if snapshot.BodyVersion < p.bodyVersion || (snapshot.BodyVersion == p.bodyVersion && snapshotLevel(snapshot) == p.level) {
 			return
 		}
 	}
@@ -537,7 +568,7 @@ func (p *peer) enqueueResyncIfAhead(snapshot collaboration.BodySnapshot) {
 	select {
 	case <-p.done:
 	case p.out <- outbound{message: message}:
-		p.bodyVersion, p.bodyEpoch, p.canEdit = snapshot.BodyVersion, snapshot.BodyEpoch, snapshot.CanEdit
+		p.bodyVersion, p.bodyEpoch, p.level = snapshot.BodyVersion, snapshot.BodyEpoch, snapshotLevel(snapshot)
 	default:
 		p.close()
 	}
@@ -547,13 +578,13 @@ func (p *peer) enqueueUpdate(receipt collaboration.CommitReceipt, schemaVersion 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if snapshot.BodyEpoch != receipt.BodyEpoch || snapshot.BodySchemaVersion != schemaVersion ||
-		receipt.BodyVersion > p.bodyVersion+1 || snapshot.CanEdit != p.canEdit {
+		receipt.BodyVersion > p.bodyVersion+1 || snapshotLevel(snapshot) != p.level {
 		message := snapshotMessage("resync", snapshot)
 		select {
 		case <-p.done:
 			return errors.New("WebSocket peer is closed")
 		case p.out <- outbound{message: message}:
-			p.bodyVersion, p.bodyEpoch, p.canEdit = snapshot.BodyVersion, snapshot.BodyEpoch, snapshot.CanEdit
+			p.bodyVersion, p.bodyEpoch, p.level = snapshot.BodyVersion, snapshot.BodyEpoch, snapshotLevel(snapshot)
 			return nil
 		default:
 			p.close()
@@ -570,7 +601,7 @@ func (p *peer) enqueueUpdate(receipt collaboration.CommitReceipt, schemaVersion 
 			case <-p.done:
 				return errors.New("WebSocket peer is closed")
 			case p.out <- outbound{message: message}:
-				p.bodyVersion, p.bodyEpoch, p.canEdit = snapshot.BodyVersion, snapshot.BodyEpoch, snapshot.CanEdit
+				p.bodyVersion, p.bodyEpoch, p.level = snapshot.BodyVersion, snapshot.BodyEpoch, snapshotLevel(snapshot)
 				return nil
 			default:
 				p.close()
@@ -627,7 +658,7 @@ func (p *peer) prepareReady(snapshot collaboration.BodySnapshot) {
 				(snapshot.BodyEpoch == p.bodyEpoch && snapshot.BodyVersion > p.bodyVersion) {
 				p.bodyEpoch, p.bodyVersion = snapshot.BodyEpoch, snapshot.BodyVersion
 			}
-			p.canEdit = snapshot.CanEdit
+			p.level = snapshotLevel(snapshot)
 			return
 		}
 	}
@@ -848,8 +879,9 @@ func (s *Server) removePeer(p *peer) {
 	if roomEmptied {
 		delete(s.rooms, p.documentID)
 		delete(s.orders, p.documentID)
-		delete(s.snapshots, snapshotKey{documentID: p.documentID, canEdit: true})
-		delete(s.snapshots, snapshotKey{documentID: p.documentID, canEdit: false})
+		for _, level := range []writeLevel{readOnly, suggestOnly, fullEdit} {
+			delete(s.snapshots, snapshotKey{documentID: p.documentID, level: level})
+		}
 		if cancel, ok := s.pollers[p.documentID]; ok {
 			cancel()
 			delete(s.pollers, p.documentID)
@@ -1127,10 +1159,11 @@ func (s *Server) closeBroker() error {
 }
 
 func snapshotMessage(kind string, snapshot collaboration.BodySnapshot) serverMessage {
-	canEdit := snapshot.CanEdit
+	canEdit, canSuggest := snapshot.CanEdit, snapshot.CanSuggest
 	return serverMessage{
 		Type: kind, BodyVersion: snapshot.BodyVersion, BodyEpoch: snapshot.BodyEpoch,
-		BodySchemaVersion: snapshot.BodySchemaVersion, CanEdit: &canEdit, State: snapshot.EncodedState,
+		BodySchemaVersion: snapshot.BodySchemaVersion, CanEdit: &canEdit, CanSuggest: &canSuggest,
+		State: snapshot.EncodedState,
 	}
 }
 
@@ -1144,6 +1177,8 @@ func updateErrorCode(err error) string {
 		return "body_not_initialized"
 	case errors.Is(err, documentbody.ErrTooLarge):
 		return "document_too_large"
+	case errors.Is(err, collaboration.ErrSuggestionLimit):
+		return "suggestion_limit"
 	case errors.Is(err, collaboration.ErrConcurrentUpdate), isTransientStoreError(err):
 		return "unavailable"
 	default:
@@ -1204,9 +1239,9 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 	}
 	var firstError error
 	// Peers that must resync all resync to the same head, so the body is read
-	// once per CanEdit value and shared. Each peer was already authorized by
+	// once per write level and shared. Each peer was already authorized by
 	// the room head above; the body read only supplies the content.
-	fulls := map[bool]collaboration.BodySnapshot{}
+	fulls := map[writeLevel]collaboration.BodySnapshot{}
 	for _, p := range peers {
 		access := head.Access[p.actor.UserID]
 		if !access.CanRead || !s.verifySession(p) {
@@ -1215,13 +1250,13 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 		}
 		snapshot := collaboration.BodySnapshot{
 			BodyVersion: head.BodyVersion, BodyEpoch: head.BodyEpoch,
-			BodySchemaVersion: head.BodySchemaVersion, CanEdit: access.CanEdit,
+			BodySchemaVersion: head.BodySchemaVersion, CanEdit: access.CanEdit, CanSuggest: access.CanSuggest,
 		}
 		if p.fanoutNeedsFullSnapshot(receipt, update.BodySchemaVersion, snapshot) {
-			full, shared := fulls[access.CanEdit]
+			full, shared := fulls[accessLevel(access)]
 			if !shared {
 				var err error
-				full, err = s.headSnapshot(ctx, p, headAt, access.CanEdit)
+				full, err = s.headSnapshot(ctx, p, headAt, accessLevel(access))
 				if err != nil {
 					p.close()
 					if firstError == nil {
@@ -1229,8 +1264,8 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 					}
 					continue
 				}
-				if full.CanEdit == access.CanEdit {
-					fulls[access.CanEdit] = full
+				if snapshotLevel(full) == accessLevel(access) {
+					fulls[accessLevel(access)] = full
 				}
 			}
 			snapshot = full
@@ -1249,8 +1284,8 @@ func (s *Server) fanoutFromRoomHead(ctx context.Context, peers []*peer, receipt 
 // reading the whole document. A read that began earlier is never reused. The
 // caller has already authorized p through the room head; the shared body is
 // only content for that access level.
-func (s *Server) headSnapshot(ctx context.Context, p *peer, headAt time.Time, canEdit bool) (collaboration.BodySnapshot, error) {
-	key := snapshotKey{documentID: p.documentID, canEdit: canEdit}
+func (s *Server) headSnapshot(ctx context.Context, p *peer, headAt time.Time, level writeLevel) (collaboration.BodySnapshot, error) {
+	key := snapshotKey{documentID: p.documentID, level: level}
 	s.mu.Lock()
 	entry := s.snapshots[key]
 	if entry == nil {
@@ -1268,7 +1303,7 @@ func (s *Server) headSnapshot(ctx context.Context, p *peer, headAt time.Time, ca
 	if err != nil {
 		return collaboration.BodySnapshot{}, err
 	}
-	if snapshot.CanEdit == canEdit {
+	if snapshotLevel(snapshot) == level {
 		entry.snapshot, entry.started, entry.valid = snapshot, started, true
 	}
 	return snapshot, nil
@@ -1280,7 +1315,7 @@ func (p *peer) fanoutNeedsFullSnapshot(receipt collaboration.CommitReceipt, sche
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if head.BodyEpoch != receipt.BodyEpoch || head.BodySchemaVersion != schemaVersion ||
-		receipt.BodyVersion > p.bodyVersion+1 || head.CanEdit != p.canEdit {
+		receipt.BodyVersion > p.bodyVersion+1 || snapshotLevel(head) != p.level {
 		return true
 	}
 	return receipt.BodyVersion <= p.bodyVersion && receipt.Changed && receipt.BodyVersion == p.bodyVersion
@@ -1332,7 +1367,7 @@ func (s *Server) checkRoom(ctx context.Context, documentID, workspaceID uuid.UUI
 			p.close()
 			continue
 		}
-		if p.behind(head, access.CanEdit) {
+		if p.behind(head, accessLevel(access)) {
 			snapshot, err := s.readAuthorizedSnapshot(ctx, p)
 			if err != nil {
 				p.close()
@@ -1346,11 +1381,11 @@ func (s *Server) checkRoom(ctx context.Context, documentID, workspaceID uuid.UUI
 }
 
 // behind reports whether the peer must be resynced to match the head.
-func (p *peer) behind(head collaboration.RoomHead, canEdit bool) bool {
+func (p *peer) behind(head collaboration.RoomHead, level writeLevel) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if head.BodyEpoch == p.bodyEpoch &&
-		(head.BodyVersion < p.bodyVersion || (head.BodyVersion == p.bodyVersion && canEdit == p.canEdit)) {
+		(head.BodyVersion < p.bodyVersion || (head.BodyVersion == p.bodyVersion && level == p.level)) {
 		return false
 	}
 	return true
