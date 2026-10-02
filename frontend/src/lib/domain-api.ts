@@ -160,10 +160,10 @@ const moveNodeResultSchema = z.object({
   changed: z.boolean(),
 })
 const documentSuggestionSchema = z.object({
-  documentId: z.string().uuid(),
-  suggestionId: z.string().uuid(),
-  proposerId: z.string().uuid(),
-  deciderId: z.string().uuid().nullable().optional(),
+  documentId: z.guid(),
+  suggestionId: z.guid(),
+  proposerId: z.guid(),
+  deciderId: z.guid().nullable().optional(),
   baseBodyVersion: z.number().int().positive(),
   baseBodyEpoch: z.number().int().positive(),
   operationSchemaVersion: z.number().int().positive(),
@@ -171,6 +171,7 @@ const documentSuggestionSchema = z.object({
   operations: z.unknown(),
   summary: z.string(),
   reason: z.string(),
+  conflictReason: z.string().optional().default(''),
   status: z.enum(['pending', 'accepted', 'rejected', 'conflicted']),
   createdAt: z.string(),
   decidedAt: z.string().nullable().optional(),

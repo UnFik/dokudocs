@@ -56,7 +56,7 @@ func (r *Repository) ListSuggestions(ctx context.Context, workspaceID, documentI
 		rows, err := tx.QueryContext(ctx, `
 			SELECT document_id, suggestion_id, proposer_id, decider_id, base_body_version,
 			       base_body_epoch, operation_schema_version, provenance, operations,
-			       summary, reason, status, created_at, decided_at
+			       summary, reason, conflict_reason, status, created_at, decided_at
 			FROM document_suggestions
 			WHERE document_id = $1
 			ORDER BY created_at ASC, suggestion_id ASC
@@ -74,7 +74,7 @@ func (r *Repository) ListSuggestions(ctx context.Context, workspaceID, documentI
 				&suggestion.DocumentID, &suggestion.SuggestionID, &suggestion.ProposerID,
 				&deciderID, &suggestion.BaseBodyVersion, &suggestion.BaseBodyEpoch,
 				&suggestion.OperationSchemaVersion, &suggestion.Provenance, &suggestion.Operations,
-				&suggestion.Summary, &suggestion.Reason, &suggestion.Status, &suggestion.CreatedAt,
+				&suggestion.Summary, &suggestion.Reason, &suggestion.ConflictReason, &suggestion.Status, &suggestion.CreatedAt,
 				&decidedAt,
 			); err != nil {
 				return err
@@ -253,7 +253,7 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 		after.Nodes = append([]documentbody.Node(nil), before.Nodes...)
 		epochChanged := false
 		for _, operation := range ops {
-			if operation.NodeID == uuid.Nil || (operation.Op != "replace_text" && operation.Op != "insert" && operation.Op != "delete" && operation.Op != "move") {
+			if operation.NodeID == uuid.Nil || (operation.Op != "replace_text" && operation.Op != "insert" && operation.Op != "delete" && operation.Op != "move" && operation.Op != "format") {
 				if err := markSuggestionConflicted(ctx, tx, documentID, suggestionID, deciderID, "operation-envelope"); err != nil {
 					return err
 				}
@@ -276,6 +276,18 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 				case "replace_text":
 					after.Nodes[index].Content = operation.Content
 					after.Nodes[index].Version++
+				case "format":
+					formatted, formatErr := formatRunAttributes(after.Nodes[index], operation.Attributes)
+					if formatErr != nil {
+						if err := markSuggestionConflicted(ctx, tx, documentID, suggestionID, deciderID, "format"); err != nil {
+							return err
+						}
+						conflicted = true
+						return nil
+					}
+					after.Nodes[index].Attributes = formatted
+					after.Nodes[index].Version++
+					epochChanged = true
 				case "delete":
 					var deleteErr error
 					after, deleteErr = documentbody.DeleteNode(after, documentbody.DeleteNodeCommand{NodeID: operation.NodeID})
@@ -400,7 +412,7 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 }
 
 func markSuggestionConflicted(ctx context.Context, tx database.Queryer, documentID, suggestionID, deciderID uuid.UUID, reason string) error {
-	if _, err := tx.ExecContext(ctx, `UPDATE document_suggestions SET status = 'conflicted', reason = COALESCE(NULLIF(reason, ''), $4), decider_id = $3, decided_at = NOW() WHERE document_id = $1 AND suggestion_id = $2 AND status = 'pending'`, documentID, suggestionID, deciderID, reason); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE document_suggestions SET status = 'conflicted', conflict_reason = $4, decider_id = $3, decided_at = NOW() WHERE document_id = $1 AND suggestion_id = $2 AND status = 'pending'`, documentID, suggestionID, deciderID, reason); err != nil {
 		return err
 	}
 	return nil
@@ -445,4 +457,35 @@ func appendSuggestionNode(body *documentbody.Body, operation suggestionOperation
 		Attributes: attributes, Version: 1,
 	})
 	return nil
+}
+
+var formatAttributeNames = map[string]bool{"bold": true, "italic": true, "strike": true, "code": true}
+
+// formatRunAttributes sets or clears the boolean format marks on a run; other
+// attributes (links) are left untouched.
+func formatRunAttributes(node documentbody.Node, requested json.RawMessage) (json.RawMessage, error) {
+	if node.Type != "run" {
+		return nil, errors.New("format applies to a run")
+	}
+	var changes map[string]bool
+	if err := json.Unmarshal(requested, &changes); err != nil || len(changes) == 0 {
+		return nil, errors.New("format needs boolean marks")
+	}
+	current := map[string]any{}
+	if len(node.Attributes) > 0 {
+		if err := json.Unmarshal(node.Attributes, &current); err != nil {
+			return nil, err
+		}
+	}
+	for name, on := range changes {
+		if !formatAttributeNames[name] {
+			return nil, errors.New("unsupported format mark")
+		}
+		if on {
+			current[name] = true
+		} else {
+			delete(current, name)
+		}
+	}
+	return json.Marshal(current)
 }
