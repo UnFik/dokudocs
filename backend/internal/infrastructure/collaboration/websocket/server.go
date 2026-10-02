@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -399,6 +400,7 @@ func (p *peer) readLoop(ctx context.Context) {
 		}
 		receipt, err := p.server.updates.Apply(ctx, p.actor, update)
 		if err != nil {
+			log.Printf("collaboration update %s on document %s answered %q: %v", message.UpdateID, p.documentID, updateErrorCode(err), err)
 			if p.sendAndWait(serverMessage{Type: "error", UpdateID: message.UpdateID, Code: updateErrorCode(err)}) != nil {
 				return
 			}
@@ -1142,7 +1144,7 @@ func updateErrorCode(err error) string {
 		return "body_not_initialized"
 	case errors.Is(err, documentbody.ErrTooLarge):
 		return "document_too_large"
-	case isTransientStoreError(err):
+	case errors.Is(err, collaboration.ErrConcurrentUpdate), isTransientStoreError(err):
 		return "unavailable"
 	default:
 		return "update_rejected"

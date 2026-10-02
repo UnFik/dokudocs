@@ -8,9 +8,12 @@ import (
 )
 
 var (
-	ErrInvalidUpdate      = errors.New("invalid collaborative update")
-	ErrInvalidReceipt     = errors.New("invalid collaborative commit receipt")
-	ErrStaleBodyEpoch     = errors.New("stale body epoch")
+	ErrInvalidUpdate  = errors.New("invalid collaborative update")
+	ErrInvalidReceipt = errors.New("invalid collaborative commit receipt")
+	ErrStaleBodyEpoch = errors.New("stale body epoch")
+	// ErrConcurrentUpdate means another writer committed first. The update
+	// itself was not judged; the client keeps it and sends it again.
+	ErrConcurrentUpdate   = errors.New("another writer committed first")
 	ErrBodySchemaMismatch = errors.New("body schema mismatch")
 	ErrBodyNotInitialized = errors.New("document body is not initialized")
 	ErrSuggestionConflict = errors.New("suggestion conflict")
