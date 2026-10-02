@@ -36,7 +36,14 @@ import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
 } from '../lib/muya/state/documentBodyToMarkdown'
+import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
+import {
+  emptyInlineState,
+  type InlineMarkName,
+  type InlineState,
+} from '../lib/prosemirror/inlineMarks'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
+import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
 import { EditorHeader } from './editor-header'
 import './markdown-body.css'
 import { MuyaEditor } from './muya-editor/MuyaEditor'
@@ -294,6 +301,12 @@ function CollaborativeMarkdownBody({
   const [recoveryPendingCount, setRecoveryPendingCount] = useState(0)
   const [isExportingRecovery, setIsExportingRecovery] = useState(false)
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false)
+  const [history, setHistory] = useState<EditorHistoryState>({
+    canUndo: false,
+    canRedo: false,
+  })
+  const [inline, setInline] = useState<InlineState>(emptyInlineState)
+  const [linkRequest, setLinkRequest] = useState(0)
   const modeRef = useRef(mode)
   const canEditRef = useRef(canEdit)
 
@@ -365,6 +378,9 @@ function CollaborativeMarkdownBody({
       },
       onTransactionError: (cause) =>
         setError(cause instanceof Error ? cause.message : 'Invalid body edit'),
+      onHistoryChange: setHistory,
+      onInlineStateChange: setInline,
+      onLinkRequest: () => setLinkRequest((count) => count + 1),
     })
       .then((session) => {
         if (disposed) {
@@ -457,6 +473,19 @@ function CollaborativeMarkdownBody({
         >
           <Edit3 /> Edit
         </Button>
+        {mode === 'edit' && canEdit ? (
+          <HistoryButtons
+            history={history}
+            onUndo={() => {
+              sessionRef.current?.editor.undo()
+              sessionRef.current?.editor.focus()
+            }}
+            onRedo={() => {
+              sessionRef.current?.editor.redo()
+              sessionRef.current?.editor.focus()
+            }}
+          />
+        ) : null}
         <div className='ml-auto flex items-center gap-3'>
           <PresenceAvatars users={presence} currentUserID={userID} />
           <span role='status' className='text-xs text-muted-foreground'>
@@ -492,6 +521,25 @@ function CollaborativeMarkdownBody({
       <div className='markdown-body min-h-0 flex-1 overflow-auto p-6'>
         <div ref={mountRef} />
       </div>
+      {mode === 'edit' && canEdit ? (
+        <SelectionToolbar
+          inline={inline}
+          linkRequest={linkRequest}
+          onToggleMark={(mark: InlineMarkName) => {
+            sessionRef.current?.editor.toggleMark(mark)
+            sessionRef.current?.editor.focus()
+          }}
+          onSetLink={(href) => {
+            const applied = sessionRef.current?.editor.setLink(href) ?? false
+            if (applied) sessionRef.current?.editor.focus()
+            return applied
+          }}
+          onRemoveLink={() => {
+            sessionRef.current?.editor.removeLink()
+            sessionRef.current?.editor.focus()
+          }}
+        />
+      ) : null}
       {!offline && status !== 'forbidden' && status !== 'unauthorized' ? (
         <SuggestionPanel
           open={isSuggestionsOpen}
