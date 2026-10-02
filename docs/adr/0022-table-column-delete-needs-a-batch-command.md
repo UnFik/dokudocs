@@ -7,3 +7,5 @@ Why: a column is one `table.cell` in every row, so removing it removes several u
 Decision: do not emulate column deletion with a sequence of single deletes. Add it when the server gains a batch `DeleteNodes` command that removes the cells atomically in one epoch. Until then, users can delete rows, or delete the whole table, which is a single subtree.
 
 `deleteRow` on the last row removes the table through one `DeleteNode`.
+
+Update: the batch command now exists as `nodeIDs` on the delete endpoint ([ADR 0026](0026-batch-delete-nodes.md)). Column delete is still not built; it needs the editor to send every cell of the column in one command.

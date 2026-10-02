@@ -1,4 +1,4 @@
-import { EditorState, TextSelection } from 'prosemirror-state'
+import { AllSelection, EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { describe, expect, it } from 'vitest'
 import {
@@ -776,8 +776,8 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     const mount = document.createElement('div')
     const deleteRequests: string[] = []
     const editor = createDocumentBodyEditor(mount, ydoc, {
-      onDeleteNode: async (nodeID) => {
-        deleteRequests.push(nodeID)
+      onDeleteNode: async (nodeIDs) => {
+        deleteRequests.push(...nodeIDs)
       },
     })
 
@@ -795,6 +795,166 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     }
   })
 
+  it('routes the deletion of several blocks through one DeleteNode batch without touching Yjs', async () => {
+    const body: DocumentBodyNode[] = [
+      {
+        nodeID: 'root',
+        parentID: null,
+        siblingOrder: 0,
+        type: 'document',
+        content: '',
+        attributes: {},
+      },
+      ...['a', 'b', 'c'].map((id, index) => ({
+        nodeID: id,
+        parentID: 'root',
+        siblingOrder: index,
+        type: 'paragraph',
+        content: `block ${id}`,
+        attributes: {},
+      })),
+    ]
+    const ydoc = prosemirrorToYDoc(documentBodyToProseMirror(body), 'body')
+    const yStateBefore = Y.encodeStateAsUpdate(ydoc)
+    const mount = document.createElement('div')
+    const batches: string[][] = []
+    const errors: unknown[] = []
+    const editor = createDocumentBodyEditor(mount, ydoc, {
+      onDeleteNode: async (nodeIDs) => {
+        batches.push(nodeIDs)
+      },
+      onTransactionError: (error) => errors.push(error),
+    })
+
+    try {
+      // Everything between the document's first and last block: select all, delete.
+      editor.view.dispatch(
+        editor.view.state.tr.delete(
+          1,
+          editor.view.state.doc.child(0).nodeSize - 1
+        )
+      )
+      await waitUntil(async () => batches.length === 1)
+
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['a', 'b', 'c']])
+      expect(editor.getBody()).toEqual(body)
+      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+    }
+  })
+
+  it('deletes every block when everything is selected and deleted', async () => {
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const yStateBefore = Y.encodeStateAsUpdate(ydoc)
+    const batches: string[][] = []
+    const errors: unknown[] = []
+    const editor = createDocumentBodyEditor(
+      document.createElement('div'),
+      ydoc,
+      {
+        onDeleteNode: (nodeIDs) => {
+          batches.push(nodeIDs)
+        },
+        onTransactionError: (error) => errors.push(error),
+      }
+    )
+
+    try {
+      // Select all replaces the whole document node, not just its blocks.
+      editor.view.dispatch(
+        editor.view.state.tr
+          .setSelection(new AllSelection(editor.view.state.doc))
+          .deleteSelection()
+      )
+      await waitUntil(async () => batches.length === 1)
+
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['p1', 'p2']])
+      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+    }
+  })
+
+  it('still rejects a transaction that deletes blocks and also edits a surviving one', () => {
+    const ydoc = prosemirrorToYDoc(
+      documentBodyToProseMirror(twoParagraphBody()),
+      'body'
+    )
+    const yStateBefore = Y.encodeStateAsUpdate(ydoc)
+    const mount = document.createElement('div')
+    const deletes: string[][] = []
+    const errors: unknown[] = []
+    const editor = createDocumentBodyEditor(mount, ydoc, {
+      onDeleteNode: (nodeIDs) => {
+        deletes.push(nodeIDs)
+      },
+      onTransactionError: (error) => errors.push(error),
+    })
+
+    try {
+      const { state } = editor.view
+      const tr = state.tr.delete(1, 1 + state.doc.child(0).child(0).nodeSize)
+      tr.insertText('!', runPosition(tr.doc, 'second') + 6)
+      editor.view.dispatch(tr)
+
+      expect(deletes).toEqual([])
+      expect(errors).toHaveLength(1)
+      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(yStateBefore)
+    } finally {
+      editor.destroy()
+      ydoc.destroy()
+    }
+  })
+
+  it('adds an empty paragraph to an editable body that has no blocks', () => {
+    const root: DocumentBodyNode = {
+      nodeID: 'root',
+      parentID: null,
+      siblingOrder: 0,
+      type: 'document',
+      content: '',
+      attributes: {},
+    }
+    const ydoc = prosemirrorToYDoc(documentBodyToProseMirror([root]), 'body')
+    const mount = document.createElement('div')
+    const editor = createDocumentBodyEditor(mount, ydoc)
+    const readOnlyDoc = prosemirrorToYDoc(
+      documentBodyToProseMirror([root]),
+      'body'
+    )
+    const readOnly = createDocumentBodyEditor(
+      document.createElement('div'),
+      readOnlyDoc,
+      { readOnly: true }
+    )
+
+    try {
+      expect(editor.getBody().map((node) => node.type)).toEqual([
+        'document',
+        'paragraph',
+      ])
+      expect(readOnly.getBody().map((node) => node.type)).toEqual(['document'])
+      readOnly.setReadOnly(false)
+      expect(readOnly.getBody().map((node) => node.type)).toEqual([
+        'document',
+        'paragraph',
+      ])
+    } finally {
+      editor.destroy()
+      readOnly.destroy()
+      ydoc.destroy()
+      readOnlyDoc.destroy()
+    }
+  })
+
   it('queues DeleteNode when Backspace is pressed on a fully selected paragraph', async () => {
     const host = document.createElement('div')
     document.body.append(host)
@@ -805,8 +965,8 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     const yStateBefore = Y.encodeStateAsUpdate(ydoc)
     const deleteRequests: string[] = []
     const editor = createDocumentBodyEditor(host, ydoc, {
-      onDeleteNode: (nodeID) => {
-        deleteRequests.push(nodeID)
+      onDeleteNode: (nodeIDs) => {
+        deleteRequests.push(...nodeIDs)
       },
     })
 
@@ -1003,8 +1163,8 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     const deleteRequests: string[] = []
     const errors: unknown[] = []
     const editor = createDocumentBodyEditor(host, ydoc, {
-      onDeleteNode: (nodeID) => {
-        deleteRequests.push(nodeID)
+      onDeleteNode: (nodeIDs) => {
+        deleteRequests.push(...nodeIDs)
       },
       onTransactionError: (error) => {
         errors.push(error)
@@ -1807,6 +1967,31 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
       moveCommands: [],
       heldEdits: [],
     })
+    await store.clear(scope)
+  })
+
+  it('persists a batch DeleteNode with every target', async () => {
+    const store = new IndexedDBCollaborationStore()
+    const scope = {
+      userID: crypto.randomUUID(),
+      documentID: crypto.randomUUID(),
+    }
+    const snapshot = {
+      bodyVersion: 3,
+      bodyEpoch: 4,
+      bodySchemaVersion: 1,
+      canEdit: true,
+      encodedState: new Uint8Array([1, 2, 3]),
+    }
+    const command = {
+      commandID: crypto.randomUUID(),
+      bodyEpoch: 4,
+      bodySchemaVersion: 1,
+      nodeID: 'a',
+      nodeIDs: ['a', 'b', 'c'],
+    }
+    await store.saveDeleteCommand(scope, snapshot, command)
+    expect((await store.load(scope)).deleteCommands).toEqual([command])
     await store.clear(scope)
   })
 

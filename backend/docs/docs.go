@@ -1019,7 +1019,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Atomically deletes a block subtree and advances the document body epoch.",
+                "description": "Atomically deletes one block subtree (nodeID) or several (nodeIDs) in a single body epoch.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1029,7 +1029,7 @@ const docTemplate = `{
                 "tags": [
                     "Document"
                 ],
-                "summary": "Delete a Markdown block",
+                "summary": "Delete Markdown blocks",
                 "parameters": [
                     {
                         "type": "string",
@@ -4680,6 +4680,13 @@ const docTemplate = `{
                 },
                 "nodeID": {
                     "type": "string"
+                },
+                "nodeIDs": {
+                    "description": "NodeIDs is set instead of NodeID for a batch delete.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -5706,6 +5713,9 @@ const docTemplate = `{
                 "canEdit": {
                     "type": "boolean"
                 },
+                "canSuggest": {
+                    "type": "boolean"
+                },
                 "encodedState": {
                     "type": "array",
                     "items": {
@@ -5745,6 +5755,13 @@ const docTemplate = `{
                 },
                 "nodeID": {
                     "type": "string"
+                },
+                "nodeIDs": {
+                    "description": "NodeIDs deletes several blocks atomically; send it instead of nodeID.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

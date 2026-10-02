@@ -19,6 +19,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// deleteNodeHashPayload keeps the single-node form byte-identical to receipts
+// written before batch deletes existed.
 type deleteNodeHashPayload struct {
 	CommandType       string    `json:"commandType"`
 	BodyEpoch         int64     `json:"bodyEpoch"`
@@ -26,18 +28,34 @@ type deleteNodeHashPayload struct {
 	NodeID            uuid.UUID `json:"nodeID"`
 }
 
+type deleteNodesHashPayload struct {
+	CommandType       string      `json:"commandType"`
+	BodyEpoch         int64       `json:"bodyEpoch"`
+	BodySchemaVersion int         `json:"bodySchemaVersion"`
+	NodeIDs           []uuid.UUID `json:"nodeIDs"`
+}
+
 func (r *Repository) DeleteNode(ctx context.Context, actor collaboration.Actor, command collaboration.DeleteNodeCommand) (collaboration.DeleteNodeResult, error) {
 	if actor.UserID == uuid.Nil || command.WorkspaceID == uuid.Nil || command.DocumentID == uuid.Nil ||
-		command.CommandID == uuid.Nil || command.BodyEpoch < 1 || command.BodySchemaVersion < 1 || command.NodeID == uuid.Nil {
+		command.CommandID == uuid.Nil || command.BodyEpoch < 1 || command.BodySchemaVersion < 1 || !command.Valid() {
 		return collaboration.DeleteNodeResult{}, collaboration.ErrInvalidDeleteNode
 	}
 	if r.tx == nil {
 		return collaboration.DeleteNodeResult{}, errors.New("DeleteNode requires a transaction-capable database")
 	}
-	requestBytes, err := json.Marshal(deleteNodeHashPayload{
-		CommandType: "delete_node", BodyEpoch: command.BodyEpoch,
-		BodySchemaVersion: command.BodySchemaVersion, NodeID: command.NodeID,
-	})
+	var requestBytes []byte
+	var err error
+	if command.NodeID != uuid.Nil {
+		requestBytes, err = json.Marshal(deleteNodeHashPayload{
+			CommandType: "delete_node", BodyEpoch: command.BodyEpoch,
+			BodySchemaVersion: command.BodySchemaVersion, NodeID: command.NodeID,
+		})
+	} else {
+		requestBytes, err = json.Marshal(deleteNodesHashPayload{
+			CommandType: "delete_nodes", BodyEpoch: command.BodyEpoch,
+			BodySchemaVersion: command.BodySchemaVersion, NodeIDs: command.NodeIDs,
+		})
+	}
 	if err != nil {
 		return collaboration.DeleteNodeResult{}, err
 	}
@@ -113,7 +131,7 @@ func (r *Repository) DeleteNode(ctx context.Context, actor collaboration.Actor, 
 			return constant.ErrDocumentConflict
 		}
 
-		after, err := documentbody.DeleteNode(before, documentbody.DeleteNodeCommand{NodeID: command.NodeID})
+		after, err := documentbody.DeleteNodes(before, command.Targets())
 		if err != nil {
 			return collaboration.ErrInvalidDeleteNode
 		}
@@ -121,7 +139,7 @@ func (r *Repository) DeleteNode(ctx context.Context, actor collaboration.Actor, 
 			return constant.ErrDocumentConflict
 		}
 		result = collaboration.DeleteNodeResult{
-			DocumentID: command.DocumentID, CommandID: command.CommandID, NodeID: command.NodeID,
+			DocumentID: command.DocumentID, CommandID: command.CommandID, NodeID: command.NodeID, NodeIDs: command.NodeIDs,
 			BodyEpoch: bodyEpoch + 1, BodyVersion: bodyVersion + 1, Changed: true,
 		}
 		encodedState, err := yjs.EncodeBodyV1(after)
@@ -193,8 +211,7 @@ func findDeleteNodeReceipt(ctx context.Context, tx database.Queryer, actorID uui
 		return collaboration.DeleteNodeResult{}, false, collaboration.ErrDeleteCommandReplay
 	}
 	var result collaboration.DeleteNodeResult
-	if err := json.Unmarshal(rawResult, &result); err != nil || result.DocumentID != command.DocumentID ||
-		result.CommandID != command.CommandID || result.NodeID != command.NodeID || result.BodyVersion != bodyVersion ||
+	if err := json.Unmarshal(rawResult, &result); err != nil || !result.Matches(command) || result.BodyVersion != bodyVersion ||
 		result.BodyEpoch <= command.BodyEpoch || !result.Changed {
 		return collaboration.DeleteNodeResult{}, false, collaboration.ErrDeleteCommandReplay
 	}

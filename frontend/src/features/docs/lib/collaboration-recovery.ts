@@ -4,6 +4,7 @@ import type { MarkdownBodySnapshot } from '@/lib/domain-api'
 import { encodeBase64 } from './collaboration-socket'
 import {
   IndexedDBCollaborationStore,
+  deleteTargets,
   type CollaborationScope,
   type PendingDeleteNodeCommand,
   type PendingMoveNodeCommand,
@@ -149,7 +150,7 @@ function applyDeleteCommands(
     children.set(node.parentID, siblings)
   }
   const deleted = new Set<string>()
-  for (const { nodeID } of commands) {
+  for (const nodeID of commands.flatMap(deleteTargets)) {
     const pending = [nodeID]
     while (pending.length) {
       const current = pending.pop()!

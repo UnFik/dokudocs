@@ -11,9 +11,17 @@ const inlineParentNames = new Set([
 ])
 
 export class DeleteNodeRequiredError extends Error {
-  constructor(readonly nodeID: string) {
-    super(`deleting node ${nodeID} requires DeleteNode`)
+  /** The subtree roots the transaction removed, in document order. */
+  readonly nodeIDs: string[]
+  constructor(nodeIDs: string | string[]) {
+    const ids = typeof nodeIDs === 'string' ? [nodeIDs] : nodeIDs
+    super(`deleting node ${ids.join(', ')} requires DeleteNode`)
     this.name = 'DeleteNodeRequiredError'
+    this.nodeIDs = ids
+  }
+
+  get nodeID() {
+    return this.nodeIDs[0]!
   }
 }
 
@@ -37,6 +45,7 @@ export function prepareBodyTransaction(
   if (!transaction.docChanged) return transaction
 
   const before = prosemirrorToDocumentBody(state.doc)
+  keepDocumentIdentity(state, transaction)
   wrapRawInlineText(transaction)
   splitRunsWithMixedMarks(transaction)
   assignNodeIDs(transaction)
@@ -51,8 +60,8 @@ export function prepareBodyTransaction(
   )
   after = prosemirrorToDocumentBody(transaction.doc)
   validateOpaquePreservation(before, after)
-  const deleteNodeID = isolatedDeletedSubtree(before, after)
-  if (deleteNodeID) throw new DeleteNodeRequiredError(deleteNodeID)
+  const deleteNodeIDs = deletedSubtreeRoots(before, after)
+  if (deleteNodeIDs) throw new DeleteNodeRequiredError(deleteNodeIDs)
   const move = singleMoveCommand(before, after)
   if (move && !options.authorizedMoveNodeIDs?.has(move.nodeID))
     throw new MoveNodeRequiredError(
@@ -66,6 +75,22 @@ export function prepareBodyTransaction(
     options.authorizedMoveNodeIDs ?? new Set()
   )
   return transaction
+}
+
+// Select-all then Delete (or typing) replaces the whole document node with a
+// fresh one that has no node ID, which would read as deleting the root. The
+// root is never replaced: only what it contains changes.
+function keepDocumentIdentity(state: EditorState, transaction: Transaction) {
+  const previous = state.doc.firstChild
+  const next = transaction.doc.firstChild
+  if (
+    !previous ||
+    !next ||
+    transaction.doc.childCount !== 1 ||
+    previous.attrs.nodeID === next.attrs.nodeID
+  )
+    return
+  transaction.setNodeMarkup(0, undefined, previous.attrs)
 }
 
 function singleMoveCommand(
@@ -152,7 +177,9 @@ function sameStrings(left: string[], right: string[]) {
   )
 }
 
-function isolatedDeletedSubtree(
+// The roots of every subtree the transaction removed, when nothing else about
+// the surviving nodes changed; undefined when it did more than delete.
+function deletedSubtreeRoots(
   before: DocumentBodyNode[],
   after: DocumentBodyNode[]
 ) {
@@ -163,18 +190,18 @@ function isolatedDeletedSubtree(
   const roots = removed.filter(
     (node) => node.parentID === null || !removedIDs.has(node.parentID)
   )
-  if (roots.length !== 1) return undefined
+  if (roots.some((root) => root.parentID === null)) return undefined
 
-  const root = roots[0]!
-  if (root.parentID === null) return undefined
   const oldNodes = new Map(before.map((node) => [node.nodeID, node]))
+  const rootIDs = new Set(roots.map((root) => root.nodeID))
   const isInsideDeletedSubtree = (node: DocumentBodyNode) => {
-    let parentID = node.parentID
-    while (parentID !== null) {
-      if (parentID === root.nodeID) return true
-      parentID = oldNodes.get(parentID)?.parentID ?? null
-    }
-    return node.nodeID === root.nodeID
+    for (
+      let current: DocumentBodyNode | undefined = node;
+      current;
+      current = current.parentID ? oldNodes.get(current.parentID) : undefined
+    )
+      if (rootIDs.has(current.nodeID)) return true
+    return false
   }
   const survivors = before.filter((node) => !isInsideDeletedSubtree(node))
   if (after.length !== survivors.length) return undefined
@@ -189,7 +216,7 @@ function isolatedDeletedSubtree(
     )
       return undefined
   }
-  return root.nodeID
+  return roots.map((root) => root.nodeID)
 }
 
 function wrapRawInlineText(transaction: Transaction) {
