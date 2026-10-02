@@ -40,7 +40,7 @@ export default defineConfig({
   webServer: isApiOnly || uiBaseURL
     ? undefined
     : {
-        command: `cd ../frontend && bunx --bun vite preview --host 127.0.0.1 --port ${process.env.FRONTEND_PORT || '4173'} --strictPort`,
+        command: `cd ../frontend && bunx vite preview --host 127.0.0.1 --port ${process.env.FRONTEND_PORT || '4173'} --strictPort`,
         url: `http://127.0.0.1:${process.env.FRONTEND_PORT || '4173'}`,
         reuseExistingServer: !process.env.CI,
         env: {
