@@ -1,3 +1,4 @@
+import { inDocumentOrder } from "../../helpers/document-order";
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
@@ -107,15 +108,15 @@ test("@live @smoke: floating selection toolbar applies bold and a link", async (
       { headers },
     );
     const nodes = ((await response.json()).data.nodes ?? []) as {
+      nodeID: string;
       parentID: string | null;
       siblingOrder: number;
       type: string;
       content: string;
       attributes: Record<string, unknown>;
     }[];
-    return nodes
+    return inDocumentOrder(nodes)
       .filter((n) => n.type === "run")
-      .sort((a, b) => a.siblingOrder - b.siblingOrder)
       .map((n) => ({ text: n.content, attributes: n.attributes }));
   };
 

@@ -1,3 +1,4 @@
+import { inDocumentOrder } from "../../helpers/document-order";
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
@@ -122,10 +123,15 @@ test("@live @smoke: table edits converge across two clients and persist", async 
         `${apiURL}/api/v1/documents/${documentID}/body`,
         { headers },
       );
-      const nodes = ((await response.json()).data.nodes ?? []) as {
-        type: string;
-        content: string;
-      }[];
+      const nodes = inDocumentOrder(
+        ((await response.json()).data.nodes ?? []) as {
+          nodeID: string;
+          parentID: string | null;
+          siblingOrder: number;
+          type: string;
+          content: string;
+        }[],
+      );
       return {
         rows: nodes.filter((n) => n.type === "table.row").length,
         cells: nodes
