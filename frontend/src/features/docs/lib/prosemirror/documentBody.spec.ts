@@ -933,7 +933,8 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
       editor.setRemoteCursors([cursor])
 
       const caret = host.querySelector('.remote-cursor')
-      expect(caret?.textContent).toContain('Bo')
+      expect(caret?.getAttribute('data-name')).toBe('Bo')
+      expect(caret?.textContent).toBe('')
       expect(
         (caret as HTMLElement).style.getPropertyValue('--cursor-color')
       ).toBe('#0369A1')
