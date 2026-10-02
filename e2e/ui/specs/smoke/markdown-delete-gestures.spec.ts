@@ -253,21 +253,36 @@ test("@live @smoke @deletegestures: deleting text across blocks keeps the rest a
     { kind: "paragraph", text: "drop and keep this end" },
   ]);
   await diagnose(async () => {
-    // Click inside the first paragraph, extend the selection into the third.
+    // Select from after "Keep this start" to before "keep this end". Arrow keys
+    // under load move the caret by a varying amount, so the range is set exactly,
+    // and Backspace follows in the same moment, before the editor has read it.
     await editor.locator("p").filter({ hasText: "Keep this start" }).click();
-    await page.keyboard.press("Home");
-    for (let i = 0; i < 15; i++) await page.keyboard.press("ArrowRight");
-    await page.keyboard.down("Shift");
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.up("Shift");
+    await page.evaluate(() => {
+      const paragraphs = [...document.querySelectorAll(".ProseMirror p")];
+      const text = (needle: string) =>
+        paragraphs
+          .find((p) => p.textContent?.includes(needle))!
+          .querySelector("span")!.firstChild!;
+      window
+        .getSelection()!
+        .setBaseAndExtent(
+          text("Keep this start"),
+          15,
+          text("keep this end"),
+          9,
+        );
+    });
     await page.keyboard.press("Backspace");
     await expect(editor).not.toContainText("middle block");
     await expect(editor).toContainText("Keep this start");
+    await expect(editor).toContainText("keep this end");
+    await expect(editor).not.toContainText("drop");
     await expectNoReviewBanner(page);
     await page.reload();
     await expect(page.getByRole("status")).toContainText("Synced");
     await expect(editor).not.toContainText("middle block");
     await expect(editor).toContainText("Keep this start");
+    await expect(editor).toContainText("keep this end");
+    await expect(editor).not.toContainText("drop");
   });
 });
