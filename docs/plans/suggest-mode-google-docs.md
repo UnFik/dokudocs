@@ -28,7 +28,20 @@ Everything in this list, except email and offline, which come later.
 - A suggestion is a `suggestion` attribute on a run or block, holding the author and, as needed, an insert part, a delete part, or a format part with the proposed value. Backend validation already accepts any string attribute on a run; blocks need the key allowed. The Yjs projection (`projectMarks`) needs to carry it.
 - Enter in Suggest mode inserts an inline split marker; Backspace at the start of a paragraph marks the paragraph as a join. Accepting either copies the affected runs into the new shape and deletes the originals with the batch `DeleteNodes`.
 - The projection to `document_nodes` skips inserted content and ignores deletes and proposals, so everything that reads the body is unchanged.
-- A comment-only user gets a restricted write path: the canonical projection must be identical before and after, and only their own suggestions may change.
+- A comment-only user can send a Yjs update, but only a suggestion-shaped one (see below).
+
+## Why comment-only users need a write path
+
+Comment access means a user can suggest but cannot decide: they cannot accept, reject, or edit the real text. That does not change.
+
+What changes is how a suggestion reaches the server. Today it is a separate REST call (`POST /suggestions`) into its own table, so a comment-only user never writes to the document, and the server refuses every Yjs update from anyone without edit access. Under ADR 0027 a suggestion is content of the document itself: when a commenter types in Suggest mode, their browser sends a Yjs update to the shared body. The server has to accept that update, and it must accept nothing else from them. The rule:
+
+1. After the update, the canonical projection (`document_nodes`) must be identical to before. They cannot change, delete, or reorder real text or blocks.
+2. The update may only add, change, or remove suggestions authored by the sender. They cannot touch another user's suggestion, and the author recorded on a suggestion must be the sender.
+
+Still not allowed for a comment-only user: accepting or rejecting (editors only; the author may withdraw their own), and anything that edits canonical content. Replies and Resolve stay REST calls as today. Resolve closes a discussion, it does not decide a suggestion.
+
+This rule is the only thing between a commenter and the shared body, so P2's adversarial tests (edit canonical text, delete a canonical node, touch someone else's suggestion, forge the author) must pass before P3 starts.
 - The editor rewrites each local transaction in Suggest mode into marks (a track-changes plugin). Accept and reject are normal edits by an editor.
 - The server keeps an index row per suggestion by reading Yjs updates. Replies and Resolve keep their tables.
 
@@ -44,7 +57,7 @@ Schema and projection only, no UI.
 - Tests: Go projection unit tests for every kind, integration test through the real commit path, codec round trips.
 
 ### P2. Write path for comment-only users
-- WebSocket accepts updates from comment access, with the one rule above. Snapshot tells the client it can suggest.
+- The WebSocket accepts updates from comment access under the two-part rule in "Why comment-only users need a write path". The snapshot tells the client it can suggest.
 - Done when: a comment user's suggestion reaches an editor live; adversarial updates (edit canonical text, delete a canonical node, touch another user's suggestion, forge the author) are all rejected.
 - Tests: Go tests for each attack, e2e with two browsers.
 
