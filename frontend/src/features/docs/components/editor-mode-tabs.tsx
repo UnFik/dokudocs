@@ -43,6 +43,15 @@ export function modeTabStates({
   }
 }
 
+export function resolveMode(
+  mode: EditorMode,
+  allowed: { canEdit: boolean; suggestEnabled: boolean }
+): EditorMode {
+  if (mode === 'edit' && !allowed.canEdit) return 'view'
+  if (mode === 'suggest' && !allowed.suggestEnabled) return 'view'
+  return mode
+}
+
 const tabs: { mode: EditorMode; label: string; icon: typeof Eye }[] = [
   { mode: 'view', label: 'View', icon: Eye },
   { mode: 'edit', label: 'Edit', icon: Edit3 },
