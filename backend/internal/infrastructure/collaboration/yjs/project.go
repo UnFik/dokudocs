@@ -97,6 +97,27 @@ func projectDoc(doc *crdt.Doc, documentID uuid.UUID) (documentbody.Body, error) 
 	return body, err
 }
 
+// ProjectWithSuggestionsV1 is ProjectV1 that also returns the suggestions found,
+// for callers that need both from one decode.
+func ProjectWithSuggestionsV1(encodedState []byte, documentID uuid.UUID) (documentbody.Body, []SuggestionInfo, error) {
+	if len(encodedState) == 0 || documentID == uuid.Nil {
+		return documentbody.Body{}, nil, projectionError("state and document id are required")
+	}
+	doc := crdt.New()
+	defer doc.Destroy()
+	if err := crdt.ApplyUpdateV1(doc, encodedState, nil); err != nil {
+		return documentbody.Body{}, nil, fmt.Errorf("%w: decode Yjs state: %v", ErrInvalidProjection, err)
+	}
+	body, suggestions, err := projectDocWithSuggestions(doc, documentID)
+	if err != nil {
+		return documentbody.Body{}, nil, err
+	}
+	if err := documentbody.Validate(body); err != nil {
+		return documentbody.Body{}, nil, fmt.Errorf("%w: %v", ErrInvalidProjection, err)
+	}
+	return body, suggestions, nil
+}
+
 // SuggestionsV1 lists the suggestions in an encoded body, one entry per id.
 func SuggestionsV1(encodedState []byte) ([]SuggestionInfo, error) {
 	if len(encodedState) == 0 {
