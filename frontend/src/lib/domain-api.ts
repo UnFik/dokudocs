@@ -171,16 +171,10 @@ const documentSuggestionSchema = z.object({
   documentId: z.guid(),
   suggestionId: z.guid(),
   proposerId: z.guid(),
+  proposerName: z.string().optional().default(''),
   deciderId: z.guid().nullable().optional(),
-  baseBodyVersion: z.number().int().positive(),
-  baseBodyEpoch: z.number().int().positive(),
-  operationSchemaVersion: z.number().int().positive(),
-  provenance: z.enum(['human', 'AI']),
-  operations: z.unknown(),
-  summary: z.string(),
-  reason: z.string(),
   conflictReason: z.string().optional().default(''),
-  status: z.enum(['pending', 'accepted', 'rejected', 'conflicted']),
+  status: z.enum(['pending', 'accepted', 'rejected', 'conflicted', 'closed']),
   createdAt: z.string(),
   decidedAt: z.string().nullable().optional(),
   resolvedAt: z.string().nullable().optional(),
@@ -315,17 +309,6 @@ export type RAGConversation = z.infer<typeof ragConversationSchema>
 export type RAGMessage = z.infer<typeof ragMessageSchema>
 export type RAGConversationHistory = z.infer<typeof ragHistorySchema>
 export type RAGAnswer = z.infer<typeof ragAnswerSchema>
-export type CreateDocumentSuggestionInput = {
-  suggestionID: string
-  baseBodyVersion: number
-  baseBodyEpoch: number
-  operationSchemaVersion: number
-  provenance: 'human' | 'AI'
-  operations: unknown
-  summary: string
-  reason?: string
-}
-
 export type CreateWorkspaceInput = {
   name: string
   plan?: string
@@ -575,40 +558,6 @@ export async function listDocumentSuggestions(
       headers: workspaceHeaders(workspaceId),
       signal,
     })
-  )
-}
-
-export async function createDocumentSuggestion(
-  workspaceId: string,
-  documentId: string,
-  input: CreateDocumentSuggestionInput
-): Promise<void> {
-  await apiFetch<void>(`/api/v1/documents/${documentId}/suggestions`, {
-    method: 'POST',
-    headers: workspaceHeaders(workspaceId),
-    body: JSON.stringify(input),
-  })
-}
-
-export async function acceptDocumentSuggestion(
-  workspaceId: string,
-  documentId: string,
-  suggestionId: string
-): Promise<void> {
-  await apiFetch<void>(
-    `/api/v1/documents/${documentId}/suggestions/${suggestionId}/accept`,
-    { method: 'POST', headers: workspaceHeaders(workspaceId) }
-  )
-}
-
-export async function rejectDocumentSuggestion(
-  workspaceId: string,
-  documentId: string,
-  suggestionId: string
-): Promise<void> {
-  await apiFetch<void>(
-    `/api/v1/documents/${documentId}/suggestions/${suggestionId}/reject`,
-    { method: 'POST', headers: workspaceHeaders(workspaceId) }
   )
 }
 

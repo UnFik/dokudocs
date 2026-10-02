@@ -93,6 +93,8 @@ What P3 must know:
 - Done when: no path creates a suggestion except typing, and the rail shows what the e2e just created.
 - UI work follows DESIGN.md and the antislop gate, including a phone-width check.
 
+**Status: ready for review.** The server indexes suggestions from collaborative updates; REST proposal/decision code and its operation columns are removed. The rail shows author, time, replies, and synchronized highlights; viewers can read but cannot reply or resolve. The real-browser test covers accept/reject, withdraw, bulk decisions, preview, reload, and 375px width; six repeated runs passed.
+
 ### P5. Structure
 - Enter split and Backspace join; multi-line paste; insert blocks (slash menu, image, table, code); delete blocks; block highlighting; accept by copy-then-delete; Accept all as one transaction plus one batch.
 - Done when: a split, a join, a pasted list, an inserted table, and a deleted block each round-trip through suggest, accept, reject, and reload.

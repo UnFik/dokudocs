@@ -6,18 +6,16 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
 import { ApiError } from '@/lib/api-client'
 import {
-  acceptDocumentSuggestion,
-  createDocumentSuggestion,
   createNamedDocumentRevision,
   getMarkdownBody,
   listDocumentSuggestions,
   listDocumentRevisions,
-  rejectDocumentSuggestion,
   restoreDocumentRevision,
   updateDocumentMetadata,
 } from '@/lib/domain-api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
   executeDeleteNode,
   executeMoveNode,
@@ -53,17 +51,6 @@ import {
 } from '../lib/prosemirror/inlineMarks'
 import { type SuggestionCard } from '../lib/prosemirror/suggestionCards'
 import { shouldSelectDocumentBody } from '../lib/select-all-scope'
-import {
-  buildDeleteBlockSuggestion,
-  buildFormatSuggestion,
-  buildInsertParagraphSuggestion,
-  buildMoveBlockSuggestion,
-  conflictReviewMessage,
-  overlayCss,
-  pendingOverlay,
-  type FormatMark,
-  type SuggestionDraft,
-} from '../lib/suggestion-operations'
 import { ConflictReviewPanel } from './conflict-review-panel'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
@@ -77,7 +64,6 @@ import {
 import './markdown-body.css'
 import { MuyaEditor } from './muya-editor/MuyaEditor'
 import { SuggestionCardList } from './suggestion-card-list'
-import { SuggestionThread } from './suggestion-thread'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
 export function RemoteMarkdownDocEditor({
@@ -331,6 +317,10 @@ function CollaborativeMarkdownBody({
   onPresence: (users: PresenceUser[]) => void
   onAccessUnavailable: () => void
 }) {
+  const [suggestionPreview, setSuggestionPreview] = useState<
+    'suggestions' | 'accepted' | 'rejected'
+  >('suggestions')
+  const suggestionPreviewRef = useRef(suggestionPreview)
   const mountRef = useRef<HTMLDivElement>(null)
   const sessionRef = useRef<Awaited<
     ReturnType<typeof mountCollaborativeDocumentBody>
@@ -356,6 +346,9 @@ function CollaborativeMarkdownBody({
   const [reviewKey, setReviewKey] = useState(0)
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false)
   const [cards, setCards] = useState<SuggestionCard[]>([])
+  const [focusedSuggestionID, setFocusedSuggestionID] = useState<string | null>(
+    null
+  )
   const reviewStore = useMemo(() => new IndexedDBCollaborationStore(), [])
   const [history, setHistory] = useState<EditorHistoryState>({
     canUndo: false,
@@ -387,7 +380,9 @@ function CollaborativeMarkdownBody({
         statusRef.current === 'ready',
     })
     editor.setSuggestMode(effective === 'suggest')
-    editor.setReadOnly(effective === 'view')
+    editor.setReadOnly(
+      effective === 'view' || suggestionPreviewRef.current !== 'suggestions'
+    )
     if (effective === 'suggest' && lastEffectiveRef.current !== 'suggest')
       setIsSuggestionsOpen(true)
     lastEffectiveRef.current = effective
@@ -431,6 +426,15 @@ function CollaborativeMarkdownBody({
       onSuggestRefused: (message) =>
         toast.error(message, { id: 'suggest-refused' }),
       onSuggestionCards: setCards,
+      onSuggestionClick: (id) => {
+        setFocusedSuggestionID(id)
+        const card = [
+          ...(window.document
+            .getElementById('suggestion-panel')
+            ?.querySelectorAll<HTMLElement>('li[data-suggestion-id]') ?? []),
+        ].find((element) => element.dataset.suggestionId === id)
+        card?.scrollIntoView({ block: 'nearest' })
+      },
       onStatus: (next) => {
         statusRef.current = next
         setStatus(next)
@@ -526,6 +530,15 @@ function CollaborativeMarkdownBody({
     applyEditorMode()
   }
 
+  const changeSuggestionPreview = (
+    next: 'suggestions' | 'accepted' | 'rejected'
+  ) => {
+    suggestionPreviewRef.current = next
+    setSuggestionPreview(next)
+    if (next === 'suggestions') applyEditorMode()
+    else sessionRef.current?.editor.setReadOnly(true)
+  }
+
   const exportPendingChanges = async () => {
     setIsExportingRecovery(true)
     try {
@@ -601,7 +614,7 @@ function CollaborativeMarkdownBody({
               aria-controls='suggestion-panel'
               onClick={() => setIsSuggestionsOpen((open) => !open)}
             >
-              {isSuggestionsOpen ? 'Hide suggestions' : 'Suggestions'}
+              Review
             </Button>
           ) : null}
           <span role='status' className='text-xs text-muted-foreground'>
@@ -674,7 +687,10 @@ function CollaborativeMarkdownBody({
         />
       ) : null}
       <div className='flex min-h-0 flex-1 flex-col md:flex-row'>
-        <div className='markdown-body min-h-0 min-w-0 flex-1 overflow-auto p-6'>
+        <div
+          className='markdown-body min-h-0 min-w-0 flex-1 overflow-auto p-6'
+          data-suggestion-preview={suggestionPreview}
+        >
           <div ref={mountRef} />
         </div>
         {mode === 'edit' && canEdit ? (
@@ -699,94 +715,30 @@ function CollaborativeMarkdownBody({
         {showSuggestionPanel ? (
           <SuggestionPanel
             open={isSuggestionsOpen}
-            onOpenChange={setIsSuggestionsOpen}
             workspaceID={workspaceID}
             documentID={documentID}
             userID={userID}
             canDecide={canEdit}
-            canSuggest={Boolean(snapshot.canSuggest) && status === 'ready'}
+            canInteract={canEdit || Boolean(snapshot.canSuggest)}
             cards={cards}
-            decisionsDisabled={mode === 'view'}
+            decisionsDisabled={
+              mode === 'view' || suggestionPreview !== 'suggestions'
+            }
+            preview={suggestionPreview}
+            onPreviewChange={changeSuggestionPreview}
+            focusedSuggestionID={focusedSuggestionID}
+            onSelect={(id) => {
+              setFocusedSuggestionID(id)
+              sessionRef.current?.editor.scrollToSuggestion(id)
+            }}
             onDecide={(id, decision) =>
               sessionRef.current?.editor.decide(id, decision)
             }
-            captureBlock={() => {
-              if (!mountRef.current) throw new Error('Editor is not ready')
-              return captureSelectedNodeID(mountRef.current)
-            }}
-            captureSelection={() => {
-              if (!mountRef.current || !sessionRef.current)
-                throw new Error('Editor is not ready')
-              return captureSelectedRun(
-                mountRef.current,
-                sessionRef.current.editor.getBody()
-              )
-            }}
           />
         ) : null}
       </div>
     </section>
   )
-}
-
-type TextSuggestionSelection = {
-  nodeID: string
-  originalContent: string
-  selectedText: string
-  start: number
-  end: number
-}
-
-function captureSelectedRun(
-  mount: HTMLElement,
-  nodes: DocumentBodyNode[]
-): TextSuggestionSelection {
-  const selection = window.getSelection()
-  if (!selection || selection.rangeCount !== 1)
-    throw new Error('Select text in one paragraph first')
-  const range = selection.getRangeAt(0)
-  const runAt = (node: Node) => {
-    const element = node instanceof Element ? node : node.parentElement
-    const run = element?.closest('span[data-node-id]')
-    return run instanceof HTMLElement && mount.contains(run) ? run : null
-  }
-  const run = runAt(range.startContainer)
-  if (!run || runAt(range.endContainer) !== run)
-    throw new Error('Select text within one formatted run')
-  const node = nodes.find((item) => item.nodeID === run.dataset.nodeId)
-  if (!node || node.type !== 'run' || node.content !== canonicalText(run))
-    throw new Error('Selected text is no longer current')
-  const prefix = range.cloneRange()
-  prefix.selectNodeContents(run)
-  prefix.setEnd(range.startContainer, range.startOffset)
-  const start = canonicalText(prefix.cloneContents()).length
-  const selectedText = canonicalText(range.cloneContents())
-  return {
-    nodeID: node.nodeID,
-    originalContent: node.content,
-    selectedText,
-    start,
-    end: start + selectedText.length,
-  }
-}
-
-// Pending inserted text is drawn inside runs but is not part of the body.
-function canonicalText(root: Node): string {
-  let text = ''
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  for (let node = walker.nextNode(); node; node = walker.nextNode())
-    if (!node.parentElement?.closest('.suggest-ins')) text += node.textContent
-  return text
-}
-
-function captureSelectedNodeID(mount: HTMLElement): string {
-  const selection = window.getSelection()
-  const anchor = selection?.anchorNode
-  const element = anchor instanceof Element ? anchor : anchor?.parentElement
-  const target = element?.closest('[data-node-id]')
-  if (!(target instanceof HTMLElement) || !mount.contains(target))
-    throw new Error('Place the cursor in the block first')
-  return target.dataset.nodeId as string
 }
 
 function isUninitializedBody(error: unknown): error is ApiError {
@@ -799,441 +751,137 @@ function isUninitializedBody(error: unknown): error is ApiError {
 
 function SuggestionPanel({
   open,
-  onOpenChange,
   workspaceID,
   documentID,
   userID,
   canDecide,
-  canSuggest,
+  canInteract,
   cards,
   decisionsDisabled,
+  preview,
+  onPreviewChange,
+  focusedSuggestionID,
+  onSelect,
   onDecide,
-  captureSelection,
-  captureBlock,
 }: {
   open: boolean
-  onOpenChange: (open: boolean) => void
   workspaceID: string
   documentID: string
   userID: string
   canDecide: boolean
-  canSuggest: boolean
+  canInteract: boolean
   cards: SuggestionCard[]
   decisionsDisabled: boolean
+  preview: 'suggestions' | 'accepted' | 'rejected'
+  onPreviewChange: (preview: 'suggestions' | 'accepted' | 'rejected') => void
+  focusedSuggestionID: string | null
+  onSelect: (id: string) => void
   onDecide: (id: string, decision: 'accept' | 'reject') => void
-  captureSelection: () => TextSuggestionSelection
-  captureBlock: () => string
 }) {
-  const queryClient = useQueryClient()
-  const [draft, setDraft] = useState<TextSuggestionSelection | null>(null)
-  const [replacement, setReplacement] = useState('')
-  const [reason, setReason] = useState('')
+  const [bulkDecision, setBulkDecision] = useState<'accept' | 'reject' | null>(
+    null
+  )
   const suggestionsQuery = useQuery({
-    queryKey: ['document-suggestions', workspaceID, documentID],
+    queryKey: [
+      'document-suggestions',
+      workspaceID,
+      documentID,
+      cards.map((card) => card.id),
+    ],
     queryFn: ({ signal }) =>
       listDocumentSuggestions(workspaceID, documentID, signal),
     enabled: true,
     retry: false,
   })
-  const decisionMutation = useMutation({
-    mutationFn: ({
-      suggestionID,
-      decision,
-    }: {
-      suggestionID: string
-      decision: 'accept' | 'reject' | 'withdraw'
-    }) =>
-      decision === 'accept'
-        ? acceptDocumentSuggestion(workspaceID, documentID, suggestionID)
-        : rejectDocumentSuggestion(workspaceID, documentID, suggestionID),
-    // A refused accept still changes state (the batch is marked conflicted).
-    onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ['document-suggestions', workspaceID, documentID],
-      })
-      await queryClient.invalidateQueries({
-        queryKey: ['markdown-body', workspaceID, documentID],
-      })
-    },
-    onError: (error) => toast.error(error.message),
-  })
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      if (!draft) throw new Error('Select text first')
-      if (!replacement && !draft.selectedText)
-        throw new Error('Enter text to suggest')
-      const latest = await getMarkdownBody(workspaceID, documentID)
-      const node = latest.nodes.find((item) => item.nodeID === draft.nodeID)
-      if (!latest.canSuggest || node?.content !== draft.originalContent)
-        throw new Error('The selected text changed; select it again')
-      const content =
-        draft.originalContent.slice(0, draft.start) +
-        replacement +
-        draft.originalContent.slice(draft.end)
-      await createDocumentSuggestion(workspaceID, documentID, {
-        suggestionID: crypto.randomUUID(),
-        baseBodyVersion: latest.bodyVersion,
-        baseBodyEpoch: latest.bodyEpoch,
-        operationSchemaVersion: 1,
-        provenance: 'human',
-        operations: [{ op: 'replace_text', nodeID: draft.nodeID, content }],
-        summary: draft.selectedText
-          ? replacement
-            ? `Replace “${draft.selectedText.slice(0, 80)}” with “${replacement.slice(0, 80)}”`
-            : `Delete “${draft.selectedText.slice(0, 80)}”`
-          : `Insert “${replacement.slice(0, 80)}”`,
-        reason,
-      })
-    },
-    onSuccess: async () => {
-      setDraft(null)
-      setReason('')
-      await queryClient.invalidateQueries({
-        queryKey: ['document-suggestions', workspaceID, documentID],
-      })
-      toast.success('Suggestion submitted')
-    },
-    onError: (error) => toast.error(error.message),
-  })
-  const structureMutation = useMutation({
-    mutationFn: async ({
-      nodeID,
-      build,
-    }: {
-      nodeID: string
-      build: (nodes: DocumentBodyNode[], nodeID: string) => SuggestionDraft
-    }) => {
-      const latest = await getMarkdownBody(workspaceID, documentID)
-      if (!latest.canSuggest) throw new Error('You cannot suggest changes here')
-      const { operations, summary } = build(latest.nodes, nodeID)
-      await createDocumentSuggestion(workspaceID, documentID, {
-        suggestionID: crypto.randomUUID(),
-        baseBodyVersion: latest.bodyVersion,
-        baseBodyEpoch: latest.bodyEpoch,
-        operationSchemaVersion: 1,
-        provenance: 'human',
-        operations,
-        summary,
-      })
-    },
-    onSuccess: async () => {
-      setInsertAnchor(null)
-      setInsertText('')
-      await queryClient.invalidateQueries({
-        queryKey: ['document-suggestions', workspaceID, documentID],
-      })
-      toast.success('Suggestion submitted')
-    },
-    onError: (error) => toast.error(error.message),
-  })
-  const [insertAnchor, setInsertAnchor] = useState<string | null>(null)
-  const [insertText, setInsertText] = useState('')
-  function propose(
-    build: (nodes: DocumentBodyNode[], nodeID: string) => SuggestionDraft
-  ) {
-    try {
-      structureMutation.mutate({ nodeID: captureBlock(), build })
-      onOpenChange(true)
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : 'Select a block first'
-      )
-    }
-  }
-  const overlay = overlayCss(pendingOverlay(suggestionsQuery.data ?? []))
   return (
     <>
-      {overlay ? <style>{overlay}</style> : null}
       {open ? (
         <aside
           id='suggestion-panel'
-          aria-label='Suggestions'
+          aria-label='Review'
           className='max-h-[40vh] min-w-0 shrink-0 overflow-auto border-t bg-card md:max-h-none md:w-80 md:border-t-0 md:border-l'
         >
-          <div className='flex flex-wrap items-center gap-2 px-4 py-2'>
-            {canSuggest ? (
+          {cards.length ? (
+            <div className='flex flex-wrap items-center justify-between gap-2 px-4 pt-3'>
+              <div
+                role='group'
+                aria-label='Suggestion preview'
+                className='flex rounded-md border p-0.5'
+              >
+                {(
+                  [
+                    ['suggestions', 'Show', 'Show suggestions'],
+                    ['accepted', 'Accepted', 'Preview accepted'],
+                    ['rejected', 'Rejected', 'Preview rejected'],
+                  ] as const
+                ).map(([value, label, accessibleName]) => (
+                  <Button
+                    key={value}
+                    size='sm'
+                    variant={preview === value ? 'secondary' : 'ghost'}
+                    className='h-7 px-2 text-xs'
+                    aria-label={accessibleName}
+                    aria-pressed={preview === value}
+                    onClick={() => onPreviewChange(value)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {canDecide && cards.length ? (
+            <div className='flex justify-end gap-2 px-4 pt-2'>
               <Button
                 size='sm'
                 variant='outline'
-                onClick={() => {
-                  try {
-                    const selection = captureSelection()
-                    setDraft(selection)
-                    setReplacement(selection.selectedText)
-                    onOpenChange(true)
-                  } catch (error) {
-                    toast.error(
-                      error instanceof Error
-                        ? error.message
-                        : 'Select text first'
-                    )
-                  }
-                }}
+                disabled={decisionsDisabled}
+                onClick={() => setBulkDecision('reject')}
               >
-                Suggest change
+                Reject all
               </Button>
-            ) : null}
-            {canSuggest ? (
-              <div
-                className='flex flex-wrap items-center gap-2'
-                role='group'
-                aria-label='Propose a change to the current block'
+              <Button
+                size='sm'
+                disabled={decisionsDisabled}
+                onClick={() => setBulkDecision('accept')}
               >
-                {(['bold', 'italic'] as FormatMark[]).map((mark) => (
-                  <Button
-                    key={mark}
-                    size='sm'
-                    variant='outline'
-                    disabled={structureMutation.isPending}
-                    onClick={() =>
-                      propose((nodes, nodeID) =>
-                        buildFormatSuggestion(nodes, nodeID, mark)
-                      )
-                    }
-                  >
-                    Suggest {mark}
-                  </Button>
-                ))}
-                <Button
-                  size='sm'
-                  variant='outline'
-                  disabled={structureMutation.isPending}
-                  onClick={() =>
-                    propose((nodes, nodeID) =>
-                      buildMoveBlockSuggestion(nodes, nodeID, 'up')
-                    )
-                  }
-                >
-                  Suggest move up
-                </Button>
-                <Button
-                  size='sm'
-                  variant='outline'
-                  disabled={structureMutation.isPending}
-                  onClick={() =>
-                    propose((nodes, nodeID) =>
-                      buildMoveBlockSuggestion(nodes, nodeID, 'down')
-                    )
-                  }
-                >
-                  Suggest move down
-                </Button>
-                <Button
-                  size='sm'
-                  variant='outline'
-                  onClick={() => {
-                    try {
-                      setInsertAnchor(captureBlock())
-                      onOpenChange(true)
-                    } catch (error) {
-                      toast.error(
-                        error instanceof Error
-                          ? error.message
-                          : 'Select a block first'
-                      )
-                    }
-                  }}
-                >
-                  Suggest insert below
-                </Button>
-                <Button
-                  size='sm'
-                  variant='outline'
-                  disabled={structureMutation.isPending}
-                  onClick={() => propose(buildDeleteBlockSuggestion)}
-                >
-                  Suggest delete block
-                </Button>
-              </div>
-            ) : null}
-            <span className='text-xs text-muted-foreground'>
-              Pending changes stay outside the canonical body until accepted.
-            </span>
-          </div>
+                Accept all
+              </Button>
+            </div>
+          ) : null}
           <SuggestionCardList
             cards={cards}
             userID={userID}
             canDecide={canDecide}
             disabled={decisionsDisabled}
             onDecide={onDecide}
+            onSelect={onSelect}
+            focusedSuggestionID={focusedSuggestionID}
+            discussions={suggestionsQuery.data ?? []}
+            canInteract={canInteract}
+            workspaceID={workspaceID}
+            documentID={documentID}
           />
-          <div className='space-y-2 px-4 pb-3'>
-            {insertAnchor ? (
-              <form
-                className='space-y-2 rounded border bg-background p-3'
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  structureMutation.mutate({
-                    nodeID: insertAnchor,
-                    build: (nodes, nodeID) =>
-                      buildInsertParagraphSuggestion(
-                        nodes,
-                        nodeID,
-                        insertText,
-                        () => crypto.randomUUID()
-                      ),
-                  })
-                }}
-              >
-                <label className='block text-xs' htmlFor='inserted-text'>
-                  New paragraph text
-                </label>
-                <textarea
-                  id='inserted-text'
-                  className='min-h-16 w-full rounded border bg-background p-2 text-sm'
-                  value={insertText}
-                  onChange={(event) => setInsertText(event.target.value)}
-                />
-                <div className='flex gap-2'>
-                  <Button
-                    size='sm'
-                    type='submit'
-                    disabled={structureMutation.isPending}
-                  >
-                    Submit insert
-                  </Button>
-                  <Button
-                    size='sm'
-                    type='button'
-                    variant='outline'
-                    onClick={() => setInsertAnchor(null)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            ) : null}
-            {draft ? (
-              <form
-                className='space-y-2 rounded border bg-background p-3'
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  createMutation.mutate()
-                }}
-              >
-                <p className='text-xs text-muted-foreground'>
-                  Selected: {draft.selectedText || '(insertion point)'}
-                </p>
-                <label className='block text-xs' htmlFor='suggested-text'>
-                  Proposed text
-                </label>
-                <textarea
-                  id='suggested-text'
-                  className='min-h-16 w-full rounded border bg-background p-2 text-sm'
-                  value={replacement}
-                  onChange={(event) => setReplacement(event.target.value)}
-                />
-                <label className='block text-xs' htmlFor='suggestion-reason'>
-                  Reason (optional)
-                </label>
-                <input
-                  id='suggestion-reason'
-                  className='w-full rounded border bg-background px-2 py-1 text-sm'
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                />
-                <Button
-                  size='sm'
-                  type='submit'
-                  disabled={createMutation.isPending}
-                >
-                  Submit suggestion
-                </Button>
-              </form>
-            ) : null}
-            {suggestionsQuery.isPending ? (
-              <p className='text-xs text-muted-foreground'>
-                Loading suggestions…
-              </p>
-            ) : suggestionsQuery.error ? (
-              <p className='text-xs text-destructive'>
-                Could not load suggestions.
-              </p>
-            ) : suggestionsQuery.data?.length ? (
-              suggestionsQuery.data.map((suggestion) => (
-                <div
-                  key={suggestion.suggestionId}
-                  className='flex items-start gap-3 rounded border bg-background p-2 text-xs'
-                >
-                  <div className='min-w-0 flex-1'>
-                    <p className='font-medium'>
-                      {suggestion.summary || 'Suggestion'}
-                    </p>
-                    <p className='text-muted-foreground'>
-                      {suggestion.status} · {suggestion.provenance}
-                    </p>
-                    {suggestion.reason ? <p>{suggestion.reason}</p> : null}
-                    {conflictReviewMessage(
-                      suggestion.status,
-                      suggestion.conflictReason
-                    ) ? (
-                      <p className='mt-1 text-destructive'>
-                        {conflictReviewMessage(
-                          suggestion.status,
-                          suggestion.conflictReason
-                        )}
-                      </p>
-                    ) : null}
-                    <SuggestionThread
-                      suggestion={suggestion}
-                      workspaceID={workspaceID}
-                      documentID={documentID}
-                      userID={userID}
-                    />
-                  </div>
-                  {!canDecide &&
-                  suggestion.status === 'pending' &&
-                  suggestion.proposerId === userID ? (
-                    <Button
-                      size='sm'
-                      variant='outline'
-                      className='shrink-0'
-                      disabled={decisionMutation.isPending}
-                      onClick={() =>
-                        decisionMutation.mutate({
-                          suggestionID: suggestion.suggestionId,
-                          decision: 'withdraw',
-                        })
-                      }
-                    >
-                      Withdraw
-                    </Button>
-                  ) : null}
-                  {canDecide && suggestion.status === 'pending' ? (
-                    <div className='flex shrink-0 gap-1'>
-                      <Button
-                        size='sm'
-                        disabled={decisionMutation.isPending}
-                        onClick={() =>
-                          decisionMutation.mutate({
-                            suggestionID: suggestion.suggestionId,
-                            decision: 'accept',
-                          })
-                        }
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        disabled={decisionMutation.isPending}
-                        onClick={() =>
-                          decisionMutation.mutate({
-                            suggestionID: suggestion.suggestionId,
-                            decision: 'reject',
-                          })
-                        }
-                      >
-                        Reject
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-              ))
-            ) : (
-              <p className='text-xs text-muted-foreground'>No suggestions.</p>
-            )}
-          </div>
+          {suggestionsQuery.error ? (
+            <p className='px-4 pb-3 text-xs text-destructive'>
+              Could not load suggestion discussions.
+            </p>
+          ) : null}
+          <ConfirmDialog
+            open={bulkDecision !== null}
+            onOpenChange={(open) => {
+              if (!open) setBulkDecision(null)
+            }}
+            title={`${bulkDecision === 'accept' ? 'Accept' : 'Reject'} all ${cards.length} ${cards.length === 1 ? 'suggestion' : 'suggestions'}?`}
+            desc={`This will ${bulkDecision ?? 'decide'} ${cards.length} ${cards.length === 1 ? 'suggestion' : 'suggestions'} in the document.`}
+            confirmText={`${bulkDecision === 'accept' ? 'Accept' : 'Reject'} all`}
+            destructive={bulkDecision === 'reject'}
+            handleConfirm={() => {
+              if (!bulkDecision) return
+              for (const card of cards) onDecide(card.id, bulkDecision)
+              setBulkDecision(null)
+            }}
+          />
         </aside>
       ) : null}
     </>

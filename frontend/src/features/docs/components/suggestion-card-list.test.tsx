@@ -23,6 +23,12 @@ async function renderList(
       canDecide
       disabled={false}
       onDecide={onDecide}
+      onSelect={vi.fn()}
+      focusedSuggestionID={null}
+      discussions={[]}
+      canInteract
+      workspaceID='workspace'
+      documentID='document'
       {...over}
     />
   )
