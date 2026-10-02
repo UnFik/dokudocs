@@ -301,13 +301,21 @@ function hasUniformMarks(node: ProseMirrorNode) {
   return true
 }
 
+// A suggestion is not formatting: a run keeps its identity whether or not part of
+// its text is proposed, deleted, or restyled by one.
+function formattingMarks(marks: ProseMirrorNode['marks']) {
+  return marks.filter((mark) => !mark.type.name.startsWith('suggestion_'))
+}
+
 function sameMarks(
   left: ProseMirrorNode['marks'],
   right: ProseMirrorNode['marks']
 ) {
+  const leftFormatting = formattingMarks(left)
+  const rightFormatting = formattingMarks(right)
   return (
-    left.length === right.length &&
-    left.every((mark, index) => mark.eq(right[index]!))
+    leftFormatting.length === rightFormatting.length &&
+    leftFormatting.every((mark, index) => mark.eq(rightFormatting[index]!))
   )
 }
 
