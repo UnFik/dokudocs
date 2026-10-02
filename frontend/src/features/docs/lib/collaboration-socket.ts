@@ -10,8 +10,28 @@ export type PresenceUser = {
   avatarURL?: string
 }
 
+/** A collaborator's selection. Only name and color are shared, never contact data. */
+export type RemoteCursor = {
+  connectionID: string
+  userID: string
+  name?: string
+  color?: string
+  anchor?: Uint8Array
+  head?: Uint8Array
+}
+
+export type CursorSelection = { anchor: Uint8Array; head: Uint8Array }
+
 export type CollaborationFrame = {
-  type: 'ready' | 'resync' | 'update' | 'ack' | 'error' | 'presence'
+  type:
+    | 'ready'
+    | 'resync'
+    | 'update'
+    | 'ack'
+    | 'error'
+    | 'presence'
+    | 'cursor'
+    | 'cursor_leave'
   code?: string
   updateID?: string
   bodyVersion?: number
@@ -21,6 +41,7 @@ export type CollaborationFrame = {
   state?: Uint8Array
   update?: Uint8Array
   users?: PresenceUser[]
+  cursor?: RemoteCursor
 }
 
 const serverFrameTypes = [
@@ -30,6 +51,8 @@ const serverFrameTypes = [
   'ack',
   'error',
   'presence',
+  'cursor',
+  'cursor_leave',
 ]
 
 type SocketLike = {
@@ -40,7 +63,11 @@ type SocketLike = {
   removeEventListener(type: string, listener: EventListener): void
 }
 
-type ServerEnvelope = Omit<CollaborationFrame, 'state' | 'update'> & {
+type ServerEnvelope = Omit<
+  CollaborationFrame,
+  'state' | 'update' | 'cursor'
+> & {
+  cursor?: Record<string, unknown>
   state?: string
   update?: string
   pingID?: string
@@ -81,7 +108,7 @@ export class CollaborationSocket {
         type: 'auth',
         token: this.options.token,
         workspaceID: this.options.workspaceID,
-        capabilities: ['presence'],
+        capabilities: ['presence', 'cursor'],
       })
     )
   }
@@ -121,9 +148,11 @@ export class CollaborationSocket {
     try {
       frame = {
         ...message,
+        cursor: message.cursor ? decodeCursor(message.cursor) : undefined,
         state: message.state ? decodeBase64(message.state) : undefined,
         update: message.update ? decodeBase64(message.update) : undefined,
       }
+      if (frame.cursor === undefined) delete frame.cursor
     } catch {
       this.socket.close()
       return
@@ -179,6 +208,26 @@ export class CollaborationSocket {
         bodySchemaVersion: input.bodySchemaVersion,
         update: encodeBase64(input.update),
       })
+    )
+    return true
+  }
+
+  /** Shares the local selection; null clears it. Dropped when not ready. */
+  sendCursor(selection: CursorSelection | null) {
+    if (!this.ready || this.closed || this.socket.readyState !== WebSocket.OPEN)
+      return false
+    this.socket.send(
+      JSON.stringify(
+        selection
+          ? {
+              type: 'cursor',
+              cursor: {
+                anchor: encodeBase64(selection.anchor),
+                head: encodeBase64(selection.head),
+              },
+            }
+          : { type: 'cursor' }
+      )
     )
     return true
   }
@@ -250,6 +299,22 @@ function isServerEnvelope(value: unknown): value is ServerEnvelope {
       )
     case 'error':
       return typeof value.code === 'string'
+    case 'cursor':
+    case 'cursor_leave':
+      return (
+        isRecord(value.cursor) &&
+        typeof value.cursor.connectionID === 'string' &&
+        value.cursor.connectionID !== '' &&
+        typeof value.cursor.userID === 'string' &&
+        value.cursor.userID !== '' &&
+        (value.cursor.name === undefined ||
+          typeof value.cursor.name === 'string') &&
+        (value.cursor.color === undefined ||
+          typeof value.cursor.color === 'string') &&
+        (value.type === 'cursor_leave' ||
+          (typeof value.cursor.anchor === 'string' &&
+            typeof value.cursor.head === 'string'))
+      )
     case 'presence':
       return (
         Array.isArray(value.users) &&
@@ -265,6 +330,20 @@ function isServerEnvelope(value: unknown): value is ServerEnvelope {
     default:
       return false
   }
+}
+
+// Copies the known fields only, so a newer server cannot leak extra data
+// into the UI through this frame.
+function decodeCursor(raw: Record<string, unknown>): RemoteCursor {
+  const cursor: RemoteCursor = {
+    connectionID: raw.connectionID as string,
+    userID: raw.userID as string,
+  }
+  if (typeof raw.name === 'string') cursor.name = raw.name
+  if (typeof raw.color === 'string') cursor.color = raw.color
+  if (typeof raw.anchor === 'string') cursor.anchor = decodeBase64(raw.anchor)
+  if (typeof raw.head === 'string') cursor.head = decodeBase64(raw.head)
+  return cursor
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
