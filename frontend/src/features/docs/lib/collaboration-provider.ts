@@ -7,7 +7,7 @@ import {
   moveMarkdownNode,
   type MarkdownBodySnapshot,
 } from '@/lib/domain-api'
-import { rebasePendingEdits } from './collaboration-rebase'
+import { rebasePendingEdits, type HeldEdit } from './collaboration-rebase'
 import { buildRebaseUpdate } from './collaboration-rebase-yjs'
 import {
   CollaborationSocket,
@@ -81,6 +81,8 @@ export type CollaborativeDocumentProviderOptions = Omit<
   ) => Promise<MarkdownBodySnapshot>
   refreshCanonicalBody?: () => Promise<MarkdownBodySnapshot>
   onCanonicalBody?: (body: MarkdownBodySnapshot) => void
+  /** Called when a partial rebase kept some conflicting edits back for review. */
+  onHeldEdits?: (edits: HeldEdit[]) => void
   onRecovery?: (
     reason: RecoveryReason,
     pending: PendingCollaborationUpdate[],
@@ -1259,12 +1261,14 @@ export class CollaborativeDocumentProvider {
     if (this.stopped || this.terminal || this.storageFailed) return false
     try {
       const canonicalNodes = projectState(input.canonicalState)
-      const { nodes, conflicts } = rebasePendingEdits({
+      const { nodes, conflicts, applied, held } = rebasePendingEdits({
         base: projectState(input.baseState),
         local: projectState(input.localState),
         canonical: canonicalNodes,
       })
-      if (conflicts.length) return false
+      // All-or-nothing only when nothing merged cleanly; otherwise apply the
+      // clean part and hold just the conflicting nodes for review.
+      if (conflicts.length && applied === 0) return false
       const update = buildRebaseUpdate(input.canonicalState, nodes)
       const encodedState = Y.mergeUpdates([input.canonicalState, update])
       const rebased: CollaborationSnapshot = {
@@ -1275,15 +1279,28 @@ export class CollaborativeDocumentProvider {
         encodedState,
         baseEncodedState: input.canonicalState,
       }
+      const previouslyHeld = (await this.store.load(this.scope)).heldEdits
+      const allHeld = [
+        ...previouslyHeld.filter(
+          (edit) => !held.some((next) => next.nodeID === edit.nodeID)
+        ),
+        ...held,
+      ]
       await this.enqueueStorage(() =>
-        this.store.replaceWithRebased(this.scope, rebased, {
-          updateID: crypto.randomUUID(),
-          bodyEpoch: input.bodyEpoch,
-          bodySchemaVersion: input.bodySchemaVersion,
-          update,
-        })
+        this.store.replaceWithRebased(
+          this.scope,
+          rebased,
+          {
+            updateID: crypto.randomUUID(),
+            bodyEpoch: input.bodyEpoch,
+            bodySchemaVersion: input.bodySchemaVersion,
+            update,
+          },
+          allHeld
+        )
       )
       if (this.storageFailed || this.stopped) return true
+      if (allHeld.length) this.options.onHeldEdits?.(allHeld)
       const root = nodes.find((node) => node.parentID === null)!
       this.pending.clear()
       this.baseState = undefined
@@ -1361,7 +1378,7 @@ export class CollaborativeDocumentProvider {
   }
 }
 
-async function executeDeleteNode(
+export async function executeDeleteNode(
   workspaceID: string,
   documentID: string,
   command: PendingDeleteNodeCommand
@@ -1378,7 +1395,7 @@ async function executeDeleteNode(
   return body
 }
 
-async function executeMoveNode(
+export async function executeMoveNode(
   workspaceID: string,
   documentID: string,
   command: PendingMoveNodeCommand

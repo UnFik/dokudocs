@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	appchat "backend/internal/application/rag/usecase"
@@ -69,7 +68,7 @@ func runRAGIndexWorker(ctx context.Context, repo *documentrepo.Repository, embed
 			log.Printf("rebuild stale RAG indexes: %v", err)
 		}
 		if embedder != nil {
-			if err := embedRAGBatch(ctx, repo, embedder); err != nil {
+			if err := embedRAGBacklog(ctx, repo, embedder); err != nil {
 				log.Printf("embed RAG chunks: %v", err)
 			}
 		}
@@ -79,30 +78,4 @@ func runRAGIndexWorker(ctx context.Context, repo *documentrepo.Repository, embed
 		case <-ticker.C:
 		}
 	}
-}
-
-func embedRAGBatch(ctx context.Context, repo *documentrepo.Repository, embedder appchat.EmbeddingModel) error {
-	chunks, err := repo.ListRAGChunksMissingEmbeddings(ctx, embedder.Provider(), embedder.Model(), 32)
-	if err != nil || len(chunks) == 0 {
-		return err
-	}
-	inputs := make([]string, len(chunks))
-	for i, chunk := range chunks {
-		inputs[i] = chunk.Text
-	}
-	vectors, err := embedder.Embed(ctx, inputs)
-	if err != nil {
-		return err
-	}
-	if len(vectors) != len(chunks) {
-		return errors.New("embedding provider returned an unexpected vector count")
-	}
-	embeddings := make([]documentrepo.RAGChunkEmbedding, len(chunks))
-	for i, chunk := range chunks {
-		embeddings[i] = documentrepo.RAGChunkEmbedding{
-			ChunkID: chunk.ChunkID, DocumentID: chunk.DocumentID, BodyVersion: chunk.BodyVersion,
-			SourceFingerprint: chunk.SourceFingerprint, Vector: vectors[i],
-		}
-	}
-	return repo.StoreRAGChunkEmbeddings(ctx, embedder.Provider(), embedder.Model(), embeddings)
 }

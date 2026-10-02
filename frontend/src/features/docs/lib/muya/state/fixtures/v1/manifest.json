@@ -66,6 +66,12 @@
       "syntax": "compact tables inside block quote and list item",
       "classification": "exact-byte",
       "file": "table-nested.md"
+    },
+    {
+      "id": "front-matter",
+      "syntax": "YAML front matter followed by a blank line",
+      "classification": "exact-byte",
+      "file": "front-matter.md"
     }
   ]
 }

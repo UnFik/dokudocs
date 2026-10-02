@@ -213,8 +213,9 @@ export class MarkdownToState {
           const previousItem = items[index - 1]!
           if (!('raw' in previousItem)) return
           const sourceGap = previousItem.raw.match(/[ \t\r\n]+$/)?.[0]
-          if (isNonCanonicalSourceGap(sourceGap))
-            sourceGapByToken.set(item, sourceGap)
+          // Canonical gaps are recorded too, so a loose item that follows a
+          // blank line is not mistaken for an item glued to its neighbour.
+          if (sourceGap) sourceGapByToken.set(item, sourceGap)
         })
         tokens.unshift(...items)
         break
@@ -347,7 +348,7 @@ export class MarkdownToState {
         const { header, align, rows, raw } = token
         const tableState: ITableState = {
           name: 'table',
-          sourceMarkdown: raw,
+          sourceMarkdown: raw.replace(/(?:\r\n|\r|\n)+$/, ''),
           children: [],
         }
 
