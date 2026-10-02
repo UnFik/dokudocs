@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
 import { toast } from 'sonner'
@@ -8,7 +8,6 @@ import { ApiError } from '@/lib/api-client'
 import {
   acceptDocumentSuggestion,
   createDocumentSuggestion,
-  type DocumentSuggestion,
   createNamedDocumentRevision,
   getMarkdownBody,
   listDocumentSuggestions,
@@ -52,12 +51,8 @@ import {
   type InlineMarkName,
   type InlineState,
 } from '../lib/prosemirror/inlineMarks'
+import { type SuggestionCard } from '../lib/prosemirror/suggestionCards'
 import { shouldSelectDocumentBody } from '../lib/select-all-scope'
-import {
-  draftSuggestion,
-  textLayerEntries,
-  type TypingDraft,
-} from '../lib/suggestion-draft'
 import {
   buildDeleteBlockSuggestion,
   buildFormatSuggestion,
@@ -81,6 +76,7 @@ import {
 } from './editor-mode-tabs'
 import './markdown-body.css'
 import { MuyaEditor } from './muya-editor/MuyaEditor'
+import { SuggestionCardList } from './suggestion-card-list'
 import { SuggestionThread } from './suggestion-thread'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
@@ -97,8 +93,8 @@ export function RemoteMarkdownDocEditor({
   offline?: boolean
   focusNodeID?: string
 }) {
-  const queryClient = useQueryClient()
   const [localStateNonce, setLocalStateNonce] = useState(0)
+  const queryClient = useQueryClient()
   const bodyQuery = useQuery({
     queryKey: ['markdown-body', workspaceID, document.id, userID, offline],
     queryFn: async ({ signal }) => {
@@ -353,6 +349,7 @@ function CollaborativeMarkdownBody({
   const [hasHeldEdits, setHasHeldEdits] = useState(false)
   const [reviewKey, setReviewKey] = useState(0)
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false)
+  const [cards, setCards] = useState<SuggestionCard[]>([])
   const reviewStore = useMemo(() => new IndexedDBCollaborationStore(), [])
   const [history, setHistory] = useState<EditorHistoryState>({
     canUndo: false,
@@ -366,7 +363,6 @@ function CollaborativeMarkdownBody({
   const suggestEnabled =
     Boolean(snapshot.canSuggest) && !offline && status === 'ready'
   const mode = resolveMode(requestedMode, { canEdit, suggestEnabled })
-  const queryClient = useQueryClient()
 
   const applyEditorMode = () => {
     const editor = sessionRef.current?.editor
@@ -389,80 +385,6 @@ function CollaborativeMarkdownBody({
     if (effective === 'suggest' && lastEffectiveRef.current !== 'suggest')
       setIsSuggestionsOpen(true)
     lastEffectiveRef.current = effective
-  }
-
-  // Saves run one at a time so a continued suggestion is stored before the
-  // next save withdraws it.
-  const flushQueueRef = useRef<Promise<unknown>>(Promise.resolve())
-  function saveTypedSuggestion(draft: TypingDraft) {
-    const save = async () => {
-      const suggestion = draftSuggestion(draft)
-      try {
-        if (suggestion) {
-          const latest = await getMarkdownBody(workspaceID, documentID)
-          if (!latest.canSuggest)
-            throw new Error('You can no longer suggest changes here')
-          await createDocumentSuggestion(workspaceID, documentID, {
-            suggestionID: draft.suggestionID,
-            baseBodyVersion: latest.bodyVersion,
-            baseBodyEpoch: latest.bodyEpoch,
-            operationSchemaVersion: 1,
-            provenance: 'human',
-            operations: suggestion.operations,
-            summary: suggestion.summary,
-          })
-        }
-        for (const replaced of draft.replaces)
-          await rejectDocumentSuggestion(workspaceID, documentID, replaced)
-      } catch (cause) {
-        toast.error(
-          cause instanceof Error
-            ? `Suggestion not saved: ${cause.message}`
-            : 'Suggestion not saved'
-        )
-        throw cause
-      } finally {
-        await queryClient.invalidateQueries({
-          queryKey: ['document-suggestions', workspaceID, documentID],
-        })
-      }
-    }
-    const saved = flushQueueRef.current.then(save, save)
-    flushQueueRef.current = saved.catch(() => {})
-    return saved
-  }
-
-  function saveSuggestionDraft(suggestion: SuggestionDraft) {
-    const save = async () => {
-      try {
-        const latest = await getMarkdownBody(workspaceID, documentID)
-        if (!latest.canSuggest)
-          throw new Error('You can no longer suggest changes here')
-        await createDocumentSuggestion(workspaceID, documentID, {
-          suggestionID: crypto.randomUUID(),
-          baseBodyVersion: latest.bodyVersion,
-          baseBodyEpoch: latest.bodyEpoch,
-          operationSchemaVersion: 1,
-          provenance: 'human',
-          operations: suggestion.operations,
-          summary: suggestion.summary,
-        })
-      } catch (cause) {
-        toast.error(
-          cause instanceof Error
-            ? `Suggestion not saved: ${cause.message}`
-            : 'Suggestion not saved'
-        )
-        throw cause
-      } finally {
-        await queryClient.invalidateQueries({
-          queryKey: ['document-suggestions', workspaceID, documentID],
-        })
-      }
-    }
-    const saved = flushQueueRef.current.then(save, save)
-    flushQueueRef.current = saved.catch(() => {})
-    return saved
   }
 
   function hideBodyAfterAccessLoss(clearStoredData: boolean) {
@@ -502,8 +424,7 @@ function CollaborativeMarkdownBody({
         }) === 'view',
       onSuggestRefused: (message) =>
         toast.error(message, { id: 'suggest-refused' }),
-      onSuggestFlush: saveTypedSuggestion,
-      onSuggestOperations: saveSuggestionDraft,
+      onSuggestionCards: setCards,
       onStatus: (next) => {
         statusRef.current = next
         setStatus(next)
@@ -559,16 +480,7 @@ function CollaborativeMarkdownBody({
           return
         }
         sessionRef.current = session
-        session.editor.setSuggestionLayer(
-          textLayerEntries(
-            queryClient.getQueryData<DocumentSuggestion[]>([
-              'document-suggestions',
-              workspaceID,
-              documentID,
-            ]) ?? [],
-            userID
-          )
-        )
+        setCards(session.editor.getSuggestionCards())
         onMarkdownChange(documentBodyToMarkdown(session.editor.getBody()))
         applyEditorMode()
         if (
@@ -647,21 +559,6 @@ function CollaborativeMarkdownBody({
 
   const showSuggestionPanel =
     !offline && status !== 'forbidden' && status !== 'unauthorized'
-  const suggestionsQuery = useQuery({
-    queryKey: ['document-suggestions', workspaceID, documentID],
-    queryFn: ({ signal }) =>
-      listDocumentSuggestions(workspaceID, documentID, signal),
-    enabled: showSuggestionPanel,
-    retry: false,
-  })
-  const layerEntries = useMemo(
-    () => textLayerEntries(suggestionsQuery.data ?? [], userID),
-    [suggestionsQuery.data, userID]
-  )
-  useEffect(() => {
-    sessionRef.current?.editor.setSuggestionLayer(layerEntries)
-  }, [layerEntries])
-
   return (
     <section className='flex min-h-0 flex-1 flex-col'>
       <div className='flex flex-wrap items-center gap-2 border-b px-4 py-2'>
@@ -802,6 +699,11 @@ function CollaborativeMarkdownBody({
             userID={userID}
             canDecide={canEdit}
             canSuggest={Boolean(snapshot.canSuggest) && status === 'ready'}
+            cards={cards}
+            decisionsDisabled={mode === 'view'}
+            onDecide={(id, decision) =>
+              sessionRef.current?.editor.decide(id, decision)
+            }
             captureBlock={() => {
               if (!mountRef.current) throw new Error('Editor is not ready')
               return captureSelectedNodeID(mountRef.current)
@@ -897,6 +799,9 @@ function SuggestionPanel({
   userID,
   canDecide,
   canSuggest,
+  cards,
+  decisionsDisabled,
+  onDecide,
   captureSelection,
   captureBlock,
 }: {
@@ -907,6 +812,9 @@ function SuggestionPanel({
   userID: string
   canDecide: boolean
   canSuggest: boolean
+  cards: SuggestionCard[]
+  decisionsDisabled: boolean
+  onDecide: (id: string, decision: 'accept' | 'reject') => void
   captureSelection: () => TextSuggestionSelection
   captureBlock: () => string
 }) {
@@ -1136,6 +1044,13 @@ function SuggestionPanel({
               Pending changes stay outside the canonical body until accepted.
             </span>
           </div>
+          <SuggestionCardList
+            cards={cards}
+            userID={userID}
+            canDecide={canDecide}
+            disabled={decisionsDisabled}
+            onDecide={onDecide}
+          />
           <div className='space-y-2 px-4 pb-3'>
             {insertAnchor ? (
               <form
