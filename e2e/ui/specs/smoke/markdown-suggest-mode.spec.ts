@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
-test("@live: commenter proposes a text change without editing the canonical body", async ({
+test("@live: typing in Suggest mode becomes a pending suggestion that an editor can accept", async ({
   page,
   browser,
 }) => {
@@ -121,41 +121,59 @@ test("@live: commenter proposes a text change without editing the canonical body
     await commenter.locator('input[name="password"]').fill(commenterPassword);
     await commenter.getByRole("button", { name: /sign in/i }).click();
     await commenter.waitForURL((url) => url.pathname === "/");
+    await commenter.setViewportSize({ width: 375, height: 800 });
     await commenter.goto(`/docs/${documentID}`);
     const commenterEditor = commenter.locator(".ProseMirror");
     await expect(commenterEditor).toContainText("Original phrase");
-    await expect(commenterEditor).toHaveAttribute("contenteditable", "false");
 
-    await commenter.getByRole("tab", { name: "Suggest", exact: true }).click();
+    const tab = (name: string) =>
+      commenter.getByRole("tab", { name, exact: true });
+    await expect(tab("View")).toHaveAttribute("aria-selected", "true");
+    await expect(tab("Edit")).toHaveAttribute("aria-disabled", "true");
+    await expect(tab("Suggest")).not.toHaveAttribute("aria-disabled", "true");
 
-    await commenter.locator(`#node-${runNodeID}`).evaluate((run) => {
-      const text = run.firstChild!;
-      const range = document.createRange();
-      range.setStart(text, 0);
-      range.setEnd(text, text.textContent!.length);
-      const selection = window.getSelection()!;
-      selection.removeAllRanges();
-      selection.addRange(range);
-    });
-    await commenter.getByRole("button", { name: "Suggest change" }).click();
-    await commenter.getByLabel("Proposed text").fill("Proposed phrase");
-    await commenter.getByRole("button", { name: "Submit suggestion" }).click();
+    await tab("Suggest").click();
+    await expect(commenterEditor).toHaveAttribute("contenteditable", "true");
+    await expect(
+      commenter.getByRole("complementary", { name: "Suggestions" }),
+    ).toBeVisible();
+
+    await commenterEditor.getByText("Original phrase").click();
+    await commenter.keyboard.press("End");
+    await commenter.keyboard.type("!");
     await expect(commenter.getByText("pending · human")).toBeVisible();
+    await expect(
+      commenter.getByText("Insert “!” in “Original phrase”"),
+    ).toBeVisible();
     await expect(commenterEditor).toContainText("Original phrase");
-    await expect(commenterEditor).not.toContainText("Proposed phrase");
-    await expect(commenter.getByRole("button", { name: "Accept" })).toHaveCount(
-      0,
+    await expect(commenterEditor).not.toContainText("Original phrase!");
+
+    await commenter.keyboard.press("Enter");
+    await expect(
+      commenter.getByText(/Typing can only change text inside one run/),
+    ).toBeVisible();
+    await expect(commenterEditor).not.toContainText("Original phrase!");
+
+    const overflow = await commenter.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
     );
+    expect(overflow).toBeLessThanOrEqual(0);
 
     await page.goto(`/docs/${documentID}`);
-    await expect(page.locator(".ProseMirror")).toContainText("Original phrase");
+    const ownerEditor = page.locator(".ProseMirror");
+    await expect(ownerEditor).toContainText("Original phrase");
+    await expect(ownerEditor).not.toContainText("Original phrase!");
+    for (const name of ["View", "Edit", "Suggest"]) {
+      await expect(
+        page.getByRole("tab", { name, exact: true }),
+      ).not.toHaveAttribute("aria-disabled", "true");
+    }
     await page
       .getByRole("button", { name: "Suggestions", exact: true })
       .click();
-    await expect(page.getByText("pending · human")).toBeVisible();
     await page.getByRole("button", { name: "Accept" }).click();
-    await expect(page.locator(".ProseMirror")).toContainText("Proposed phrase");
-    await expect(commenterEditor).toContainText("Proposed phrase");
+    await expect(ownerEditor).toContainText("Original phrase!");
+    await expect(commenterEditor).toContainText("Original phrase!");
   } finally {
     await commenterContext.close();
   }

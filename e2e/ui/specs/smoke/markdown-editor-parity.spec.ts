@@ -85,7 +85,7 @@ test("@live @smoke: table edits converge across two clients and persist", async 
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("tab", { name: "Edit", exact: true }).click();
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
@@ -224,7 +224,7 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("tab", { name: "Edit", exact: true }).click();
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
