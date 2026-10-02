@@ -111,14 +111,17 @@ func (r *Repository) RejectSuggestion(ctx context.Context, workspaceID, document
 		if err != nil {
 			return err
 		}
-		if !policy.CanDecideSuggestion(doc, access) {
+		// An editor rejects any suggestion; a proposer may withdraw their own.
+		canDecide := policy.CanDecideSuggestion(doc, access)
+		if !canDecide && !policy.CanSuggest(doc, access) {
 			return constant.ErrForbidden
 		}
 		result, err := tx.ExecContext(ctx, `
 			UPDATE document_suggestions
 			SET status = 'rejected', decider_id = $3, decided_at = NOW()
 			WHERE document_id = $1 AND suggestion_id = $2 AND status = 'pending'
-		`, documentID, suggestionID, deciderID)
+			  AND ($4 OR proposer_id = $3)
+		`, documentID, suggestionID, deciderID, canDecide)
 		if err != nil {
 			return err
 		}
@@ -128,13 +131,17 @@ func (r *Repository) RejectSuggestion(ctx context.Context, workspaceID, document
 			return nil
 		}
 		var status string
+		var proposerID uuid.UUID
 		if err := tx.QueryRowContext(ctx, `
-			SELECT status FROM document_suggestions WHERE document_id = $1 AND suggestion_id = $2
-		`, documentID, suggestionID).Scan(&status); err != nil {
+			SELECT status, proposer_id FROM document_suggestions WHERE document_id = $1 AND suggestion_id = $2
+		`, documentID, suggestionID).Scan(&status, &proposerID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return constant.ErrDocumentNotFound
 			}
 			return err
+		}
+		if !canDecide && proposerID != deciderID {
+			return constant.ErrForbidden
 		}
 		if status == "rejected" {
 			return nil
@@ -152,6 +159,19 @@ type suggestionOperation struct {
 	Type           string          `json:"type"`
 	Content        string          `json:"content"`
 	Attributes     json.RawMessage `json:"attributes"`
+	// BaseContent is the run text a typed change was made against. When every
+	// operation carries it, acceptance checks those runs instead of the whole
+	// body version, so unrelated edits do not conflict the suggestion.
+	BaseContent *string `json:"baseContent"`
+}
+
+func typedTextOnly(ops []suggestionOperation) bool {
+	for _, operation := range ops {
+		if operation.BaseContent == nil || (operation.Op != "replace_text" && operation.Op != "delete") {
+			return false
+		}
+	}
+	return len(ops) > 0
 }
 
 func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, documentID, suggestionID, deciderID uuid.UUID) error {
@@ -196,6 +216,16 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 			return nil
 		}
 
+		var ops []suggestionOperation
+		if err := json.Unmarshal(operations, &ops); err != nil || len(ops) == 0 {
+			if err := markSuggestionConflicted(ctx, tx, documentID, suggestionID, deciderID, "operations-json"); err != nil {
+				return err
+			}
+			conflicted = true
+			return nil
+		}
+		textOnly := typedTextOnly(ops)
+
 		var rootIDText sql.NullString
 		var bodyVersion, bodyEpoch int64
 		var bodySchemaVersion int
@@ -206,7 +236,7 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 		`, documentID, workspaceID).Scan(&rootIDText, &bodyVersion, &bodyEpoch, &bodySchemaVersion); err != nil {
 			return err
 		}
-		if !rootIDText.Valid || bodySchemaVersion != 1 || baseVersion != bodyVersion || baseEpoch != bodyEpoch {
+		if !rootIDText.Valid || bodySchemaVersion != 1 || (!textOnly && (baseVersion != bodyVersion || baseEpoch != bodyEpoch)) {
 			if err := markSuggestionConflicted(ctx, tx, documentID, suggestionID, deciderID, "base"); err != nil {
 				return err
 			}
@@ -241,13 +271,14 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 			return constant.ErrDocumentConflict
 		}
 
-		var ops []suggestionOperation
-		if err := json.Unmarshal(operations, &ops); err != nil || len(ops) == 0 {
-			if err := markSuggestionConflicted(ctx, tx, documentID, suggestionID, deciderID, "operations-json"); err != nil {
-				return err
+		if textOnly {
+			if reason := typedTextConflict(before, ops); reason != "" {
+				if err := markSuggestionConflicted(ctx, tx, documentID, suggestionID, deciderID, reason); err != nil {
+					return err
+				}
+				conflicted = true
+				return nil
 			}
-			conflicted = true
-			return nil
 		}
 		after := before
 		after.Nodes = append([]documentbody.Node(nil), before.Nodes...)
@@ -350,6 +381,7 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 		if bodyVersion == 1<<63-1 || (epochChanged && bodyEpoch == 1<<63-1) {
 			return constant.ErrDocumentConflict
 		}
+		currentVersion, currentEpoch := bodyVersion, bodyEpoch
 		bodyVersion++
 		if epochChanged {
 			bodyEpoch++
@@ -370,7 +402,7 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 		if err := replaceDocumentBody(ctx, tx, documentID, after); err != nil {
 			return err
 		}
-		if result, err := tx.ExecContext(ctx, `UPDATE documents SET body_version = $2, body_epoch = $3, updated_at = NOW() WHERE id = $1 AND body_version = $4 AND body_epoch = $5`, documentID, bodyVersion, bodyEpoch, baseVersion, baseEpoch); err != nil {
+		if result, err := tx.ExecContext(ctx, `UPDATE documents SET body_version = $2, body_epoch = $3, updated_at = NOW() WHERE id = $1 AND body_version = $4 AND body_epoch = $5`, documentID, bodyVersion, bodyEpoch, currentVersion, currentEpoch); err != nil {
 			return err
 		} else if rows, _ := result.RowsAffected(); rows != 1 {
 			return constant.ErrDocumentConflict
@@ -400,7 +432,7 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 					(document_id, command_id, body_epoch, actor_id, request_hash, body_version, result)
 				VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
 				ON CONFLICT (document_id, command_id) DO NOTHING
-			`, documentID, suggestionID, baseEpoch, deciderID, requestHash[:], bodyVersion, resultJSON)
+			`, documentID, suggestionID, currentEpoch, deciderID, requestHash[:], bodyVersion, resultJSON)
 			return err
 		}
 		return nil
@@ -409,6 +441,28 @@ func (r *Repository) AcceptSuggestion(ctx context.Context, workspaceID, document
 		return collaboration.ErrSuggestionConflict
 	}
 	return err
+}
+
+// typedTextConflict reports why a typed text change no longer fits its runs,
+// or "" when every run still holds the text it was typed against.
+func typedTextConflict(body documentbody.Body, ops []suggestionOperation) string {
+	for _, operation := range ops {
+		found := false
+		for _, node := range body.Nodes {
+			if node.NodeID != operation.NodeID {
+				continue
+			}
+			if node.Type != "run" || node.Content != *operation.BaseContent {
+				return "changed-text"
+			}
+			found = true
+			break
+		}
+		if !found {
+			return "missing-node"
+		}
+	}
+	return ""
 }
 
 func markSuggestionConflicted(ctx context.Context, tx database.Queryer, documentID, suggestionID, deciderID uuid.UUID, reason string) error {

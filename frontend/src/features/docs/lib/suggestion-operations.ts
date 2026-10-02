@@ -1,8 +1,13 @@
 import type { DocumentBodyNode } from './documentBody'
 
 export type SuggestionOperation =
-  | { op: 'replace_text'; nodeID: string; content: string }
-  | { op: 'delete'; nodeID: string }
+  | {
+      op: 'replace_text'
+      nodeID: string
+      content: string
+      baseContent?: string
+    }
+  | { op: 'delete'; nodeID: string; baseContent?: string }
   | { op: 'format'; nodeID: string; attributes: Record<string, boolean> }
   | {
       op: 'move'
@@ -179,82 +184,13 @@ export function buildInsertParagraphSuggestion(
 }
 
 export const typingRefusal =
-  'Typing can only change text inside one run. Use Suggest insert below, Suggest delete block, or the move actions in the suggestions panel.'
-
-export type TextEditTranslation =
-  | { ok: true; draft: SuggestionDraft }
-  | { ok: false; message: string }
-
-function describeTextEdit(before: string, after: string) {
-  let start = 0
-  while (
-    start < before.length &&
-    start < after.length &&
-    before[start] === after[start]
-  )
-    start++
-  let end = 0
-  while (
-    end < before.length - start &&
-    end < after.length - start &&
-    before[before.length - 1 - end] === after[after.length - 1 - end]
-  )
-    end++
-  const removed = before.slice(start, before.length - end)
-  const added = after.slice(start, after.length - end)
-  const whole = clip(before)
-  if (removed && added)
-    return `Replace “${clip(removed)}” with “${clip(added)}” in “${whole}”`
-  if (added) return `Insert “${clip(added)}” in “${whole}”`
-  return `Delete “${clip(removed)}” from “${whole}”`
-}
-
-// Only an edit that leaves the tree intact and changes exactly one run maps to
-// a supported operation; anything else is refused, never approximated.
-export function translateTextEdit(
-  before: DocumentBodyNode[],
-  after: DocumentBodyNode[]
-): TextEditTranslation {
-  const refuse = { ok: false, message: typingRefusal } as const
-  if (before.length !== after.length) return refuse
-  const afterByID = new Map(after.map((item) => [item.nodeID, item]))
-  let changed: DocumentBodyNode | null = null
-  let changedAfter: DocumentBodyNode | null = null
-  for (const item of before) {
-    const next = afterByID.get(item.nodeID)
-    if (
-      !next ||
-      next.parentID !== item.parentID ||
-      next.siblingOrder !== item.siblingOrder ||
-      next.type !== item.type ||
-      JSON.stringify(next.attributes) !== JSON.stringify(item.attributes)
-    )
-      return refuse
-    if (next.content === item.content) continue
-    if (item.type !== 'run' || changed) return refuse
-    changed = item
-    changedAfter = next
-  }
-  if (!changed || !changedAfter) return refuse
-  return {
-    ok: true,
-    draft: {
-      operations: [
-        {
-          op: 'replace_text',
-          nodeID: changed.nodeID,
-          content: changedAfter.content,
-        },
-      ],
-      summary: describeTextEdit(changed.content, changedAfter.content),
-    },
-  }
-}
+  'Typing can only change text within one block. Use Suggest insert below, Suggest delete block, or the move actions in the suggestions panel.'
 
 const conflictMessages: Record<string, string> = {
   base: 'the document changed after this was proposed',
   'state-schema': 'the document changed after this was proposed',
   'missing-node': 'the target block no longer exists',
+  'changed-text': 'someone edited this text after it was suggested',
   'opaque-node': 'the target block cannot be edited by a suggestion',
   'no-change': 'it would not change the document',
   schema: 'this suggestion uses an unsupported format',
@@ -285,8 +221,14 @@ export function pendingOverlay(
       continue
     for (const raw of suggestion.operations as unknown[]) {
       if (typeof raw !== 'object' || raw === null) continue
-      const { op, nodeID } = raw as { op?: unknown; nodeID?: unknown }
+      const { op, nodeID, baseContent } = raw as {
+        op?: unknown
+        nodeID?: unknown
+        baseContent?: unknown
+      }
       if (typeof nodeID !== 'string') continue
+      // Typed text changes are drawn inline by the editor's suggestion layer.
+      if (typeof baseContent === 'string') continue
       if (
         op !== 'delete' &&
         op !== 'replace_text' &&

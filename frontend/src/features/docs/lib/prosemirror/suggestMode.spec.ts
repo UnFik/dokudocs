@@ -2,7 +2,7 @@ import { TextSelection } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
 import { yUndoPluginKey } from 'y-prosemirror'
 import * as Y from 'yjs'
-import type { TextEditTranslation } from '../suggestion-operations'
+import { draftSuggestion, type TypingDraft } from '../suggestion-draft'
 import {
   mountTestEditor,
   paragraphsBody,
@@ -11,106 +11,292 @@ import {
 } from './editorTestKit'
 
 function suggestEditor(...texts: string[]) {
-  const results: TextEditTranslation[] = []
+  const flushed: TypingDraft[] = []
+  const refused: string[] = []
   const deletes: string[] = []
   const mounted = mountTestEditor(paragraphsBody(...texts), {
-    onSuggestTransaction: (result) => results.push(result),
+    onSuggestFlush: (draft) => {
+      flushed.push(draft)
+    },
+    onSuggestRefused: (message) => refused.push(message),
     onDeleteNode: (nodeIDs) => {
       deletes.push(...nodeIDs)
     },
+    suggestIdleMs: 0,
   })
   mounted.editor.setSuggestMode(true)
-  return { ...mounted, results, deletes }
+  const { view } = mounted.editor
+  return {
+    ...mounted,
+    flushed,
+    refused,
+    deletes,
+    caret(text: string, offset: number) {
+      const at = runStart(view.state.doc, text) + offset
+      view.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, at))
+      )
+    },
+    select(text: string, from: number, to: number) {
+      const start = runStart(view.state.doc, text)
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, start + from, start + to)
+        )
+      )
+    },
+    type(text: string) {
+      for (const char of text) {
+        const { from, to } = view.state.selection
+        view.someProp('handleTextInput', (handle) =>
+          handle(view, from, to, char, () => view.state.tr.insertText(char))
+        )
+      }
+    },
+    inserted: () =>
+      [...mounted.host.querySelectorAll('.suggest-ins')].map(
+        (node) => node.textContent
+      ),
+    struck: () =>
+      [...mounted.host.querySelectorAll('.suggest-del')].map(
+        (node) => node.textContent
+      ),
+  }
 }
 
 describe('suggest mode', () => {
-  it('turns typing inside a run into a text suggestion and leaves the body and Yjs untouched', () => {
-    const { editor, ydoc, results, cleanup } = suggestEditor('hello')
+  it('shows typed text in place without changing the body or Yjs', () => {
+    const editor = suggestEditor('hello')
     try {
-      const before = Y.encodeStateAsUpdate(ydoc)
-      editor.view.dispatch(
-        editor.view.state.tr.insertText(
-          ' world',
-          runStart(editor.view.state.doc, 'hello') + 5
-        )
-      )
-      expect(editor.getBody().find((n) => n.nodeID === 'r0')?.content).toBe(
-        'hello'
-      )
-      expect(Y.encodeStateAsUpdate(ydoc)).toEqual(before)
-      expect(results).toEqual([
-        {
-          ok: true,
-          draft: {
-            operations: [
-              { op: 'replace_text', nodeID: 'r0', content: 'hello world' },
-            ],
-            summary: 'Insert “ world” in “hello”',
+      const before = Y.encodeStateAsUpdate(editor.ydoc)
+      editor.caret('hello', 5)
+      editor.type(' world')
+      expect(editor.inserted()).toEqual([' world'])
+      expect(
+        editor.editor.getBody().find((n) => n.nodeID === 'r0')?.content
+      ).toBe('hello')
+      expect(Y.encodeStateAsUpdate(editor.ydoc)).toEqual(before)
+      expect(editor.flushed).toEqual([])
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('saves consecutive typing as one suggestion when the caret moves away', () => {
+    const editor = suggestEditor('hello', 'second')
+    try {
+      editor.caret('hello', 5)
+      editor.type(' world')
+      editor.caret('second', 0)
+      expect(editor.flushed).toHaveLength(1)
+      expect(draftSuggestion(editor.flushed[0]!)).toEqual({
+        operations: [
+          {
+            op: 'replace_text',
+            nodeID: 'r0',
+            content: 'hello world',
+            baseContent: 'hello',
           },
+        ],
+        summary: 'Insert “ world”',
+      })
+      // The saved suggestion stays drawn until the stored list catches up.
+      expect(editor.inserted()).toEqual([' world'])
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('splits suggestions when the caret moves between edits', () => {
+    const editor = suggestEditor('hello')
+    try {
+      editor.caret('hello', 0)
+      editor.type('A')
+      editor.caret('hello', 5)
+      editor.type('B')
+      editor.editor.flushSuggestion()
+      expect(
+        editor.flushed.map((draft) => draftSuggestion(draft)?.summary)
+      ).toEqual(['Insert “A”', 'Insert “B”'])
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('turns Backspace then typing into one replace card with struck text', () => {
+    const editor = suggestEditor('a cat')
+    try {
+      editor.caret('a cat', 5)
+      for (let i = 0; i < 3; i++) pressKey(editor.editor.view.dom, 'Backspace')
+      editor.type('dog')
+      expect(editor.struck()).toEqual(['cat'])
+      expect(editor.inserted()).toEqual(['dog'])
+      editor.editor.flushSuggestion()
+      expect(draftSuggestion(editor.flushed[0]!)?.summary).toBe(
+        'Replace “cat” with “dog”'
+      )
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('drops a typed insertion that is deleted again before it is saved', () => {
+    const editor = suggestEditor('hi')
+    try {
+      editor.caret('hi', 2)
+      editor.type('!!')
+      pressKey(editor.editor.view.dom, 'Backspace')
+      pressKey(editor.editor.view.dom, 'Backspace')
+      editor.editor.flushSuggestion()
+      expect(editor.flushed).toEqual([])
+      expect(editor.inserted()).toEqual([])
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('continues the viewer’s own pending suggestion and withdraws it when emptied', () => {
+    const editor = suggestEditor('hi')
+    try {
+      editor.editor.setSuggestionLayer([
+        {
+          suggestionID: 'mine',
+          nodeID: 'r0',
+          base: 'hi',
+          text: 'hi!',
+          own: true,
+        },
+      ])
+      expect(editor.inserted()).toEqual(['!'])
+      editor.caret('hi', 2)
+      pressKey(editor.editor.view.dom, 'Backspace')
+      expect(editor.inserted()).toEqual([])
+      editor.editor.flushSuggestion()
+      expect(editor.flushed).toHaveLength(1)
+      expect(editor.flushed[0]!.replaces).toEqual(['mine'])
+      expect(draftSuggestion(editor.flushed[0]!)).toBeNull()
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('extends the viewer’s own pending suggestion instead of starting another', () => {
+    const editor = suggestEditor('hi')
+    try {
+      editor.editor.setSuggestionLayer([
+        {
+          suggestionID: 'mine',
+          nodeID: 'r0',
+          base: 'hi',
+          text: 'hi!',
+          own: true,
+        },
+      ])
+      editor.caret('hi', 2)
+      editor.type('?')
+      editor.editor.flushSuggestion()
+      expect(editor.flushed[0]!.replaces).toEqual(['mine'])
+      expect(draftSuggestion(editor.flushed[0]!)?.operations).toEqual([
+        {
+          op: 'replace_text',
+          nodeID: 'r0',
+          content: 'hi!?',
+          baseContent: 'hi',
         },
       ])
     } finally {
-      cleanup()
+      editor.cleanup()
+    }
+  })
+
+  it('makes a separate suggestion when typing next to someone else’s', () => {
+    const editor = suggestEditor('hi')
+    try {
+      editor.editor.setSuggestionLayer([
+        {
+          suggestionID: 'theirs',
+          nodeID: 'r0',
+          base: 'hi',
+          text: 'hi!',
+          own: false,
+        },
+      ])
+      editor.caret('hi', 0)
+      editor.type('O')
+      editor.editor.flushSuggestion()
+      expect(editor.flushed[0]!.replaces).toEqual([])
+      expect(editor.host.querySelector('.suggest-other')?.textContent).toBe('!')
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('turns a selected block deleted with Backspace into a text suggestion, not a DeleteNode', () => {
+    const editor = suggestEditor('first', 'second')
+    try {
+      editor.select('second', 0, 6)
+      pressKey(editor.editor.view.dom, 'Backspace')
+      editor.editor.flushSuggestion()
+      expect(editor.deletes).toEqual([])
+      expect(editor.editor.getBody()).toHaveLength(5)
+      expect(draftSuggestion(editor.flushed[0]!)?.operations).toEqual([
+        { op: 'delete', nodeID: 'r1', baseContent: 'second' },
+      ])
+    } finally {
+      editor.cleanup()
     }
   })
 
   it('refuses a block split from Enter without changing the body', () => {
-    const { editor, results, cleanup } = suggestEditor('hello')
+    const editor = suggestEditor('hello')
     try {
-      const at = runStart(editor.view.state.doc, 'hello') + 2
-      editor.view.dispatch(
-        editor.view.state.tr.setSelection(
-          TextSelection.create(editor.view.state.doc, at)
-        )
-      )
-      pressKey(editor.view.dom, 'Enter')
-      expect(editor.getBody()).toHaveLength(3)
-      expect(results).toHaveLength(1)
-      expect(results[0]!.ok).toBe(false)
+      editor.caret('hello', 2)
+      pressKey(editor.editor.view.dom, 'Enter')
+      expect(editor.editor.getBody()).toHaveLength(3)
+      expect(editor.refused).toHaveLength(1)
     } finally {
-      cleanup()
+      editor.cleanup()
     }
   })
 
-  it('does not queue DeleteNode when a whole block is selected and Backspace is pressed', () => {
-    const { editor, deletes, results, cleanup } = suggestEditor(
-      'first',
-      'second'
-    )
+  it('refuses a selection that spans two blocks', () => {
+    const editor = suggestEditor('first', 'second')
     try {
-      const start = runStart(editor.view.state.doc, 'second')
-      editor.view.dispatch(
-        editor.view.state.tr.setSelection(
-          TextSelection.create(editor.view.state.doc, start, start + 6)
+      const { view } = editor.editor
+      const from = runStart(view.state.doc, 'first') + 2
+      const to = runStart(view.state.doc, 'second') + 2
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, from, to)
         )
       )
-      pressKey(editor.view.dom, 'Backspace')
-      expect(deletes).toEqual([])
-      expect(editor.getBody()).toHaveLength(5)
-      expect(results.every((result) => !result.ok)).toBe(true)
+      editor.type('x')
+      expect(editor.refused).toHaveLength(1)
+      expect(editor.inserted()).toEqual([])
     } finally {
-      cleanup()
+      editor.cleanup()
     }
   })
 
   it('ignores undo and redo shortcuts so the shared history is not rewritten', () => {
-    const { editor, results, cleanup } = suggestEditor('hello')
+    const editor = suggestEditor('hello')
     try {
       const undoManager = yUndoPluginKey.getState(
-        editor.view.state
+        editor.editor.view.state
       )?.undoManager
-      const undo = pressKey(editor.view.dom, 'z', { ctrlKey: true })
+      const undo = pressKey(editor.editor.view.dom, 'z', { ctrlKey: true })
       expect(undo.defaultPrevented).toBe(true)
       expect(undoManager?.canUndo()).toBe(false)
-      expect(results).toEqual([])
     } finally {
-      cleanup()
+      editor.cleanup()
     }
   })
 
-  it('applies remote changes while suggesting', () => {
-    const { editor, ydoc, cleanup } = suggestEditor('hello')
+  it('applies remote changes while suggesting and saves a draft whose text moved on', () => {
+    const editor = suggestEditor('hello')
     try {
+      editor.caret('hello', 5)
+      editor.type('!')
       const firstText = (
         node: Y.XmlFragment | Y.XmlElement
       ): Y.XmlText | null => {
@@ -121,32 +307,35 @@ describe('suggest mode', () => {
         }
         return null
       }
-      ydoc.transact(() => {
-        firstText(ydoc.getXmlFragment('body'))!.insert(5, '!')
+      editor.ydoc.transact(() => {
+        firstText(editor.ydoc.getXmlFragment('body'))!.insert(0, '>')
       }, 'remote')
-      expect(editor.getBody().find((n) => n.nodeID === 'r0')?.content).toBe(
-        'hello!'
-      )
+      expect(
+        editor.editor.getBody().find((n) => n.nodeID === 'r0')?.content
+      ).toBe('>hello')
+      expect(editor.flushed).toHaveLength(1)
+      expect(editor.flushed[0]!.runs[0]!.base).toBe('hello')
     } finally {
-      cleanup()
+      editor.cleanup()
     }
   })
 
-  it('edits normally again after leaving suggest mode', () => {
-    const { editor, cleanup } = suggestEditor('hello')
+  it('saves the draft and edits normally again after leaving suggest mode', () => {
+    const editor = suggestEditor('hello')
     try {
-      editor.setSuggestMode(false)
-      editor.view.dispatch(
-        editor.view.state.tr.insertText(
-          '!',
-          runStart(editor.view.state.doc, 'hello') + 5
-        )
+      editor.caret('hello', 5)
+      editor.type('?')
+      editor.editor.setSuggestMode(false)
+      expect(editor.flushed).toHaveLength(1)
+      const { view } = editor.editor
+      view.dispatch(
+        view.state.tr.insertText('!', runStart(view.state.doc, 'hello') + 5)
       )
-      expect(editor.getBody().find((n) => n.nodeID === 'r0')?.content).toBe(
-        'hello!'
-      )
+      expect(
+        editor.editor.getBody().find((n) => n.nodeID === 'r0')?.content
+      ).toBe('hello!')
     } finally {
-      cleanup()
+      editor.cleanup()
     }
   })
 })
