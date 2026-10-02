@@ -743,6 +743,69 @@ describe('CollaborativeDocumentProvider', () => {
     }
   })
 
+  it('queues one batch DeleteNode for several nodes and completes it from the canonical body', async () => {
+    const serverDoc = new Y.Doc()
+    serverDoc.getText('body').insert(0, 'base')
+    const initialState = Y.encodeStateAsUpdate(serverDoc)
+    const document = new Y.Doc()
+    Y.applyUpdate(document, initialState)
+    const store = new MemoryStore()
+    const socket = new FakeSocket()
+    const commands: PendingDeleteNodeCommand[] = []
+    const provider = new CollaborativeDocumentProvider({
+      documentID: 'document-1',
+      workspaceID: 'workspace-1',
+      userID: 'user-1',
+      token: 'jwt-token',
+      document,
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      baseURL: 'https://docs.example.test',
+      store,
+      socketFactory: () => socket,
+      executeDeleteNode: async (command) => {
+        commands.push(command)
+        return {
+          bodyVersion: 2,
+          bodyEpoch: 2,
+          bodySchemaVersion: 1,
+          canEdit: true,
+          rootNodeID: crypto.randomUUID(),
+          nodes: [],
+          encodedState: base64(initialState),
+        }
+      },
+    })
+
+    try {
+      await provider.start()
+      socket.open()
+      socket.receive({
+        type: 'ready',
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: base64(initialState),
+      })
+      await flushPromises()
+      await provider.deleteNode(['a', 'b', 'a', 'c'])
+      await flushPromises()
+
+      expect(commands).toHaveLength(1)
+      expect(commands[0]).toMatchObject({
+        bodyEpoch: 1,
+        nodeID: 'a',
+        nodeIDs: ['a', 'b', 'c'],
+      })
+      expect(store.deleteCommands.size).toBe(0)
+      expect(store.snapshot?.bodyEpoch).toBe(2)
+    } finally {
+      provider.stop()
+    }
+  })
+
   it('queues MoveNode offline and completes from the canonical body without a Yjs update', async () => {
     const serverDoc = new Y.Doc()
     serverDoc.getText('body').insert(0, 'base')
