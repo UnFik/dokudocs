@@ -1,4 +1,4 @@
-import { TextSelection } from 'prosemirror-state'
+import { AllSelection, TextSelection } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
 import { yUndoPluginKey } from 'y-prosemirror'
 import * as Y from 'yjs'
@@ -313,6 +313,24 @@ describe('suggest mode', () => {
       ])
       expect(editor.operations[0]?.summary).toBe('Delete 2 blocks')
       expect(editor.editor.getBody()).toHaveLength(5)
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('suggests deleting every block for select-all and Delete', () => {
+    const editor = suggestEditor('first', 'second')
+    try {
+      const { view } = editor.editor
+      view.dispatch(
+        view.state.tr.setSelection(new AllSelection(view.state.doc))
+      )
+      pressKey(view.dom, 'Delete')
+      expect(editor.refused).toEqual([])
+      expect(editor.operations[0]?.operations).toEqual([
+        { op: 'delete', nodeID: 'p0' },
+        { op: 'delete', nodeID: 'p1' },
+      ])
     } finally {
       editor.cleanup()
     }
