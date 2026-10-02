@@ -137,13 +137,22 @@ export const splitTextBlock: Command = (state, dispatch) => {
       })
     else types.unshift({ type: node.type, attrs })
   }
+  // The server rejects an empty run, so a split at the end of a run starts the
+  // new block without one; typing wraps the first text in a fresh run.
+  const atRunEnd =
+    state.selection.empty &&
+    $from.parent.type === run &&
+    $from.parentOffset === $from.parent.content.size
   if (dispatch) {
     const tr = state.tr.deleteSelection()
-    dispatch(
-      tr
-        .split(tr.mapping.map(state.selection.from), levels, types)
-        .scrollIntoView()
-    )
+    const from = tr.mapping.map(state.selection.from)
+    if (atRunEnd) {
+      tr.split(from + 1, levels - 1, types.slice(0, -1))
+      tr.setSelection(
+        TextSelection.near(tr.doc.resolve(tr.mapping.map(from + 1, 1)), 1)
+      )
+    } else tr.split(from, levels, types)
+    dispatch(tr.scrollIntoView())
   }
   return true
 }
