@@ -160,7 +160,8 @@
   pointer-events: none;
 }
 
-.markdown-body .remote-cursor-label {
+.markdown-body .remote-cursor::after {
+  content: attr(data-name);
   position: absolute;
   bottom: 100%;
   left: -2px;
