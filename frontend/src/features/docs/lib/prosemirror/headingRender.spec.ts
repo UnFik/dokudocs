@@ -1,6 +1,9 @@
 import { DOMSerializer } from 'prosemirror-model'
+import { TextSelection } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
+import { documentBodyToMarkdown } from '../muya/state/documentBodyToMarkdown'
 import { documentBodySchema } from './documentBody'
+import { mountTestEditor, paragraphsBody, runStart } from './editorTestKit'
 
 function renderedTag(type: string, bodyAttributes: string) {
   const node = documentBodySchema.nodes[type]!.create({
@@ -33,11 +36,43 @@ describe('heading render', () => {
   })
 
   it('renders setext headings by level', () => {
-    expect(
-      renderedTag('setext_heading', '{"level":1,"underline":"==="}')
-    ).toBe('h1')
-    expect(
-      renderedTag('setext_heading', '{"level":2,"underline":"---"}')
-    ).toBe('h2')
+    expect(renderedTag('setext_heading', '{"level":1,"underline":"==="}')).toBe(
+      'h1'
+    )
+    expect(renderedTag('setext_heading', '{"level":2,"underline":"---"}')).toBe(
+      'h2'
+    )
   })
+})
+
+describe('heading conversion keeps the Markdown level', () => {
+  it.each([1, 2, 3, 4, 5, 6] as const)(
+    'exports level %i as # x level',
+    (level) => {
+      const harness = mountTestEditor(paragraphsBody('Title'))
+      try {
+        const { view } = harness.editor
+        view.dispatch(
+          view.state.tr.setSelection(
+            TextSelection.create(
+              view.state.doc,
+              runStart(view.state.doc, 'Title') + 1
+            )
+          )
+        )
+        expect(harness.editor.setHeading(level)).toBe(true)
+        expect(view.dom.querySelector(`h${level}`)?.textContent).toBe('Title')
+        expect(documentBodyToMarkdown(harness.editor.getBody())).toContain(
+          `${'#'.repeat(level)} Title`
+        )
+        expect(harness.editor.setHeading(0)).toBe(true)
+        expect(view.dom.querySelector('p')?.textContent).toBe('Title')
+        expect(documentBodyToMarkdown(harness.editor.getBody())).not.toContain(
+          '#'
+        )
+      } finally {
+        harness.cleanup()
+      }
+    }
+  )
 })
