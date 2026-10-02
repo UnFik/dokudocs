@@ -3,6 +3,7 @@ import { keymap } from 'prosemirror-keymap'
 import {
   AllSelection,
   EditorState,
+  NodeSelection,
   Plugin,
   type Command,
   type Transaction,
@@ -56,6 +57,7 @@ import {
   MoveNodeRequiredError,
   prepareBodyTransaction,
 } from './prepareBodyTransaction'
+import { planSelectionDeletion, textblockAt } from './selectionDeletion'
 
 export type MoveNodeIntent = {
   nodeID: string
@@ -307,6 +309,35 @@ export function createDocumentBodyEditor(
     return true
   }
 
+  // Delete with a selection that is not inside one textblock (select all, a
+  // separator, text across blocks). The browser's own deletion is ignored by the
+  // editor for these, so it is done here: whole blocks and runs go through
+  // DeleteNode as one batch, and text left at the ends is trimmed as an edit.
+  const deleteAcrossBlocks = () => {
+    const { selection } = state
+    if (selection.empty) return false
+    const first = textblockAt(state.doc, selection.from)
+    if (
+      !(selection instanceof NodeSelection) &&
+      first &&
+      first === textblockAt(state.doc, selection.to)
+    )
+      return false
+    const plan = planSelectionDeletion(state.doc, selection.from, selection.to)
+    if (!plan.ok) {
+      options.onTransactionError?.(new Error(plan.message))
+      return true
+    }
+    if (plan.trims.length) {
+      let trim = state.tr
+      for (const range of [...plan.trims].reverse())
+        trim = trim.delete(range.from, range.to)
+      viewHolder.current?.dispatch(trim)
+    }
+    if (plan.roots.length) queueDeleteNode(plan.roots)
+    return true
+  }
+
   const dispatchTransaction = (transaction: Transaction) => {
     const remote = transaction.getMeta(ySyncPluginKey)?.isChangeOrigin === true
     let prepared = transaction
@@ -412,6 +443,17 @@ export function createDocumentBodyEditor(
           event.preventDefault()
           return true
         }
+      }
+      if (
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        (event.key === 'Backspace' || event.key === 'Delete') &&
+        deleteAcrossBlocks()
+      ) {
+        event.preventDefault()
+        return true
       }
       if (
         !event.altKey ||
