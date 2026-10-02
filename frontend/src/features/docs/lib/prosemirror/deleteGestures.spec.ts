@@ -98,6 +98,60 @@ describe('delete gestures with a real keyboard', () => {
     }
   })
 
+  it('removes a separator from a caret inside the last run, not just between runs', async () => {
+    const { editor, batches, errors, runStart, cleanup } =
+      mount(withSeparator())
+    try {
+      const { view } = editor
+      // Inside the run's text, one position before the paragraph's own end.
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, runStart('second') + 6)
+        )
+      )
+      expect(view.state.selection.$from.parent.type.name).toBe('run')
+      await userEvent.keyboard('{Delete}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('removes a separator before the caret with Backspace from inside the first run', async () => {
+    const { editor, batches, errors, runStart, cleanup } =
+      mount(withSeparator())
+    try {
+      const { view } = editor
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, runStart('after'))
+        )
+      )
+      expect(view.state.selection.$from.parent.type.name).toBe('run')
+      await userEvent.keyboard('{Backspace}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('selects a separator when it is clicked, so Delete removes it', async () => {
+    const { editor, batches, errors, host, cleanup } = mount(withSeparator())
+    try {
+      const separator = host.querySelector('hr')!
+      separator.style.height = '20px'
+      await userEvent.click(separator)
+      expect(editor.view.state.selection).toBeInstanceOf(NodeSelection)
+      await userEvent.keyboard('{Delete}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+    } finally {
+      cleanup()
+    }
+  })
+
   it('deletes a separator with Delete from the end of the paragraph before it', async () => {
     const { editor, batches, errors, runStart, cleanup } =
       mount(withSeparator())
