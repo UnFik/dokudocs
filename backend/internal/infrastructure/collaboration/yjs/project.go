@@ -106,28 +106,37 @@ func projectDoc(doc *crdt.Doc, documentID uuid.UUID) (documentbody.Body, error) 
 		return documentbody.Body{}, err
 	}
 	body := documentbody.Body{DocumentID: documentID, RootNodeID: rootID, Nodes: make([]documentbody.Node, 0)}
-	if err := appendElement(&body, root, nil, 0); err != nil {
+	if _, err := appendElement(&body, root, nil, 0); err != nil {
 		return documentbody.Body{}, err
 	}
 	return body, nil
 }
 
-func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID *uuid.UUID, siblingOrder float64) error {
+// appendElement projects one element and its subtree. It reports false, and adds
+// nothing, for an element that is not canonical: an inserted suggestion.
+func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID *uuid.UUID, siblingOrder float64) (bool, error) {
 	values := element.GetAttributeValues()
 	nodeID, err := nodeIDFromValues(element, values)
 	if err != nil {
-		return err
+		return false, err
 	}
 	nodeType, ok := nodeTypeFromProseMirror(element.NodeName)
 	if !ok {
-		return projectionError("unsupported ProseMirror node %q", element.NodeName)
+		return false, projectionError("unsupported ProseMirror node %q", element.NodeName)
 	}
 	bodyAttributes, bodyContent, err := elementBodyAttributes(values, nodeID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if (isTextOnly(nodeType) || isInlineParent(nodeType) || nodeType == "run") && bodyContent != "" {
-		return projectionError("text node %s has unexpected bodyContent", nodeID)
+		return false, projectionError("text node %s has unexpected bodyContent", nodeID)
+	}
+	bodyAttributes, inserted, err := withoutNodeSuggestion(bodyAttributes)
+	if err != nil {
+		return false, projectionError("node %s: %v", nodeID, err)
+	}
+	if inserted {
+		return false, nil
 	}
 	node := documentbody.Node{
 		DocumentID: body.DocumentID, NodeID: nodeID, ParentID: parentID,
@@ -140,11 +149,16 @@ func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID 
 	for index, child := range rawChildren {
 		children[index] = child
 	}
-	if err := appendTextContent(&body.Nodes[len(body.Nodes)-1], nodeType, children); err != nil {
-		return err
+	onlyInserted, err := appendTextContent(&body.Nodes[len(body.Nodes)-1], nodeType, children)
+	if err != nil {
+		return false, err
+	}
+	if onlyInserted {
+		body.Nodes = body.Nodes[:len(body.Nodes)-1]
+		return false, nil
 	}
 	if isTextOnly(nodeType) || nodeType == "run" {
-		return nil
+		return true, nil
 	}
 	var elements []*crdt.YXmlElement
 	var directText []*crdt.YXmlText
@@ -155,69 +169,88 @@ func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID 
 		case *crdt.YXmlText:
 			directText = append(directText, value)
 		default:
-			return projectionError("node %s contains unsupported Yjs XML child", nodeID)
+			return false, projectionError("node %s contains unsupported Yjs XML child", nodeID)
 		}
 	}
 	if isInlineParent(nodeType) && len(elements) > 0 && len(directText) > 0 {
-		return projectionError("inline parent %s mixes direct text and child nodes", nodeID)
+		return false, projectionError("inline parent %s mixes direct text and child nodes", nodeID)
 	}
 	if !isInlineParent(nodeType) && len(directText) > 0 && !isTextOnly(nodeType) {
-		return projectionError("container %s contains direct text", nodeID)
+		return false, projectionError("container %s contains direct text", nodeID)
 	}
-	for index, child := range elements {
+	kept := 0
+	for _, child := range elements {
 		id := nodeID
-		if err := appendElement(body, child, &id, float64(index)); err != nil {
-			return err
+		appended, err := appendElement(body, child, &id, float64(kept))
+		if err != nil {
+			return false, err
+		}
+		if appended {
+			kept++
 		}
 	}
-	return nil
+	return true, nil
 }
 
-func appendTextContent(node *documentbody.Node, nodeType string, children []crdtXMLNode) error {
+// appendTextContent fills a node's text. It reports true when the node is a run
+// whose text is entirely inserted by suggestions, which makes it not canonical.
+func appendTextContent(node *documentbody.Node, nodeType string, children []crdtXMLNode) (bool, error) {
 	if nodeType == "opaque" || nodeType == "opaque-inline" || nodeType == "thematic-break" {
 		if len(children) > 0 {
-			return projectionError("source node %s must be an XML atom", node.NodeID)
+			return false, projectionError("source node %s must be an XML atom", node.NodeID)
 		}
-		return nil
+		return false, nil
 	}
 	var text strings.Builder
 	var baseAttributes map[string]json.RawMessage
 	if nodeType == "run" {
 		if err := json.Unmarshal(node.Attributes, &baseAttributes); err != nil {
-			return projectionError("run %s has invalid attributes", node.NodeID)
+			return false, projectionError("run %s has invalid attributes", node.NodeID)
 		}
 	}
 	var marks map[string]any
+	hadInserted := false
 	for _, child := range children {
 		ytext, ok := child.(*crdt.YXmlText)
 		if !ok {
 			if nodeType == "run" || isTextOnly(nodeType) {
-				return projectionError("text node %s contains a nested element", node.NodeID)
+				return false, projectionError("text node %s contains a nested element", node.NodeID)
 			}
 			continue
 		}
 		for _, delta := range ytext.ToDelta() {
 			if delta.Op != crdt.DeltaOpInsert {
-				return projectionError("text node %s contains a non-insert delta", node.NodeID)
+				return false, projectionError("text node %s contains a non-insert delta", node.NodeID)
 			}
 			chunk, ok := delta.Insert.(string)
 			if !ok {
-				return projectionError("text node %s contains a non-text embed", node.NodeID)
+				return false, projectionError("text node %s contains a non-text embed", node.NodeID)
+			}
+			attributes, inserted, err := withoutSuggestionMarks(delta.Attributes)
+			if err != nil {
+				return false, projectionError("text node %s: %v", node.NodeID, err)
+			}
+			if inserted {
+				hadInserted = true
+				continue
 			}
 			text.WriteString(chunk)
 			if nodeType == "run" {
-				current, err := projectMarks(delta.Attributes)
+				current, err := projectMarks(attributes)
 				if err != nil {
-					return fmt.Errorf("%w: %v", ErrInvalidProjection, err)
+					return false, fmt.Errorf("%w: %v", ErrInvalidProjection, err)
 				}
 				if marks != nil && !reflect.DeepEqual(marks, current) {
-					return projectionError("run %s has mixed formatting; split it before projection", node.NodeID)
+					return false, projectionError("run %s has mixed formatting; split it before projection", node.NodeID)
 				}
 				marks = current
-			} else if len(delta.Attributes) > 0 {
-				return projectionError("text node %s has marks outside a run", node.NodeID)
+			} else if len(attributes) > 0 {
+				return false, projectionError("text node %s has marks outside a run", node.NodeID)
 			}
 		}
+	}
+	if nodeType == "run" && hadInserted && text.Len() == 0 {
+		return true, nil
 	}
 	if isTextOnly(nodeType) || nodeType == "run" || isInlineParent(nodeType) {
 		node.Content = text.String()
@@ -225,11 +258,11 @@ func appendTextContent(node *documentbody.Node, nodeType string, children []crdt
 	if nodeType == "run" {
 		attributes, err := mergeRunMarks(baseAttributes, marks)
 		if err != nil {
-			return err
+			return false, err
 		}
 		node.Attributes = attributes
 	}
-	return nil
+	return false, nil
 }
 
 // crdt.xmlNode is intentionally unexported; this local interface keeps the
@@ -289,6 +322,33 @@ func nodeIDFromValues(element *crdt.YXmlElement, values map[string]any) (uuid.UU
 		return uuid.Nil, projectionError("node %q has invalid nodeID", element.NodeName)
 	}
 	return id, nil
+}
+
+// withoutNodeSuggestion removes a suggestion carried in a node's attributes,
+// after checking it. A node inserted by a suggestion is not canonical, with
+// everything under it.
+func withoutNodeSuggestion(attributes json.RawMessage) (json.RawMessage, bool, error) {
+	if !strings.Contains(string(attributes), `"suggestion"`) {
+		return attributes, false, nil
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(attributes, &object); err != nil {
+		return nil, false, err
+	}
+	raw, ok := object["suggestion"]
+	if !ok {
+		return attributes, false, nil
+	}
+	suggestion, err := parseNodeSuggestion(raw)
+	if err != nil {
+		return nil, false, err
+	}
+	delete(object, "suggestion")
+	stripped, err := json.Marshal(object)
+	if err != nil {
+		return nil, false, err
+	}
+	return stripped, suggestion.Kind == "insert", nil
 }
 
 func projectMarks(attributes crdt.Attributes) (map[string]any, error) {
