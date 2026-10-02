@@ -359,6 +359,12 @@ function CollaborativeMarkdownBody({
   const applyEditorMode = () => {
     const editor = sessionRef.current?.editor
     if (!editor) return
+    // The collaboration session locks the editor itself in these states.
+    if (
+      statusRef.current === 'closed' ||
+      statusRef.current === 'recovery-required'
+    )
+      return
     const effective = resolveMode(modeRef.current, {
       canEdit: canEditRef.current,
       suggestEnabled:
