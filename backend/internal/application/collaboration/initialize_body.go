@@ -38,6 +38,9 @@ func (u *BodyInitializationUseCase) Initialize(ctx context.Context, actor Actor,
 		input.Body.RootNodeID == uuid.Nil || len(input.Body.Nodes) == 0 {
 		return ErrInvalidBodyInitialization
 	}
+	if err := documentbody.CheckCollaborativeSize(input.Body); err != nil {
+		return err
+	}
 	if err := documentbody.Validate(input.Body); err != nil {
 		return ErrInvalidBodyInitialization
 	}

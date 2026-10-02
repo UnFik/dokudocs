@@ -106,6 +106,12 @@ type PresenceEntry struct {
 // PresenceStore shares who is connected to a document across server
 // instances. Entries expire unless refreshed, so a crashed instance cleans up
 // after itself.
+// RevisionFlusher brings the rolling auto revision up to the latest body once
+// editing stops, because commits rewrite it only once per debounce interval.
+type RevisionFlusher interface {
+	FlushAutoRevision(ctx context.Context, documentID uuid.UUID) error
+}
+
 type PresenceStore interface {
 	Heartbeat(ctx context.Context, documentID uuid.UUID, entry PresenceEntry) error
 	Leave(ctx context.Context, documentID, connectionID uuid.UUID) error

@@ -6,6 +6,7 @@ import (
 
 	"backend/constant"
 	"backend/internal/application/collaboration"
+	"backend/internal/domain/documentbody"
 	"backend/internal/presentation/response"
 )
 
@@ -26,6 +27,8 @@ func writeDocumentError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, collaboration.ErrInvalidMoveNode):
 		response.Error(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, documentbody.ErrTooLarge):
+		response.Error(w, http.StatusRequestEntityTooLarge, err.Error())
 	case errors.Is(err, collaboration.ErrInvalidBodyInitialization):
 		response.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, constant.ErrInvalidIdempotencyKey):
