@@ -23,6 +23,8 @@ export type TrackOptions = {
   newID?: () => string
   /** Where the caret goes after a deletion: before the deleted text (Backspace) or after it (Delete). Typing always ends after the typed text. */
   caret?: 'start' | 'end'
+  /** False after the caret moves or a remote edit; adjacent older marks start a new card. */
+  continueAdjacent?: boolean
 }
 
 /** A change Suggest mode cannot record as a suggestion. */
@@ -142,7 +144,9 @@ export function suggestReplace(
   let id: string | null = null
   const suggestionID = () =>
     (id ??=
-      ownIDNextTo(chunks, from, to, options.author) ??
+      (options.continueAdjacent === false
+        ? null
+        : ownIDNextTo(chunks, from, to, options.author)) ??
       (options.newID ?? (() => crypto.randomUUID()))())
 
   // Work from the right, so earlier positions stay valid.

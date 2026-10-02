@@ -178,4 +178,20 @@ describe('edits the browser makes itself', () => {
       UnsupportedSuggestionError
     )
   })
+
+  it('refuses format mark steps until Format suggestions exist', () => {
+    const start = state()
+    const from = positionIn(start.doc, 'Hello', 0)
+    const strong = documentBodySchema.marks.strong!.create()
+    const add = start.tr.addMark(from, from + 5, strong)
+    expect(() => trackTransaction(start, add, options)).toThrow(
+      UnsupportedSuggestionError
+    )
+
+    const bold = start.apply(add)
+    const remove = bold.tr.removeMark(from, from + 5, strong)
+    expect(() => trackTransaction(bold, remove, options)).toThrow(
+      UnsupportedSuggestionError
+    )
+  })
 })

@@ -123,6 +123,7 @@ export function createDocumentBodyEditor(
   const fragment = ydoc.getXmlFragment('body')
   let readOnly = options.readOnly ?? false
   let suggestMode = false
+  let continueSuggestion = false
   let structuralCommandPending = false
   let remoteCursors: RemoteCursor[] = []
   const remoteCursorPlugin = new Plugin({
@@ -200,6 +201,7 @@ export function createDocumentBodyEditor(
   // A shortcut swallowed while read-only must not fall through to the browser's
   // own contenteditable history, which would bypass the Yjs undo manager.
   const runHistory = (action: (state: EditorState) => boolean) => {
+    continueSuggestion = false
     if (canEdit()) action(state)
     return true
   }
@@ -416,17 +418,23 @@ export function createDocumentBodyEditor(
       throw new UnsupportedSuggestionError('You cannot suggest changes here.')
     return options.suggestAuthor
   }
+  const suggestionOptions = () => ({
+    author: suggestAuthor(),
+    continueAdjacent: continueSuggestion,
+  })
 
   // Applies the edit a function builds as a suggestion. What it cannot record
   // is refused with a message; nothing changes.
   const suggest = (build: () => Transaction) => {
     try {
       const transaction = build()
-      if (transaction.docChanged)
+      if (transaction.docChanged) {
+        const before = state.doc
         viewHolder.current?.dispatch(
           transaction.setMeta(trackedMeta, true).scrollIntoView()
         )
-      else if (transaction.selectionSet)
+        continueSuggestion = state.doc !== before
+      } else if (transaction.selectionSet)
         viewHolder.current?.dispatch(transaction)
     } catch (error) {
       if (!(error instanceof UnsupportedSuggestionError)) throw error
@@ -446,18 +454,21 @@ export function createDocumentBodyEditor(
 
   const dispatchTransaction = (transaction: Transaction) => {
     const remote = transaction.getMeta(ySyncPluginKey)?.isChangeOrigin === true
+    const tracked = transaction.getMeta(trackedMeta) === true
+    if (
+      remote ||
+      (transaction.selectionSet && !transaction.docChanged && !tracked)
+    )
+      continueSuggestion = false
     let prepared = transaction
 
     try {
       if (structuralCommandPending && transaction.docChanged && !remote) return
       if (readOnly && transaction.docChanged && !remote) return
-      const tracked = transaction.getMeta(trackedMeta) === true
       if (suggestMode && transaction.docChanged && !remote && !tracked) {
         // An edit the browser made itself (an input method, a drop): recorded
         // as a suggestion if it is plain text, refused otherwise.
-        suggest(() =>
-          trackTransaction(state, transaction, { author: suggestAuthor() })
-        )
+        suggest(() => trackTransaction(state, transaction, suggestionOptions()))
         viewHolder.current?.updateState(state)
         return
       }
@@ -525,9 +536,7 @@ export function createDocumentBodyEditor(
     editable: () => !readOnly && !structuralCommandPending,
     handleTextInput: (_view, from, to, text) => {
       if (!suggestMode) return false
-      suggest(() =>
-        suggestReplace(state, from, to, text, { author: suggestAuthor() })
-      )
+      suggest(() => suggestReplace(state, from, to, text, suggestionOptions()))
       return true
     },
     handlePaste: (_view, event) => {
@@ -540,9 +549,7 @@ export function createDocumentBodyEditor(
         return true
       }
       const { from, to } = state.selection
-      suggest(() =>
-        suggestReplace(state, from, to, text, { author: suggestAuthor() })
-      )
+      suggest(() => suggestReplace(state, from, to, text, suggestionOptions()))
       return true
     },
     handleDOMEvents: {
@@ -590,7 +597,7 @@ export function createDocumentBodyEditor(
               forward: event.key === 'Delete',
               word: event.ctrlKey || event.altKey,
             },
-            { author: suggestAuthor() }
+            suggestionOptions()
           )
         )
         event.preventDefault()
@@ -752,6 +759,7 @@ export function createDocumentBodyEditor(
       view.dispatch(view.state.tr.setMeta(remoteCursorPlugin, 'refresh'))
     },
     setSuggestMode: (next: boolean) => {
+      if (suggestMode !== next) continueSuggestion = false
       suggestMode = next
     },
     getSuggestionCards: () => suggestionCards(state.doc),
@@ -761,6 +769,7 @@ export function createDocumentBodyEditor(
      * IDs are returned.
      */
     decide: (id: string, decision: 'accept' | 'reject') => {
+      continueSuggestion = false
       try {
         const { transaction, structuralDeletes } = decideSuggestion(
           state,

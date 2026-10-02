@@ -75,6 +75,41 @@ describe('Suggest mode, typing', () => {
     }
   })
 
+  it('starts a new card after the caret moves away and returns', async () => {
+    const editor = suggestEditor('hello')
+    try {
+      editor.caret('hello', 5)
+      await userEvent.keyboard('A')
+      editor.caret('helloA', 0)
+      editor.caret('helloA', 6)
+      await userEvent.keyboard('B')
+
+      expect(editor.titles()).toEqual(['Add: "A"', 'Add: "B"'])
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('starts a new card after another user changes the body', async () => {
+    const editor = suggestEditor('hello')
+    try {
+      editor.caret('hello', 5)
+      await userEvent.keyboard('A')
+      const { view } = editor.editor
+      view.dispatch(
+        view.state.tr
+          .insertText('X', runStart(view.state.doc, 'helloA'))
+          .setMeta('y-sync$', { isChangeOrigin: true })
+      )
+      editor.caret('XhelloA', 7)
+      await userEvent.keyboard('B')
+
+      expect(editor.titles()).toEqual(['Add: "A"', 'Add: "B"'])
+    } finally {
+      editor.cleanup()
+    }
+  })
+
   it('records Backspace as a deletion that stays visible', async () => {
     const editor = suggestEditor('hello')
     try {
