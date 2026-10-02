@@ -6,6 +6,7 @@ import {
   prepareBodyTransaction,
 } from '../prepareBodyTransaction'
 import { blockHandlePlugin } from './blockHandle'
+import { moveTopLevelBlock } from './moveBlock'
 import { bodyBuilder, stateFor } from './testSupport'
 
 const views: EditorView[] = []
@@ -101,5 +102,59 @@ describe('block handle', () => {
       })
     )
     expect(errors).toHaveLength(0)
+  })
+  it('shows the handle for the caret block without any mouse movement', () => {
+    const { view, host } = mount()
+    const handle = host.querySelector<HTMLElement>('.dd-handle')!
+    expect(handle.hidden).toBe(true)
+    view.focus()
+    view.dispatch(view.state.tr.setMeta('refresh', true))
+    expect(handle.hidden).toBe(false)
+  })
+
+  it('follows the block it moved, so the next arrow press moves the same block', () => {
+    const { view, host } = mount()
+    hover(view, 0)
+    const handle = host.querySelector<HTMLElement>('.dd-handle')!
+    const box = host.getBoundingClientRect()
+    // The server applies the MoveNode and the editor receives the new document.
+    const move = moveTopLevelBlock(view.state, 0, 2)!
+    view.updateState(view.state.apply(move))
+    const moved = view.dom.querySelectorAll('p')[1]!.getBoundingClientRect()
+    expect(parseFloat(handle.style.top)).toBeCloseTo(moved.top - box.top, 0)
+  })
+
+  it('returns focus to the editor on Escape', () => {
+    const { view, host } = mount()
+    hover(view, 1)
+    const handle = host.querySelector<HTMLElement>('.dd-handle')!
+    handle.focus()
+    handle.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      })
+    )
+    expect(view.hasFocus()).toBe(true)
+  })
+  it('keeps keyboard focus on the handle when the editor rebuilds its plugin views', async () => {
+    const { view, host } = mount()
+    hover(view, 0)
+    const handle = host.querySelector<HTMLElement>('.dd-handle')!
+    handle.focus()
+    handle.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+        cancelable: true,
+      })
+    )
+    // A structural command can swap the plugin set; the old handle is removed.
+    view.updateState(view.state.reconfigure({ plugins: [blockHandlePlugin()] }))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const active = document.activeElement as HTMLElement
+    expect(active.classList.contains('dd-handle')).toBe(true)
+    expect(active.hidden).toBe(false)
   })
 })
