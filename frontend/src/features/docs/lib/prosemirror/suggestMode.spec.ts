@@ -1,5 +1,6 @@
 import { AllSelection, TextSelection } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
+import { userEvent } from 'vitest/browser'
 import { yUndoPluginKey } from 'y-prosemirror'
 import * as Y from 'yjs'
 import { draftSuggestion, type TypingDraft } from '../suggestion-draft'
@@ -326,6 +327,21 @@ describe('suggest mode', () => {
         view.state.tr.setSelection(new AllSelection(view.state.doc))
       )
       pressKey(view.dom, 'Delete')
+      expect(editor.refused).toEqual([])
+      expect(editor.operations[0]?.operations).toEqual([
+        { op: 'delete', nodeID: 'p0' },
+        { op: 'delete', nodeID: 'p1' },
+      ])
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('suggests deleting every block for a real Ctrl+A then Delete', async () => {
+    const editor = suggestEditor('first', 'second')
+    try {
+      editor.editor.view.focus()
+      await userEvent.keyboard('{Control>}a{/Control}{Delete}')
       expect(editor.refused).toEqual([])
       expect(editor.operations[0]?.operations).toEqual([
         { op: 'delete', nodeID: 'p0' },
