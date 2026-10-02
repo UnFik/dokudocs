@@ -151,7 +151,7 @@ async function deleteBlock(
 
 async function openEditor(page: Page, documentID: string, workspaceID: string) {
   await page.goto(`/docs/${documentID}?workspaceId=${workspaceID}`);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("tab", { name: "Edit", exact: true }).click();
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status").first()).toContainText("Synced");
@@ -324,7 +324,7 @@ test.fixme("@live: an unsent offline edit survives a browser restart while the s
   const second = await launch();
   const reopened = await second.newPage();
   await reopened.goto(`/docs/${doc.documentID}?workspaceId=${doc.workspaceID}`);
-  await reopened.getByRole("button", { name: "Edit", exact: true }).click();
+  await reopened.getByRole("tab", { name: "Edit", exact: true }).click();
   const editable = reopened.locator('.ProseMirror[contenteditable="true"]');
   await expect(editable).toContainText("RESTART first", { timeout: 30000 });
   await expect(reopened.getByRole("status").first()).toContainText("Synced", {

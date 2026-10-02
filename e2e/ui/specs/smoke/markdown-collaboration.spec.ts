@@ -151,7 +151,7 @@ test("@live @smoke: Markdown edits and structural commands sync every client", a
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
 
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("tab", { name: "Edit", exact: true }).click();
   await expect(editor).toHaveAttribute("contenteditable", "true");
 
   const storageState = await page.context().storageState();

@@ -129,6 +129,7 @@ test("@live: commenter suggests deleting a block, sees it marked, owner accepts"
     await commenter.goto(`/docs/${documentID}`);
     const editor = commenter.locator(".ProseMirror");
     await expect(editor).toContainText("Remove this block");
+    await commenter.getByRole("tab", { name: "Suggest", exact: true }).click();
     await commenter.locator(`#node-${secondRunID}`).evaluate((run) => {
       const range = document.createRange();
       range.setStart(run.firstChild!, 3);
@@ -182,6 +183,7 @@ test("@live: a stale batch is shown as not applied with its reason, on a phone-w
     await expect(commenter.locator(".ProseMirror")).toContainText(
       "Remove this block",
     );
+    await commenter.getByRole("tab", { name: "Suggest", exact: true }).click();
     for (const expected of [1, 2]) {
       await commenter.locator(`#node-${secondRunID}`).evaluate((run) => {
         const range = document.createRange();
