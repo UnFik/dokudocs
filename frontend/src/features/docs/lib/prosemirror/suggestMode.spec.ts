@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { yUndoPluginKey } from 'y-prosemirror'
 import * as Y from 'yjs'
 import { draftSuggestion, type TypingDraft } from '../suggestion-draft'
+import type { SuggestionDraft } from '../suggestion-operations'
 import {
   mountTestEditor,
   paragraphsBody,
@@ -12,6 +13,7 @@ import {
 
 function suggestEditor(...texts: string[]) {
   const flushed: TypingDraft[] = []
+  const operations: SuggestionDraft[] = []
   const refused: string[] = []
   const deletes: string[] = []
   const mounted = mountTestEditor(paragraphsBody(...texts), {
@@ -19,6 +21,9 @@ function suggestEditor(...texts: string[]) {
       flushed.push(draft)
     },
     onSuggestRefused: (message) => refused.push(message),
+    onSuggestOperations: (draft) => {
+      operations.push(draft)
+    },
     onDeleteNode: (nodeIDs) => {
       deletes.push(...nodeIDs)
     },
@@ -29,6 +34,7 @@ function suggestEditor(...texts: string[]) {
   return {
     ...mounted,
     flushed,
+    operations,
     refused,
     deletes,
     caret(text: string, offset: number) {
@@ -247,6 +253,71 @@ describe('suggest mode', () => {
     }
   })
 
+  it('turns a delete across blocks into one suggestion that deletes covered blocks and trims the ragged ends', () => {
+    const editor = suggestEditor('first', 'middle', 'last')
+    try {
+      const { view } = editor.editor
+      const from = runStart(view.state.doc, 'first') + 2
+      const to = runStart(view.state.doc, 'last') + 2
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, from, to)
+        )
+      )
+      pressKey(view.dom, 'Backspace')
+      expect(editor.refused).toEqual([])
+      expect(editor.deletes).toEqual([])
+      expect(editor.operations).toHaveLength(1)
+      expect(editor.operations[0]).toEqual({
+        operations: [
+          {
+            op: 'replace_text',
+            nodeID: 'r0',
+            content: 'fi',
+            baseContent: 'first',
+          },
+          { op: 'delete', nodeID: 'p1' },
+          {
+            op: 'replace_text',
+            nodeID: 'r2',
+            content: 'st',
+            baseContent: 'last',
+          },
+        ],
+        summary: 'Delete 1 block and selected text',
+      })
+      expect(editor.editor.getBody()).toHaveLength(7)
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('turns select-all and Delete into a suggestion to delete every block', () => {
+    const editor = suggestEditor('first', 'second')
+    try {
+      const { view } = editor.editor
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(
+            view.state.doc,
+            1,
+            view.state.doc.content.size - 1
+          )
+        )
+      )
+      pressKey(view.dom, 'Delete')
+      expect(editor.refused).toEqual([])
+      expect(editor.operations[0]?.operations).toEqual([
+        { op: 'delete', nodeID: 'p0' },
+        { op: 'delete', nodeID: 'p1' },
+      ])
+      expect(editor.operations[0]?.summary).toBe('Delete 2 blocks')
+      expect(editor.editor.getBody()).toHaveLength(5)
+    } finally {
+      editor.cleanup()
+    }
+  })
+
   it('refuses a block split from Enter without changing the body', () => {
     const editor = suggestEditor('hello')
     try {
@@ -259,7 +330,7 @@ describe('suggest mode', () => {
     }
   })
 
-  it('refuses a selection that spans two blocks', () => {
+  it('refuses typing over a selection that spans two blocks', () => {
     const editor = suggestEditor('first', 'second')
     try {
       const { view } = editor.editor

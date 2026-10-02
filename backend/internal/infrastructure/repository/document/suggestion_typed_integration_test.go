@@ -138,3 +138,27 @@ func TestProposerWithdrawsOnlyTheirOwnSuggestion(t *testing.T) {
 		t.Fatalf("own suggestion = %s, want rejected", status)
 	}
 }
+
+func TestSuggestionDeletingEveryBlockLeavesAnEmptyDocument(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("pgx", integrationDatabaseURL(t))
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer db.Close()
+	workspaceID, documentID, ownerID, paragraphID, _, repo := seedRunDocument(t, ctx, db)
+	suggestion := typedSuggestion(documentID, ownerID, `[{"op":"delete","nodeID":"`+paragraphID.String()+`"}]`)
+	if err := repo.CreateSuggestion(ctx, workspaceID, suggestion); err != nil {
+		t.Fatalf("CreateSuggestion(): %v", err)
+	}
+	if err := repo.AcceptSuggestion(ctx, workspaceID, documentID, suggestion.SuggestionID, ownerID); err != nil {
+		t.Fatalf("AcceptSuggestion(): %v", err)
+	}
+	var nodes int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM document_nodes WHERE document_id = $1`, documentID).Scan(&nodes); err != nil {
+		t.Fatalf("count nodes: %v", err)
+	}
+	if nodes != 1 {
+		t.Fatalf("nodes after deleting every block = %d, want only the root", nodes)
+	}
+}
