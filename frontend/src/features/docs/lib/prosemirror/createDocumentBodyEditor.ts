@@ -1,4 +1,3 @@
-import 'prosemirror-view/style/prosemirror.css'
 import { inputRules } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
 import {
@@ -13,6 +12,7 @@ import {
   EditorView,
   type EditorProps,
 } from 'prosemirror-view'
+import 'prosemirror-view/style/prosemirror.css'
 import {
   absolutePositionToRelativePosition,
   redo as redoYjs,
@@ -27,6 +27,11 @@ import {
 import * as Y from 'yjs'
 import type { RemoteCursor } from '../collaboration-socket'
 import type { DocumentBodyNode } from '../documentBody'
+import {
+  translateTextEdit,
+  typingRefusal,
+  type TextEditTranslation,
+} from '../suggestion-operations'
 import {
   headingInputRule,
   insertBlockCommand,
@@ -93,12 +98,15 @@ export function createDocumentBodyEditor(
     onHistoryChange?: (history: EditorHistoryState) => void
     onInlineStateChange?: (state: InlineState) => void
     onLinkRequest?: () => void
+    /** Suggest mode: a local edit is reported here instead of being applied. */
+    onSuggestTransaction?: (result: TextEditTranslation) => void
     /** Fires when the local selection moves; null when the editor loses focus. */
     onSelectionChange?: (selection: DocumentBodySelection | null) => void
   } = {}
 ) {
   const fragment = ydoc.getXmlFragment('body')
   let readOnly = options.readOnly ?? false
+  let suggestMode = false
   let structuralCommandPending = false
   let remoteCursors: RemoteCursor[] = []
   const remoteCursorPlugin = new Plugin({
@@ -155,7 +163,7 @@ export function createDocumentBodyEditor(
   // A shortcut swallowed while read-only must not fall through to the browser's
   // own contenteditable history, which would bypass the Yjs undo manager.
   const runHistory = (action: (state: EditorState) => boolean) => {
-    if (canEdit()) action(state)
+    if (canEdit() && !suggestMode) action(state)
     return true
   }
   const runInline = (command: Command) => {
@@ -285,6 +293,20 @@ export function createDocumentBodyEditor(
     try {
       if (structuralCommandPending && transaction.docChanged && !remote) return
       if (readOnly && transaction.docChanged && !remote) return
+      if (suggestMode && transaction.docChanged && !remote) {
+        let translation: TextEditTranslation
+        try {
+          translation = translateTextEdit(
+            prosemirrorToDocumentBody(state.doc),
+            prosemirrorToDocumentBody(transaction.doc)
+          )
+        } catch {
+          translation = { ok: false, message: typingRefusal }
+        }
+        options.onSuggestTransaction?.(translation)
+        viewHolder.current?.updateState(state)
+        return
+      }
       if (transaction.docChanged && !remote) {
         if (wouldRemoveInlineRun(state.doc, transaction.doc)) {
           viewHolder.current?.updateState(state)
@@ -354,6 +376,9 @@ export function createDocumentBodyEditor(
       // Keys pressed during IME composition belong to the input method.
       if (readOnly || structuralCommandPending || event.isComposing)
         return false
+      // Block deletion and moves are queued commands on the canonical body;
+      // in suggest mode they must go through the suggestions panel instead.
+      if (suggestMode) return false
       if (
         !event.altKey &&
         !event.ctrlKey &&
@@ -472,8 +497,8 @@ export function createDocumentBodyEditor(
     insertBlock: (kind: InsertableBlock) =>
       canEdit() && insertBlockCommand(kind)(state, view.dispatch),
     focus: () => view.focus(),
-    undo: () => canEdit() && undoYjs(state),
-    redo: () => canEdit() && redoYjs(state),
+    undo: () => canEdit() && !suggestMode && undoYjs(state),
+    redo: () => canEdit() && !suggestMode && redoYjs(state),
     resolveSelection: (selection: DocumentBodySelection) => {
       const anchor = resolveRelative(state, selection.anchor)
       const head = resolveRelative(state, selection.head)
@@ -482,6 +507,9 @@ export function createDocumentBodyEditor(
     setRemoteCursors: (cursors: RemoteCursor[]) => {
       remoteCursors = cursors
       view.dispatch(view.state.tr.setMeta(remoteCursorPlugin, 'refresh'))
+    },
+    setSuggestMode: (next: boolean) => {
+      suggestMode = next
     },
     setReadOnly: (next: boolean) => {
       readOnly = next
