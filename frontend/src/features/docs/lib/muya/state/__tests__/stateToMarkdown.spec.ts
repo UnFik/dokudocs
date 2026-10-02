@@ -167,7 +167,7 @@ describe('serializeTable — column alignment', () => {
 
     // The parsed aligns survive serialization with the expected markers.
     const delimiterRow = firstPass.split('\n')[1]
-    expect(delimiterRow).toBe('|:--- |:---:| ---:|')
+    expect(delimiterRow).toBe('| :--- | :---: | ---: |')
     expect(delimiterRow).toContain(':---')
     expect(delimiterRow).toContain(':---:')
     expect(delimiterRow).toContain('---:')

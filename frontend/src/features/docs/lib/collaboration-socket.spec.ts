@@ -67,7 +67,7 @@ describe('CollaborationSocket', () => {
       type: 'auth',
       token: 'secret-token',
       workspaceID: 'workspace-1',
-      capabilities: ['presence'],
+      capabilities: ['presence', 'cursor'],
     })
     expect(socketURL).not.toContain('secret-token')
 
@@ -160,6 +160,104 @@ describe('CollaborationSocket', () => {
 
     socket.receive({ type: 'presence', users: [{ name: 'no id' }] })
     expect(socket.readyState).toBe(3)
+  })
+
+  it('decodes remote cursor frames, drops unknown fields, and rejects malformed ones', () => {
+    const socket = new FakeSocket()
+    const frames: unknown[] = []
+    new CollaborationSocket({
+      documentID: 'doc-1',
+      workspaceID: 'workspace-1',
+      token: 'secret-token',
+      baseURL: 'http://localhost:5173',
+      socketFactory: () => socket,
+      onFrame: (frame) => frames.push(frame),
+    })
+    socket.open()
+
+    socket.receive({
+      type: 'cursor',
+      cursor: {
+        connectionID: 'conn-1',
+        userID: 'user-1',
+        name: 'Ada',
+        color: '#0369A1',
+        anchor: 'AQI=',
+        head: 'AwQ=',
+        email: 'ada@example.test',
+      },
+    })
+    expect(frames.at(-1)).toEqual(
+      expect.objectContaining({
+        type: 'cursor',
+        cursor: {
+          connectionID: 'conn-1',
+          userID: 'user-1',
+          name: 'Ada',
+          color: '#0369A1',
+          anchor: new Uint8Array([1, 2]),
+          head: new Uint8Array([3, 4]),
+        },
+      })
+    )
+
+    socket.receive({
+      type: 'cursor_leave',
+      cursor: { connectionID: 'conn-1', userID: 'user-1' },
+    })
+    expect(frames.at(-1)).toEqual(
+      expect.objectContaining({
+        type: 'cursor_leave',
+        cursor: { connectionID: 'conn-1', userID: 'user-1' },
+      })
+    )
+    expect(socket.readyState).toBe(1)
+
+    socket.receive({ type: 'cursor', cursor: { userID: 'user-1' } })
+    expect(socket.readyState).toBe(3)
+  })
+
+  it('sends the local selection as base64 positions and clears it with null', () => {
+    const socket = new FakeSocket()
+    const client = new CollaborationSocket({
+      documentID: 'doc-1',
+      workspaceID: 'workspace-1',
+      token: 'secret-token',
+      baseURL: 'http://localhost:5173',
+      socketFactory: () => socket,
+      onFrame: () => {},
+    })
+    socket.open()
+    expect(
+      client.sendCursor({
+        anchor: new Uint8Array([1]),
+        head: new Uint8Array([2]),
+      })
+    ).toBe(false)
+
+    socket.receive({
+      type: 'ready',
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      canEdit: true,
+      state: 'YQ==',
+    })
+    const sentBefore = socket.sent.length
+    expect(
+      client.sendCursor({
+        anchor: new Uint8Array([1, 2]),
+        head: new Uint8Array([3, 4]),
+      })
+    ).toBe(true)
+    expect(JSON.parse(socket.sent[sentBefore]!)).toEqual({
+      type: 'cursor',
+      cursor: { anchor: 'AQI=', head: 'AwQ=' },
+    })
+    expect(client.sendCursor(null)).toBe(true)
+    expect(JSON.parse(socket.sent[sentBefore + 1]!)).toEqual({
+      type: 'cursor',
+    })
   })
 
   it('ignores frame types it does not know instead of dropping the connection', () => {
