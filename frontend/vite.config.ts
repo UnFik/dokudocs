@@ -101,6 +101,8 @@ export default defineConfig(({ mode }) => {
         'react-top-loading-bar',
         'monaco-editor',
         'monaco-editor/editor/editor.worker',
+        'prismjs',
+        'prismjs/plugins/keep-markup/prism-keep-markup',
         'prosemirror-model',
         'prosemirror-state',
         'prosemirror-view',

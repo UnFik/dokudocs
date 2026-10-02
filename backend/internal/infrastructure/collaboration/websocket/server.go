@@ -115,6 +115,7 @@ type peer struct {
 	connectionID  uuid.UUID
 	profile       PresenceUser
 	wantsPresence bool
+	wantsCursor   bool
 	present       bool
 	presenceKey   string
 }
@@ -135,6 +136,8 @@ type clientMessage struct {
 	Update            []byte    `json:"update,omitempty"`
 	// Capabilities lists optional server frames the client understands.
 	Capabilities []string `json:"capabilities,omitempty"`
+	// Cursor is the sender's selection; nil with type "cursor" clears it.
+	Cursor *CursorSelection `json:"cursor,omitempty"`
 }
 
 type serverMessage struct {
@@ -149,6 +152,7 @@ type serverMessage struct {
 	State             []byte         `json:"state,omitempty"`
 	Update            []byte         `json:"update,omitempty"`
 	Users             []PresenceUser `json:"users,omitempty"`
+	Cursor            *RemoteCursor  `json:"cursor,omitempty"`
 }
 
 // WithPresenceStore shares presence across server instances. Without it,
@@ -274,6 +278,7 @@ func (s *Server) servePeer(ctx context.Context, conn *ws.Conn, documentID uuid.U
 		pong:        make(chan uuid.UUID, 1),
 		bodyVersion: snapshot.BodyVersion, bodyEpoch: snapshot.BodyEpoch, canEdit: snapshot.CanEdit,
 		connectionID: uuid.New(), profile: PresenceUser{UserID: userID}, wantsPresence: hasCapability(auth.Capabilities, "presence"),
+		wantsCursor: hasCapability(auth.Capabilities, "cursor"),
 	}
 	if s.profiles != nil {
 		if profile, err := s.profiles.PresenceProfile(ctx, userID); err == nil {
@@ -330,6 +335,16 @@ func (p *peer) readLoop(ctx context.Context) {
 				default:
 				}
 			}
+			continue
+		}
+		if message.Type == "cursor" {
+			if message.Cursor != nil && !validCursor(message.Cursor) {
+				if p.sendAndWait(serverMessage{Type: "error", Code: "invalid_message"}) != nil {
+					return
+				}
+				continue
+			}
+			p.server.relayCursor(p, message.Cursor)
 			continue
 		}
 		if message.Type != "update" || message.UpdateID == uuid.Nil || len(message.Update) == 0 {
@@ -735,6 +750,7 @@ func (s *Server) removePeer(p *peer) {
 		}
 	}
 	s.mu.Unlock()
+	s.relayCursor(p, nil)
 	if roomEmptied {
 		s.flushRevision(p.documentID)
 	}
