@@ -43,7 +43,7 @@ import {
   type TextLayerEntry,
   type TypingDraft,
 } from '../suggestion-draft'
-import { typingRefusal } from '../suggestion-operations'
+import { typingRefusal, type SuggestionDraft } from '../suggestion-operations'
 import {
   headingInputRule,
   insertBlockCommand,
@@ -69,6 +69,7 @@ import {
 } from './prepareBodyTransaction'
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
 import {
+  deleteSelectionSuggestion,
   findRun,
   runCaretAt,
   suggestionDecorations,
@@ -126,6 +127,8 @@ export function createDocumentBodyEditor(
      * the editor's layer.
      */
     onSuggestFlush?: (draft: TypingDraft) => void | Promise<void>
+    /** Suggest mode: a deletion across blocks, saved as one suggestion. */
+    onSuggestOperations?: (draft: SuggestionDraft) => void | Promise<void>
     /** Pause before a typed suggestion is saved; 0 waits for the caret to move. */
     suggestIdleMs?: number
     /** Fires when the local selection moves; null when the editor loses focus. */
@@ -395,6 +398,12 @@ export function createDocumentBodyEditor(
     }
     if (plan.roots.length) queueDeleteNode(plan.roots)
     return true
+  }
+
+  const sameBlock = (from: number, to: number) => {
+    const start = runCaretAt(state.doc, from)
+    const end = runCaretAt(state.doc, to)
+    return start !== null && end !== null && start.blockID === end.blockID
   }
 
   const visibleEntries = (): LayerEntry[] => {
@@ -709,6 +718,17 @@ export function createDocumentBodyEditor(
       if (suggestMode) {
         if (event.key !== 'Backspace' && event.key !== 'Delete') return false
         const { from, to } = state.selection
+        if (from !== to && !sameBlock(from, to)) {
+          const deletion = deleteSelectionSuggestion(state.doc, from, to)
+          flushDraft()
+          if (deletion.ok) {
+            void Promise.resolve(
+              options.onSuggestOperations?.(deletion.draft)
+            ).catch(() => {})
+          } else options.onSuggestRefused?.(deletion.message)
+          event.preventDefault()
+          return true
+        }
         typeSuggestion(from, to, (current) =>
           from !== to
             ? current
