@@ -93,8 +93,17 @@ A validated change that becomes part of the canonical DocumentBody.
 _Avoid_: Received update when referring to a durable change
 
 **Suggestion**:
-A proposed text, formatting, or structural change to a DocumentBody. One `suggestion_id` is one atomic change set; a User with comment access may propose it, and only an editor or owner may accept or reject the whole set. Until accepted, it is not part of the canonical body or chatbot evidence.
+A proposed change to a DocumentBody that lives in the body itself, marked with its author, until an editor accepts or rejects it. It is not part of the canonical body, so search, chatbot evidence, revisions, and public links never include it. Everyone who can read the document sees every Suggestion; a User with comment access may make one, and only an editor or owner may accept or reject it. The author may withdraw their own.
 _Avoid_: Accepted Edit when referring to a pending proposal
+
+**Suggestion card**:
+How a Suggestion is shown in the review rail, with a title worked out from what it contains: Add (only inserted text), Delete (only deleted text), Replace (deleted and inserted text that touch), plus Format, Split paragraph, Join paragraphs, Insert block, and Delete block.
+
+**Suggestion thread**:
+The replies on one Suggestion, which can be resolved without deciding the Suggestion itself.
+
+**Review rail**:
+The right-hand column that lists Suggestion cards and comments in document order, with accept, reject, and resolve actions, and the preview of the body as if everything were accepted or rejected.
 
 **KnowledgeSource**:
 An active Markdown document, including a draft, that a User is allowed to read and that may support a chatbot answer within its workspace. Access is checked for each question; a `public_link` document without an internal grant requires a valid token proven in the current chat session. Its title and project name aid discovery; its body supplies evidence for an answer.
