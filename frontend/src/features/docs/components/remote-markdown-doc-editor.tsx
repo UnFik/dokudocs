@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
 import { toast } from 'sonner'
@@ -8,6 +8,7 @@ import { ApiError } from '@/lib/api-client'
 import {
   acceptDocumentSuggestion,
   createDocumentSuggestion,
+  type DocumentSuggestion,
   createNamedDocumentRevision,
   getMarkdownBody,
   listDocumentSuggestions,
@@ -53,6 +54,11 @@ import {
 } from '../lib/prosemirror/inlineMarks'
 import { shouldSelectDocumentBody } from '../lib/select-all-scope'
 import {
+  draftSuggestion,
+  textLayerEntries,
+  type TypingDraft,
+} from '../lib/suggestion-draft'
+import {
   buildDeleteBlockSuggestion,
   buildFormatSuggestion,
   buildInsertParagraphSuggestion,
@@ -61,7 +67,6 @@ import {
   overlayCss,
   pendingOverlay,
   type FormatMark,
-  type TextEditTranslation,
   type SuggestionDraft,
 } from '../lib/suggestion-operations'
 import { ConflictReviewPanel } from './conflict-review-panel'
@@ -385,42 +390,45 @@ function CollaborativeMarkdownBody({
     lastEffectiveRef.current = effective
   }
 
-  function submitTypedSuggestion(result: TextEditTranslation) {
-    if (!result.ok) {
-      toast.error(result.message)
-      return
-    }
-    const operation = result.draft.operations[0]
-    const original = sessionRef.current?.editor
-      .getBody()
-      .find((node) => node.nodeID === operation?.nodeID)?.content
-    void (async () => {
+  // Saves run one at a time so a continued suggestion is stored before the
+  // next save withdraws it.
+  const flushQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+  function saveTypedSuggestion(draft: TypingDraft) {
+    const save = async () => {
+      const suggestion = draftSuggestion(draft)
       try {
-        const latest = await getMarkdownBody(workspaceID, documentID)
-        const current = latest.nodes.find(
-          (node) => node.nodeID === operation?.nodeID
+        if (suggestion) {
+          const latest = await getMarkdownBody(workspaceID, documentID)
+          if (!latest.canSuggest)
+            throw new Error('You can no longer suggest changes here')
+          await createDocumentSuggestion(workspaceID, documentID, {
+            suggestionID: draft.suggestionID,
+            baseBodyVersion: latest.bodyVersion,
+            baseBodyEpoch: latest.bodyEpoch,
+            operationSchemaVersion: 1,
+            provenance: 'human',
+            operations: suggestion.operations,
+            summary: suggestion.summary,
+          })
+        }
+        for (const replaced of draft.replaces)
+          await rejectDocumentSuggestion(workspaceID, documentID, replaced)
+      } catch (cause) {
+        toast.error(
+          cause instanceof Error
+            ? `Suggestion not saved: ${cause.message}`
+            : 'Suggestion not saved'
         )
-        if (!latest.canSuggest || current?.content !== original)
-          throw new Error('The text changed while you were typing; try again')
-        await createDocumentSuggestion(workspaceID, documentID, {
-          suggestionID: crypto.randomUUID(),
-          baseBodyVersion: latest.bodyVersion,
-          baseBodyEpoch: latest.bodyEpoch,
-          operationSchemaVersion: 1,
-          provenance: 'human',
-          operations: result.draft.operations,
-          summary: result.draft.summary,
-        })
+        throw cause
+      } finally {
         await queryClient.invalidateQueries({
           queryKey: ['document-suggestions', workspaceID, documentID],
         })
-        toast.success('Suggestion submitted', { id: 'typed-suggestion' })
-      } catch (cause) {
-        toast.error(
-          cause instanceof Error ? cause.message : 'Could not submit suggestion'
-        )
       }
-    })()
+    }
+    const saved = flushQueueRef.current.then(save, save)
+    flushQueueRef.current = saved.catch(() => {})
+    return saved
   }
 
   function hideBodyAfterAccessLoss(clearStoredData: boolean) {
@@ -458,7 +466,9 @@ function CollaborativeMarkdownBody({
           canEdit: snapshot.canEdit,
           suggestEnabled: false,
         }) === 'view',
-      onSuggestTransaction: submitTypedSuggestion,
+      onSuggestRefused: (message) =>
+        toast.error(message, { id: 'suggest-refused' }),
+      onSuggestFlush: saveTypedSuggestion,
       onStatus: (next) => {
         statusRef.current = next
         setStatus(next)
@@ -514,6 +524,16 @@ function CollaborativeMarkdownBody({
           return
         }
         sessionRef.current = session
+        session.editor.setSuggestionLayer(
+          textLayerEntries(
+            queryClient.getQueryData<DocumentSuggestion[]>([
+              'document-suggestions',
+              workspaceID,
+              documentID,
+            ]) ?? [],
+            userID
+          )
+        )
         onMarkdownChange(documentBodyToMarkdown(session.editor.getBody()))
         applyEditorMode()
         if (
@@ -592,6 +612,20 @@ function CollaborativeMarkdownBody({
 
   const showSuggestionPanel =
     !offline && status !== 'forbidden' && status !== 'unauthorized'
+  const suggestionsQuery = useQuery({
+    queryKey: ['document-suggestions', workspaceID, documentID],
+    queryFn: ({ signal }) =>
+      listDocumentSuggestions(workspaceID, documentID, signal),
+    enabled: showSuggestionPanel,
+    retry: false,
+  })
+  const layerEntries = useMemo(
+    () => textLayerEntries(suggestionsQuery.data ?? [], userID),
+    [suggestionsQuery.data, userID]
+  )
+  useEffect(() => {
+    sessionRef.current?.editor.setSuggestionLayer(layerEntries)
+  }, [layerEntries])
 
   return (
     <section className='flex min-h-0 flex-1 flex-col'>
@@ -730,6 +764,7 @@ function CollaborativeMarkdownBody({
             onOpenChange={setIsSuggestionsOpen}
             workspaceID={workspaceID}
             documentID={documentID}
+            userID={userID}
             canDecide={canEdit}
             canSuggest={Boolean(snapshot.canSuggest) && status === 'ready'}
             captureBlock={() => {
@@ -776,13 +811,13 @@ function captureSelectedRun(
   if (!run || runAt(range.endContainer) !== run)
     throw new Error('Select text within one formatted run')
   const node = nodes.find((item) => item.nodeID === run.dataset.nodeId)
-  if (!node || node.type !== 'run' || node.content !== run.textContent)
+  if (!node || node.type !== 'run' || node.content !== canonicalText(run))
     throw new Error('Selected text is no longer current')
   const prefix = range.cloneRange()
   prefix.selectNodeContents(run)
   prefix.setEnd(range.startContainer, range.startOffset)
-  const start = prefix.toString().length
-  const selectedText = range.toString()
+  const start = canonicalText(prefix.cloneContents()).length
+  const selectedText = canonicalText(range.cloneContents())
   return {
     nodeID: node.nodeID,
     originalContent: node.content,
@@ -790,6 +825,15 @@ function captureSelectedRun(
     start,
     end: start + selectedText.length,
   }
+}
+
+// Pending inserted text is drawn inside runs but is not part of the body.
+function canonicalText(root: Node): string {
+  let text = ''
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode())
+    if (!node.parentElement?.closest('.suggest-ins')) text += node.textContent
+  return text
 }
 
 function captureSelectedNodeID(mount: HTMLElement): string {
@@ -815,6 +859,7 @@ function SuggestionPanel({
   onOpenChange,
   workspaceID,
   documentID,
+  userID,
   canDecide,
   canSuggest,
   captureSelection,
@@ -824,6 +869,7 @@ function SuggestionPanel({
   onOpenChange: (open: boolean) => void
   workspaceID: string
   documentID: string
+  userID: string
   canDecide: boolean
   canSuggest: boolean
   captureSelection: () => TextSuggestionSelection
@@ -846,7 +892,7 @@ function SuggestionPanel({
       decision,
     }: {
       suggestionID: string
-      decision: 'accept' | 'reject'
+      decision: 'accept' | 'reject' | 'withdraw'
     }) =>
       decision === 'accept'
         ? acceptDocumentSuggestion(workspaceID, documentID, suggestionID)
@@ -1173,6 +1219,24 @@ function SuggestionPanel({
                       </p>
                     ) : null}
                   </div>
+                  {!canDecide &&
+                  suggestion.status === 'pending' &&
+                  suggestion.proposerId === userID ? (
+                    <Button
+                      size='sm'
+                      variant='outline'
+                      className='shrink-0'
+                      disabled={decisionMutation.isPending}
+                      onClick={() =>
+                        decisionMutation.mutate({
+                          suggestionID: suggestion.suggestionId,
+                          decision: 'withdraw',
+                        })
+                      }
+                    >
+                      Withdraw
+                    </Button>
+                  ) : null}
                   {canDecide && suggestion.status === 'pending' ? (
                     <div className='flex shrink-0 gap-1'>
                       <Button
