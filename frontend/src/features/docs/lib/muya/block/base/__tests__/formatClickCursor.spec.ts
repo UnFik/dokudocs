@@ -136,7 +136,8 @@ describe('clickHandler forwards the backward anchor/focus (not normalized start/
       value: target,
       configurable: true,
     })
-    Object.assign(event, { x: 0, y: 0 })
+    Object.defineProperty(event, 'x', { value: 0, configurable: true })
+    Object.defineProperty(event, 'y', { value: 0, configurable: true })
 
     content.clickHandler(event)
 
