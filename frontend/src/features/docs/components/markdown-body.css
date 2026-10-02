@@ -84,11 +84,19 @@
   border-left: 0.25em solid var(--border);
 }
 
+/* The rule stays one pixel; the box around it is tall enough to click, so a
+   separator can be selected and deleted. */
 .markdown-body hr {
-  height: 1px;
-  margin: 1.5rem 0;
+  height: 1.25rem;
+  margin: 0.9rem 0;
   border: 0;
-  background-color: var(--border);
+  background: linear-gradient(var(--border), var(--border)) center / 100% 1px
+    no-repeat;
+}
+
+.markdown-body hr.ProseMirror-selectednode {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
 }
 
 .markdown-body code {
