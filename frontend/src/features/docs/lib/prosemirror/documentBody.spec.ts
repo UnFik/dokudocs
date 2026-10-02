@@ -1795,6 +1795,7 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
       updates: [],
       deleteCommands: [command],
       moveCommands: [],
+      heldEdits: [],
     })
 
     const canonical = { ...snapshot, bodyVersion: 4, bodyEpoch: 5 }
@@ -1804,6 +1805,7 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
       updates: [],
       deleteCommands: [],
       moveCommands: [],
+      heldEdits: [],
     })
     await store.clear(scope)
   })
