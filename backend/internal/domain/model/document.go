@@ -97,6 +97,7 @@ type DocumentSuggestion struct {
 	Operations             json.RawMessage `json:"operations"`
 	Summary                string          `json:"summary"`
 	Reason                 string          `json:"reason"`
+	ConflictReason         string          `json:"conflictReason"`
 	Status                 string          `json:"status"`
 	CreatedAt              time.Time       `json:"createdAt"`
 	DecidedAt              *time.Time      `json:"decidedAt,omitempty"`
