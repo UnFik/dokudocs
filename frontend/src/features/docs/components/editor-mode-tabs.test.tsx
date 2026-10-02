@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
-import { userEvent } from 'vitest/browser'
-import { page } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 import { EditorModeTabs, modeTabStates, resolveMode } from './editor-mode-tabs'
 
 const editor = { canEdit: true, canSuggest: true, online: true, synced: true }
