@@ -443,13 +443,14 @@ function CollaborativeMarkdownBody({
       onStatus: (next) => {
         statusRef.current = next
         setStatus(next)
-        applyEditorMode()
         if (next === 'forbidden') {
           hideBodyAfterAccessLoss(true)
           setError('Read access is no longer available.')
         } else if (next === 'unauthorized') {
           hideBodyAfterAccessLoss(false)
           setError('Sign in again to load this document.')
+        } else {
+          applyEditorMode()
         }
       },
       onPresence,
