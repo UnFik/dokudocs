@@ -37,7 +37,6 @@ func writeDocumentError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, collaboration.ErrBodyNotInitialized),
 		errors.Is(err, collaboration.ErrBodySchemaMismatch),
-		errors.Is(err, collaboration.ErrSuggestionsPending),
 		errors.Is(err, collaboration.ErrStaleBodyEpoch):
 		response.Error(w, http.StatusConflict, err.Error())
 	default:
