@@ -39,7 +39,10 @@ func ValidateCollaborativeChange(before, after Body) error {
 			continue
 		}
 		if previous.Type != node.Type {
-			return invalid("existing node %s changed type", node.NodeID)
+			if !isParagraphHeadingConversion(previous.Type, node.Type) {
+				return invalid("existing node %s changed type", node.NodeID)
+			}
+			changed[node.NodeID] = struct{}{}
 		}
 		if !sameParent(previous.ParentID, node.ParentID) {
 			return invalid("existing node %s changed parent without MoveNode", node.NodeID)
@@ -109,4 +112,13 @@ func ValidateCollaborativeChange(before, after Body) error {
 		}
 	}
 	return nil
+}
+
+// isParagraphHeadingConversion reports whether an existing node may change
+// type in place: a paragraph and an ATX heading both hold only inline
+// children, so the node keeps its ID, parent and children. The heading level
+// is checked by validateBody because a converted node counts as touched.
+func isParagraphHeadingConversion(from, to string) bool {
+	return (from == "paragraph" && to == "atx-heading") ||
+		(from == "atx-heading" && to == "paragraph")
 }
