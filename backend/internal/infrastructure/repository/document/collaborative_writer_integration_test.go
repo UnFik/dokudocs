@@ -618,7 +618,13 @@ func TestDeleteNodeCommitsReceiptAndFencesOldEpoch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read deleted body: %v", err)
 	}
-	if snapshot.BodyEpoch != 2 || snapshot.BodyVersion != 2 || len(snapshot.Body.Nodes) != 2 || snapshot.Body.Nodes[1].NodeID != siblingID {
+	// loadDocumentBody has no ORDER BY, so rows come back in heap order; look the
+	// survivor up by ID instead of by position.
+	survivor := false
+	for _, node := range snapshot.Body.Nodes {
+		survivor = survivor || node.NodeID == siblingID
+	}
+	if snapshot.BodyEpoch != 2 || snapshot.BodyVersion != 2 || len(snapshot.Body.Nodes) != 2 || !survivor {
 		t.Fatalf("deleted body = %+v at epoch/version %d/%d, want root and surviving sibling", snapshot.Body.Nodes, snapshot.BodyEpoch, snapshot.BodyVersion)
 	}
 	var deletedAnchor sql.NullString
