@@ -19,6 +19,7 @@ import {
   type PendingCollaborationUpdate,
 } from './collaboration-store'
 import type { DocumentBodyNode } from './documentBody'
+import { blockEditing } from './prosemirror/blocks'
 import {
   createDocumentBodyEditor,
   type EditorHistoryState,
@@ -146,8 +147,12 @@ export async function mountCollaborativeDocumentBody(
     if (status.current === 'closed' || status.current === 'recovery-required')
       editorReadOnly = true
 
+    const blocks = blockEditing()
     const editor = createDocumentBodyEditor(mount, document, {
       readOnly: editorReadOnly,
+      plugins: blocks.plugins,
+      nodeViews: blocks.nodeViews,
+      onEditorReady: blocks.attach,
       onBodyChange: input.onBodyChange,
       onDeleteNode: (nodeID) => provider!.deleteNode(nodeID),
       onDeleteNodeQueued: input.onDeleteNodeQueued,

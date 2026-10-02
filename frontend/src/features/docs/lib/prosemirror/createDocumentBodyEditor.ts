@@ -6,7 +6,12 @@ import {
   type Command,
   type Transaction,
 } from 'prosemirror-state'
-import { Decoration, DecorationSet, EditorView } from 'prosemirror-view'
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  type EditorProps,
+} from 'prosemirror-view'
 import {
   absolutePositionToRelativePosition,
   redo as redoYjs,
@@ -28,7 +33,7 @@ import {
   splitTextBlock,
   toggleTaskChecked,
   type InsertableBlock,
-} from './blocks'
+} from './blockCommands'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
 import {
   emptyInlineState,
@@ -75,6 +80,9 @@ export function createDocumentBodyEditor(
   ydoc: Y.Doc,
   options: {
     readOnly?: boolean
+    plugins?: Plugin[]
+    nodeViews?: EditorProps['nodeViews']
+    onEditorReady?: (view: EditorView) => void
     onBodyChange?: (body: DocumentBodyNode[]) => void
     onDeleteNode?: (nodeID: string) => void | Promise<void>
     onDeleteNodeQueued?: (nodeID: string) => void
@@ -103,6 +111,9 @@ export function createDocumentBodyEditor(
       ySyncPlugin(fragment),
       yUndoPlugin(),
       remoteCursorPlugin,
+      // Block plugins (slash menu, drag handle) run before the keymaps below so
+      // they can claim Enter and arrow keys while a menu is open.
+      ...(options.plugins ?? []),
       inputRules({ rules: [headingInputRule] }),
       keymap({
         Enter: () => runBlock(splitTextBlock),
@@ -227,10 +238,9 @@ export function createDocumentBodyEditor(
             const caret = document.createElement('span')
             caret.className = 'remote-cursor'
             if (color) caret.style.setProperty('--cursor-color', color)
-            const label = document.createElement('span')
-            label.className = 'remote-cursor-label'
-            label.textContent = cursor.name || 'Collaborator'
-            caret.append(label)
+            // The name is drawn by CSS from data-name so it never becomes
+            // document text: it must not be copied or break text assertions.
+            caret.dataset.name = cursor.name || 'Collaborator'
             return caret
           },
           { key: `cursor-${cursor.connectionID}-${head}-${color}`, side: 1 }
@@ -330,6 +340,7 @@ export function createDocumentBodyEditor(
 
   const view = new EditorView(mount, {
     state,
+    nodeViews: options.nodeViews,
     dispatchTransaction,
     editable: () => !readOnly && !structuralCommandPending,
     handleDOMEvents: {
@@ -339,7 +350,9 @@ export function createDocumentBodyEditor(
       },
     },
     handleKeyDown: (editorView, event) => {
-      if (readOnly || structuralCommandPending) return false
+      // Keys pressed during IME composition belong to the input method.
+      if (readOnly || structuralCommandPending || event.isComposing)
+        return false
       if (
         !event.altKey &&
         !event.ctrlKey &&
@@ -389,6 +402,7 @@ export function createDocumentBodyEditor(
     },
   })
   viewHolder.current = view
+  options.onEditorReady?.(view)
   if (view.state !== state) view.updateState(state)
   const undoManager = yUndoPluginKey.getState(state)?.undoManager
   undoManager?.on('stack-item-added', publishHistory)
