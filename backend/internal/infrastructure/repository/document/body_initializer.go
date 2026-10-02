@@ -25,6 +25,7 @@ func (r *Repository) InitializeBody(ctx context.Context, actor collaboration.Act
 		input.BodySchemaVersion != yjs.BodySchemaVersionV1 || input.Body.DocumentID != input.DocumentID {
 		return collaboration.ErrInvalidBodyInitialization
 	}
+	input.Body = documentbody.NormalizeSiblingOrder(input.Body)
 	encodedState, err := yjs.EncodeBodyV1(input.Body)
 	if err != nil {
 		return err

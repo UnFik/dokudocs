@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"backend/internal/domain/documentbody"
 	"context"
 	"strings"
 
@@ -53,6 +54,9 @@ func (u *useCase) CreateDocument(ctx context.Context, input dto.CreateDocumentIn
 		if docType != "markdown" || input.DocumentID == uuid.Nil || input.Content != "" ||
 			input.InitialBody.DocumentID != input.DocumentID || input.BodySchemaVersion < 1 {
 			return data, collaboration.ErrInvalidBodyInitialization
+		}
+		if err := documentbody.CheckCollaborativeSize(*input.InitialBody); err != nil {
+			return data, err
 		}
 		return u.docRepo.CreateMarkdownIdempotent(ctx, repository.MarkdownDocumentCreate{
 			Document: doc, Categories: input.Categories, RequestID: input.RequestID,

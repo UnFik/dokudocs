@@ -1,4 +1,5 @@
 import { act } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -9,8 +10,8 @@ import {
 import type { DocumentItem } from '@/types/dokudocs'
 import * as monaco from 'monaco-editor'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
+import { userEvent } from 'vitest/browser'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { switchLocalUser } from '@/lib/local-user-data'
 import { getLocalUserScope, getUserStorage } from '@/lib/user-storage'
@@ -63,7 +64,14 @@ async function renderEditor() {
     history: createMemoryHistory({ initialEntries: ['/docs/isolated-editor'] }),
   })
   await router.load()
-  return render(<RouterProvider router={router} />)
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  )
 }
 
 it('flushes pending Monaco content to its owner before switching and restores only that owner', async () => {
@@ -112,10 +120,14 @@ it('flushes pending Monaco content to its owner before switching and restores on
 })
 
 it('flushes pending Muya input before logout', async () => {
-  useDokudocsStore.setState({ documents: [{ ...doc, type: 'markdown', content: 'Original paragraph' }] })
+  useDokudocsStore.setState({
+    documents: [{ ...doc, type: 'markdown', content: 'Original paragraph' }],
+  })
   const screen = await renderEditor()
   await screen.getByTestId('preview-mode-edit').click()
-  const editable = document.querySelector<HTMLElement>('.muya-container [contenteditable="true"]')
+  const editable = document.querySelector<HTMLElement>(
+    '.muya-container [contenteditable="true"]'
+  )
   if (!editable) throw new Error('Muya editable paragraph is missing')
   await userEvent.click(editable)
   await userEvent.keyboard('{Control>}a{/Control}')
@@ -123,9 +135,15 @@ it('flushes pending Muya input before logout', async () => {
   act(() => switchLocalUser(null))
   expect(useDokudocsStore.getState().documents).toEqual([])
   act(() => switchLocalUser(userA))
-  await expect.element(screen.getByRole('heading', { name: doc.title })).toBeInTheDocument()
-  expect(useDokudocsStore.getState().documents[0].content).toContain('Pending private Muya paragraph')
-  expect(useDokudocsStore.getState().getDocRevisions(doc.id)[0]?.content).toContain('Pending private Muya paragraph')
+  await expect
+    .element(screen.getByRole('heading', { name: doc.title }))
+    .toBeInTheDocument()
+  expect(useDokudocsStore.getState().documents[0].content).toContain(
+    'Pending private Muya paragraph'
+  )
+  expect(
+    useDokudocsStore.getState().getDocRevisions(doc.id)[0]?.content
+  ).toContain('Pending private Muya paragraph')
   await screen.unmount()
 })
 
@@ -199,12 +217,10 @@ it('saves content before rasterization and rejects a delayed thumbnail after A t
   act(() => {
     switchLocalUser(userB)
     switchLocalUser(userA)
-    useDokudocsStore
-      .getState()
-      .updateDocument(doc.id, {
-        content: 'Table newest_a {\n id int\n}',
-        thumbnail: 'new session thumbnail',
-      })
+    useDokudocsStore.getState().updateDocument(doc.id, {
+      content: 'Table newest_a {\n id int\n}',
+      thumbnail: 'new session thumbnail',
+    })
   })
   for (const release of pendingImages) release()
   await new Promise((resolve) => setTimeout(resolve, 400))
