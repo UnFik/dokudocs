@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"backend/internal/application/collaboration"
@@ -50,7 +51,7 @@ func TestSuggestionUpdateIsSharedButDoesNotChangeTheCanonicalBody(t *testing.T) 
 		t.Fatalf("open test database: %v", err)
 	}
 	defer db.Close()
-	_, documentID, ownerID, _, runID, repo := seedRunDocument(t, ctx, db)
+	workspaceID, documentID, ownerID, _, runID, repo := seedRunDocument(t, ctx, db)
 	suggestionID := uuid.New()
 	mark := func(kind string) crdt.Attributes {
 		return crdt.Attributes{"suggestion_" + kind: crdt.Attributes{"id": suggestionID.String(), "author": ownerID.String()}}
@@ -99,6 +100,36 @@ func TestSuggestionUpdateIsSharedButDoesNotChangeTheCanonicalBody(t *testing.T) 
 	suggestions, err := yjs.SuggestionsV1(stored)
 	if err != nil || len(suggestions) != 1 || suggestions[0].ID != suggestionID || suggestions[0].Author != ownerID {
 		t.Fatalf("stored suggestions = (%+v, %v), want the one just made by %s", suggestions, err, ownerID)
+	}
+
+	// Readers: someone who can read the document gets the shared state with the
+	// suggestion in it; a public link gets the canonical body only.
+	snapshot, err := repo.ReadBody(ctx, collaboration.Actor{UserID: ownerID}, workspaceID, documentID)
+	if err != nil {
+		t.Fatalf("ReadBody() with a pending suggestion: %v", err)
+	}
+	if infos, err := yjs.SuggestionsV1(snapshot.EncodedState); err != nil || len(infos) != 1 {
+		t.Fatalf("suggestions in the state a reader receives = (%+v, %v), want the pending one", infos, err)
+	}
+	for _, node := range snapshot.Body.Nodes {
+		if node.NodeID == runID && node.Content != "plain" {
+			t.Fatalf("ReadBody() run = %q, want the canonical \"plain\"", node.Content)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE documents SET share_token = $2, visibility = 'public_link', is_draft = FALSE WHERE id = $1`, documentID, "suggestion-public-"+documentID.String()); err != nil {
+		t.Fatalf("share the document: %v", err)
+	}
+	public, err := repo.ReadPublicBody(ctx, "suggestion-public-"+documentID.String())
+	if err != nil {
+		t.Fatalf("ReadPublicBody() with a pending suggestion: %v", err)
+	}
+	for _, node := range public.Body.Nodes {
+		if node.NodeID == runID && node.Content != "plain" {
+			t.Fatalf("public run = %q, want the canonical \"plain\"", node.Content)
+		}
+		if strings.Contains(string(node.Attributes), "suggestion") {
+			t.Fatalf("public node %s carries a suggestion: %s", node.NodeID, node.Attributes)
+		}
 	}
 
 	// An editor accepts the insertion by clearing its mark: that is what makes

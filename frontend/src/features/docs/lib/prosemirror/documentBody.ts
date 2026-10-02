@@ -203,8 +203,51 @@ export const documentBodySchema = new Schema({
       inclusive: false,
       toDOM: (mark) => ['span', { 'data-link-href': mark.attrs.href }, 0],
     },
+    // Suggestions (ADR 0027). Text under suggestion_insert is proposed, not
+    // canonical; the other two leave the text as it is. Typing at the end of
+    // your own insertion continues it; typing after a deletion or a format
+    // proposal does not.
+    suggestion_insert: {
+      attrs: { id: {}, author: {} },
+      toDOM: (mark) => suggestionDOM(mark, 'suggest-ins'),
+    },
+    suggestion_delete: {
+      attrs: { id: {}, author: {} },
+      inclusive: false,
+      toDOM: (mark) => suggestionDOM(mark, 'suggest-del'),
+    },
+    suggestion_format: {
+      attrs: { id: {}, author: {}, set: { default: {} } },
+      inclusive: false,
+      toDOM: (mark) => suggestionDOM(mark, 'suggest-fmt'),
+    },
   },
 })
+
+function suggestionDOM(mark: Mark, className: string): DOMOutputSpec {
+  return [
+    'span',
+    {
+      class: className,
+      'data-suggestion-id': mark.attrs.id,
+      'data-suggestion-author': mark.attrs.author,
+    },
+    0,
+  ]
+}
+
+/** Text under an insert suggestion is not part of the canonical body. */
+function isInserted(node: ProseMirrorNode) {
+  return node.marks.some((mark) => mark.type.name === 'suggestion_insert')
+}
+
+function isInsertSuggestion(value: unknown) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === 'insert'
+  )
+}
 
 export function documentBodyToProseMirror(
   nodes: DocumentBodyNode[]
@@ -269,11 +312,13 @@ export function prosemirrorToDocumentBody(
 
   const rows: DocumentBodyNode[] = []
   const ids = new Set<string>()
+  // Reports whether the node is canonical; a suggested insertion is not, and
+  // neither is anything under it.
   const visit = (
     node: ProseMirrorNode,
     parentID: string | null,
     siblingOrder: number
-  ) => {
+  ): boolean => {
     const type = bodyTypeByProseMirrorName.get(node.type.name)
     if (!type) throw new Error(`unsupported ProseMirror node ${node.type.name}`)
     const nodeID = node.attrs.nodeID
@@ -286,6 +331,9 @@ export function prosemirrorToDocumentBody(
     ids.add(nodeID)
 
     let attributes = parseAttributes(node.attrs.bodyAttributes, nodeID)
+    const nodeSuggestion = attributes.suggestion
+    delete attributes.suggestion
+    if (isInsertSuggestion(nodeSuggestion)) return false
     let content = ''
     let astChildren: ProseMirrorNode[] = []
     if (inlineParents.has(type)) {
@@ -305,7 +353,7 @@ export function prosemirrorToDocumentBody(
     } else if (bodyContentTypes.has(type)) {
       content = node.attrs.bodyContent
     } else if (textContentTypes.has(type)) {
-      content = node.textContent
+      content = canonicalText(node)
       if (type === 'run') attributes = attributesForRun(node, attributes)
     } else {
       astChildren = Array.from({ length: node.childCount }, (_, i) =>
@@ -313,14 +361,27 @@ export function prosemirrorToDocumentBody(
       )
     }
 
-    if ((type === 'run' || type === 'math') && content.length === 0) return
+    if ((type === 'run' || type === 'math') && content.length === 0)
+      return false
 
     rows.push({ nodeID, parentID, siblingOrder, type, content, attributes })
-    astChildren.forEach((child, index) => visit(child, nodeID, index))
+    let kept = 0
+    for (const child of astChildren) if (visit(child, nodeID, kept)) kept++
+    return true
   }
 
   visit(doc.child(0), null, 0)
   return rows
+}
+
+function canonicalText(node: ProseMirrorNode) {
+  let text = ''
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i)
+    if (child.isText && !isInserted(child)) text += child.text ?? ''
+    else if (!child.isText) text += child.textContent
+  }
+  return text
 }
 
 function marksForRun(attributes: Record<string, unknown>): Mark[] {
