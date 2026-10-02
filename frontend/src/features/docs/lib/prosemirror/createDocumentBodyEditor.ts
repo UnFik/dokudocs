@@ -606,6 +606,36 @@ export function createDocumentBodyEditor(
     applyDraft(edit(current) ?? current)
   }
 
+  // Delete at the end of a paragraph, or Backspace at the start of one, next to
+  // a separator removes the separator. The browser has nothing to merge with, so
+  // it does nothing on its own.
+  const deleteNeighbouringSeparator = (key: 'Delete' | 'Backspace') => {
+    const { selection } = state
+    if (!selection.empty) return false
+    const $pos = selection.$from
+    let depth = $pos.depth
+    while (depth > 0 && !$pos.node(depth).isTextblock) depth--
+    if (depth === 0) return false
+    // The caret may sit inside the first or last run or between runs, so the
+    // edge is "no text and no inline leaf between the caret and the block's end".
+    const emptyBetween = (from: number, to: number) =>
+      state.doc.textBetween(from, to, '', '\ufffc') === ''
+    const atEdge =
+      key === 'Delete'
+        ? emptyBetween($pos.pos, $pos.end(depth))
+        : emptyBetween($pos.start(depth), $pos.pos)
+    if (!atEdge) return false
+    const parent = $pos.node(depth - 1)
+    const index = $pos.index(depth - 1)
+    const neighbour = parent.maybeChild(
+      key === 'Delete' ? index + 1 : index - 1
+    )
+    const nodeID = neighbour?.attrs.nodeID
+    if (neighbour?.type.name !== 'thematic_break' || typeof nodeID !== 'string')
+      return false
+    return queueDeleteNode([nodeID])
+  }
+
   const dispatchTransaction = (transaction: Transaction) => {
     const remote = transaction.getMeta(ySyncPluginKey)?.isChangeOrigin === true
     let prepared = transaction
@@ -708,6 +738,24 @@ export function createDocumentBodyEditor(
         return false
       },
     },
+    // A separator is not selectable by default (it is an atom), so a click on it
+    // would only move the caret. Select it, so Delete can remove it.
+    handleClickOn: (editorView, _pos, node, nodePos, _event, direct) => {
+      if (
+        !direct ||
+        readOnly ||
+        structuralCommandPending ||
+        suggestMode ||
+        node.type.name !== 'thematic_break'
+      )
+        return false
+      editorView.dispatch(
+        editorView.state.tr.setSelection(
+          NodeSelection.create(editorView.state.doc, nodePos)
+        )
+      )
+      return true
+    },
     handleKeyDown: (editorView, event) => {
       // Keys pressed during IME composition belong to the input method.
       if (readOnly || structuralCommandPending || event.isComposing)
@@ -758,7 +806,8 @@ export function createDocumentBodyEditor(
         !event.metaKey &&
         !event.shiftKey &&
         (event.key === 'Backspace' || event.key === 'Delete') &&
-        deleteAcrossBlocks()
+        (deleteAcrossBlocks() ||
+          deleteNeighbouringSeparator(event.key as 'Delete' | 'Backspace'))
       ) {
         event.preventDefault()
         return true
