@@ -431,6 +431,39 @@ function CollaborativeMarkdownBody({
     return saved
   }
 
+  function saveSuggestionDraft(suggestion: SuggestionDraft) {
+    const save = async () => {
+      try {
+        const latest = await getMarkdownBody(workspaceID, documentID)
+        if (!latest.canSuggest)
+          throw new Error('You can no longer suggest changes here')
+        await createDocumentSuggestion(workspaceID, documentID, {
+          suggestionID: crypto.randomUUID(),
+          baseBodyVersion: latest.bodyVersion,
+          baseBodyEpoch: latest.bodyEpoch,
+          operationSchemaVersion: 1,
+          provenance: 'human',
+          operations: suggestion.operations,
+          summary: suggestion.summary,
+        })
+      } catch (cause) {
+        toast.error(
+          cause instanceof Error
+            ? `Suggestion not saved: ${cause.message}`
+            : 'Suggestion not saved'
+        )
+        throw cause
+      } finally {
+        await queryClient.invalidateQueries({
+          queryKey: ['document-suggestions', workspaceID, documentID],
+        })
+      }
+    }
+    const saved = flushQueueRef.current.then(save, save)
+    flushQueueRef.current = saved.catch(() => {})
+    return saved
+  }
+
   function hideBodyAfterAccessLoss(clearStoredData: boolean) {
     setRecoveryPendingCount(0)
     sessionRef.current?.destroy()
@@ -469,6 +502,7 @@ function CollaborativeMarkdownBody({
       onSuggestRefused: (message) =>
         toast.error(message, { id: 'suggest-refused' }),
       onSuggestFlush: saveTypedSuggestion,
+      onSuggestOperations: saveSuggestionDraft,
       onStatus: (next) => {
         statusRef.current = next
         setStatus(next)
