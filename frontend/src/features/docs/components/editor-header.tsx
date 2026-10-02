@@ -28,7 +28,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import type { PresenceUser } from '../lib/collaboration-socket'
 import { DocTypeBadge } from './doc-type-badge'
+import { PresenceAvatars } from './presence-avatars'
 import { ProjectDocsHoverCard } from './project-docs-hover-card'
 
 interface EditorHeaderProps {
@@ -57,6 +59,8 @@ interface EditorHeaderProps {
   onOpenShare?: () => void
   isStarred?: boolean
   onToggleStar?: () => void
+  presenceUsers?: PresenceUser[]
+  currentUserID?: string
 }
 
 export function EditorHeader({
@@ -85,6 +89,8 @@ export function EditorHeader({
   onOpenShare,
   isStarred,
   onToggleStar,
+  presenceUsers,
+  currentUserID = '',
 }: EditorHeaderProps) {
   const navigate = useNavigate()
   const { projects } = useDokudocsStore()
@@ -174,7 +180,10 @@ export function EditorHeader({
             </span>
           ) : isDirty ? (
             <span className='flex items-center gap-1.5 text-warn'>
-              <i className='size-1.5 rounded-[1px] bg-warn' aria-hidden='true' />
+              <i
+                className='size-1.5 rounded-[1px] bg-warn'
+                aria-hidden='true'
+              />
               Unsaved
             </span>
           ) : (
@@ -194,6 +203,14 @@ export function EditorHeader({
       </div>
 
       <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+        {presenceUsers?.length ? (
+          <div className='hidden md:flex'>
+            <PresenceAvatars
+              users={presenceUsers}
+              currentUserID={currentUserID}
+            />
+          </div>
+        ) : null}
         {activeProject ? (
           <ProjectDocsHoverCard
             projectId={activeProject.id}
