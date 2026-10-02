@@ -1,7 +1,7 @@
-import { EditorState } from 'prosemirror-state'
+import { EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
-import { documentBodyToProseMirror } from '../documentBody'
+import { documentBodySchema, documentBodyToProseMirror } from '../documentBody'
 import { prepareBodyTransaction } from '../prepareBodyTransaction'
 import { blockMenuPlugin, filterBlockItems } from './blockMenu'
 import { bodyBuilder, bodyOf, stateFor } from './testSupport'
@@ -67,6 +67,24 @@ describe('block menu', () => {
       5
     )
     expect(view.state.doc.textContent).toBe('')
+  })
+
+  it('opens on / in a paragraph that only holds an empty run', () => {
+    const { view, mountEl } = mount()
+    view.updateState(
+      view.state.apply(
+        view.state.tr.insert(2, documentBodySchema.nodes.run.create())
+      )
+    )
+    view.updateState(
+      view.state.apply(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, 3))
+      )
+    )
+    expect(view.state.selection.$from.parent.type.name).toBe('run')
+    view.focus()
+    expect(press(view.dom, '/').defaultPrevented).toBe(true)
+    expect(mountEl.querySelector('[role="combobox"]')).not.toBeNull()
   })
 
   it('does not open inside a paragraph that has text', () => {

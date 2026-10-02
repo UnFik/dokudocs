@@ -1,3 +1,4 @@
+import type { Node as ProseMirrorNode } from 'prosemirror-model'
 import { Plugin } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import { documentBodySchema } from '../documentBody'
@@ -236,6 +237,16 @@ class BlockMenu {
   }
 }
 
+/** Enter leaves an empty run in the new paragraph, so size alone is not a test. */
+function isBlankParagraph(paragraph: ProseMirrorNode) {
+  let blank = true
+  paragraph.forEach((child) => {
+    if (child.type !== documentBodySchema.nodes.run || child.content.size > 0)
+      blank = false
+  })
+  return blank
+}
+
 /** Opens the "/" block menu in an empty paragraph without writing the slash. */
 export function blockMenuPlugin() {
   let menu: BlockMenu | null = null
@@ -253,11 +264,15 @@ export function blockMenuPlugin() {
         )
           return false
         const { selection } = view.state
-        const parent = selection.$from.parent
+        const { $from } = selection
+        const parent =
+          $from.parent.type === documentBodySchema.nodes.run
+            ? $from.node($from.depth - 1)
+            : $from.parent
         if (
           !selection.empty ||
           parent.type !== documentBodySchema.nodes.paragraph ||
-          parent.content.size > 0
+          !isBlankParagraph(parent)
         )
           return false
         event.preventDefault()
