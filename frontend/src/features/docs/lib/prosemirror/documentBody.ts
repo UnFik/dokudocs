@@ -140,6 +140,21 @@ function nodeSpec(bodyType: string, definition: NodeDefinition): NodeSpec {
   }
 }
 
+/** The level only lives in the bodyAttributes JSON; clamp it into h1-h6. */
+function headingTag(bodyAttributes: unknown) {
+  let level = 1
+  try {
+    const parsed = JSON.parse(String(bodyAttributes ?? '{}')) as {
+      level?: unknown
+    }
+    if (typeof parsed.level === 'number' && Number.isFinite(parsed.level))
+      level = Math.min(6, Math.max(1, Math.trunc(parsed.level)))
+  } catch {
+    // Invalid attributes fall back to h1; the server validates the real value.
+  }
+  return `h${level}`
+}
+
 function nodeDOM(
   bodyType: string,
   definition: NodeDefinition,
@@ -149,6 +164,8 @@ function nodeDOM(
     id: `node-${node.attrs.nodeID}`,
     'data-node-id': node.attrs.nodeID,
   }
+  if (bodyType === 'atx-heading' || bodyType === 'setext-heading')
+    return [headingTag(node.attrs.bodyAttributes), idAttrs, 0]
   if (bodyType === 'thematic-break')
     return [
       definition.tag,
