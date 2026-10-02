@@ -39,3 +39,7 @@ Indent is `WrapNodes` of the item into a new nested list under the previous sibl
 ## Decision needed
 
 Choose between the three commands above, the block-menu-only fallback, or a binding rewrite. Until then #30 stays partial.
+
+## Note: paragraph and ATX heading convert in place (issues #55, #56)
+
+The "shipped" in-place paragraph to heading conversion was rejected by the server (`existing node ... changed type`), so the slash menu and Ctrl+Alt+0..6 produced `update_rejected`. The validators in `documentbody` now accept a type change for an existing node ID only between `paragraph` and `atx-heading`. Both hold only inline children, so the ID, parent, sibling order and children stay as they are and no command or BodyEpoch is needed. A converted node counts as touched, so the heading `level` attribute (1 to 6) is validated as for any new heading. Every other type change still needs `ConvertBlock` above.
