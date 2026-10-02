@@ -73,6 +73,13 @@ Found while building it: `DeleteNode` and `MoveNode` rebuild the shared Yjs stat
 - Done when: a comment user's suggestion reaches an editor live; adversarial updates (edit canonical text, delete a canonical node, touch another user's suggestion, forge the author) are all rejected.
 - Tests: Go tests for each attack, e2e with two browsers.
 
+**Status: done on the server.** `yjs.ValidateSuggesterChange` takes the body before and after an update, removes everything the sender authored from each, and requires the two to be identical, so one comparison covers "real text and blocks are unchanged" and "no one else's suggestion is touched or forged". `CommitUpdate` applies it, plus the canonical-projection check, to users who can suggest but not edit; editors are unchanged and viewers are still refused. Per-user limits: 500 suggestions, 200,000 bytes of suggested text, 2,000 nodes in inserted blocks (growth is refused, withdrawing is never). The ready and resync frames carry `canSuggest`, a suggestion limit has its own error code `suggestion_limit`, and the room head reports `canSuggest`. Not done: the browser e2e, which belongs with the editor engine in P3.
+
+What P3 must know:
+- A text attribute holds one value per character, so a second delete mark over text another user already marked deleted would replace the first user's mark. The server refuses it. The editor treats text that is already marked deleted as deleted and adds nothing.
+- Plain content inside a block the sender inserted counts as the sender's. Another user's suggestion inside that block is protected, and deleting the block while it holds one is refused.
+- Content inside an inserted block is not validated as canonical content until it is accepted (the projection skips it). A suggester could park malformed nodes there; the limits bound it, and P3's accept must validate before it commits.
+
 ### P3. Track-changes engine for text
 - Insert, delete, replace marks; the grouping rules; own and others' insertions; single-line paste; undo and redo; own-edit merging.
 - Done when: the three card kinds appear from real keystrokes, an editor accepts and rejects, and the server body and a reload agree.
