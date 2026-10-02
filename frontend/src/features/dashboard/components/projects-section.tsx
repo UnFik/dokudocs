@@ -34,7 +34,7 @@ export function ProjectsSection({ onAddDocToProject }: ProjectsSectionProps) {
 
       {projectsWithDocs.length === 0 ? (
         <div className='flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/40 py-8 text-center'>
-          <div className='mb-2 flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground'>
+          <div className='mb-2 flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground'>
             <FolderPlus className='size-5' />
           </div>
           <p className='text-xs text-muted-foreground'>

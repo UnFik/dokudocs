@@ -13,7 +13,7 @@ import (
 
 func (u *useCase) Login(ctx context.Context, req dto.LoginRequest) (data dto.LoginResponse, err error) {
 	email := strings.TrimSpace(strings.ToLower(req.Email))
-	if email == "" || strings.TrimSpace(req.Password) == "" {
+	if email == "" || req.Password == "" {
 		return data, constant.ErrMissingCredential
 	}
 

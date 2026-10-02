@@ -9,6 +9,23 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// ReorderCategories reorders categories in a project.
+// @Summary Reorder project categories
+// @Description Reorder categories within a project by passing ordered array of category IDs
+// @Tags Project
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Project ID (UUID)"
+// @Param request body presenter.ReorderCategoriesRequest true "Reorder categories payload"
+// @Success 200 {object} response.Envelope{data=map[string]string}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /projects/{id}/categories/reorder [put]
 func (h *Handler) ReorderCategories(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {

@@ -1,6 +1,6 @@
 import Fuse from 'fuse.js'
 import Prism from 'prismjs'
-import { languages } from 'prismjs/components.js'
+import { languages } from 'prismjs/components'
 import initLoadLanguage, {
   loadedLanguages,
   transformAliasToOrigin,

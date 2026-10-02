@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"bufio"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"backend/internal/infrastructure/logger"
@@ -10,6 +13,18 @@ import (
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	conn, rw, err := hijacker.Hijack()
+	if err == nil {
+		r.status = http.StatusSwitchingProtocols
+	}
+	return conn, rw, err
 }
 
 func (r *statusRecorder) WriteHeader(status int) {
@@ -34,7 +49,16 @@ func Logger(log *logger.Logger) func(http.Handler) http.Handler {
 			if status == 0 {
 				status = http.StatusOK
 			}
-			log.Printf("%s %s %d %s", r.Method, r.URL.Path, status, time.Since(start))
+			log.Printf("%s %s %d %s", r.Method, redactShareTokenPath(r.URL.Path), status, time.Since(start))
 		})
 	}
+}
+
+func redactShareTokenPath(path string) string {
+	parts := strings.Split(path, "/")
+	if len(parts) >= 4 && parts[1] == "public" && parts[2] == "documents" && parts[3] != "" {
+		parts[3] = "[REDACTED]"
+		return strings.Join(parts, "/")
+	}
+	return path
 }

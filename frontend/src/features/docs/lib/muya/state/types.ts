@@ -43,6 +43,11 @@ export interface IHtmlBlockState {
   text: string
 }
 
+export interface IOpaqueBlockState {
+  name: 'opaque'
+  text: string
+}
+
 /**
  * @deprecated Reference definitions are stored as paragraph state nodes whose
  * `text` is the raw `[label]: url "title"` line (matches marktext's
@@ -64,10 +69,12 @@ export interface IBlockQuoteState {
 export interface IListItemState {
   name: 'list-item'
   children: TState[]
+  sourceGap?: string
 }
 
 export interface IOrderListState {
   name: 'order-list'
+  sourceGap?: string
   meta: {
     start: number
     loose: boolean
@@ -78,6 +85,7 @@ export interface IOrderListState {
 
 export interface IBulletListState {
   name: 'bullet-list'
+  sourceGap?: string
   meta: {
     marker: string // "-" | "+" | "*";
     loose: boolean
@@ -102,6 +110,7 @@ export interface ITableCellState {
 
 export interface ITableState {
   name: 'table'
+  sourceMarkdown?: string
   children: ITableRowState[]
 }
 
@@ -111,6 +120,7 @@ export interface ITaskListItemMeta {
 
 export interface ITaskListItemState {
   name: 'task-list-item'
+  sourceGap?: string
   meta: ITaskListItemMeta
   children: TState[]
 }
@@ -122,6 +132,7 @@ export interface ITaskListMeta {
 
 export interface ITaskListState {
   name: 'task-list'
+  sourceGap?: string
   meta: ITaskListMeta
   children: ITaskListItemState[]
 }
@@ -175,6 +186,7 @@ export type TLeafState =
   | IThematicBreakState
   | ICodeBlockState
   | IHtmlBlockState
+  | IOpaqueBlockState
   | ILinkReferenceDefinitionState
   | IMathBlockState
   | IFrontmatterState
@@ -192,7 +204,9 @@ export type TContainerState =
   | ITableRowState
   | IFootnoteBlockState
 
-export type TState = TLeafState | TContainerState
+export type TState = (TLeafState | TContainerState) & {
+  sourceGap?: string
+}
 
 export type CodeContentState =
   | ICodeBlockState

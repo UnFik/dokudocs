@@ -276,7 +276,7 @@ export function ProjectCategoryFilter({
             <Button
               variant='ghost'
               size='icon'
-              className='absolute left-0 z-10 size-6 rounded-full bg-background/90 shadow-xs backdrop-blur-xs'
+              className='absolute left-0 z-10 size-6 rounded-full bg-background/90'
               onClick={() => scroll('left')}
             >
               <ChevronLeft className='size-3.5' />
@@ -290,9 +290,9 @@ export function ProjectCategoryFilter({
                 type='button'
                 onClick={onClearCategories}
                 disabled={filterMode !== 'normal'}
-                className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-sm border px-3 py-1 text-xs font-medium transition-all ${
                   isAllSelected && filterMode === 'normal'
-                    ? 'border-primary bg-primary text-primary-foreground shadow-2xs'
+                    ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-border/60 bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
@@ -339,7 +339,7 @@ export function ProjectCategoryFilter({
                       isDragging
                         ? 'ring-dashed scale-95 opacity-30 ring-2 ring-amber-500'
                         : isDragOver
-                          ? 'scale-105 shadow-md ring-2 ring-amber-500 ring-offset-2'
+                          ? 'scale-105 ring-2 ring-amber-500 ring-offset-2'
                           : ''
                     } ${
                       filterMode === 'edit'
@@ -347,7 +347,7 @@ export function ProjectCategoryFilter({
                         : filterMode === 'delete'
                           ? 'cursor-pointer border-red-500/40 bg-red-500/10 py-1 pr-2 pl-3 text-red-700 ring-2 ring-red-500/80 dark:text-red-300'
                           : isSelected
-                            ? `${palette.activeBg} ${palette.activeText} border-transparent px-3 py-1 shadow-2xs ring-1 ring-primary/40`
+                            ? `${palette.activeBg} ${palette.activeText} border-transparent px-3 py-1 ring-1 ring-primary/40`
                             : `${palette.bg} ${palette.text} ${palette.border} px-3 py-1 hover:opacity-90`
                     }`}
                   >
@@ -394,7 +394,7 @@ export function ProjectCategoryFilter({
                           e.stopPropagation()
                           handleCategoryClick(category)
                         }}
-                        className='absolute -top-1.5 -right-1.5 z-20 flex size-5 items-center justify-center rounded-full bg-red-600 text-white shadow-sm transition-transform hover:scale-115 dark:bg-red-500'
+                        className='absolute -top-1.5 -right-1.5 z-20 flex size-5 items-center justify-center rounded-full bg-red-600 text-white transition-transform hover:scale-115 dark:bg-red-500'
                         title='Delete category'
                       >
                         <X className='size-3 stroke-[3] text-white' />
@@ -408,7 +408,7 @@ export function ProjectCategoryFilter({
             <Button
               variant='ghost'
               size='icon'
-              className='absolute right-0 z-10 size-6 rounded-full bg-background/90 shadow-xs backdrop-blur-xs'
+              className='absolute right-0 z-10 size-6 rounded-full bg-background/90'
               onClick={() => scroll('right')}
             >
               <ChevronRight className='size-3.5' />
@@ -495,7 +495,7 @@ export function ProjectCategoryFilter({
                                       onClick={() => field.onChange(opt.id)}
                                       className={`size-6 rounded-full ${opt.dot} flex items-center justify-center transition-all ${
                                         isSelected
-                                          ? 'scale-110 shadow-xs ring-2 ring-primary ring-offset-2'
+                                          ? 'scale-110 ring-2 ring-primary ring-offset-2'
                                           : 'opacity-80 hover:scale-105 hover:opacity-100'
                                       }`}
                                       title={opt.name}

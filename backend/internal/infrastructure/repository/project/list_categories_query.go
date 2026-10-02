@@ -8,14 +8,16 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r *Repository) ListCategories(ctx context.Context, projectID uuid.UUID) ([]model.ProjectCategory, error) {
-	const query = `
-		SELECT id, project_id, name, color_id, sort_order, created_at
-		FROM project_categories
-		WHERE project_id = $1
-		ORDER BY sort_order ASC, created_at ASC
+func (r *Repository) ListCategories(ctx context.Context, projectID, workspaceID, userID uuid.UUID) ([]model.ProjectCategory, error) {
+	query := `
+		SELECT c.id, c.project_id, c.name, c.color_id, c.sort_order, c.created_at
+		FROM project_categories c
+	JOIN projects p ON p.id = c.project_id
+		WHERE c.project_id = $1 AND p.workspace_id = $2 AND p.deleted_at IS NULL
+		  AND ` + projectReadAccessPredicate("$3") + `
+		ORDER BY c.sort_order ASC, c.created_at ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, projectID)
+	rows, err := r.db.QueryContext(ctx, query, projectID, workspaceID, userID)
 	if err != nil {
 		return nil, err
 	}

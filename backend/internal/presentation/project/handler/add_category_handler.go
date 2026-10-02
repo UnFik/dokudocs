@@ -5,10 +5,28 @@ import (
 	"net/http"
 
 	"backend/constant"
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/project/presenter"
 	"backend/internal/presentation/response"
 )
 
+// AddCategory adds a new category to a project.
+// @Summary Add project category
+// @Description Add a new category to a project
+// @Tags Project
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Project ID (UUID)"
+// @Param request body presenter.AddCategoryRequest true "Category creation payload"
+// @Success 201 {object} response.Envelope{data=model.ProjectCategory}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /projects/{id}/categories [post]
 func (h *Handler) AddCategory(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {

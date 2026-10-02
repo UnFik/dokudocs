@@ -1,0 +1,29 @@
+[
+  {
+    "name": "paragraph",
+    "text": "first",
+    "inline": [
+      {
+        "type": "run",
+        "content": "first",
+        "attributes": {
+          "source": "first"
+        }
+      }
+    ]
+  },
+  {
+    "name": "paragraph",
+    "sourceGap": "\n\n\n",
+    "text": "second",
+    "inline": [
+      {
+        "type": "run",
+        "content": "second",
+        "attributes": {
+          "source": "second"
+        }
+      }
+    ]
+  }
+]

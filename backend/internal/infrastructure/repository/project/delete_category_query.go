@@ -4,19 +4,28 @@ import (
 	"context"
 
 	"backend/constant"
+	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
 )
 
-func (r *Repository) DeleteCategory(ctx context.Context, projectID, categoryID uuid.UUID) error {
+func (r *Repository) DeleteCategory(ctx context.Context, projectID, workspaceID, actorID, categoryID uuid.UUID) error {
 	const query = `DELETE FROM project_categories WHERE id = $2 AND project_id = $1`
-	res, err := r.db.ExecContext(ctx, query, projectID, categoryID)
-	if err != nil {
-		return err
-	}
-	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		return constant.ErrCategoryNotFound
-	}
-	return nil
+	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		if err := lockEditableProject(ctx, tx, projectID, workspaceID, actorID); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, query, projectID, categoryID)
+		if err != nil {
+			return err
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return constant.ErrCategoryNotFound
+		}
+		return nil
+	})
 }

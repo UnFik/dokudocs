@@ -1,0 +1,16 @@
+Table accounts {
+  id varchar(36) [pk]
+  email varchar(255) [unique, not null]
+  password_hash varchar(255)
+  is_verified boolean
+  created_at timestamp
+}
+
+Table sessions {
+  id varchar(64) [pk]
+  account_id varchar(36) [ref: > accounts.id]
+  ip_address varchar(45)
+  user_agent text
+  expires_at timestamp
+  created_at timestamp
+}

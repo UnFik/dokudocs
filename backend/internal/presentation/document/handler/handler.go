@@ -5,6 +5,7 @@ import (
 
 	"backend/constant"
 	usecasecontract "backend/internal/domain/contract/usecase"
+	_ "backend/internal/domain/model"
 	"backend/internal/infrastructure/validator"
 	"backend/internal/presentation/middleware"
 
@@ -39,4 +40,12 @@ func getUserAndWorkspace(r *http.Request) (uuid.UUID, uuid.UUID, error) {
 func parsePathUUID(r *http.Request, key string) (uuid.UUID, error) {
 	idStr := r.PathValue(key)
 	return uuid.Parse(idStr)
+}
+
+func parseIdempotencyKey(r *http.Request) (uuid.UUID, error) {
+	requestID, err := uuid.Parse(r.Header.Get("Idempotency-Key"))
+	if err != nil || requestID == uuid.Nil {
+		return uuid.Nil, constant.ErrInvalidIdempotencyKey
+	}
+	return requestID, nil
 }

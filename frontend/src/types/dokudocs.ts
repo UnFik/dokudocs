@@ -88,11 +88,27 @@ export interface TrashItem {
 export interface DocumentRevision {
   id: string
   documentId: string
+  authorId?: string
   versionNumber: number
   title?: string | null
   isNamed?: boolean
   content: string
-  author: UserAuthor
+  astSnapshot?: {
+    documentID: string
+    rootNodeID: string
+    nodes: Array<{
+      nodeID: string
+      parentID: string | null
+      siblingOrder: number
+      type: string
+      content: string
+      attributes: Record<string, unknown>
+      version: number
+    }>
+  }
+  bodyVersion?: number
+  bodySchemaVersion?: number
+  author?: UserAuthor
   createdAt: string
   updatedAt?: string
 }
@@ -118,4 +134,3 @@ export interface ProjectMemberItem {
   role: ProjectMemberRole
   createdAt: string
 }
-

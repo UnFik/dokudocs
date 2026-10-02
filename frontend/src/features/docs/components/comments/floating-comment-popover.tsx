@@ -102,7 +102,7 @@ export function FloatingCommentPopover({
         width: `${popoverWidth}px`,
         zIndex: 60,
       }}
-      className='animate-in rounded-xl border border-border/80 bg-popover/95 p-3.5 text-popover-foreground shadow-xl backdrop-blur-md duration-150 zoom-in-95 fade-in'
+      className='animate-in rounded-xl border border-border/80 bg-popover/95 p-3.5 text-popover-foreground shadow-sm duration-150 zoom-in-95 fade-in'
     >
       <div className='flex items-center justify-between gap-2 border-b border-border/50 pb-2'>
         <div className='flex items-center gap-1.5 text-xs font-semibold text-foreground'>

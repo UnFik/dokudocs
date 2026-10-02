@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"backend/internal/application/user/dto"
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/middleware"
 	"backend/internal/presentation/response"
 	"backend/internal/presentation/user/presenter"
@@ -11,6 +12,19 @@ import (
 	"github.com/google/uuid"
 )
 
+// UpdateProfile updates the profile of current user.
+// @Summary Update user profile
+// @Description Update profile details of authenticated user
+// @Tags User
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body presenter.UpdateProfileRequest true "Update profile payload"
+// @Success 200 {object} response.Envelope{data=model.UserProfile}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /user/profile [put]
 func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.UserFromContext(r.Context())
 	if !ok {

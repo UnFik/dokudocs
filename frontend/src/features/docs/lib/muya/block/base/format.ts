@@ -1,6 +1,6 @@
 /* eslint-disable no-fallthrough */
-import Content from '../../block/base/content'
-import { ScrollPage } from '../../block/scrollPage'
+import Content from './content'
+import { ScrollPage } from '../scrollPage'
 import {
   CLASS_NAMES,
   FORMAT_MARKER_MAP,

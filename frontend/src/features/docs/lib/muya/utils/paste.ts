@@ -5,7 +5,7 @@ import {
   PREVIEW_DOMPURIFY_CONFIG,
   URL_REG,
 } from '../config'
-import { sanitize } from '../utils'
+import { sanitize } from '.'
 
 const TIMEOUT = 1500
 

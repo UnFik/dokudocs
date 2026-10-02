@@ -13,23 +13,27 @@ import (
 
 func (r *Repository) List(ctx context.Context, workspaceID, userID uuid.UUID, filter repository.DocumentFilter) ([]model.Document, error) {
 	query := `
-		SELECT d.id, d.workspace_id, d.project_id, COALESCE(p.name, ''), d.title, d.type::text,
-		       d.content, d.author_id, u.full_name, u.email, COALESCE(u.avatar_url, ''),
+		SELECT d.id, d.workspace_id, d.project_id,
+		       CASE WHEN p.id IS NOT NULL AND ` + projectMetadataPredicate("$2", "p") + ` THEN p.name ELSE '' END,
+		       d.title, d.type::text,
+		       CASE WHEN d.type = 'markdown' AND d.root_node_id IS NOT NULL THEN '' ELSE d.content END,
+		       d.author_id, u.full_name, u.email, COALESCE(u.avatar_url, ''),
 		       COALESCE(array_to_string(d.tags, ','), ''), d.is_draft, d.visibility::text,
-		       COALESCE(d.share_token, ''), COALESCE(d.thumbnail, ''), COALESCE(d.thumbnail_dark, ''),
+		       COALESCE(d.thumbnail, ''), COALESCE(d.thumbnail_dark, ''),
 		       COALESCE(d.thumbnail_preview, ''), COALESCE(d.thumbnail_preview_dark, ''),
 		       (ds.document_id IS NOT NULL) AS is_starred, ds.starred_at,
 		       (da.document_id IS NOT NULL) AS is_shared,
 		       COALESCE(dv.view_count, 0) AS view_count, dv.last_viewed_at,
 		       d.created_at, d.updated_at
 		FROM documents d
-		LEFT JOIN projects p ON p.id = d.project_id
+		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 		JOIN users u ON u.id = d.author_id
 		LEFT JOIN document_stars ds ON ds.document_id = d.id AND ds.user_id = $2
 		LEFT JOIN document_accesses da ON da.document_id = d.id AND da.user_id = $2
 		LEFT JOIN document_views dv ON dv.document_id = d.id AND dv.user_id = $2
-		WHERE d.workspace_id = $1 AND d.deleted_at IS NULL
-	`
+		WHERE d.workspace_id = $1
+		  AND d.deleted_at IS NULL
+	` + documentReadPredicate
 
 	args := []any{workspaceID, userID}
 	argIdx := 3
@@ -41,7 +45,22 @@ func (r *Repository) List(ctx context.Context, workspaceID, userID uuid.UUID, fi
 	}
 
 	if filter.Search != "" {
-		query += fmt.Sprintf(" AND (d.title ILIKE $%d OR d.content ILIKE $%d)", argIdx, argIdx)
+		query += fmt.Sprintf(` AND (
+			d.title ILIKE $%d
+			OR (
+				d.type = 'markdown'
+				AND d.root_node_id IS NOT NULL
+				AND EXISTS (
+					SELECT 1 FROM document_nodes dn
+					WHERE dn.document_id = d.id
+					  AND (dn.content ILIKE $%d OR dn.attributes::text ILIKE $%d)
+				)
+			)
+			OR (
+				(d.type <> 'markdown' OR d.root_node_id IS NULL)
+				AND d.content ILIKE $%d
+			)
+		)`, argIdx, argIdx, argIdx, argIdx)
 		args = append(args, "%"+filter.Search+"%")
 		argIdx++
 	}
@@ -59,7 +78,10 @@ func (r *Repository) List(ctx context.Context, workspaceID, userID uuid.UUID, fi
 		query += fmt.Sprintf(` AND EXISTS (
 			SELECT 1 FROM document_category_mappings dcm
 			JOIN project_categories pc ON pc.id = dcm.category_id
-			WHERE dcm.document_id = d.id AND pc.name ILIKE $%d
+			JOIN projects p_category ON p_category.id = pc.project_id AND p_category.workspace_id = d.workspace_id AND p_category.deleted_at IS NULL
+			WHERE dcm.document_id = d.id AND d.project_id = pc.project_id
+			  AND `+projectMetadataPredicate("$2", "p_category")+`
+			  AND pc.name ILIKE $%d
 		)`, argIdx)
 		args = append(args, "%"+filter.Category+"%")
 		argIdx++
@@ -103,7 +125,7 @@ func (r *Repository) List(ctx context.Context, workspaceID, userID uuid.UUID, fi
 			&d.ID, &d.WorkspaceID, &d.ProjectID, &d.ProjectName, &d.Title, &d.Type,
 			&d.Content, &d.AuthorID, &d.Author.Name, &d.Author.Email, &d.Author.Avatar,
 			&tagsStr, &d.IsDraft, &d.Visibility,
-			&d.ShareToken, &d.Thumbnail, &d.ThumbnailDark,
+			&d.Thumbnail, &d.ThumbnailDark,
 			&d.ThumbnailPreview, &d.ThumbnailPreviewDark,
 			&d.IsStarred, &d.StarredAt,
 			&d.IsShared,
@@ -127,7 +149,7 @@ func (r *Repository) List(ctx context.Context, workspaceID, userID uuid.UUID, fi
 	}
 
 	if len(docIDs) > 0 {
-		catMap, err := r.fetchCategoriesForDocuments(ctx, docIDs)
+		catMap, err := r.fetchCategoriesForDocuments(ctx, docIDs, userID)
 		if err == nil {
 			for i := range docs {
 				cats := catMap[docs[i].ID]

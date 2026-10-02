@@ -8,9 +8,8 @@ declare global {
     MUYA_VERSION: string
     // Absolute directory of the document currently open in the host
     // (desktop) app. `getImageSrc` reads it to anchor relative local
-    // image paths. Undefined in
-    // non-desktop / headless contexts (the resolver then leaves relative
-    // paths untouched rather than producing a broken `file://`).
+    // image paths. Undefined in non-desktop / headless contexts; the
+    // resolver falls back to a bare `file://` path.
     DIRNAME?: string
   }
 

@@ -10,7 +10,7 @@ func (u *useCase) ToggleStar(ctx context.Context, id, workspaceID, userID uuid.U
 	if _, err = u.GetProject(ctx, id, workspaceID, userID); err != nil {
 		return false, err
 	}
-	data, err = u.projectRepo.ToggleStar(ctx, id, userID)
+	data, err = u.projectRepo.ToggleStar(ctx, id, workspaceID, userID)
 	if err != nil {
 		return data, err
 	}

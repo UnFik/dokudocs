@@ -18,7 +18,7 @@ type DocumentUseCase interface {
 	UpdateDocument(ctx context.Context, input dto.UpdateDocumentInput) (data model.Document, err error)
 	UpdateThumbnails(ctx context.Context, id, workspaceID, userID uuid.UUID, thumb, thumbDark, thumbPreview, thumbPreviewDark string) (err error)
 	MoveDocument(ctx context.Context, id, workspaceID, userID uuid.UUID, targetProjectID *uuid.UUID) (err error)
-	DuplicateDocument(ctx context.Context, id, workspaceID, userID uuid.UUID) (data model.Document, err error)
+	DuplicateDocument(ctx context.Context, id, workspaceID, userID, requestID uuid.UUID) (data model.Document, err error)
 	RecordView(ctx context.Context, id, workspaceID, userID uuid.UUID) (err error)
 	ToggleStar(ctx context.Context, id, workspaceID, userID uuid.UUID) (data bool, err error)
 	CreateShareToken(ctx context.Context, id, workspaceID, userID uuid.UUID) (data string, err error)

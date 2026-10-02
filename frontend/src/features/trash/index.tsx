@@ -47,7 +47,7 @@ export function TrashPage() {
             <h1 className='text-xl font-bold tracking-tight text-foreground'>
               Trash
             </h1>
-            <span className='rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground'>
+            <span className='rounded-sm bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground'>
               {trash.length}
             </span>
           </div>

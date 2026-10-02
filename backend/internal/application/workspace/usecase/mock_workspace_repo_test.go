@@ -30,20 +30,20 @@ func (m *mockWorkspaceRepo) Create(ctx context.Context, ws model.Workspace) (mod
 	m.roles[ws.ID.String()+":"+ws.CreatedBy.String()] = "owner"
 	return ws, nil
 }
-func (m *mockWorkspaceRepo) Update(ctx context.Context, ws model.Workspace) error {
+func (m *mockWorkspaceRepo) Update(ctx context.Context, ws model.Workspace, actorID uuid.UUID) error {
 	return nil
 }
-func (m *mockWorkspaceRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (m *mockWorkspaceRepo) Delete(ctx context.Context, id, actorID uuid.UUID) error {
 	return nil
 }
-func (m *mockWorkspaceRepo) GetMembers(ctx context.Context, workspaceID uuid.UUID) ([]model.WorkspaceMember, error) {
+func (m *mockWorkspaceRepo) GetMembers(ctx context.Context, workspaceID, actorID uuid.UUID) ([]model.WorkspaceMember, error) {
 	return m.members[workspaceID], nil
 }
-func (m *mockWorkspaceRepo) AddMember(ctx context.Context, workspaceID, userID uuid.UUID, role string) error {
+func (m *mockWorkspaceRepo) AddMember(ctx context.Context, workspaceID, actorID, userID uuid.UUID, role string) error {
 	m.roles[workspaceID.String()+":"+userID.String()] = role
 	return nil
 }
-func (m *mockWorkspaceRepo) RemoveMember(ctx context.Context, workspaceID, userID uuid.UUID) error {
+func (m *mockWorkspaceRepo) RemoveMember(ctx context.Context, workspaceID, actorID, userID uuid.UUID) error {
 	delete(m.roles, workspaceID.String()+":"+userID.String())
 	return nil
 }

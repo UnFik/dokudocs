@@ -17,5 +17,5 @@ func (u *useCase) RemoveAccess(ctx context.Context, docID, workspaceID, memberUs
 	if (err != nil || !canManage) && actorID != memberUserID {
 		return constant.ErrForbidden
 	}
-	return u.docRepo.RemoveAccess(ctx, docID, memberUserID)
+	return u.docRepo.RemoveAccess(ctx, docID, workspaceID, actorID, memberUserID)
 }

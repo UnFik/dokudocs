@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"backend/internal/config"
 	"backend/internal/infrastructure/api/routes"
@@ -20,17 +21,21 @@ func Routes(c *container.Container, cfg config.Config) http.Handler {
 }
 
 func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Container) error {
-	handler := Routes(c, cfg)
+	handler, shutdownCollaboration := routes.InitRoutesWithShutdown(c, cfg)
 	handler = middleware.Logger(c.Logger)(handler)
 	handler = middleware.Recover(c.Logger)(handler)
 	handler = middleware.CORS(cfg.AllowedOrigin)(handler)
-	handler = middleware.Timeout(cfg.ReadTimeout)(handler)
+	handler = middleware.TimeoutWithRAG(cfg.ReadTimeout, cfg.RAGRequestTimeout)(handler)
+	writeTimeout := cfg.WriteTimeout
+	if ragTimeout := cfg.RAGRequestTimeout + 2*time.Second; ragTimeout > writeTimeout {
+		writeTimeout = ragTimeout
+	}
 
 	server := &http.Server{
 		Addr:         cfg.Addr,
 		Handler:      handler,
 		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
+		WriteTimeout: writeTimeout,
 		IdleTimeout:  cfg.IdleTimeout,
 	}
 	errCh := make(chan error, 1)
@@ -41,17 +46,18 @@ func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Containe
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(stop)
+	var serveErr error
 	select {
 	case sig := <-stop:
 		c.Logger.Printf("received signal %s", sig)
 	case err := <-errCh:
 		if !errors.Is(err, http.ErrServerClosed) {
-			return err
+			serveErr = err
 		}
 	case <-ctx.Done():
 		c.Logger.Printf("context canceled")
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	return server.Shutdown(shutdownCtx)
+	return errors.Join(serveErr, server.Shutdown(shutdownCtx), shutdownCollaboration(shutdownCtx))
 }

@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: dokudocs-postgres
     environment:
       POSTGRES_DB: dokudocs
@@ -16,6 +16,17 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: dokudocs-redis
+    ports:
+      - "${REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     build:
       context: .
@@ -26,6 +37,7 @@ services:
     environment:
       APP_ADDR: :8080
       DATABASE_URL: postgres://postgres:postgres@db:5432/dokudocs?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8080:8080"
     volumes:
@@ -34,6 +46,8 @@ services:
       - go_build_cache:/root/.cache/go-build
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: go run ./cmd/server
 

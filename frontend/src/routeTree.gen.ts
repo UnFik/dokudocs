@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as DocsDocIdRouteImport } from './routes/docs/$docId'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
@@ -30,12 +31,15 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects/index'
 import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
 import { Route as AuthenticatedDraftsIndexRouteImport } from './routes/_authenticated/drafts/index'
+import { Route as AuthenticatedAssistantIndexRouteImport } from './routes/_authenticated/assistant/index'
+import { Route as PublicDocumentsShareTokenRouteImport } from './routes/public/documents/$shareToken'
 import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
 import { Route as AuthenticatedSettingsDisplayRouteImport } from './routes/_authenticated/settings/display'
 import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects/$projectId'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
+import { Route as AuthenticatedDevMarkdownBackfillRouteImport } from './routes/_authenticated/dev/markdown-backfill'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -49,6 +53,11 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
 const DocsDocIdRoute = DocsDocIdRouteImport.update({
   id: '/docs/$docId',
   path: '/docs/$docId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
@@ -146,6 +155,18 @@ const AuthenticatedDraftsIndexRoute =
     path: '/drafts/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAssistantIndexRoute =
+  AuthenticatedAssistantIndexRouteImport.update({
+    id: '/assistant/',
+    path: '/assistant/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const PublicDocumentsShareTokenRoute =
+  PublicDocumentsShareTokenRouteImport.update({
+    id: '/public/documents/$shareToken',
+    path: '/public/documents/$shareToken',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedSettingsNotificationsRoute =
   AuthenticatedSettingsNotificationsRouteImport.update({
     id: '/notifications',
@@ -182,6 +203,12 @@ const AuthenticatedErrorsErrorRoute =
     path: '/errors/$error',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedDevMarkdownBackfillRoute =
+  AuthenticatedDevMarkdownBackfillRouteImport.update({
+    id: '/dev/markdown-backfill',
+    path: '/dev/markdown-backfill',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -197,13 +224,17 @@ export interface FileRoutesByFullPath {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/account': typeof AuthenticatedAccountRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/docs/$docId': typeof DocsDocIdRoute
+  '/dev/markdown-backfill': typeof AuthenticatedDevMarkdownBackfillRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/settings/display': typeof AuthenticatedSettingsDisplayRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
+  '/public/documents/$shareToken': typeof PublicDocumentsShareTokenRoute
+  '/assistant/': typeof AuthenticatedAssistantIndexRoute
   '/drafts/': typeof AuthenticatedDraftsIndexRoute
   '/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
@@ -223,14 +254,18 @@ export interface FileRoutesByTo {
   '/500': typeof errors500Route
   '/503': typeof errors503Route
   '/account': typeof AuthenticatedAccountRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/docs/$docId': typeof DocsDocIdRoute
   '/': typeof AuthenticatedIndexRoute
+  '/dev/markdown-backfill': typeof AuthenticatedDevMarkdownBackfillRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/settings/display': typeof AuthenticatedSettingsDisplayRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
+  '/public/documents/$shareToken': typeof PublicDocumentsShareTokenRoute
+  '/assistant': typeof AuthenticatedAssistantIndexRoute
   '/drafts': typeof AuthenticatedDraftsIndexRoute
   '/help-center': typeof AuthenticatedHelpCenterIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
@@ -253,14 +288,18 @@ export interface FileRoutesById {
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
   '/_authenticated/account': typeof AuthenticatedAccountRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/docs/$docId': typeof DocsDocIdRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/dev/markdown-backfill': typeof AuthenticatedDevMarkdownBackfillRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/_authenticated/settings/display': typeof AuthenticatedSettingsDisplayRoute
   '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
+  '/public/documents/$shareToken': typeof PublicDocumentsShareTokenRoute
+  '/_authenticated/assistant/': typeof AuthenticatedAssistantIndexRoute
   '/_authenticated/drafts/': typeof AuthenticatedDraftsIndexRoute
   '/_authenticated/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
@@ -284,13 +323,17 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/account'
+    | '/auth/callback'
     | '/docs/$docId'
+    | '/dev/markdown-backfill'
     | '/errors/$error'
     | '/projects/$projectId'
     | '/settings/account'
     | '/settings/appearance'
     | '/settings/display'
     | '/settings/notifications'
+    | '/public/documents/$shareToken'
+    | '/assistant/'
     | '/drafts/'
     | '/help-center/'
     | '/projects/'
@@ -310,14 +353,18 @@ export interface FileRouteTypes {
     | '/500'
     | '/503'
     | '/account'
+    | '/auth/callback'
     | '/docs/$docId'
     | '/'
+    | '/dev/markdown-backfill'
     | '/errors/$error'
     | '/projects/$projectId'
     | '/settings/account'
     | '/settings/appearance'
     | '/settings/display'
     | '/settings/notifications'
+    | '/public/documents/$shareToken'
+    | '/assistant'
     | '/drafts'
     | '/help-center'
     | '/projects'
@@ -339,14 +386,18 @@ export interface FileRouteTypes {
     | '/(errors)/500'
     | '/(errors)/503'
     | '/_authenticated/account'
+    | '/auth/callback'
     | '/docs/$docId'
     | '/_authenticated/'
+    | '/_authenticated/dev/markdown-backfill'
     | '/_authenticated/errors/$error'
     | '/_authenticated/projects/$projectId'
     | '/_authenticated/settings/account'
     | '/_authenticated/settings/appearance'
     | '/_authenticated/settings/display'
     | '/_authenticated/settings/notifications'
+    | '/public/documents/$shareToken'
+    | '/_authenticated/assistant/'
     | '/_authenticated/drafts/'
     | '/_authenticated/help-center/'
     | '/_authenticated/projects/'
@@ -367,7 +418,9 @@ export interface RootRouteChildren {
   errors404Route: typeof errors404Route
   errors500Route: typeof errors500Route
   errors503Route: typeof errors503Route
+  AuthCallbackRoute: typeof AuthCallbackRoute
   DocsDocIdRoute: typeof DocsDocIdRoute
+  PublicDocumentsShareTokenRoute: typeof PublicDocumentsShareTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -391,6 +444,13 @@ declare module '@tanstack/react-router' {
       path: '/docs/$docId'
       fullPath: '/docs/$docId'
       preLoaderRoute: typeof DocsDocIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/account': {
@@ -519,6 +579,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDraftsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/assistant/': {
+      id: '/_authenticated/assistant/'
+      path: '/assistant'
+      fullPath: '/assistant/'
+      preLoaderRoute: typeof AuthenticatedAssistantIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/public/documents/$shareToken': {
+      id: '/public/documents/$shareToken'
+      path: '/public/documents/$shareToken'
+      fullPath: '/public/documents/$shareToken'
+      preLoaderRoute: typeof PublicDocumentsShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/settings/notifications': {
       id: '/_authenticated/settings/notifications'
       path: '/notifications'
@@ -561,6 +635,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedErrorsErrorRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/dev/markdown-backfill': {
+      id: '/_authenticated/dev/markdown-backfill'
+      path: '/dev/markdown-backfill'
+      fullPath: '/dev/markdown-backfill'
+      preLoaderRoute: typeof AuthenticatedDevMarkdownBackfillRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -591,8 +672,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedDevMarkdownBackfillRoute: typeof AuthenticatedDevMarkdownBackfillRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedProjectsProjectIdRoute: typeof AuthenticatedProjectsProjectIdRoute
+  AuthenticatedAssistantIndexRoute: typeof AuthenticatedAssistantIndexRoute
   AuthenticatedDraftsIndexRoute: typeof AuthenticatedDraftsIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
   AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
@@ -604,8 +687,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedDevMarkdownBackfillRoute: AuthenticatedDevMarkdownBackfillRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedProjectsProjectIdRoute: AuthenticatedProjectsProjectIdRoute,
+  AuthenticatedAssistantIndexRoute: AuthenticatedAssistantIndexRoute,
   AuthenticatedDraftsIndexRoute: AuthenticatedDraftsIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,
   AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,
@@ -628,7 +713,9 @@ const rootRouteChildren: RootRouteChildren = {
   errors404Route: errors404Route,
   errors500Route: errors500Route,
   errors503Route: errors503Route,
+  AuthCallbackRoute: AuthCallbackRoute,
   DocsDocIdRoute: DocsDocIdRoute,
+  PublicDocumentsShareTokenRoute: PublicDocumentsShareTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

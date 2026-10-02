@@ -35,10 +35,15 @@ func (u *useCase) UpdateDocument(ctx context.Context, input dto.UpdateDocumentIn
 		doc.IsDraft = *input.IsDraft
 	}
 	if input.ProjectID != nil {
+		if !sameProject(doc.ProjectID, input.ProjectID) {
+			if err := u.checkProjectWorkspace(ctx, input.ProjectID, doc.WorkspaceID, input.UserID); err != nil {
+				return data, err
+			}
+		}
 		doc.ProjectID = input.ProjectID
 	}
 
-	if err = u.docRepo.Update(ctx, doc, input.Categories); err != nil {
+	if err = u.docRepo.UpdateAuthorized(ctx, doc, input.Categories, input.UserID); err != nil {
 		return data, err
 	}
 	data, err = u.GetDocument(ctx, input.ID, input.WorkspaceID, input.UserID)

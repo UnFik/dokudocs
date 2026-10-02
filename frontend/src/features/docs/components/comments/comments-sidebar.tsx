@@ -65,7 +65,7 @@ export function CommentsSidebar({
   if (!isOpen) return null
 
   return (
-    <aside className='z-30 flex h-full w-80 shrink-0 animate-in flex-col border-l border-border/80 bg-background/95 shadow-lg backdrop-blur-md duration-200 slide-in-from-right-4 2xl:w-96'>
+    <aside className='z-30 flex h-full w-80 shrink-0 animate-in flex-col border-l border-border/80 bg-background/95 duration-200 slide-in-from-right-4 2xl:w-96'>
       <div className='flex items-center justify-between border-b border-border/60 px-4 py-3'>
         <div className='flex items-center gap-2'>
           <MessageSquare className='size-4 text-primary' />
@@ -73,7 +73,7 @@ export function CommentsSidebar({
             Comments
           </h2>
           {openThreads.length > 0 && (
-            <span className='rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary'>
+            <span className='rounded-sm bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary'>
               {openThreads.length}
             </span>
           )}
@@ -201,7 +201,7 @@ export function CommentsSidebar({
           </div>
         ) : (
           <div className='flex h-64 flex-col items-center justify-center px-4 text-center'>
-            <div className='mb-2.5 flex size-10 items-center justify-center rounded-full bg-muted/60 text-muted-foreground'>
+            <div className='mb-2.5 flex size-10 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground'>
               {activeTab === 'open' ? (
                 <MessageSquare className='size-5' />
               ) : (

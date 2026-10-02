@@ -5,9 +5,25 @@ import (
 	"net/http"
 
 	"backend/constant"
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/response"
 )
 
+// ListMembers retrieves members of a project.
+// @Summary List project members
+// @Description Get all members of a project
+// @Tags Project
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Project ID (UUID)"
+// @Success 200 {object} response.Envelope{data=[]model.ProjectMember}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /projects/{id}/members [get]
 func (h *Handler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {

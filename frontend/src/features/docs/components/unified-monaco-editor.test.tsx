@@ -1,15 +1,21 @@
 import * as monaco from 'monaco-editor'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
+import { switchLocalUser } from '@/lib/local-user-data'
 import { UnifiedMonacoEditor } from './unified-monaco-editor'
 
 describe('UnifiedMonacoEditor component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    useEditorPreferenceStore.getState().setViewMode('guest', 'split')
+    switchLocalUser('11111111-1111-4111-8111-111111111111')
+    useEditorPreferenceStore
+      .getState()
+      .setViewMode('11111111-1111-4111-8111-111111111111', 'split')
   })
+
+  afterEach(() => switchLocalUser(null))
 
   it('renders editor and preview pane in split mode by default', async () => {
     const handleChange = vi.fn()
@@ -157,6 +163,27 @@ describe('UnifiedMonacoEditor component', () => {
     )
 
     expect(activeModel?.getValue()).toBe('typed locally by user')
+  })
+
+  it('flushes pending typed content when the editor unmounts', async () => {
+    const handleChange = vi.fn()
+    const screen = await render(
+      <UnifiedMonacoEditor
+        content='initial'
+        onChange={handleChange}
+        language='markdown'
+        previewContent={<div>Preview</div>}
+      />
+    )
+
+    const model = monaco.editor.getModels().at(-1)
+    expect(model).toBeDefined()
+    model?.setValue('pending content before leaving')
+    await screen.unmount()
+
+    expect(handleChange).toHaveBeenLastCalledWith(
+      'pending content before leaving'
+    )
   })
 
   it('renders floating theme toggle button in preview pane and allows clicking', async () => {

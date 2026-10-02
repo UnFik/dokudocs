@@ -19,7 +19,11 @@
     /* Alias */
     "paths": {
       "@/*": ["./src/*"],
-      "@muyajs/core": ["./src/types/muya-core.d.ts"]
+      "@muyajs/core": ["./src/types/muya-core.d.ts"],
+      "vega-lite": ["./src/types/stubs.d.ts"],
+      "vega-tooltip": ["./src/types/stubs.d.ts"],
+      "rxjs": ["./src/types/stubs.d.ts"],
+      "seroval": ["./src/types/stubs.d.ts"]
     },
 
     /* Linting */

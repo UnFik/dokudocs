@@ -16,7 +16,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID
 		SELECT w.id, w.name, w.slug, w.plan, COALESCE(w.logo_url, ''),
 		       COALESCE(wm.role::text, ''), w.created_by, w.created_at, w.updated_at
 		FROM workspaces w
-		LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $2
+		JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $2
 		WHERE w.id = $1
 	`
 	var w model.Workspace

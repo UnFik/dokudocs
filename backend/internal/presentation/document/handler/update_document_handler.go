@@ -1,15 +1,32 @@
 package handler
 
 import (
-	"errors"
 	"net/http"
 
-	"backend/constant"
 	"backend/internal/application/document/dto"
+	_ "backend/internal/domain/model"
 	"backend/internal/presentation/document/presenter"
 	"backend/internal/presentation/response"
 )
 
+// Update updates an existing document by ID.
+// @Summary Update document
+// @Description Update document details
+// @Tags Document
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param X-Workspace-Id header string true "Workspace ID (UUID)"
+// @Param id path string true "Document ID (UUID)"
+// @Param request body presenter.UpdateDocumentRequest true "Document update payload"
+// @Success 200 {object} response.Envelope{data=model.Document}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 403 {object} response.ErrorEnvelope
+// @Failure 404 {object} response.ErrorEnvelope
+// @Failure 409 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /documents/{id} [put]
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	userID, wsID, err := getUserAndWorkspace(r)
 	if err != nil {
@@ -39,14 +56,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		ProjectID:   req.ProjectID,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, constant.ErrForbidden):
-			response.Error(w, http.StatusForbidden, "forbidden: insufficient permission")
-		case errors.Is(err, constant.ErrDocumentNotFound):
-			response.Error(w, http.StatusNotFound, "document not found")
-		default:
-			response.Error(w, http.StatusInternalServerError, err.Error())
-		}
+		writeDocumentError(w, err)
 		return
 	}
 	_ = response.Data(w, http.StatusOK, doc)

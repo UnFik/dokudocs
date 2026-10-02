@@ -193,7 +193,7 @@ export function EditProjectDialog({
                     <img
                       src={logoUrl}
                       alt='Project Logo Preview'
-                      className='size-12 rounded-lg border border-border object-cover shadow-2xs'
+                      className='size-12 rounded-lg border border-border object-cover'
                     />
                     <div className='min-w-0 flex-1'>
                       <p className='truncate text-xs font-medium text-foreground'>
@@ -225,7 +225,7 @@ export function EditProjectDialog({
                         : 'border-border/80 hover:border-primary/50 hover:bg-muted/30'
                     }`}
                   >
-                    <div className='mb-2 flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground'>
+                    <div className='mb-2 flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground'>
                       <UploadCloud className='size-5' />
                     </div>
                     <p className='text-xs font-medium text-foreground'>
@@ -271,7 +271,7 @@ export function EditProjectDialog({
               >
                 Cancel
               </Button>
-              <Button type='submit' size='sm' className='h-8 text-xs shadow-xs'>
+              <Button type='submit' size='sm' className='h-8 text-xs'>
                 Save Changes
               </Button>
             </DialogFooter>

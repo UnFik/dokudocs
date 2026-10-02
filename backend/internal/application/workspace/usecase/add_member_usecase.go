@@ -25,5 +25,5 @@ func (u *useCase) AddMember(ctx context.Context, input dto.AddMemberInput) (err 
 	if role == "" {
 		role = "member"
 	}
-	return u.workspaceRepo.AddMember(ctx, input.WorkspaceID, user.ID, role)
+	return u.workspaceRepo.AddMember(ctx, input.WorkspaceID, input.ActorID, user.ID, role)
 }

@@ -36,7 +36,7 @@ func (u *useCase) UpdateProject(ctx context.Context, input dto.UpdateProjectInpu
 		p.Visibility = input.Visibility
 	}
 
-	if err = u.projectRepo.Update(ctx, p); err != nil {
+	if err = u.projectRepo.Update(ctx, p, input.UserID); err != nil {
 		return data, err
 	}
 	data, err = u.GetProject(ctx, input.ID, input.WorkspaceID, input.UserID)

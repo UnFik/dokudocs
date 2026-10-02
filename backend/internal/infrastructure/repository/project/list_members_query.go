@@ -8,16 +8,18 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r *Repository) ListMembers(ctx context.Context, projectID uuid.UUID) ([]model.ProjectMember, error) {
-	const query = `
+func (r *Repository) ListMembers(ctx context.Context, projectID, workspaceID, userID uuid.UUID) ([]model.ProjectMember, error) {
+	query := `
 		SELECT pm.project_id, pm.user_id, pm.role::text, pm.created_at,
 		       u.id, u.email, u.full_name, COALESCE(u.avatar_url, '')
 		FROM project_members pm
+		JOIN projects p ON p.id = pm.project_id
 		JOIN users u ON u.id = pm.user_id
-		WHERE pm.project_id = $1
+		WHERE pm.project_id = $1 AND p.workspace_id = $2 AND p.deleted_at IS NULL
+		  AND ` + projectReadAccessPredicate("$3") + `
 		ORDER BY pm.created_at ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, projectID)
+	rows, err := r.db.QueryContext(ctx, query, projectID, workspaceID, userID)
 	if err != nil {
 		return nil, err
 	}

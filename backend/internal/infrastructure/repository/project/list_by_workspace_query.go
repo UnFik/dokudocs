@@ -9,17 +9,18 @@ import (
 )
 
 func (r *Repository) ListByWorkspace(ctx context.Context, workspaceID, userID uuid.UUID) ([]model.Project, error) {
-	const query = `
+	query := `
 		SELECT p.id, p.workspace_id, p.name, COALESCE(p.description, ''), COALESCE(p.logo_url, ''),
 		       COALESCE(p.color_badge, '#3b82f6'), p.visibility::text, p.created_by, p.created_at, p.updated_at,
 		       (ps.project_id IS NOT NULL) AS is_starred, ps.starred_at,
 		       COALESCE(pm.role::text, '') AS member_role,
-		       COUNT(DISTINCT d.id) AS document_count
+		       COUNT(DISTINCT d.id) FILTER (WHERE d.id IS NOT NULL AND ` + projectDocumentReadPredicate + `) AS document_count
 		FROM projects p
 		LEFT JOIN project_stars ps ON ps.project_id = p.id AND ps.user_id = $2
 		LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $2
 		LEFT JOIN documents d ON d.project_id = p.id AND d.deleted_at IS NULL
 		WHERE p.workspace_id = $1 AND p.deleted_at IS NULL
+		  AND ` + projectReadAccessPredicate("$2") + `
 		GROUP BY p.id, ps.project_id, ps.starred_at, pm.role
 		ORDER BY p.created_at DESC
 	`
@@ -49,7 +50,7 @@ func (r *Repository) ListByWorkspace(ctx context.Context, workspaceID, userID uu
 	}
 
 	if len(projectIDs) > 0 {
-		catsByProject, err := r.fetchCategoriesForProjects(ctx, projectIDs)
+		catsByProject, err := r.fetchCategoriesForProjects(ctx, projectIDs, workspaceID, userID)
 		if err != nil {
 			return nil, err
 		}

@@ -1,0 +1,12 @@
+graph TD
+  Customer([Customer]) --> AddCart[Add Item to Cart]
+  AddCart --> Review[Review Cart]
+  Review --> Checkout[Click Checkout]
+  CheckStock -- No --> OutOfStock[Show Stock Error]
+  CheckStock -- Yes --> ReserveStock[Reserve Inventory 15m]
+  ReserveStock --> SelectPayment[Select Payment Method]
+  SelectPayment --> Stripe{Process Stripe?}
+  Stripe -- Success --> MarkPaid[Mark Order as Paid]
+  Stripe -- Failed --> ReleaseStock[Release Reserved Stock]
+  MarkPaid --> NotifyFulfillment[Dispatch Fulfillment Webhook]
+  NotifyFulfillment --> Finish([Order Complete])

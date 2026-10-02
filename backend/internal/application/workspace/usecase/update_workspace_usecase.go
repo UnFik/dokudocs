@@ -31,7 +31,7 @@ func (u *useCase) UpdateWorkspace(ctx context.Context, input dto.UpdateWorkspace
 	if input.LogoURL != "" {
 		ws.LogoURL = input.LogoURL
 	}
-	if err = u.workspaceRepo.Update(ctx, ws); err != nil {
+	if err = u.workspaceRepo.Update(ctx, ws, input.UserID); err != nil {
 		return data, err
 	}
 	data = ws

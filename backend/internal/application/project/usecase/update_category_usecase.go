@@ -17,5 +17,5 @@ func (u *useCase) UpdateCategory(ctx context.Context, projectID, categoryID, wor
 	if err != nil || !canEdit {
 		return constant.ErrForbidden
 	}
-	return u.projectRepo.UpdateCategory(ctx, projectID, categoryID, strings.TrimSpace(name), colorID)
+	return u.projectRepo.UpdateCategory(ctx, projectID, workspaceID, userID, categoryID, strings.TrimSpace(name), colorID)
 }

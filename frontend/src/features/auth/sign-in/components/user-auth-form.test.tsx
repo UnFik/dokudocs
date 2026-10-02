@@ -1,147 +1,90 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, type RenderResult } from 'vitest-browser-react'
-import { type Locator, userEvent } from 'vitest/browser'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { jsonResponse, testSession } from '@/test-utils/auth'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { render } from 'vitest-browser-react'
+import { useAuthStore } from '@/stores/auth-store'
 import { UserAuthForm } from './user-auth-form'
 
-const FORM_MESSAGES = {
-  emailEmpty: 'Please enter your email.',
-  passwordEmpty: 'Please enter your password.',
-  passwordShort: 'Password must be at least 7 characters long.',
-} as const
-
 const navigate = vi.fn()
-const setUserMock = vi.fn()
-const setAccessTokenMock = vi.fn()
-const postMock = vi.fn()
-
-const loginResponse = {
-  accessToken: 'api-access-token',
-  user: {
-    accountNo: 'ACC001',
-    email: 'admin@example.com',
-    role: ['admin'],
-    exp: 1_760_000_000,
-  },
-}
-
-vi.mock('@/stores/auth-store', () => ({
-  useAuthStore: () => ({
-    auth: {
-      setUser: setUserMock,
-      setAccessToken: setAccessTokenMock,
-    },
-  }),
+vi.mock('@tanstack/react-router', async (original) => ({
+  ...(await original<typeof import('@tanstack/react-router')>()),
+  useNavigate: () => navigate,
 }))
-
-vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
-  return {
-    ...actual,
-    useNavigate: () => navigate,
-    Link: ({
-      children,
-      to,
-      className,
-      ...rest
-    }: {
-      children?: React.ReactNode
-      to: string
-      className?: string
-    }) => (
-      <a href={to} className={className} {...rest}>
-        {children}
-      </a>
-    ),
-  }
+function renderForm(redirectTo?: string) {
+  return render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+      }
+    >
+      <UserAuthForm redirectTo={redirectTo} />
+    </QueryClientProvider>
+  )
+}
+beforeEach(() => {
+  navigate.mockClear()
+  useAuthStore.getState().auth.reset()
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+  useAuthStore.getState().auth.reset()
 })
 
-vi.mock('@/lib/api-client', () => ({
-  apiClient: {
-    post: postMock,
-  },
-}))
-
-describe('UserAuthForm', () => {
-  describe('Rendering without redirectTo', () => {
-    let screen: RenderResult
-    let emailInput: Locator
-    let passwordInput: Locator
-    let signInButton: Locator
-    let forgotPasswordLink: Locator
-
-    beforeEach(async () => {
-      vi.clearAllMocks()
-      postMock.mockResolvedValue({ data: loginResponse })
-      screen = await render(<UserAuthForm />)
-      emailInput = screen.getByRole('textbox', { name: /^Email$/i })
-      passwordInput = screen.getByLabelText(/^Password$/i)
-      signInButton = screen.getByRole('button', { name: /^Sign in$/i })
-      forgotPasswordLink = screen.getByText(/^Forgot password\?$/i)
-    })
-
-    it('renders fields, submit button, and forgot password link', async () => {
-      await expect.element(emailInput).toBeInTheDocument()
-      await expect.element(passwordInput).toBeInTheDocument()
-      await expect.element(signInButton).toBeInTheDocument()
-      await expect.element(forgotPasswordLink).toBeInTheDocument()
-    })
-
-    it('shows validation messages when submitting empty form', async () => {
-      await userEvent.click(signInButton)
-
-      await expect
-        .element(screen.getByText(FORM_MESSAGES.emailEmpty))
-        .toBeInTheDocument()
-      await expect
-        .element(screen.getByText(FORM_MESSAGES.passwordEmpty))
-        .toBeInTheDocument()
-    })
-
-    it('authenticates and navigates to default route on success', async () => {
-      await userEvent.fill(emailInput, 'admin@example.com')
-      await userEvent.fill(passwordInput, 'password123')
-
-      await userEvent.click(signInButton)
-      expect(postMock).toHaveBeenCalledWith('/api/v1/auth/login', {
-        email: 'admin@example.com',
-        password: 'password123',
-      })
-
-      await vi.waitFor(() => expect(setUserMock).toHaveBeenCalledOnce())
-      expect(setUserMock).toHaveBeenCalledWith(loginResponse.user)
-      expect(setAccessTokenMock).toHaveBeenCalledOnce()
-      expect(setAccessTokenMock).toHaveBeenCalledWith('api-access-token')
-
-      await vi.waitFor(() =>
-        expect(navigate).toHaveBeenCalledWith({ to: '/', replace: true })
-      )
-    })
-  })
-
-  it('navigates to redirectTo when provided', async () => {
-    vi.clearAllMocks()
-    postMock.mockResolvedValue({ data: loginResponse })
-
-    const { getByRole, getByLabelText } = await render(
-      <UserAuthForm redirectTo='/settings' />
-    )
-
-    await userEvent.fill(
-      getByRole('textbox', { name: /Email/i }),
-      'admin@example.com'
-    )
-    await userEvent.fill(getByLabelText('Password'), 'password123')
-
-    await userEvent.click(getByRole('button', { name: /Sign in/i }))
-
-    await vi.waitFor(() => expect(setUserMock).toHaveBeenCalledOnce())
-    expect(setAccessTokenMock).toHaveBeenCalledOnce()
-
+describe('email and Google sign-in', () => {
+  it('logs in with an existing short password and sets the session atomically', async () => {
+    const session = testSession()
+    const fetch = vi.fn().mockResolvedValue(jsonResponse(session))
+    vi.stubGlobal('fetch', fetch)
+    const screen = await renderForm('/account')
+    await screen
+      .getByRole('textbox', { name: 'Email', exact: true })
+      .fill('user@example.com')
+    await screen.getByLabelText('Password', { exact: true }).fill('old')
+    await screen.getByRole('button', { name: 'Sign in', exact: true }).click()
     await vi.waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({
-        to: '/settings',
-        replace: true,
-      })
+      expect(useAuthStore.getState().auth.user).toEqual(session.user)
     )
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      email: 'user@example.com',
+      password: 'old',
+    })
+    expect(navigate).toHaveBeenCalledWith({ to: '/account', replace: true })
+  })
+  it('keeps Google configuration errors inline without navigating', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ title: 'Google login belum dikonfigurasi' }, 503)
+        )
+    )
+    const screen = await renderForm()
+    await screen.getByRole('button', { name: 'Continue with Google' }).click()
+    await expect
+      .element(screen.getByRole('alert'))
+      .toHaveTextContent('Google login belum dikonfigurasi')
+    expect(navigate).not.toHaveBeenCalled()
+    await expect
+      .element(screen.getByText('Password recovery is not available yet.'))
+      .toBeVisible()
+  })
+  it('shows credential errors without treating login 401 as session expiry', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ title: 'Invalid credentials' }, 401))
+    )
+    const screen = await renderForm()
+    await screen
+      .getByRole('textbox', { name: 'Email', exact: true })
+      .fill('user@example.com')
+    await screen.getByLabelText('Password', { exact: true }).fill('wrong')
+    await screen.getByRole('button', { name: 'Sign in', exact: true }).click()
+    await expect
+      .element(screen.getByRole('alert'))
+      .toHaveTextContent('Invalid credentials')
+    expect(navigate).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,5 @@
-import { LinkedList } from '../../block/base/linkedList/linkedList'
-import TreeNode from '../../block/base/treeNode'
+import { LinkedList } from './linkedList/linkedList'
+import TreeNode from './treeNode'
 import { CLASS_NAMES } from '../../config'
 import type { TState } from '../../state/types'
 import type { Nullable } from '../../types'

@@ -5,6 +5,7 @@ import {
   FileText,
   Folder,
   Layers,
+  MessageSquareText,
   Settings,
   Trash2,
 } from 'lucide-react'
@@ -51,6 +52,11 @@ export const sidebarData: SidebarData = {
           title: 'Trash',
           url: '/trash',
           icon: Trash2,
+        },
+        {
+          title: 'AI Chat',
+          url: '/assistant',
+          icon: MessageSquareText,
         },
       ],
     },

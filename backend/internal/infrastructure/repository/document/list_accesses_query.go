@@ -8,16 +8,18 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r *Repository) ListAccesses(ctx context.Context, docID uuid.UUID) ([]model.DocumentAccess, error) {
-	const query = `
+func (r *Repository) ListAccesses(ctx context.Context, docID, actorID uuid.UUID) ([]model.DocumentAccess, error) {
+	query := `
 		SELECT da.document_id, da.user_id, da.access_level::text, da.created_at,
 		       u.id, u.full_name, u.email, COALESCE(u.avatar_url, '')
 		FROM document_accesses da
+		JOIN documents d ON d.id = da.document_id
 		JOIN users u ON u.id = da.user_id
-		WHERE da.document_id = $1
+		WHERE da.document_id = $1 AND d.deleted_at IS NULL
+	` + documentReadPredicate + `
 		ORDER BY da.created_at ASC
 	`
-	rows, err := r.db.QueryContext(ctx, query, docID)
+	rows, err := r.db.QueryContext(ctx, query, docID, actorID)
 	if err != nil {
 		return nil, err
 	}

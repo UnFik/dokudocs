@@ -11,6 +11,18 @@ import (
 	"backend/internal/presentation/response"
 )
 
+// Login authenticates a user and returns an access token.
+// @Summary User login
+// @Description Authenticate user with credentials and return JWT token
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body presenter.LoginRequest true "Login request payload"
+// @Success 200 {object} response.Envelope{data=presenter.LoginResponse}
+// @Failure 400 {object} response.ErrorEnvelope
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 500 {object} response.ErrorEnvelope
+// @Router /auth/login [post]
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req presenter.LoginRequest
 	if err := response.DecodeJSON(r, &req); err != nil {
