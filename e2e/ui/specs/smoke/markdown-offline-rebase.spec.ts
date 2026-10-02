@@ -159,30 +159,29 @@ async function pendingCommandCount(
   page: Page,
   storeName: "pending-delete-commands" | "pending-move-commands",
 ) {
-  return page.evaluate(
-    () =>
-      new Promise<number>((resolve, reject) => {
-        const request = indexedDB.open("dokudocs-collaboration");
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          const db = request.result;
-          if (!db.objectStoreNames.contains(storeName)) {
-            db.close();
-            resolve(0);
-            return;
-          }
-          const count = db
-            .transaction(storeName, "readonly")
-            .objectStore(storeName)
-            .count();
-          count.onsuccess = () => {
-            db.close();
-            resolve(count.result);
-          };
-          count.onerror = () => reject(count.error);
-        };
-      }),
-  );
+  // A source string keeps the Playwright TS transform from injecting helper
+  // calls (such as __name) that do not exist in the page context.
+  return page.evaluate<number>(`new Promise((resolve, reject) => {
+    const request = indexedDB.open("dokudocs-collaboration");
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(${JSON.stringify(storeName)})) {
+        db.close();
+        resolve(0);
+        return;
+      }
+      const count = db
+        .transaction(${JSON.stringify(storeName)}, "readonly")
+        .objectStore(${JSON.stringify(storeName)})
+        .count();
+      count.onsuccess = () => {
+        db.close();
+        resolve(count.result);
+      };
+      count.onerror = () => reject(count.error);
+    };
+  })`);
 }
 
 test("@live @smoke: offline edit merges after another user deletes an unrelated block", async ({

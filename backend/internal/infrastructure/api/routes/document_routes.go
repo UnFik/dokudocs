@@ -44,7 +44,8 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) func
 	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel))
 	publicBodyHandler := dochandler.NewPublicBodyHandler(publicBodyReader)
 	collaborationServer := collabws.NewServer(authUseCase, bodyReader, bodyRepository, cfg.AllowedOrigin, c.CollaborationBroker).
-		WithProfiles(presenceProfiles{users: userrepo.NewRepository(c.DB)})
+		WithProfiles(presenceProfiles{users: userrepo.NewRepository(c.DB)}).
+		WithRevisionFlusher(bodyRepository)
 	if c.CollaborationPresence != nil {
 		collaborationServer.WithPresenceStore(c.CollaborationPresence)
 	}
