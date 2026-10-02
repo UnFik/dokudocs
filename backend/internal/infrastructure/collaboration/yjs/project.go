@@ -93,28 +93,48 @@ func MergeAndProjectV1(persisted, incoming []byte, documentID uuid.UUID) ([]byte
 }
 
 func projectDoc(doc *crdt.Doc, documentID uuid.UUID) (documentbody.Body, error) {
+	body, _, err := projectDocWithSuggestions(doc, documentID)
+	return body, err
+}
+
+// SuggestionsV1 lists the suggestions in an encoded body, one entry per id.
+func SuggestionsV1(encodedState []byte) ([]SuggestionInfo, error) {
+	if len(encodedState) == 0 {
+		return nil, projectionError("state is required")
+	}
+	doc := crdt.New()
+	defer doc.Destroy()
+	if err := crdt.ApplyUpdateV1(doc, encodedState, nil); err != nil {
+		return nil, fmt.Errorf("%w: decode Yjs state: %v", ErrInvalidProjection, err)
+	}
+	_, suggestions, err := projectDocWithSuggestions(doc, uuid.New())
+	return suggestions, err
+}
+
+func projectDocWithSuggestions(doc *crdt.Doc, documentID uuid.UUID) (documentbody.Body, []SuggestionInfo, error) {
 	children := doc.GetXmlFragment("body").Children()
 	if len(children) != 1 {
-		return documentbody.Body{}, projectionError("body fragment must have one document root")
+		return documentbody.Body{}, nil, projectionError("body fragment must have one document root")
 	}
 	root, ok := children[0].(*crdt.YXmlElement)
 	if !ok || root.NodeName != "document" {
-		return documentbody.Body{}, projectionError("body fragment root must be a document element")
+		return documentbody.Body{}, nil, projectionError("body fragment root must be a document element")
 	}
 	rootID, err := nodeID(root)
 	if err != nil {
-		return documentbody.Body{}, err
+		return documentbody.Body{}, nil, err
 	}
 	body := documentbody.Body{DocumentID: documentID, RootNodeID: rootID, Nodes: make([]documentbody.Node, 0)}
-	if _, err := appendElement(&body, root, nil, 0); err != nil {
-		return documentbody.Body{}, err
+	collector := &suggestionCollector{}
+	if _, err := appendElement(&body, root, nil, 0, collector); err != nil {
+		return documentbody.Body{}, nil, err
 	}
-	return body, nil
+	return body, collector.list(), nil
 }
 
 // appendElement projects one element and its subtree. It reports false, and adds
 // nothing, for an element that is not canonical: an inserted suggestion.
-func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID *uuid.UUID, siblingOrder float64) (bool, error) {
+func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID *uuid.UUID, siblingOrder float64, collector *suggestionCollector) (bool, error) {
 	values := element.GetAttributeValues()
 	nodeID, err := nodeIDFromValues(element, values)
 	if err != nil {
@@ -131,12 +151,17 @@ func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID 
 	if (isTextOnly(nodeType) || isInlineParent(nodeType) || nodeType == "run") && bodyContent != "" {
 		return false, projectionError("text node %s has unexpected bodyContent", nodeID)
 	}
-	bodyAttributes, inserted, err := withoutNodeSuggestion(bodyAttributes)
+	bodyAttributes, nodeSuggestion, err := withoutNodeSuggestion(bodyAttributes)
 	if err != nil {
 		return false, projectionError("node %s: %v", nodeID, err)
 	}
-	if inserted {
-		return false, nil
+	if nodeSuggestion != nil {
+		if err := collector.add(nodeSuggestion.Kind, nodeSuggestion.ID, nodeSuggestion.Author, nodeID); err != nil {
+			return false, projectionError("node %s: %v", nodeID, err)
+		}
+		if nodeSuggestion.Kind == "insert" {
+			return false, nil
+		}
 	}
 	node := documentbody.Node{
 		DocumentID: body.DocumentID, NodeID: nodeID, ParentID: parentID,
@@ -149,7 +174,7 @@ func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID 
 	for index, child := range rawChildren {
 		children[index] = child
 	}
-	onlyInserted, err := appendTextContent(&body.Nodes[len(body.Nodes)-1], nodeType, children)
+	onlyInserted, err := appendTextContent(&body.Nodes[len(body.Nodes)-1], nodeType, children, collector)
 	if err != nil {
 		return false, err
 	}
@@ -181,7 +206,7 @@ func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID 
 	kept := 0
 	for _, child := range elements {
 		id := nodeID
-		appended, err := appendElement(body, child, &id, float64(kept))
+		appended, err := appendElement(body, child, &id, float64(kept), collector)
 		if err != nil {
 			return false, err
 		}
@@ -194,7 +219,7 @@ func appendElement(body *documentbody.Body, element *crdt.YXmlElement, parentID 
 
 // appendTextContent fills a node's text. It reports true when the node is a run
 // whose text is entirely inserted by suggestions, which makes it not canonical.
-func appendTextContent(node *documentbody.Node, nodeType string, children []crdtXMLNode) (bool, error) {
+func appendTextContent(node *documentbody.Node, nodeType string, children []crdtXMLNode, collector *suggestionCollector) (bool, error) {
 	if nodeType == "opaque" || nodeType == "opaque-inline" || nodeType == "thematic-break" {
 		if len(children) > 0 {
 			return false, projectionError("source node %s must be an XML atom", node.NodeID)
@@ -226,9 +251,14 @@ func appendTextContent(node *documentbody.Node, nodeType string, children []crdt
 			if !ok {
 				return false, projectionError("text node %s contains a non-text embed", node.NodeID)
 			}
-			attributes, inserted, err := withoutSuggestionMarks(delta.Attributes)
+			attributes, inserted, found, err := withoutSuggestionMarks(delta.Attributes)
 			if err != nil {
 				return false, projectionError("text node %s: %v", node.NodeID, err)
+			}
+			for _, suggestion := range found {
+				if err := collector.add(suggestion.Kind, suggestion.ID, suggestion.Author, node.NodeID); err != nil {
+					return false, projectionError("text node %s: %v", node.NodeID, err)
+				}
 			}
 			if inserted {
 				hadInserted = true
@@ -327,28 +357,28 @@ func nodeIDFromValues(element *crdt.YXmlElement, values map[string]any) (uuid.UU
 // withoutNodeSuggestion removes a suggestion carried in a node's attributes,
 // after checking it. A node inserted by a suggestion is not canonical, with
 // everything under it.
-func withoutNodeSuggestion(attributes json.RawMessage) (json.RawMessage, bool, error) {
+func withoutNodeSuggestion(attributes json.RawMessage) (json.RawMessage, *nodeSuggestion, error) {
 	if !strings.Contains(string(attributes), `"suggestion"`) {
-		return attributes, false, nil
+		return attributes, nil, nil
 	}
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(attributes, &object); err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 	raw, ok := object["suggestion"]
 	if !ok {
-		return attributes, false, nil
+		return attributes, nil, nil
 	}
 	suggestion, err := parseNodeSuggestion(raw)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
 	delete(object, "suggestion")
 	stripped, err := json.Marshal(object)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
-	return stripped, suggestion.Kind == "insert", nil
+	return stripped, &suggestion, nil
 }
 
 func projectMarks(attributes crdt.Attributes) (map[string]any, error) {
