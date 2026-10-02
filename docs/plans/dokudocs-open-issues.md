@@ -80,13 +80,16 @@ Keterangan kolom **Verifikasi**: *terkonfirmasi* = saya cek atau buktikan di ses
 ## G1
 
 ### 11. [G1] Latihan failover Redis dan PostgreSQL, tetapkan RPO/RTO
+- **Status 2026-10-02 (sebagian):** outage Redis dan PostgreSQL disimulasikan di repo dan lulus; angka dan celah di [catatan HA](../research/dokudocs-g1-ha-resilience.md). Failover terkelola, replikasi sinkron, dan restart orkestrator nyata belum diverifikasi.
 - Terbuka menurut ringkasan: outage/failover Redis, failover PostgreSQL, restart orchestrator.
 - **Selesai bila:** skenario dijalankan terhadap layanan terkelola atau padanannya, hasil dan RPO/RTO tertulis, dan klien terbukti pulih tanpa kehilangan edit yang sudah di-ACK.
 
 ### 12. [G1] Sizing koneksi dan topologi HA
+- **Status 2026-10-02 (sebagian):** model sizing, pool DB dapat dikonfigurasi, dan usulan topologi ada di [catatan HA](../research/dokudocs-g1-ha-resilience.md). Target masih usulan sampai load test WebSocket (G6 butir 2).
 - Angka editor per dokumen, koneksi per instance, latency, availability, dan topologi HA belum ditetapkan ("ditetapkan dari sizing dan load/failover sebelum rilis").
 
 ### 13. [G1] Bukti E2E revoke, kedaluwarsa token, dan logout dengan pending edit
+- **Status 2026-10-02 (sebagian):** revoke dan token kedaluwarsa terbukti di tingkat provider; logout mengikuti ADR 0007 (opsi B): flush lalu bersihkan, atau konfirmasi buang; E2E browser untuk revoke, token ditolak, dan logout lulus (lihat [catatan HA](../research/dokudocs-g1-ha-resilience.md)).
 - Catatan lama menyebut alur ini belum terbukti; periksa dulu mana yang sudah tertutup oleh tes terbaru, lalu tutup sisanya (revoke saat edit berjalan, token kedaluwarsa saat offline, logout dengan pending).
 
 ## G2
