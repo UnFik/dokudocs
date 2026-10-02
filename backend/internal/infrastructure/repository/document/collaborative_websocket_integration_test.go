@@ -52,6 +52,7 @@ type integrationWebSocketFrame struct {
 	BodyEpoch         int64     `json:"bodyEpoch,omitempty"`
 	BodySchemaVersion int       `json:"bodySchemaVersion,omitempty"`
 	CanEdit           *bool     `json:"canEdit,omitempty"`
+	CanSuggest        *bool     `json:"canSuggest,omitempty"`
 	State             []byte    `json:"state,omitempty"`
 	Update            []byte    `json:"update,omitempty"`
 }

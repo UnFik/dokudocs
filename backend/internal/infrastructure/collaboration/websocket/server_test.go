@@ -242,7 +242,7 @@ func TestEnqueueUpdateResyncsAcrossEpoch(t *testing.T) {
 }
 
 func TestEnqueueResyncsWhenEditAccessChangesWithoutBodyChange(t *testing.T) {
-	peer := &peer{out: make(chan outbound, 1), done: make(chan struct{}), bodyVersion: 4, bodyEpoch: 2, canEdit: true}
+	peer := &peer{out: make(chan outbound, 1), done: make(chan struct{}), bodyVersion: 4, bodyEpoch: 2, level: fullEdit}
 	snapshot := collaboration.BodySnapshot{
 		BodyVersion: 4, BodyEpoch: 2, BodySchemaVersion: 1, CanEdit: false,
 		EncodedState: []byte("state-4"),
@@ -253,8 +253,8 @@ func TestEnqueueResyncsWhenEditAccessChangesWithoutBodyChange(t *testing.T) {
 	if message.message.Type != "resync" || message.message.BodyVersion != 4 || message.message.CanEdit == nil || *message.message.CanEdit {
 		t.Fatalf("ACL resync = %+v, want same-version read-only snapshot", message.message)
 	}
-	if peer.canEdit {
-		t.Fatal("peer canEdit stayed true after read-only resync")
+	if peer.level != readOnly {
+		t.Fatal("peer kept its write level after a read-only resync")
 	}
 }
 

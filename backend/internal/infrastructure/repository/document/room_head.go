@@ -85,7 +85,7 @@ func (r *Repository) ReadRoomHead(ctx context.Context, workspaceID, documentID u
 				ProjectRole: projectRoles[userID], DocumentGrant: grants[userID],
 			}
 			if policy.CanReadDocument(doc, context) {
-				head.Access[userID] = collaboration.RoomAccess{CanRead: true, CanEdit: policy.CanEditDocument(doc, context)}
+				head.Access[userID] = collaboration.RoomAccess{CanRead: true, CanEdit: policy.CanEditDocument(doc, context), CanSuggest: policy.CanSuggest(doc, context)}
 			}
 		}
 		return nil

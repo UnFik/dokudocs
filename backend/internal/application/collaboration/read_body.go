@@ -28,8 +28,9 @@ type BodySnapshot struct {
 
 // RoomAccess is one user's current access to a document.
 type RoomAccess struct {
-	CanRead bool
-	CanEdit bool
+	CanRead    bool
+	CanEdit    bool
+	CanSuggest bool
 }
 
 // RoomHead is the lightweight state of a document for everyone in a room:
