@@ -266,7 +266,9 @@ func TestRedisOutageKeepsAcknowledgedEditsAndPeersConvergeAfterRecovery(t *testi
 			t.Fatalf("send update after recovery: %v", err)
 		}
 		ack := readWebSocketFrame(t, ownerSocket)
-		for ack.Type == "resync" {
+		// The author also receives its own earlier commit as an ordinary update frame
+		// (room fan-out ordering), which is not the ACK being waited for here.
+		for ack.Type == "resync" || ack.Type == "update" {
 			ack = readWebSocketFrame(t, ownerSocket)
 		}
 		if ack.Type != "ack" || ack.BodyVersion != version {
@@ -368,7 +370,7 @@ func TestPostgresOutageNeverAcksAndTheRetryAppliesOnce(t *testing.T) {
 			t.Fatalf("retry update: %v", err)
 		}
 		ack = readWebSocketFrame(t, owner)
-		for ack.Type == "resync" {
+		for ack.Type == "resync" || ack.Type == "update" {
 			ack = readWebSocketFrame(t, owner)
 		}
 		if ack.Type == "ack" || time.Now().After(deadline) {
@@ -383,7 +385,7 @@ func TestPostgresOutageNeverAcksAndTheRetryAppliesOnce(t *testing.T) {
 		t.Fatalf("duplicate retry: %v", err)
 	}
 	again := readWebSocketFrame(t, owner)
-	for again.Type == "resync" {
+	for again.Type == "resync" || again.Type == "update" {
 		again = readWebSocketFrame(t, owner)
 	}
 	if again.Type != "ack" || again.BodyVersion != 2 {
