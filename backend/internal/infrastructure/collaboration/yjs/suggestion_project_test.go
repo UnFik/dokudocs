@@ -276,3 +276,76 @@ func TestProjectV1RejectsMalformedSuggestions(t *testing.T) {
 		})
 	}
 }
+
+func TestSuggestionsV1ListsEachSuggestionOnceWithItsKinds(t *testing.T) {
+	f := newSuggestionFixture()
+	other := uuid.New()
+	otherSuggestion := uuid.New()
+	doc := crdt.New()
+	defer doc.Destroy()
+	fragment := doc.GetXmlFragment("body")
+	blockSuggestion := `{"suggestion":{"kind":"insert","id":"` + otherSuggestion.String() + `","author":"` + other.String() + `"}}`
+	if err := doc.TransactE(func(tx *crdt.Transaction) error {
+		root := xmlElement(tx, "document", f.rootID, `{}`, "")
+		paragraph := xmlElement(tx, "paragraph", f.paragraphID, `{}`, "")
+		run := xmlElement(tx, "run", f.runID, `{}`, "")
+		text := crdt.NewYXmlText()
+		// One suggestion, a Replace: deleted text and the text typed in its place.
+		text.ApplyDelta(tx, []crdt.Delta{
+			{Op: crdt.DeltaOpInsert, Insert: "old", Attributes: f.mark("delete")},
+			{Op: crdt.DeltaOpInsert, Insert: "new", Attributes: f.mark("insert")},
+			{Op: crdt.DeltaOpInsert, Insert: " plain"},
+		})
+		run.InsertText(tx, 0, text)
+		paragraph.InsertElement(tx, 0, run)
+		inserted := xmlElement(tx, "paragraph", uuid.New(), blockSuggestion, "")
+		root.InsertElement(tx, 0, paragraph)
+		root.InsertElement(tx, 1, inserted)
+		fragment.InsertElement(tx, 0, root)
+		return nil
+	}); err != nil {
+		t.Fatalf("build Yjs body: %v", err)
+	}
+
+	got, err := SuggestionsV1(crdt.EncodeStateAsUpdateV1(doc, nil))
+	if err != nil {
+		t.Fatalf("SuggestionsV1() error = %v", err)
+	}
+	byID := map[uuid.UUID]SuggestionInfo{}
+	for _, info := range got {
+		byID[info.ID] = info
+	}
+	if len(got) != 2 {
+		t.Fatalf("SuggestionsV1() = %+v, want two suggestions", got)
+	}
+	if replace := byID[f.suggestionID]; replace.Author != f.author || strings.Join(replace.Kinds, ",") != "delete,insert" {
+		t.Fatalf("replace = %+v, want author %s with kinds delete,insert", replace, f.author)
+	}
+	if block := byID[otherSuggestion]; block.Author != other || strings.Join(block.Kinds, ",") != "insert" {
+		t.Fatalf("block insert = %+v, want author %s with kind insert", block, other)
+	}
+}
+
+func TestSuggestionsV1RejectsOneIDWithTwoAuthors(t *testing.T) {
+	f := newSuggestionFixture()
+	forged := crdt.Attributes{"suggestion_delete": crdt.Attributes{"id": f.suggestionID.String(), "author": uuid.New().String()}}
+	state := f.bodyWithRun(t, `{}`, []crdt.Delta{
+		{Op: crdt.DeltaOpInsert, Insert: "mine", Attributes: f.mark("insert")},
+		{Op: crdt.DeltaOpInsert, Insert: "theirs", Attributes: forged},
+	})
+	if _, err := SuggestionsV1(state); err == nil {
+		t.Fatalf("SuggestionsV1() accepted one suggestion id claimed by two authors")
+	}
+	if _, err := ProjectV1(state, f.documentID); err == nil {
+		t.Fatalf("ProjectV1() accepted one suggestion id claimed by two authors")
+	}
+}
+
+func TestSuggestionsV1IsEmptyForAPlainBody(t *testing.T) {
+	f := newSuggestionFixture()
+	state := f.bodyWithRun(t, `{}`, []crdt.Delta{{Op: crdt.DeltaOpInsert, Insert: "plain"}})
+	got, err := SuggestionsV1(state)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("SuggestionsV1() = (%+v, %v), want none", got, err)
+	}
+}

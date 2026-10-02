@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/reearth/ygo/crdt"
@@ -231,19 +232,82 @@ func validateScalarObject(raw json.RawMessage) error {
 // withoutSuggestionMarks separates suggestion marks from formatting and checks
 // each one. Text under an insert suggestion is not part of the canonical body;
 // delete and format suggestions leave the text and its formatting as they are.
-func withoutSuggestionMarks(attributes crdt.Attributes) (rest crdt.Attributes, inserted bool, err error) {
+func withoutSuggestionMarks(attributes crdt.Attributes) (rest crdt.Attributes, inserted bool, found []textSuggestion, err error) {
 	rest = make(crdt.Attributes, len(attributes))
 	for name, value := range attributes {
 		if !isSuggestionMark(name) {
 			rest[name] = value
 			continue
 		}
-		if _, err := parseTextSuggestionMark(name, value); err != nil {
-			return nil, false, err
+		parsed, err := parseTextSuggestionMark(name, value)
+		if err != nil {
+			return nil, false, nil, err
 		}
+		found = append(found, parsed)
 		if name == textInsertMark {
 			inserted = true
 		}
 	}
-	return rest, inserted, nil
+	return rest, inserted, found, nil
+}
+
+// SuggestionInfo describes one suggestion found in a body.
+type SuggestionInfo struct {
+	ID     uuid.UUID
+	Author uuid.UUID
+	// Kinds are the kinds the suggestion has, sorted. A Replace has delete and insert.
+	Kinds []string
+	// NodeIDs are the nodes that carry it: the runs whose text is marked, or the
+	// node whose attributes hold it.
+	NodeIDs []uuid.UUID
+}
+
+// suggestionCollector gathers suggestions during projection and enforces that one
+// suggestion id has one author, so nobody can add to or take over another
+// user's suggestion by reusing its id.
+type suggestionCollector struct {
+	byID map[uuid.UUID]*SuggestionInfo
+}
+
+func (c *suggestionCollector) add(kind string, id, author, nodeID uuid.UUID) error {
+	if c.byID == nil {
+		c.byID = map[uuid.UUID]*SuggestionInfo{}
+	}
+	info, ok := c.byID[id]
+	if !ok {
+		info = &SuggestionInfo{ID: id, Author: author}
+		c.byID[id] = info
+	}
+	if info.Author != author {
+		return fmt.Errorf("suggestion %s has more than one author", id)
+	}
+	if !containsString(info.Kinds, kind) {
+		info.Kinds = append(info.Kinds, kind)
+	}
+	for _, existing := range info.NodeIDs {
+		if existing == nodeID {
+			return nil
+		}
+	}
+	info.NodeIDs = append(info.NodeIDs, nodeID)
+	return nil
+}
+
+func (c *suggestionCollector) list() []SuggestionInfo {
+	result := make([]SuggestionInfo, 0, len(c.byID))
+	for _, info := range c.byID {
+		sort.Strings(info.Kinds)
+		result = append(result, *info)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID.String() < result[j].ID.String() })
+	return result
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
