@@ -1,6 +1,8 @@
 package yjs
 
 import (
+	"encoding/base64"
+	"os"
 	"strings"
 	"testing"
 
@@ -347,5 +349,47 @@ func TestSuggestionsV1IsEmptyForAPlainBody(t *testing.T) {
 	got, err := SuggestionsV1(state)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("SuggestionsV1() = (%+v, %v), want none", got, err)
+	}
+}
+
+// testdata/suggestions_v1.b64 is a Yjs state the frontend encoded from its own
+// suggestion fixture (frontend/scripts/generate-suggestions-fixture.ts). The
+// frontend and the backend must project it to the same canonical body.
+func TestProjectV1AgreesWithTheFrontendOnASuggestionFixture(t *testing.T) {
+	encoded, err := os.ReadFile("testdata/suggestions_v1.b64")
+	if err != nil {
+		t.Fatalf("read frontend Yjs fixture: %v", err)
+	}
+	state, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(encoded)))
+	if err != nil {
+		t.Fatalf("decode frontend Yjs fixture: %v", err)
+	}
+
+	nodes := projectNodes(t, state, uuid.New())
+
+	want := []struct{ id, nodeType, content string }{
+		{"10000000-0000-4000-8000-000000000001", "document", ""},
+		{"10000000-0000-4000-8000-000000000011", "paragraph", ""},
+		{"10000000-0000-4000-8000-000000000012", "run", "Hello world"},
+		{"10000000-0000-4000-8000-000000000021", "paragraph", ""},
+		{"10000000-0000-4000-8000-000000000022", "run", "Keep drop and restyle"},
+		{"10000000-0000-4000-8000-000000000041", "paragraph", ""},
+		{"10000000-0000-4000-8000-000000000042", "run", "block to delete"},
+	}
+	if len(nodes) != len(want) {
+		t.Fatalf("projected %d nodes, want %d: %+v", len(nodes), len(want), nodes)
+	}
+	for index, node := range nodes {
+		if node.NodeID.String() != want[index].id || node.Type != want[index].nodeType || node.Content != want[index].content {
+			t.Fatalf("node %d = %s %s %q, want %s %s %q", index, node.NodeID, node.Type, node.Content, want[index].id, want[index].nodeType, want[index].content)
+		}
+		if strings.Contains(string(node.Attributes), "suggestion") {
+			t.Fatalf("node %s attributes = %s, want no suggestion", node.NodeID, node.Attributes)
+		}
+	}
+
+	suggestions, err := SuggestionsV1(state)
+	if err != nil || len(suggestions) != 5 {
+		t.Fatalf("SuggestionsV1() = (%+v, %v), want the five suggestions in the fixture", suggestions, err)
 	}
 }
