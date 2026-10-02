@@ -1,4 +1,5 @@
 import * as Y from 'yjs'
+import type { TextEditTranslation } from './suggestion-operations'
 import type { MarkdownBodySnapshot } from '@/lib/domain-api'
 import {
   CollaborativeDocumentProvider,
@@ -74,6 +75,7 @@ export async function mountCollaborativeDocumentBody(
     onHistoryChange?: (history: EditorHistoryState) => void
     onInlineStateChange?: (state: InlineState) => void
     onLinkRequest?: () => void
+    onSuggestTransaction?: (result: TextEditTranslation) => void
   }
 ) {
   const document = new Y.Doc()
@@ -165,6 +167,7 @@ export async function mountCollaborativeDocumentBody(
       onHistoryChange: input.onHistoryChange,
       onInlineStateChange: input.onInlineStateChange,
       onLinkRequest: input.onLinkRequest,
+      onSuggestTransaction: input.onSuggestTransaction,
       onSelectionChange: cursorSender.send,
     })
     showRemoteCursors = (cursors) => editor.setRemoteCursors(cursors)
