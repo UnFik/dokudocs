@@ -141,18 +141,17 @@ test("@live: typing in Suggest mode becomes a pending suggestion that an editor 
     await commenterEditor.getByText("Original phrase").click();
     await commenter.keyboard.press("End");
     await commenter.keyboard.type("!");
+    // The typed text shows in place at once as a suggestion layer.
+    await expect(commenterEditor.locator(".suggest-ins")).toHaveText("!");
+    // Moving the caret saves it as one suggestion.
+    await commenter.keyboard.press("Home");
     await expect(commenter.getByText("pending · human")).toBeVisible();
-    await expect(
-      commenter.getByText("Insert “!” in “Original phrase”"),
-    ).toBeVisible();
-    await expect(commenterEditor).toContainText("Original phrase");
-    await expect(commenterEditor).not.toContainText("Original phrase!");
+    await expect(commenter.getByText("Insert “!”")).toBeVisible();
 
     await commenter.keyboard.press("Enter");
     await expect(
-      commenter.getByText(/Typing can only change text inside one run/),
+      commenter.getByText(/Typing can only change text within one block/),
     ).toBeVisible();
-    await expect(commenterEditor).not.toContainText("Original phrase!");
 
     const overflow = await commenter.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
@@ -168,7 +167,7 @@ test("@live: typing in Suggest mode becomes a pending suggestion that an editor 
     await page.goto(`/docs/${documentID}`);
     const ownerEditor = page.locator(".ProseMirror");
     await expect(ownerEditor).toContainText("Original phrase");
-    await expect(ownerEditor).not.toContainText("Original phrase!");
+    await expect(ownerEditor.locator(".suggest-ins")).toHaveText("!");
     for (const name of ["View", "Edit", "Suggest"]) {
       await expect(
         page.getByRole("tab", { name, exact: true }),
@@ -178,6 +177,7 @@ test("@live: typing in Suggest mode becomes a pending suggestion that an editor 
       .getByRole("button", { name: "Suggestions", exact: true })
       .click();
     await page.getByRole("button", { name: "Accept" }).click();
+    await expect(ownerEditor.locator(".suggest-ins")).toHaveCount(0);
     await expect(ownerEditor).toContainText("Original phrase!");
     await expect(commenterEditor).toContainText("Original phrase!");
   } finally {

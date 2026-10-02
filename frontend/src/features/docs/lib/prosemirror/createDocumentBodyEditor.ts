@@ -5,6 +5,7 @@ import {
   EditorState,
   NodeSelection,
   Plugin,
+  TextSelection,
   type Command,
   type Transaction,
 } from 'prosemirror-state'
@@ -30,10 +31,19 @@ import * as Y from 'yjs'
 import type { RemoteCursor } from '../collaboration-socket'
 import type { DocumentBodyNode } from '../documentBody'
 import {
-  translateTextEdit,
-  typingRefusal,
-  type TextEditTranslation,
-} from '../suggestion-operations'
+  baseOffsetForDraft,
+  deleteDraftBackward,
+  deleteDraftForward,
+  deleteDraftRange,
+  draftHasChanges,
+  draftOffsetForBase,
+  insertDraftText,
+  touchesChange,
+  type DraftCaret,
+  type TextLayerEntry,
+  type TypingDraft,
+} from '../suggestion-draft'
+import { typingRefusal } from '../suggestion-operations'
 import {
   headingInputRule,
   insertBlockCommand,
@@ -58,6 +68,13 @@ import {
   prepareBodyTransaction,
 } from './prepareBodyTransaction'
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
+import {
+  findRun,
+  runCaretAt,
+  suggestionDecorations,
+  type LayerEntry,
+  type RunCaret,
+} from './suggestionLayer'
 
 export type MoveNodeIntent = {
   nodeID: string
@@ -101,8 +118,16 @@ export function createDocumentBodyEditor(
     onHistoryChange?: (history: EditorHistoryState) => void
     onInlineStateChange?: (state: InlineState) => void
     onLinkRequest?: () => void
-    /** Suggest mode: a local edit is reported here instead of being applied. */
-    onSuggestTransaction?: (result: TextEditTranslation) => void
+    /** Suggest mode: an edit that cannot become a suggestion. */
+    onSuggestRefused?: (message: string) => void
+    /**
+     * Suggest mode: a typed suggestion is finished (the caret moved, the editor
+     * lost focus, typing paused, or the mode changed). Rejecting drops it from
+     * the editor's layer.
+     */
+    onSuggestFlush?: (draft: TypingDraft) => void | Promise<void>
+    /** Pause before a typed suggestion is saved; 0 waits for the caret to move. */
+    suggestIdleMs?: number
     /** Fires when the local selection moves; null when the editor loses focus. */
     onSelectionChange?: (selection: DocumentBodySelection | null) => void
   } = {}
@@ -117,12 +142,46 @@ export function createDocumentBodyEditor(
       decorations: (editorState) => remoteCursorDecorations(editorState),
     },
   })
+  // Suggest mode keeps typed text out of the body: the suggestion being typed
+  // (draft), ones being saved (optimistic), and stored pending ones (stored)
+  // are drawn over it as decorations.
+  let draft: TypingDraft | null = null
+  let storedEntries: TextLayerEntry[] = []
+  const optimistic = new Map<
+    string,
+    { entries: TextLayerEntry[]; replaces: string[]; settled: boolean }
+  >()
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
+  const idleMs = options.suggestIdleMs ?? 2000
+  let layerCache: {
+    doc: EditorState['doc']
+    version: number
+    set: DecorationSet
+  } | null = null
+  let layerVersion = 0
+  const suggestionLayerPlugin = new Plugin({
+    props: {
+      decorations: (editorState) => {
+        if (
+          layerCache?.doc !== editorState.doc ||
+          layerCache.version !== layerVersion
+        )
+          layerCache = {
+            doc: editorState.doc,
+            version: layerVersion,
+            set: suggestionDecorations(editorState.doc, visibleEntries()),
+          }
+        return layerCache.set
+      },
+    },
+  })
   let state = EditorState.create({
     doc: yXmlFragmentToProseMirrorRootNode(fragment, documentBodySchema),
     plugins: [
       ySyncPlugin(fragment),
       yUndoPlugin(),
       remoteCursorPlugin,
+      suggestionLayerPlugin,
       // Block plugins (slash menu, drag handle) run before the keymaps below so
       // they can claim Enter and arrow keys while a menu is open.
       ...(options.plugins ?? []),
@@ -338,6 +397,206 @@ export function createDocumentBodyEditor(
     return true
   }
 
+  const visibleEntries = (): LayerEntry[] => {
+    const hidden = new Set(draft?.replaces)
+    for (const item of optimistic.values())
+      for (const id of item.replaces) hidden.add(id)
+    const entries: LayerEntry[] = storedEntries.filter(
+      (entry) =>
+        !hidden.has(entry.suggestionID) && !optimistic.has(entry.suggestionID)
+    )
+    for (const [id, item] of optimistic)
+      if (!hidden.has(id)) entries.push(...item.entries)
+    if (draft)
+      for (const run of draft.runs)
+        if (run.text !== run.base)
+          entries.push({
+            suggestionID: draft.suggestionID,
+            nodeID: run.nodeID,
+            base: run.base,
+            text: run.text,
+            own: true,
+            active: true,
+          })
+    return entries
+  }
+
+  const refreshLayer = () => {
+    layerVersion++
+    const view = viewHolder.current
+    if (!view) return
+    state = state.apply(state.tr.setMeta(suggestionLayerPlugin, 'refresh'))
+    view.updateState(state)
+  }
+
+  const draftCaretPos = (): number | null => {
+    if (!draft) return null
+    const runDraft = draft.runs.find(
+      (run) => run.nodeID === draft!.caret.nodeID
+    )
+    const run = findRun(state.doc, draft.caret.nodeID)
+    if (!runDraft || !run) return null
+    return (
+      run.pos +
+      1 +
+      baseOffsetForDraft(runDraft.base, runDraft.text, draft.caret.offset)
+    )
+  }
+
+  const draftIsStale = () =>
+    draft !== null &&
+    draft.runs.some((run) => findRun(state.doc, run.nodeID)?.text !== run.base)
+
+  const flushDraft = () => {
+    clearTimeout(idleTimer)
+    const finished = draft
+    if (!finished) return
+    draft = null
+    if (draftHasChanges(finished) || finished.replaces.length) {
+      const entries = finished.runs
+        .filter((run) => run.text !== run.base)
+        .map((run) => ({
+          suggestionID: finished.suggestionID,
+          nodeID: run.nodeID,
+          base: run.base,
+          text: run.text,
+          own: true,
+        }))
+      const item = { entries, replaces: finished.replaces, settled: false }
+      optimistic.set(finished.suggestionID, item)
+      let saving: Promise<unknown>
+      try {
+        saving = Promise.resolve(options.onSuggestFlush?.(finished))
+      } catch (cause) {
+        saving = Promise.reject(cause)
+      }
+      void saving.then(
+        () => {
+          item.settled = true
+          const live = new Set(storedEntries.map((entry) => entry.suggestionID))
+          if (
+            (live.has(finished.suggestionID) || !item.entries.length) &&
+            !item.replaces.some((replaced) => live.has(replaced))
+          ) {
+            optimistic.delete(finished.suggestionID)
+            refreshLayer()
+          }
+        },
+        () => {
+          optimistic.delete(finished.suggestionID)
+          refreshLayer()
+        }
+      )
+    }
+    refreshLayer()
+  }
+
+  // A new draft starts from the caret's run. Typing where the user already has
+  // a pending suggestion continues it, so one change stays one suggestion.
+  const startDraft = (caret: RunCaret): TypingDraft => {
+    const visible = visibleEntries()
+    const reopened = visible.find(
+      (entry) =>
+        entry.own &&
+        entry.nodeID === caret.nodeID &&
+        entry.base ===
+          caret.runs.find((run) => run.nodeID === caret.nodeID)?.text &&
+        touchesChange(entry.base, entry.text, caret.offset)
+    )
+    const reopenedRuns = reopened
+      ? visible.filter((entry) => entry.suggestionID === reopened.suggestionID)
+      : []
+    const usable =
+      reopened !== undefined &&
+      reopenedRuns.every((entry) =>
+        caret.runs.some(
+          (run) => run.nodeID === entry.nodeID && run.text === entry.base
+        )
+      )
+    const proposed = new Map(
+      usable ? reopenedRuns.map((entry) => [entry.nodeID, entry.text]) : []
+    )
+    const runs = caret.runs.map((run) => ({
+      nodeID: run.nodeID,
+      base: run.text,
+      text: proposed.get(run.nodeID) ?? run.text,
+    }))
+    const caretRun = runs.find((run) => run.nodeID === caret.nodeID)!
+    return {
+      suggestionID: crypto.randomUUID(),
+      blockID: caret.blockID,
+      runs,
+      caret: {
+        nodeID: caret.nodeID,
+        offset: draftOffsetForBase(caretRun.base, caretRun.text, caret.offset),
+      },
+      replaces: usable ? [reopened.suggestionID] : [],
+    }
+  }
+
+  const toDraftCaret = (current: TypingDraft, caret: RunCaret): DraftCaret => {
+    const run = current.runs.find((item) => item.nodeID === caret.nodeID)!
+    return {
+      nodeID: caret.nodeID,
+      offset: draftOffsetForBase(run.base, run.text, caret.offset),
+    }
+  }
+
+  const applyDraft = (next: TypingDraft) => {
+    draft = next
+    layerVersion++
+    const pos = draftCaretPos()
+    const view = viewHolder.current
+    if (pos !== null && view)
+      view.dispatch(
+        state.tr
+          .setSelection(TextSelection.create(state.doc, pos))
+          .setMeta(suggestionLayerPlugin, 'typing')
+          .scrollIntoView()
+      )
+    else refreshLayer()
+    clearTimeout(idleTimer)
+    if (idleMs > 0) idleTimer = setTimeout(flushDraft, idleMs)
+  }
+
+  /** Applies one typing step at the selection [from, to] to the suggestion layer. */
+  const typeSuggestion = (
+    from: number,
+    to: number,
+    edit: (current: TypingDraft) => TypingDraft | null
+  ) => {
+    const start = runCaretAt(state.doc, from)
+    if (!start) {
+      options.onSuggestRefused?.(typingRefusal)
+      return
+    }
+    const continues =
+      draft !== null &&
+      from === to &&
+      from === draftCaretPos() &&
+      draft.blockID === start.blockID &&
+      !draftIsStale()
+    let current: TypingDraft
+    if (continues) current = draft!
+    else {
+      flushDraft()
+      current = startDraft(start)
+    }
+    if (from !== to) {
+      const end = runCaretAt(state.doc, to)
+      if (!end || end.blockID !== start.blockID) {
+        options.onSuggestRefused?.(typingRefusal)
+        return
+      }
+      current = deleteDraftRange(
+        current,
+        toDraftCaret(current, start),
+        toDraftCaret(current, end)
+      )
+    }
+    applyDraft(edit(current) ?? current)
+  }
+
   const dispatchTransaction = (transaction: Transaction) => {
     const remote = transaction.getMeta(ySyncPluginKey)?.isChangeOrigin === true
     let prepared = transaction
@@ -346,16 +605,7 @@ export function createDocumentBodyEditor(
       if (structuralCommandPending && transaction.docChanged && !remote) return
       if (readOnly && transaction.docChanged && !remote) return
       if (suggestMode && transaction.docChanged && !remote) {
-        let translation: TextEditTranslation
-        try {
-          translation = translateTextEdit(
-            prosemirrorToDocumentBody(state.doc),
-            prosemirrorToDocumentBody(transaction.doc)
-          )
-        } catch {
-          translation = { ok: false, message: typingRefusal }
-        }
-        options.onSuggestTransaction?.(translation)
+        options.onSuggestRefused?.(typingRefusal)
         viewHolder.current?.updateState(state)
         return
       }
@@ -378,6 +628,14 @@ export function createDocumentBodyEditor(
       const result = state.applyTransaction(prepared)
       state = result.state
       viewHolder.current?.updateState(state)
+      if (draft && transaction.getMeta(suggestionLayerPlugin) !== 'typing') {
+        const moved =
+          !remote &&
+          (transaction.selectionSet || transaction.docChanged) &&
+          (!state.selection.empty || state.selection.head !== draftCaretPos())
+        if (moved || (remote && transaction.docChanged && draftIsStale()))
+          flushDraft()
+      }
       if (result.transactions.some((item) => item.docChanged))
         options.onBodyChange?.(prosemirrorToDocumentBody(state.doc))
       publishInline()
@@ -418,8 +676,25 @@ export function createDocumentBodyEditor(
     nodeViews: options.nodeViews,
     dispatchTransaction,
     editable: () => !readOnly && !structuralCommandPending,
+    handleTextInput: (_view, from, to, text) => {
+      if (!suggestMode) return false
+      typeSuggestion(from, to, (current) => insertDraftText(current, text))
+      return true
+    },
+    handlePaste: (_view, event) => {
+      if (!suggestMode) return false
+      const text = event.clipboardData?.getData('text/plain') ?? ''
+      if (!text || /[\r\n]/.test(text)) {
+        options.onSuggestRefused?.(typingRefusal)
+        return true
+      }
+      const { from, to } = state.selection
+      typeSuggestion(from, to, (current) => insertDraftText(current, text))
+      return true
+    },
     handleDOMEvents: {
       blur: () => {
+        flushDraft()
         options.onSelectionChange?.(null)
         return false
       },
@@ -430,7 +705,20 @@ export function createDocumentBodyEditor(
         return false
       // Block deletion and moves are queued commands on the canonical body;
       // in suggest mode they must go through the suggestions panel instead.
-      if (suggestMode) return false
+      // Deleting text becomes part of the suggestion being typed.
+      if (suggestMode) {
+        if (event.key !== 'Backspace' && event.key !== 'Delete') return false
+        const { from, to } = state.selection
+        typeSuggestion(from, to, (current) =>
+          from !== to
+            ? current
+            : event.key === 'Backspace'
+              ? deleteDraftBackward(current)
+              : deleteDraftForward(current)
+        )
+        event.preventDefault()
+        return true
+      }
       if (
         !event.altKey &&
         !event.ctrlKey &&
@@ -582,14 +870,30 @@ export function createDocumentBodyEditor(
       view.dispatch(view.state.tr.setMeta(remoteCursorPlugin, 'refresh'))
     },
     setSuggestMode: (next: boolean) => {
+      if (!next) flushDraft()
       suggestMode = next
     },
+    /** Pending typed suggestions to draw, as stored on the server. */
+    setSuggestionLayer: (entries: TextLayerEntry[]) => {
+      storedEntries = entries
+      const live = new Set(entries.map((entry) => entry.suggestionID))
+      for (const [id, item] of optimistic)
+        if (
+          item.settled &&
+          !item.replaces.some((replaced) => live.has(replaced))
+        )
+          optimistic.delete(id)
+      refreshLayer()
+    },
+    /** Saves the suggestion being typed now instead of waiting for a pause. */
+    flushSuggestion: () => flushDraft(),
     setReadOnly: (next: boolean) => {
       readOnly = next
       view.setProps({ editable: () => !readOnly && !structuralCommandPending })
       if (!next) ensureEmptyParagraph()
     },
     destroy: () => {
+      flushDraft()
       undoManager?.off('stack-item-added', publishHistory)
       undoManager?.off('stack-item-popped', publishHistory)
       undoManager?.off('stack-cleared', publishHistory)

@@ -100,7 +100,8 @@ func (u *SuggestionUseCase) Reject(ctx context.Context, workspaceID, documentID,
 	if err != nil {
 		return err
 	}
-	if !policy.CanDecideSuggestion(doc, access) {
+	// The repository lets a proposer withdraw only their own suggestion.
+	if !policy.CanDecideSuggestion(doc, access) && !policy.CanSuggest(doc, access) {
 		return ErrSuggestionDecision
 	}
 	return u.suggestionRepo.RejectSuggestion(ctx, workspaceID, documentID, suggestionID, actorID)

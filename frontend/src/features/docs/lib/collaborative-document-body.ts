@@ -28,7 +28,7 @@ import {
   type MoveNodeIntent,
 } from './prosemirror/createDocumentBodyEditor'
 import type { InlineState } from './prosemirror/inlineMarks'
-import type { TextEditTranslation } from './suggestion-operations'
+import type { TypingDraft } from './suggestion-draft'
 
 type CollaborativeBodySnapshot = {
   bodyVersion: number
@@ -75,7 +75,8 @@ export async function mountCollaborativeDocumentBody(
     onHistoryChange?: (history: EditorHistoryState) => void
     onInlineStateChange?: (state: InlineState) => void
     onLinkRequest?: () => void
-    onSuggestTransaction?: (result: TextEditTranslation) => void
+    onSuggestRefused?: (message: string) => void
+    onSuggestFlush?: (draft: TypingDraft) => void | Promise<void>
   }
 ) {
   const document = new Y.Doc()
@@ -167,7 +168,8 @@ export async function mountCollaborativeDocumentBody(
       onHistoryChange: input.onHistoryChange,
       onInlineStateChange: input.onInlineStateChange,
       onLinkRequest: input.onLinkRequest,
-      onSuggestTransaction: input.onSuggestTransaction,
+      onSuggestRefused: input.onSuggestRefused,
+      onSuggestFlush: input.onSuggestFlush,
       onSelectionChange: cursorSender.send,
     })
     showRemoteCursors = (cursors) => editor.setRemoteCursors(cursors)

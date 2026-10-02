@@ -186,3 +186,27 @@
   white-space: nowrap;
   user-select: none;
 }
+
+/* Suggestions: inserted text is underlined, deleted text struck through.
+   Own suggestions use the accent; other people's use the ink color. */
+.markdown-body .suggest-ins,
+.markdown-body .suggest-del {
+  --suggest-color: var(--muted-foreground);
+  text-decoration-color: var(--suggest-color);
+  text-decoration-thickness: 1px;
+  background-color: color-mix(in srgb, var(--suggest-color) 10%, transparent);
+}
+
+.markdown-body .suggest-own {
+  --suggest-color: var(--signal);
+}
+
+.markdown-body .suggest-ins {
+  color: var(--suggest-color);
+  text-decoration-line: underline;
+  text-underline-offset: 3px;
+}
+
+.markdown-body .suggest-del {
+  text-decoration-line: line-through;
+}

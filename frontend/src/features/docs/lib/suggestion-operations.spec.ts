@@ -8,7 +8,6 @@ import {
   conflictReviewMessage,
   overlayCss,
   pendingOverlay,
-  translateTextEdit,
 } from './suggestion-operations'
 
 const ROOT = '00000000-0000-4000-8000-000000000001'
@@ -223,6 +222,16 @@ describe('pendingOverlay', () => {
     ])
     expect(overlay.size).toBe(0)
   })
+
+  it('leaves typed text changes to the editor layer', () => {
+    const overlay = pendingOverlay([
+      suggestion('pending', [
+        { op: 'replace_text', nodeID: RUN2, content: 'x', baseContent: 'y' },
+        { op: 'delete', nodeID: PARA, baseContent: 'z' },
+      ]),
+    ])
+    expect(overlay.size).toBe(0)
+  })
 })
 
 describe('overlayCss', () => {
@@ -241,69 +250,5 @@ describe('overlayCss', () => {
 
   it('drops ids that are not UUIDs so the stylesheet cannot be injected into', () => {
     expect(overlayCss(new Map([['"] { color: red } x[', ['delete']]]))).toBe('')
-  })
-})
-
-describe('translateTextEdit', () => {
-  const changed = (content: string) =>
-    body.map((item) => (item.nodeID === RUN ? { ...item, content } : item))
-
-  it('turns an edit inside one run into a replace_text suggestion', () => {
-    const result = translateTextEdit(body, changed('Hello brave world'))
-    expect(result).toEqual({
-      ok: true,
-      draft: {
-        operations: [
-          { op: 'replace_text', nodeID: RUN, content: 'Hello brave world' },
-        ],
-        summary: 'Insert “brave ” in “Hello world”',
-      },
-    })
-  })
-
-  it('describes a deletion', () => {
-    const result = translateTextEdit(body, changed('Hello'))
-    expect(result.ok && result.draft.summary).toBe(
-      'Delete “ world” from “Hello world”'
-    )
-  })
-
-  it('describes a replacement', () => {
-    const result = translateTextEdit(body, changed('Hello there'))
-    expect(result.ok && result.draft.summary).toBe(
-      'Replace “world” with “there” in “Hello world”'
-    )
-  })
-
-  it('refuses a split that adds blocks and points to the panel actions', () => {
-    const split = [
-      ...body,
-      node('00000000-0000-4000-8000-000000000009', ROOT, 'paragraph'),
-    ]
-    const result = translateTextEdit(body, split)
-    expect(result.ok).toBe(false)
-    expect(!result.ok && result.message).toBe(
-      'Typing can only change text inside one run. Use Suggest insert below, Suggest delete block, or the move actions in the suggestions panel.'
-    )
-  })
-
-  it('refuses a removed block', () => {
-    const result = translateTextEdit(
-      body,
-      body.filter((item) => item.nodeID !== RUN)
-    )
-    expect(result.ok).toBe(false)
-  })
-
-  it('refuses edits that touch two runs', () => {
-    const two = [...body, node('00000000-0000-4000-8000-00000000000a', PARA, 'run', 'x')]
-    const after = two.map((item) =>
-      item.type === 'run' ? { ...item, content: item.content + '!' } : item
-    )
-    expect(translateTextEdit(two, after).ok).toBe(false)
-  })
-
-  it('refuses when nothing changed', () => {
-    expect(translateTextEdit(body, body).ok).toBe(false)
   })
 })
