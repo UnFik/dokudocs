@@ -181,6 +181,25 @@ describe('Enter', () => {
     }
   })
 
+  it('leaves no empty run when Enter is pressed at the end of a run', () => {
+    const harness = mountTestEditor(paragraphsBody('hello'))
+    try {
+      caret(harness, 'hello', 5)
+      pressKey(harness.editor.view.dom, 'Enter')
+      const emptyRuns: string[] = []
+      harness.editor.view.state.doc.descendants((child) => {
+        if (child.type.name === 'run' && child.content.size === 0)
+          emptyRuns.push(child.type.name)
+      })
+      expect(emptyRuns).toEqual([])
+      expect(
+        harness.editor.getBody().filter((item) => item.type === 'paragraph')
+      ).toHaveLength(2)
+    } finally {
+      harness.cleanup()
+    }
+  })
+
   it('adds a new bullet item with fresh IDs', () => {
     const harness = mountTestEditor(listBody('bullet-list'))
     try {
