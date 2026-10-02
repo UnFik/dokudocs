@@ -160,6 +160,13 @@ const moveNodeResultSchema = z.object({
   bodyVersion: z.number().int().positive(),
   changed: z.boolean(),
 })
+const suggestionReplySchema = z.object({
+  replyId: z.guid(),
+  suggestionId: z.guid(),
+  authorId: z.guid(),
+  body: z.string(),
+  createdAt: z.string(),
+})
 const documentSuggestionSchema = z.object({
   documentId: z.guid(),
   suggestionId: z.guid(),
@@ -176,6 +183,12 @@ const documentSuggestionSchema = z.object({
   status: z.enum(['pending', 'accepted', 'rejected', 'conflicted']),
   createdAt: z.string(),
   decidedAt: z.string().nullable().optional(),
+  resolvedAt: z.string().nullable().optional(),
+  resolvedBy: z.guid().nullable().optional(),
+  replies: z
+    .array(suggestionReplySchema)
+    .nullish()
+    .transform((v) => v ?? []),
 })
 const shareTokenSchema = z.object({ shareToken: z.string().min(1) })
 const ragCitationSchema = z.object({
@@ -296,6 +309,7 @@ export type MoveMarkdownNodeInput = {
 }
 export type MoveMarkdownNodeResult = z.infer<typeof moveNodeResultSchema>
 export type DocumentSuggestion = z.infer<typeof documentSuggestionSchema>
+export type SuggestionReply = z.infer<typeof suggestionReplySchema>
 export type RAGCitation = z.infer<typeof ragCitationSchema>
 export type RAGConversation = z.infer<typeof ragConversationSchema>
 export type RAGMessage = z.infer<typeof ragMessageSchema>
@@ -594,6 +608,37 @@ export async function rejectDocumentSuggestion(
 ): Promise<void> {
   await apiFetch<void>(
     `/api/v1/documents/${documentId}/suggestions/${suggestionId}/reject`,
+    { method: 'POST', headers: workspaceHeaders(workspaceId) }
+  )
+}
+
+export const maxSuggestionReplyLength = 2000
+
+export async function replyToDocumentSuggestion(
+  workspaceId: string,
+  documentId: string,
+  suggestionId: string,
+  input: { replyID: string; body: string }
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/suggestions/${suggestionId}/replies`,
+    {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceId),
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+/** Closes a suggestion's thread, or reopens it. The text is never touched. */
+export async function setDocumentSuggestionResolved(
+  workspaceId: string,
+  documentId: string,
+  suggestionId: string,
+  resolved: boolean
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/suggestions/${suggestionId}/${resolved ? 'resolve' : 'reopen'}`,
     { method: 'POST', headers: workspaceHeaders(workspaceId) }
   )
 }
