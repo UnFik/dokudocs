@@ -99,7 +99,7 @@ export function EditorModeTabs({
             data-mode={tabMode}
             aria-selected={selected}
             aria-disabled={reason ? true : undefined}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={selected || reason ? 0 : -1}
             onClick={() => {
               if (!reason) onChange(tabMode)
             }}

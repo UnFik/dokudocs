@@ -126,6 +126,8 @@ test("@live: commenter proposes a text change without editing the canonical body
     await expect(commenterEditor).toContainText("Original phrase");
     await expect(commenterEditor).toHaveAttribute("contenteditable", "false");
 
+    await commenter.getByRole("tab", { name: "Suggest", exact: true }).click();
+
     await commenter.locator(`#node-${runNodeID}`).evaluate((run) => {
       const text = run.firstChild!;
       const range = document.createRange();

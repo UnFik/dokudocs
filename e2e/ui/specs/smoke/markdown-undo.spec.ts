@@ -97,7 +97,7 @@ test("@live @smoke: undo and redo only touch the local user's edits", async ({
   const editorA = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editorA).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("tab", { name: "Edit", exact: true }).click();
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
