@@ -511,7 +511,7 @@ describe('Dokudocs domain API adapter', () => {
       commandID: requestID,
       bodyEpoch: 1,
       bodySchemaVersion: 1,
-      nodeID: workspaceId,
+      nodeIDs: [workspaceId],
     })
   })
 
