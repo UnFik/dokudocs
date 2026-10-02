@@ -118,6 +118,7 @@
   },
   {
     "name": "table",
+    "sourceMarkdown": "| left | right |\n| --- | --- |\n| a | b |",
     "children": [
       {
         "name": "table.row",
@@ -212,6 +213,7 @@
   },
   {
     "name": "diagram",
+    "sourceGap": "",
     "meta": {
       "type": "mermaid",
       "lang": "yaml"

@@ -72,6 +72,8 @@ func (r *Repository) create(
 		if bodySchemaVersion != yjs.BodySchemaVersionV1 {
 			return model.Document{}, collaboration.ErrBodySchemaMismatch
 		}
+		normalized := documentbody.NormalizeSiblingOrder(*initialBody)
+		initialBody = &normalized
 		var err error
 		encodedBody, err = yjs.EncodeBodyV1(*initialBody)
 		if err != nil {

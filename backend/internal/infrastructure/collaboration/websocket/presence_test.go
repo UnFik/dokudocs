@@ -237,3 +237,17 @@ func TestReadyFrameWriteToAClientThatNeverReadsIsAbandoned(t *testing.T) {
 	}
 	t.Fatal("server still holds the peer after the ready write deadline")
 }
+
+func TestClientThatNeverReadsReadyDoesNotBlockOthersInTheSameDocument(t *testing.T) {
+	a, b := uuid.New(), uuid.New()
+	server := newPresenceServer(t, map[string]uuid.UUID{"token-a": a, "token-b": b}, nil)
+	server.writeBase = 150 * time.Millisecond
+	documentID, workspaceID := uuid.New(), uuid.New()
+
+	_ = dialPresence(t, server, documentID, workspaceID, "token-a")
+	other := dialPresence(t, server, documentID, workspaceID, "token-b")
+
+	if frame := other.next(2 * time.Second); frame.Type != "ready" {
+		t.Fatalf("second client first frame = %+v, want ready", frame)
+	}
+}

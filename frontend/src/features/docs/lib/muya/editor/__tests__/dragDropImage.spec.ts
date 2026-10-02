@@ -208,10 +208,11 @@ function webImageDataTransfer(
   return dt
 }
 
-// Drain the microtask queue so the chained getAsString → checkImageContentType
-// promise in `handleWebLinkImage` settles before assertions.
+// Let the chained getAsString → checkImageContentType promise in
+// `handleWebLinkImage` settle before assertions. Real browsers deliver
+// `getAsString` callbacks as a task, not a microtask, so wait one timer tick.
 async function flushMicrotasks(): Promise<void> {
-  for (let i = 0; i < 5; i++) await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 20))
 }
 
 describe('attachDragDropImageHandlers — web-link image', () => {
