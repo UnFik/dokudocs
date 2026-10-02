@@ -108,12 +108,14 @@ test("@live @smoke: floating selection toolbar applies bold and a link", async (
     );
     const nodes = ((await response.json()).data.nodes ?? []) as {
       parentID: string | null;
+      siblingOrder: number;
       type: string;
       content: string;
       attributes: Record<string, unknown>;
     }[];
     return nodes
       .filter((n) => n.type === "run")
+      .sort((a, b) => a.siblingOrder - b.siblingOrder)
       .map((n) => ({ text: n.content, attributes: n.attributes }));
   };
 
