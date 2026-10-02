@@ -5,6 +5,7 @@ import {
   EditorState,
   NodeSelection,
   Plugin,
+  type Selection,
   TextSelection,
   type Command,
   type Transaction,
@@ -371,12 +372,39 @@ export function createDocumentBodyEditor(
     return true
   }
 
+  // The editor reads the browser's selection after a selectionchange event, so a
+  // key pressed right after the caret moved (End, an arrow, a click) can find the
+  // editor's selection one step behind. Delete and Backspace read the DOM
+  // selection directly for a text caret or range; a node or select-all selection
+  // is always set by the editor itself.
+  const selectionNow = (editorView: EditorView): Selection => {
+    const current = editorView.state.selection
+    if (!(current instanceof TextSelection)) return current
+    try {
+      const range = window.getSelection()
+      if (
+        !range ||
+        !range.anchorNode ||
+        !range.focusNode ||
+        !editorView.dom.contains(range.anchorNode) ||
+        !editorView.dom.contains(range.focusNode)
+      )
+        return current
+      const doc = editorView.state.doc
+      return TextSelection.between(
+        doc.resolve(editorView.posAtDOM(range.anchorNode, range.anchorOffset)),
+        doc.resolve(editorView.posAtDOM(range.focusNode, range.focusOffset))
+      )
+    } catch {
+      return current
+    }
+  }
+
   // Delete with a selection that is not inside one textblock (select all, a
   // separator, text across blocks). The browser's own deletion is ignored by the
   // editor for these, so it is done here: whole blocks and runs go through
   // DeleteNode as one batch, and text left at the ends is trimmed as an edit.
-  const deleteAcrossBlocks = () => {
-    const { selection } = state
+  const deleteAcrossBlocks = (selection: Selection) => {
     if (selection.empty) return false
     const first = textblockAt(state.doc, selection.from)
     if (
@@ -609,8 +637,10 @@ export function createDocumentBodyEditor(
   // Delete at the end of a paragraph, or Backspace at the start of one, next to
   // a separator removes the separator. The browser has nothing to merge with, so
   // it does nothing on its own.
-  const deleteNeighbouringSeparator = (key: 'Delete' | 'Backspace') => {
-    const { selection } = state
+  const deleteNeighbouringSeparator = (
+    key: 'Delete' | 'Backspace',
+    selection: Selection
+  ) => {
     if (!selection.empty) return false
     const $pos = selection.$from
     let depth = $pos.depth
@@ -794,7 +824,7 @@ export function createDocumentBodyEditor(
         !event.shiftKey &&
         (event.key === 'Backspace' || event.key === 'Delete')
       ) {
-        const nodeID = fullySelectedBlockNodeID(editorView.state.selection)
+        const nodeID = fullySelectedBlockNodeID(selectionNow(editorView))
         if (nodeID && queueDeleteNode([nodeID])) {
           event.preventDefault()
           return true
@@ -806,8 +836,11 @@ export function createDocumentBodyEditor(
         !event.metaKey &&
         !event.shiftKey &&
         (event.key === 'Backspace' || event.key === 'Delete') &&
-        (deleteAcrossBlocks() ||
-          deleteNeighbouringSeparator(event.key as 'Delete' | 'Backspace'))
+        (deleteAcrossBlocks(selectionNow(editorView)) ||
+          deleteNeighbouringSeparator(
+            event.key as 'Delete' | 'Backspace',
+            selectionNow(editorView)
+          ))
       ) {
         event.preventDefault()
         return true
