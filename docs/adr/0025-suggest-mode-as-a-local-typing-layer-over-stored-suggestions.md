@@ -9,3 +9,5 @@ Suggest behaves like Google Docs: the user keeps editing, and the edits become s
 **Kept from earlier decisions.** Suggestions are visible only to their proposer and eligible editors (ADR 0006). Suggest is online-only, and the mode is stored per user in localStorage. Notifications are in-app: a new suggestion goes to the owner, a decision goes to the proposer. No email.
 
 **Cost.** The editor needs a local suggestion layer and a merge step for typed edits, and the thread table is new. In exchange the model, permissions, and acceptance path stay as they are.
+
+Implementation note: the thread is `document_suggestion_replies` (one row per reply, 2000 characters at most) plus `resolved_at` and `resolved_by` on the suggestion, since a suggestion has exactly one thread. A reply to a resolved thread reopens it. Replies are as visible as the suggestion: its proposer and anyone who can decide suggestions.

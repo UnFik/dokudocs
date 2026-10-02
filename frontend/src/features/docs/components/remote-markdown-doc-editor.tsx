@@ -81,6 +81,7 @@ import {
 } from './editor-mode-tabs'
 import './markdown-body.css'
 import { MuyaEditor } from './muya-editor/MuyaEditor'
+import { SuggestionThread } from './suggestion-thread'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
 export function RemoteMarkdownDocEditor({
@@ -1252,6 +1253,12 @@ function SuggestionPanel({
                         )}
                       </p>
                     ) : null}
+                    <SuggestionThread
+                      suggestion={suggestion}
+                      workspaceID={workspaceID}
+                      documentID={documentID}
+                      userID={userID}
+                    />
                   </div>
                   {!canDecide &&
                   suggestion.status === 'pending' &&
