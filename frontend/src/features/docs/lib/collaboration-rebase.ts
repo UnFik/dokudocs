@@ -5,9 +5,19 @@ export type RebaseConflict = {
   reason: 'node-deleted' | 'parent-deleted' | 'concurrent-edit'
 }
 
+export type HeldEdit = RebaseConflict & {
+  /** The user's pending version of the node, kept for review. */
+  local: DocumentBodyNode
+  /** The current server version, or null when the node no longer exists. */
+  canonical: DocumentBodyNode | null
+}
+
 export type RebaseResult = {
   nodes: DocumentBodyNode[]
   conflicts: RebaseConflict[]
+  /** Edits that did not conflict and are already merged into `nodes`. */
+  applied: number
+  held: HeldEdit[]
 }
 
 /**
@@ -30,18 +40,28 @@ export function rebasePendingEdits(input: {
   const merged = new Map<string, DocumentBodyNode>()
   const inserted: DocumentBodyNode[] = []
   const conflicts: RebaseConflict[] = []
+  const held: HeldEdit[] = []
+  const hold = (local: DocumentBodyNode, reason: RebaseConflict['reason']) => {
+    conflicts.push({ nodeID: local.nodeID, reason })
+    held.push({
+      nodeID: local.nodeID,
+      reason,
+      local,
+      canonical: canonicalByID.get(local.nodeID) ?? null,
+    })
+  }
 
   for (const local of input.local) {
     const base = baseByID.get(local.nodeID)
     if (!base || sameNodeContent(base, local)) continue
     const canonical = canonicalByID.get(local.nodeID)
     if (!canonical) {
-      conflicts.push({ nodeID: local.nodeID, reason: 'node-deleted' })
+      hold(local, 'node-deleted')
       continue
     }
     const next = mergeNode(base, local, canonical)
     if (next) merged.set(local.nodeID, next)
-    else conflicts.push({ nodeID: local.nodeID, reason: 'concurrent-edit' })
+    else hold(local, 'concurrent-edit')
   }
 
   const live = (nodeID: string) =>
@@ -67,7 +87,7 @@ export function rebasePendingEdits(input: {
       !live(local.parentID)
     ) {
       droppedInserts.add(local.nodeID)
-      conflicts.push({ nodeID: local.nodeID, reason: 'parent-deleted' })
+      hold(local, 'parent-deleted')
       continue
     }
     inserted.push({ ...local })
@@ -76,7 +96,12 @@ export function rebasePendingEdits(input: {
   const nodes = input.canonical.map((node) => merged.get(node.nodeID) ?? node)
   const result = [...nodes, ...inserted]
   placeInsertedSiblings(result, inserted, localChildren)
-  return { nodes: result, conflicts }
+  return {
+    nodes: result,
+    conflicts,
+    applied: merged.size + inserted.length,
+    held,
+  }
 }
 
 function childrenOf(nodes: DocumentBodyNode[]) {

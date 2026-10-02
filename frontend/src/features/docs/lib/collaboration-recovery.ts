@@ -15,6 +15,42 @@ import {
   prosemirrorToDocumentBody,
 } from './prosemirror/documentBody'
 
+export function projectEncodedState(state: Uint8Array): DocumentBodyNode[] {
+  const document = new Y.Doc()
+  try {
+    Y.applyUpdate(document, state)
+    return prosemirrorToDocumentBody(
+      yXmlFragmentToProseMirrorRootNode(
+        document.getXmlFragment('body'),
+        documentBodySchema
+      )
+    )
+  } finally {
+    document.destroy()
+  }
+}
+
+/** The snapshot with pending Yjs updates applied; structural commands excluded. */
+export function pendingBodyNodes(stored: {
+  snapshot: { encodedState: Uint8Array } | null
+  updates: { update: Uint8Array }[]
+}): DocumentBodyNode[] {
+  if (!stored.snapshot) return []
+  const document = new Y.Doc()
+  try {
+    Y.applyUpdate(document, stored.snapshot.encodedState)
+    for (const update of stored.updates) Y.applyUpdate(document, update.update)
+    return prosemirrorToDocumentBody(
+      yXmlFragmentToProseMirrorRootNode(
+        document.getXmlFragment('body'),
+        documentBodySchema
+      )
+    )
+  } finally {
+    document.destroy()
+  }
+}
+
 export async function recoverPendingMarkdown(scope: CollaborationScope) {
   const stored = await new IndexedDBCollaborationStore().load(scope)
   if (
