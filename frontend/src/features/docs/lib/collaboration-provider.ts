@@ -63,8 +63,11 @@ export type CollaborativeDocumentProviderOptions = Omit<
   document: Y.Doc
   bodyVersion: number
   bodyEpoch: number
+  /** The oldest epoch whose history still continues into bodyEpoch. */
+  compatEpoch?: number
   bodySchemaVersion: number
   canEdit?: boolean
+  canSuggest?: boolean
   store?: CollaborationStore
   socketFactory?: CollaborationSocketOptions['socketFactory']
   onStatus?: (status: CollaborativeDocumentStatus) => void
@@ -209,7 +212,11 @@ export class CollaborativeDocumentProvider {
       const snapshotSchemaMismatch =
         stored.snapshot &&
         stored.snapshot.bodySchemaVersion !== this.options.bodySchemaVersion
-      if (hasPendingChanges && snapshotEpochMismatch) {
+      if (
+        hasPendingChanges &&
+        snapshotEpochMismatch &&
+        !this.adoptCompatibleStored()
+      ) {
         if (
           stored.snapshot &&
           stored.snapshot.bodyEpoch < this.options.bodyEpoch &&
@@ -276,7 +283,11 @@ export class CollaborativeDocumentProvider {
       }
       for (const update of this.pending.values())
         Y.applyUpdate(this.options.document, update.update, this.remoteOrigin)
-      if (this.pending.size > 0 && stored.snapshot?.baseEncodedState)
+      if (
+        this.pending.size > 0 &&
+        stored.snapshot?.baseEncodedState &&
+        !snapshotEpochMismatch
+      )
         this.baseState = stored.snapshot.baseEncodedState
       this.options.document.on('beforeTransaction', this.captureBaseState)
       this.options.document.on('update', this.handleYUpdate)
@@ -484,6 +495,37 @@ export class CollaborativeDocumentProvider {
     )
       return false
     this.takeEpoch(frame.bodyEpoch)
+    return true
+  }
+
+  /**
+   * Edits saved offline under an older epoch that is still compatible (ADR
+   * 0028), for someone who can suggest but not edit: they take the current
+   * epoch instead of being held for review, as a live resync would. Needs the
+   * epoch the page just loaded and every stored update to be at or above the
+   * compatible epoch.
+   */
+  private adoptCompatibleStored() {
+    const compat = this.options.compatEpoch
+    if (
+      compat === undefined ||
+      this.options.canEdit !== false ||
+      this.options.canSuggest !== true ||
+      this.pending.size === 0 ||
+      this.hasPendingStructuralCommand()
+    )
+      return false
+    const updates = [...this.pending.values()]
+    if (
+      updates.some(
+        (update) =>
+          update.bodyEpoch < compat ||
+          update.bodyEpoch > this.options.bodyEpoch ||
+          update.bodySchemaVersion !== this.options.bodySchemaVersion
+      )
+    )
+      return false
+    this.takeEpoch(this.options.bodyEpoch)
     return true
   }
 
