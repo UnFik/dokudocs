@@ -50,19 +50,21 @@ export function planSelectionDeletion(
 ): SelectionDeletionPlan {
   const roots: string[] = []
   const trims: { from: number; to: number }[] = []
-  let refused = false
   doc.nodesBetween(from, to, (node, pos) => {
-    if (refused) return false
     if (node === doc || node.type.name === 'document') return true
     const nodeID = nodeIDOf(node)
     const covered = from <= pos && pos + node.nodeSize <= to
-    if (node.isBlock && nodeID && covered) {
-      // A cell on its own would leave a ragged table; a row is fine.
-      if (node.type.name === 'table_cell' || hasOpaque(node)) refused = true
-      else roots.push(nodeID)
+    if (node.isBlock && nodeID && covered && node.type.name !== 'table_cell') {
+      // A block that holds something that must stay (an opaque block) is not
+      // deleted whole: what is around it goes, and it stays where it is.
+      if (hasOpaque(node)) return true
+      roots.push(nodeID)
       return false
     }
+    if (node.type.name === 'opaque') return false
     if (!node.isTextblock) return true
+    // A table cell cannot go on its own without a ragged table, so what it
+    // holds is cleared and the cell stays.
     node.forEach((child, offset) => {
       const start = pos + 1 + offset
       const end = start + child.nodeSize
@@ -70,20 +72,27 @@ export function planSelectionDeletion(
       const cutTo = Math.min(to, end)
       if (cutFrom >= cutTo) return
       const childID = nodeIDOf(child)
-      if (child.type.name !== 'run' || !childID) {
-        refused = true
+      if (child.type.name === 'run' && childID) {
+        if (cutFrom <= start && cutTo >= end) roots.push(childID)
+        else
+          trims.push({
+            from: Math.max(cutFrom, start + 1),
+            to: Math.min(cutTo, end - 1),
+          })
         return
       }
-      if (cutFrom <= start && cutTo >= end) roots.push(childID)
-      else
-        trims.push({
-          from: Math.max(cutFrom, start + 1),
-          to: Math.min(cutTo, end - 1),
-        })
+      // An image, a formula or a line break goes when the selection covers it
+      // whole; one that is kept for the importer is left alone.
+      if (
+        childID &&
+        child.type.name !== 'opaque_inline' &&
+        cutFrom <= start &&
+        cutTo >= end
+      )
+        roots.push(childID)
     })
     return false
   })
-  if (refused || (!roots.length && !trims.length))
-    return { ok: false, message: refusal }
+  if (!roots.length && !trims.length) return { ok: false, message: refusal }
   return { ok: true, roots, trims }
 }

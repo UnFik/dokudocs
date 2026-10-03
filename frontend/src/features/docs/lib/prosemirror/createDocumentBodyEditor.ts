@@ -47,7 +47,6 @@ import {
   type CaretHint,
 } from './deleteTargets'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
-import { EditorNotice } from './editorNotice'
 import {
   emptyInlineState,
   readInlineState,
@@ -521,10 +520,8 @@ export function createDocumentBodyEditor(
     )
       return false
     const plan = planSelectionDeletion(state.doc, selection.from, selection.to)
-    if (!plan.ok) {
-      options.onTransactionError?.(new EditorNotice(plan.message))
-      return true
-    }
+    // A selection with nothing to delete does nothing, and says nothing.
+    if (!plan.ok) return true
     if (plan.trims.length) {
       let trim = state.tr
       for (const range of [...plan.trims].reverse())
@@ -622,7 +619,29 @@ export function createDocumentBodyEditor(
     const upper = joinTarget(current, forward)
     if (upper === null) return false
     const join = joinParagraphs(current, upper)
-    if (!join) return false
+    if (!join) {
+      // Next to a table or a code block there is nothing to merge into: the
+      // caret moves into it, as it would in any editor.
+      const first = current.doc.nodeAt(upper)
+      const next = first ? current.doc.nodeAt(upper + first.nodeSize) : null
+      const target = forward ? next : first
+      const targetPos = forward && first ? upper + first.nodeSize : upper
+      if (
+        target &&
+        ['table', 'code_block', 'math_block', 'diagram'].includes(
+          target.type.name
+        )
+      ) {
+        const at = forward ? targetPos + 1 : targetPos + target.nodeSize - 1
+        viewHolder.current?.dispatch(
+          current.tr.setSelection(
+            TextSelection.near(current.doc.resolve(at), forward ? 1 : -1)
+          )
+        )
+        return true
+      }
+      return false
+    }
     if (join.transaction) viewHolder.current?.dispatch(join.transaction)
     return queueDeleteNode([join.deleteNodeID])
   }
