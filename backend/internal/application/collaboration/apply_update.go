@@ -54,10 +54,18 @@ type Fanout interface {
 	Publish(context.Context, CommitReceipt, Update) error
 }
 
+// BroadcastKindComments marks an event that only says a document's comments
+// changed; it carries no update.
+const BroadcastKindComments = "comments"
+
 type BroadcastEvent struct {
 	OriginID uuid.UUID
 	Receipt  CommitReceipt
 	Update   Update
+	// Kind is empty for a body update and BroadcastKindComments for a comments
+	// hint, which names the document in DocumentID and nothing else.
+	Kind       string    `json:"kind,omitempty"`
+	DocumentID uuid.UUID `json:"documentID,omitempty"`
 }
 
 type Broker interface {

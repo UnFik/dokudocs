@@ -13,7 +13,26 @@ import (
 )
 
 type CommentHandler struct {
-	service *appdoc.CommentUseCase
+	service  *appdoc.CommentUseCase
+	notifier CommentNotifier
+}
+
+// CommentNotifier tells the people connected to a document that its comments
+// changed.
+type CommentNotifier interface {
+	NotifyComments(documentID uuid.UUID)
+}
+
+// WithNotifier makes every successful write wake the document's room.
+func (h *CommentHandler) WithNotifier(notifier CommentNotifier) *CommentHandler {
+	h.notifier = notifier
+	return h
+}
+
+func (h *CommentHandler) notify(documentID uuid.UUID) {
+	if h.notifier != nil {
+		h.notifier.NotifyComments(documentID)
+	}
 }
 
 func NewCommentHandler(service *appdoc.CommentUseCase) *CommentHandler {
@@ -69,6 +88,7 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, err)
 		return
 	}
+	h.notify(documentID)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -94,6 +114,7 @@ func (h *CommentHandler) Reply(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, err)
 		return
 	}
+	h.notify(documentID)
 	w.WriteHeader(http.StatusCreated)
 }
 
@@ -114,6 +135,7 @@ func (h *CommentHandler) setResolved(w http.ResponseWriter, r *http.Request, res
 		h.writeError(w, err)
 		return
 	}
+	h.notify(documentID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
