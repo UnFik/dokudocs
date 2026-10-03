@@ -109,3 +109,28 @@ type SuggestionReply struct {
 	Body         string    `json:"body"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
+
+// CommentThread is a discussion anchored to text in a document.
+type CommentThread struct {
+	ID           uuid.UUID       `json:"id"`
+	DocumentID   uuid.UUID       `json:"documentId"`
+	AuthorID     uuid.UUID       `json:"authorId"`
+	AuthorName   string          `json:"authorName"`
+	SelectedText string          `json:"selectedText"`
+	Content      string          `json:"content"`
+	Anchor       json.RawMessage `json:"anchor,omitempty"`
+	CreatedAt    time.Time       `json:"createdAt"`
+	ResolvedAt   *time.Time      `json:"resolvedAt,omitempty"`
+	ResolvedBy   *uuid.UUID      `json:"resolvedBy,omitempty"`
+	Replies      []CommentReply  `json:"replies"`
+}
+
+// CommentReply is one message after the first in a comment thread.
+type CommentReply struct {
+	ID         uuid.UUID `json:"id"`
+	ThreadID   uuid.UUID `json:"threadId"`
+	AuthorID   uuid.UUID `json:"authorId"`
+	AuthorName string    `json:"authorName"`
+	Content    string    `json:"content"`
+	CreatedAt  time.Time `json:"createdAt"`
+}

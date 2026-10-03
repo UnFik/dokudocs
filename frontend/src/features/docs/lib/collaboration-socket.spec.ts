@@ -67,7 +67,7 @@ describe('CollaborationSocket', () => {
       type: 'auth',
       token: 'secret-token',
       workspaceID: 'workspace-1',
-      capabilities: ['presence', 'cursor'],
+      capabilities: ['presence', 'cursor', 'comments'],
     })
     expect(socketURL).not.toContain('secret-token')
 
@@ -215,6 +215,25 @@ describe('CollaborationSocket', () => {
 
     socket.receive({ type: 'cursor', cursor: { userID: 'user-1' } })
     expect(socket.readyState).toBe(3)
+  })
+
+  it('passes a comments_changed hint on and keeps the connection', () => {
+    const socket = new FakeSocket()
+    const frames: { type: string }[] = []
+    new CollaborationSocket({
+      documentID: 'doc-1',
+      workspaceID: 'workspace-1',
+      token: 'secret-token',
+      baseURL: 'http://localhost:5173',
+      socketFactory: () => socket,
+      onFrame: (frame) => frames.push(frame),
+    })
+    socket.open()
+
+    socket.receive({ type: 'comments_changed' })
+
+    expect(frames.map((frame) => frame.type)).toEqual(['comments_changed'])
+    expect(socket.readyState).toBe(1)
   })
 
   it('sends the local selection as base64 positions and clears it with null', () => {

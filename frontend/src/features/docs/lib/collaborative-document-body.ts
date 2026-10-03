@@ -78,6 +78,10 @@ export async function mountCollaborativeDocumentBody(
     onSuggestRefused?: (message: string) => void
     onSuggestionCards?: (cards: SuggestionCard[]) => void
     onSuggestionClick?: (id: string) => void
+    onCommentsChanged?: () => void
+    onCommentPositions?: (positions: Record<string, number | null>) => void
+    onCommentClick?: (id: string) => void
+    onCommentRequest?: () => void
   }
 ) {
   const document = new Y.Doc()
@@ -137,6 +141,7 @@ export async function mountCollaborativeDocumentBody(
       onRecovery: input.onRecovery,
       onPresence: input.onPresence,
       onRemoteCursors: (cursors) => showRemoteCursors(cursors),
+      onCommentsChanged: input.onCommentsChanged,
       onCanonicalBody: input.onCanonicalBody,
       onHeldEdits: input.onHeldEdits,
       onCanEdit: (canEdit) => {
@@ -177,6 +182,9 @@ export async function mountCollaborativeDocumentBody(
       onSuggestRefused: input.onSuggestRefused,
       onSuggestionCards: input.onSuggestionCards,
       onSuggestionClick: input.onSuggestionClick,
+      onCommentPositions: input.onCommentPositions,
+      onCommentClick: input.onCommentClick,
+      onCommentRequest: input.onCommentRequest,
       onSelectionChange: cursorSender.send,
     })
     showRemoteCursors = (cursors) => editor.setRemoteCursors(cursors)

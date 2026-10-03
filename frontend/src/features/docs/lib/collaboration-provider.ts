@@ -73,6 +73,8 @@ export type CollaborativeDocumentProviderOptions = Omit<
   onPresence?: (users: PresenceUser[]) => void
   /** Current cursors of other connections; [] after a disconnect. */
   onRemoteCursors?: (cursors: RemoteCursor[]) => void
+  /** The server says the document's comments changed; fetch them again. */
+  onCommentsChanged?: () => void
   batchIntervalMs?: number
   executeDeleteNode?: (
     command: PendingDeleteNodeCommand
@@ -442,6 +444,9 @@ export class CollaborativeDocumentProvider {
           this.remoteCursors.set(frame.cursor.connectionID, frame.cursor)
         else this.remoteCursors.delete(frame.cursor.connectionID)
         this.options.onRemoteCursors?.([...this.remoteCursors.values()])
+        return
+      case 'comments_changed':
+        this.options.onCommentsChanged?.()
         return
       case 'ack':
         void this.acknowledge(frame)

@@ -60,3 +60,10 @@ type SuggestionRepository interface {
 	CreateSuggestionReply(ctx context.Context, workspaceID uuid.UUID, reply model.SuggestionReply) error
 	SetSuggestionResolved(ctx context.Context, workspaceID, documentID, suggestionID, actorID uuid.UUID, resolved bool) error
 }
+
+type CommentRepository interface {
+	ListComments(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.CommentThread, error)
+	CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error
+	CreateCommentReply(ctx context.Context, workspaceID, documentID uuid.UUID, reply model.CommentReply) error
+	SetCommentResolved(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, resolved bool) error
+}
