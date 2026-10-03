@@ -116,6 +116,7 @@ export function SuggestionCardList({
                   thread={entry.thread}
                   userID={userID}
                   canInteract={canInteract}
+                  canDecide={canDecide}
                   orphaned={orphaned(entry.thread.id)}
                   focused={focusedCommentID === entry.thread.id}
                   workspaceID={workspaceID}

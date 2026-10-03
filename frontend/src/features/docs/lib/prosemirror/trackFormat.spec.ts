@@ -1,7 +1,7 @@
 import { TextSelection, type EditorState } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
 import { decideSuggestion } from './decideSuggestion'
-import { prosemirrorToDocumentBody } from './documentBody'
+import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
 import { cardTitle, suggestionCards } from './suggestionCards'
 import {
   documentOf,
@@ -13,7 +13,7 @@ import {
   stateOf,
 } from './suggestionTestKit'
 import { UnsupportedSuggestionError } from './trackChanges'
-import { suggestFormat } from './trackFormat'
+import { suggestFormat, suggestLink } from './trackFormat'
 
 let counter = 0
 const options = {
@@ -148,5 +148,95 @@ describe('formatting a selection in Suggest mode', () => {
     expect(() => suggestFormat(state, 'strong', options)).toThrow(
       UnsupportedSuggestionError
     )
+  })
+})
+
+const linkHrefs = (state: EditorState) => {
+  const found: string[] = []
+  state.doc.descendants((node) => {
+    for (const mark of node.marks)
+      if (mark.type.name === 'link') found.push(mark.attrs.href)
+  })
+  return found
+}
+
+describe('links in Suggest mode', () => {
+  it('proposes a link and leaves the text without one', () => {
+    let state = select(hello(), 'hello', 0, 5)
+
+    state = state.apply(
+      suggestLink(state, state.selection, 'https://example.com', options)
+    )
+
+    expect(cardTitle(suggestionCards(state.doc)[0]!)).toBe(
+      'Format: link "hello"'
+    )
+    expect(linkHrefs(state)).toEqual([])
+  })
+
+  it('accepting adds the link and rejecting leaves none', () => {
+    let state = select(hello(), 'hello', 0, 5)
+    state = state.apply(
+      suggestLink(state, state.selection, 'https://example.com', options)
+    )
+    const id = suggestionCards(state.doc)[0]!.id
+
+    const accepted = state.apply(
+      decideSuggestion(state, id, 'accept').transaction
+    )
+    expect(linkHrefs(accepted)).toEqual(['https://example.com'])
+    expect(suggestionCards(accepted.doc)).toEqual([])
+
+    const rejected = state.apply(
+      decideSuggestion(state, id, 'reject').transaction
+    )
+    expect(linkHrefs(rejected)).toEqual([])
+    expect(suggestionCards(rejected.doc)).toEqual([])
+  })
+
+  it('proposes taking a link off, and accepting removes it', () => {
+    const doc = documentOf(paragraph('p1', [run('r1', ['hello world'])]))
+    let state = select(stateOf(doc), 'hello', 0, 5)
+    state = state.apply(
+      state.tr.addMark(
+        state.selection.from,
+        state.selection.to,
+        documentBodySchema.marks.link!.create({ href: 'https://old.example' })
+      )
+    )
+
+    state = state.apply(suggestLink(state, state.selection, null, options))
+
+    expect(cardTitle(suggestionCards(state.doc)[0]!)).toBe(
+      'Format: remove link "hello"'
+    )
+    expect(linkHrefs(state)).toEqual(['https://old.example'])
+    const accepted = state.apply(
+      decideSuggestion(state, suggestionCards(state.doc)[0]!.id, 'accept')
+        .transaction
+    )
+    expect(linkHrefs(accepted)).toEqual([])
+  })
+
+  it('refuses an address that is not safe, and changes nothing', () => {
+    const state = select(hello(), 'hello', 0, 5)
+
+    expect(() =>
+      suggestLink(state, state.selection, 'javascript:alert(1)', options)
+    ).toThrow(UnsupportedSuggestionError)
+  })
+
+  it('links your own inserted text for real', () => {
+    const doc = documentOf(
+      paragraph('p1', [run('r1', [{ text: 'new', mark: 'insert', by: ME }])])
+    )
+    let state = select(stateOf(doc), 'new', 0, 3)
+
+    state = state.apply(
+      suggestLink(state, state.selection, 'https://example.com', options)
+    )
+
+    expect(linkHrefs(state)).toEqual(['https://example.com'])
+    expect(suggestionCards(state.doc).map(cardTitle)).toEqual(['Add: "new"'])
   })
 })

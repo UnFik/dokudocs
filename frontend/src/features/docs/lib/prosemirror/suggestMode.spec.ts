@@ -267,6 +267,58 @@ describe('Suggest mode, split and join', () => {
   })
 })
 
+describe('Suggest mode, block types', () => {
+  it('Ctrl+Alt+2 proposes a heading, and accepting makes the block one', async () => {
+    const editor = suggestEditor('Title')
+    try {
+      editor.caret('Title', 2)
+      await userEvent.keyboard('{Control>}{Alt>}2{/Alt}{/Control}')
+      expect(editor.refused).toEqual([])
+      expect(editor.titles()).toEqual(['Format: heading 2 "Title"'])
+      expect(editor.dom('h2')).toEqual([])
+      expect(editor.dom('[data-suggest-label]')).toHaveLength(1)
+
+      editor.editor.decide(editor.cards()[0]!.id, 'accept')
+      expect(editor.dom('h2')).toEqual(['Title'])
+      expect(editor.titles()).toEqual([])
+    } finally {
+      editor.cleanup()
+    }
+  })
+})
+
+describe('Suggest mode, links', () => {
+  it('proposes a link on a selection through the editor, and accepting links the text', () => {
+    const editor = suggestEditor('hello')
+    try {
+      editor.select('hello', 0, 5)
+      expect(editor.editor.setLink('https://example.com')).toBe(true)
+      expect(editor.refused).toEqual([])
+      expect(editor.titles()).toEqual(['Format: link "hello"'])
+      expect(editor.dom('[data-link-href]')).toEqual([])
+
+      editor.editor.decide(editor.cards()[0]!.id, 'accept')
+      expect(editor.dom('[data-link-href="https://example.com"]')).toEqual([
+        'hello',
+      ])
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('refuses an unsafe address with a message', () => {
+    const editor = suggestEditor('hello')
+    try {
+      editor.select('hello', 0, 5)
+      editor.editor.setLink('javascript:alert(1)')
+      expect(editor.refused).toHaveLength(1)
+      expect(editor.titles()).toEqual([])
+    } finally {
+      editor.cleanup()
+    }
+  })
+})
+
 describe('Suggest mode, formatting after a split', () => {
   it('formats the first half of an accepted split', async () => {
     const editor = suggestEditor('hello world')

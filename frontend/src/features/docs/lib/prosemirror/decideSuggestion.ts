@@ -1,7 +1,11 @@
 import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model'
 import type { EditorState, Transaction } from 'prosemirror-state'
 import { documentBodySchema } from './documentBody'
-import { nodeSuggestionOf, withNodeSuggestion } from './nodeSuggestion'
+import {
+  nodeSuggestionOf,
+  withNodeSuggestion,
+  type NodeSuggestion,
+} from './nodeSuggestion'
 import { UnsupportedSuggestionError } from './trackChanges'
 import { formatKeys } from './trackFormat'
 
@@ -77,14 +81,26 @@ export function decideSuggestion(
     | { kind: 'removeRun'; start: number; end: number }
     | { kind: 'applyFormat'; start: number; end: number; mark: Mark }
     | { kind: 'clearBlock'; start: number; node: ProseMirrorNode }
+    | {
+        kind: 'convertBlock'
+        start: number
+        node: ProseMirrorNode
+        suggestion: NodeSuggestion
+      }
     | { kind: 'removeBlock'; start: number; end: number }
   const operations: Operation[] = []
 
   // Suggestions on whole nodes: an inserted or deleted block.
-  const blocks: { node: ProseMirrorNode; pos: number; kind: string }[] = []
+  const blocks: {
+    node: ProseMirrorNode
+    pos: number
+    kind: string
+    suggestion: NodeSuggestion
+  }[] = []
   state.doc.descendants((node, pos) => {
     const suggestion = node.isText ? null : nodeSuggestionOf(node)
-    if (suggestion?.id === id) blocks.push({ node, pos, kind: suggestion.kind })
+    if (suggestion?.id === id)
+      blocks.push({ node, pos, kind: suggestion.kind, suggestion })
     return true
   })
 
@@ -125,6 +141,13 @@ export function decideSuggestion(
       // A deleted block is canonical: it goes through DeleteNode.
       if (block.kind === 'delete')
         structuralDeletes.push(block.node.attrs.nodeID as string)
+      else if (block.kind === 'format')
+        operations.push({
+          kind: 'convertBlock',
+          start: block.pos,
+          node: block.node,
+          suggestion: block.suggestion,
+        })
       else
         operations.push({
           kind: 'clearBlock',
@@ -233,7 +256,10 @@ export function decideSuggestion(
     if (operation.kind === 'clear')
       tr.removeMark(operation.start, operation.end, operation.mark)
     else if (operation.kind === 'applyFormat') {
-      const set = (operation.mark.attrs.set ?? {}) as Record<string, boolean>
+      const set = (operation.mark.attrs.set ?? {}) as Record<
+        string,
+        boolean | string
+      >
       for (const [mark, key] of Object.entries(formatKeys)) {
         const type = documentBodySchema.marks[mark]!
         if (set[key] === true)
@@ -241,7 +267,35 @@ export function decideSuggestion(
         else if (set[key] === false)
           tr.removeMark(operation.start, operation.end, type)
       }
+      // A link is an address; an empty one takes the link off.
+      if (typeof set.href === 'string') {
+        const link = documentBodySchema.marks.link!
+        tr.removeMark(operation.start, operation.end, link)
+        if (set.href)
+          tr.addMark(
+            operation.start,
+            operation.end,
+            link.create({ href: set.href })
+          )
+      }
       tr.removeMark(operation.start, operation.end, operation.mark)
+    } else if (operation.kind === 'convertBlock') {
+      const { suggestion } = operation
+      const attributes = JSON.parse(
+        String(operation.node.attrs.bodyAttributes ?? '{}')
+      ) as Record<string, unknown>
+      delete attributes.suggestion
+      const heading = suggestion.toType === 'atx_heading'
+      if (heading) attributes.level = suggestion.toAttributes?.level ?? 1
+      else delete attributes.level
+      tr.setNodeMarkup(
+        operation.start,
+        documentBodySchema.nodes[heading ? 'atx_heading' : 'paragraph']!,
+        {
+          ...operation.node.attrs,
+          bodyAttributes: JSON.stringify(attributes),
+        }
+      )
     } else if (operation.kind === 'clearBlock')
       tr.setNodeMarkup(
         operation.start,

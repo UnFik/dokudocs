@@ -18,6 +18,10 @@ import {
   listDocumentComments,
   createDocumentComment,
   setDocumentCommentResolved,
+  editDocumentComment,
+  deleteDocumentComment,
+  editDocumentCommentReply,
+  deleteDocumentCommentReply,
   listProjects,
   listRAGConversations,
   listWorkspaces,
@@ -216,6 +220,43 @@ describe('Dokudocs domain API adapter', () => {
     })
     expect(String(resolve[0])).toMatch(/comments\/.+\/resolve$/)
     expect(String(reopen[0])).toMatch(/comments\/.+\/reopen$/)
+  })
+
+  it('edits and deletes comments and replies with the right method and path', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetch)
+    const thread = '11111111-1111-4111-8111-111111111111'
+    const reply = '22222222-2222-4222-8222-222222222222'
+
+    await editDocumentComment(workspaceId, documentId, thread, 'fixed')
+    await deleteDocumentComment(workspaceId, documentId, thread)
+    await editDocumentCommentReply(
+      workspaceId,
+      documentId,
+      thread,
+      reply,
+      'better'
+    )
+    await deleteDocumentCommentReply(workspaceId, documentId, thread, reply)
+
+    const calls = (fetch.mock.calls as [string, RequestInit][]).map(
+      ([url, init]) => [init.method, new URL(String(url), 'http://x').pathname]
+    )
+    expect(calls).toEqual([
+      ['PATCH', `/api/v1/documents/${documentId}/comments/${thread}`],
+      ['DELETE', `/api/v1/documents/${documentId}/comments/${thread}`],
+      [
+        'PATCH',
+        `/api/v1/documents/${documentId}/comments/${thread}/replies/${reply}`,
+      ],
+      [
+        'DELETE',
+        `/api/v1/documents/${documentId}/comments/${thread}/replies/${reply}`,
+      ],
+    ])
+    expect(
+      JSON.parse(String((fetch.mock.calls[0] as [string, RequestInit])[1].body))
+    ).toEqual({ content: 'fixed' })
   })
 
   it('requests a public share token with workspace scope', async () => {

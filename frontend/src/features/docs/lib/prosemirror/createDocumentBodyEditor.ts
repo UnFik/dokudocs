@@ -45,6 +45,7 @@ import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
 import {
   emptyInlineState,
   readInlineState,
+  linkRange,
   removeLinkCommand,
   setLinkCommand,
   toggleInlineMark,
@@ -60,13 +61,14 @@ import {
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
 import { suggestionBlocksPlugin } from './suggestionBlocks'
 import { suggestionCards, type SuggestionCard } from './suggestionCards'
+import { suggestBlockType, type HeadingLevel } from './trackBlockType'
 import {
   suggestDeleteKey,
   suggestReplace,
   trackTransaction,
   UnsupportedSuggestionError,
 } from './trackChanges'
-import { suggestFormat } from './trackFormat'
+import { suggestFormat, suggestLink } from './trackFormat'
 import {
   joinTarget,
   suggestEnter,
@@ -254,7 +256,7 @@ export function createDocumentBodyEditor(
           ([0, 1, 2, 3, 4, 5, 6] as const).flatMap((level) =>
             ['Ctrl', 'Meta'].map((modifier) => [
               `${modifier}-Alt-${level}`,
-              () => runBlock(setHeadingCommand(level)),
+              () => runHeading(level),
             ])
           )
         ),
@@ -318,6 +320,17 @@ export function createDocumentBodyEditor(
     if (view)
       suggest(() =>
         suggestFormat(stateAtDomSelection(view), name, suggestionOptions())
+      )
+    return true
+  }
+  // In Suggest mode a block's type is proposed, not changed.
+  const runHeading = (level: HeadingLevel) => {
+    if (!suggestMode) return runBlock(setHeadingCommand(level))
+    if (!canEdit()) return false
+    const view = viewHolder.current
+    if (view)
+      suggest(() =>
+        suggestBlockType(stateAtDomSelection(view), level, suggestionOptions())
       )
     return true
   }
@@ -961,11 +974,37 @@ export function createDocumentBodyEditor(
       }
       return toggleInlineMark(name)(state, view.dispatch)
     },
-    setLink: (href: string) =>
-      canEdit() && setLinkCommand(href)(state, view.dispatch),
-    removeLink: () => canEdit() && removeLinkCommand(state, view.dispatch),
-    setHeading: (level: 0 | 1 | 2 | 3 | 4 | 5 | 6) =>
-      canEdit() && setHeadingCommand(level)(state, view.dispatch),
+    setLink: (href: string) => {
+      if (!canEdit()) return false
+      if (!suggestMode || state.selection.empty)
+        return setLinkCommand(href)(state, view.dispatch)
+      // A link on a selection is proposed, not applied.
+      let proposed = false
+      suggest(() => {
+        const transaction = suggestLink(
+          stateAtDomSelection(view),
+          state.selection,
+          href,
+          suggestionOptions()
+        )
+        proposed = transaction.docChanged
+        return transaction
+      })
+      return proposed
+    },
+    removeLink: () => {
+      if (!canEdit()) return false
+      if (!suggestMode) return removeLinkCommand(state, view.dispatch)
+      const range = linkRange(state)
+      if (!range) return false
+      suggest(() => suggestLink(state, range, null, suggestionOptions()))
+      return true
+    },
+    setHeading: (level: HeadingLevel) =>
+      canEdit() &&
+      (suggestMode
+        ? runHeading(level)
+        : setHeadingCommand(level)(state, view.dispatch)),
     toggleTask: () => canEdit() && toggleTaskChecked(state, view.dispatch),
     insertBlock: (kind: InsertableBlock) =>
       canEdit() && insertBlockCommand(kind)(state, view.dispatch),

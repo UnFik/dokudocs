@@ -66,4 +66,10 @@ type CommentRepository interface {
 	CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error
 	CreateCommentReply(ctx context.Context, workspaceID, documentID uuid.UUID, reply model.CommentReply) error
 	SetCommentResolved(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, resolved bool) error
+	// UpdateComment and UpdateCommentReply change the text; only its author may.
+	UpdateComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, content string) error
+	UpdateCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID, content string) error
+	// DeleteComment removes a thread with its replies; its author or an editor may.
+	DeleteComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID) error
+	DeleteCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID) error
 }
