@@ -1,5 +1,6 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model'
 import { nodeSuggestionOf } from './nodeSuggestion'
+import { blockLabels } from './trackBlockInsert'
 import { levelLabel, proposedLevel } from './trackBlockType'
 
 // What the review rail shows for a suggestion. A card is not stored: its kind and
@@ -19,6 +20,8 @@ export type SuggestionCard = {
   /** Whole blocks the suggestion adds or removes; they count even when empty. */
   insertedBlocks: number
   deletedBlocks: number
+  /** What the inserted blocks are, when they are more than paragraphs: a code block, a table. */
+  blockKinds: string[]
   /** Where the suggestion first appears in the document. */
   position: number
 }
@@ -47,6 +50,7 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
             formats: [],
             insertedBlocks: 0,
             deletedBlocks: 0,
+            blockKinds: [],
             position,
           }
           cards.set(suggestion.id, card)
@@ -54,6 +58,8 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
         if (suggestion.kind === 'insert') {
           // Its text carries insert marks of its own, counted below.
           card.insertedBlocks++
+          const label = blockLabels[node.type.name]
+          if (label) card.blockKinds.push(label)
         } else if (suggestion.kind === 'format') {
           const label = levelLabel(proposedLevel(node) ?? 0)
           if (!card.formats.includes(label)) card.formats.push(label)
@@ -80,6 +86,7 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
           formats: [],
           insertedBlocks: 0,
           deletedBlocks: 0,
+          blockKinds: [],
           position,
         }
         cards.set(id, card)
@@ -122,6 +129,8 @@ export function cardTitle(card: SuggestionCard) {
   if (card.inserted) return `Add: "${shorten(card.inserted)}"`
   if (card.deleted) return `Delete: "${shorten(card.deleted)}"`
   // Blocks with no text of their own.
+  if (card.insertedBlocks && card.deletedBlocks) return 'Leave list'
+  if (card.blockKinds.length) return `Add: ${card.blockKinds.join(', ')}`
   return card.insertedBlocks
     ? `Add: ${card.insertedBlocks === 1 ? 'new paragraph' : `${card.insertedBlocks} new paragraphs`}`
     : `Delete: ${card.deletedBlocks === 1 ? 'empty paragraph' : `${card.deletedBlocks} empty paragraphs`}`

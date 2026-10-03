@@ -12,9 +12,10 @@ export type NodeSuggestion = {
   toAttributes?: Record<string, unknown>
 }
 
-function parse(node: ProseMirrorNode): Record<string, unknown> {
+/** All of the node's attributes, whether or not it has a suggestion. */
+function parseAll(node: ProseMirrorNode): Record<string, unknown> {
   const raw = node.attrs.bodyAttributes
-  if (typeof raw !== 'string' || !raw.includes('"suggestion"')) return {}
+  if (typeof raw !== 'string') return {}
   try {
     const parsed: unknown = JSON.parse(raw)
     return typeof parsed === 'object' && parsed !== null
@@ -23,6 +24,14 @@ function parse(node: ProseMirrorNode): Record<string, unknown> {
   } catch {
     return {}
   }
+}
+
+/** The attributes of a node that may carry a suggestion; a node without one is not parsed. */
+function parse(node: ProseMirrorNode): Record<string, unknown> {
+  const raw = node.attrs.bodyAttributes
+  return typeof raw === 'string' && raw.includes('"suggestion"')
+    ? parseAll(node)
+    : {}
 }
 
 export function nodeSuggestionOf(node: ProseMirrorNode): NodeSuggestion | null {
@@ -46,7 +55,7 @@ export function withNodeSuggestion(
   node: ProseMirrorNode,
   suggestion: NodeSuggestion | null
 ) {
-  const attributes = parse(node)
+  const attributes = parseAll(node)
   if (suggestion) attributes.suggestion = suggestion
   else delete attributes.suggestion
   return { ...node.attrs, bodyAttributes: JSON.stringify(attributes) }

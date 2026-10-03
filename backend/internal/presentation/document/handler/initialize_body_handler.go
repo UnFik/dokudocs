@@ -150,6 +150,7 @@ func (h *BodyHandler) InitializeBody(w http.ResponseWriter, r *http.Request) {
 type bodySnapshotResponse struct {
 	BodyVersion       int64              `json:"bodyVersion"`
 	BodyEpoch         int64              `json:"bodyEpoch"`
+	CompatEpoch       int64              `json:"compatEpoch"`
 	BodySchemaVersion int                `json:"bodySchemaVersion"`
 	CanEdit           bool               `json:"canEdit"`
 	CanSuggest        bool               `json:"canSuggest"`
@@ -203,7 +204,7 @@ func (h *BodyHandler) GetBody(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := bodySnapshotResponse{
-		BodyVersion: snapshot.BodyVersion, BodyEpoch: snapshot.BodyEpoch,
+		BodyVersion: snapshot.BodyVersion, BodyEpoch: snapshot.BodyEpoch, CompatEpoch: snapshot.CompatEpoch,
 		BodySchemaVersion: snapshot.BodySchemaVersion, CanEdit: snapshot.CanEdit, CanSuggest: snapshot.CanSuggest, RootNodeID: snapshot.Body.RootNodeID,
 		EncodedState: snapshot.EncodedState, Nodes: make([]bodyNodeResponse, len(snapshot.Body.Nodes)),
 	}

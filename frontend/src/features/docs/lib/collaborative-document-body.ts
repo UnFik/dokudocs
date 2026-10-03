@@ -33,8 +33,10 @@ import type { SuggestionCard } from './prosemirror/suggestionCards'
 type CollaborativeBodySnapshot = {
   bodyVersion: number
   bodyEpoch: number
+  compatEpoch?: number
   bodySchemaVersion: number
   canEdit: boolean
+  canSuggest?: boolean
   encodedState: string
 }
 
@@ -115,8 +117,10 @@ export async function mountCollaborativeDocumentBody(
       document,
       bodyVersion: input.snapshot.bodyVersion,
       bodyEpoch: input.snapshot.bodyEpoch,
+      compatEpoch: input.snapshot.compatEpoch,
       bodySchemaVersion: input.snapshot.bodySchemaVersion,
       canEdit: input.snapshot.canEdit,
+      canSuggest: input.snapshot.canSuggest,
       store: input.store ?? new IndexedDBCollaborationStore(),
       executeDeleteNode: input.executeDeleteNode,
       executeMoveNode: input.executeMoveNode,

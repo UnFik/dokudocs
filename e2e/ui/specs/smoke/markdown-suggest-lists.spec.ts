@@ -224,6 +224,19 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await expect(commenterEditor.locator("li")).toHaveCount(2);
     await expect.poll(canonicalRuns).toEqual(["Apples", "Pears", "Quoted"]);
 
+    // Enter in the middle of an item splits it by copying the tail; the owner rejects.
+    await commenterEditor.getByText("Pears").click();
+    await commenter.keyboard.press("Home");
+    await commenter.keyboard.press("ArrowRight");
+    await commenter.keyboard.press("ArrowRight");
+    await commenter.keyboard.press("Enter");
+    await expect(ownerCards).toContainText("Split paragraph");
+    await expect(ownerEditor.locator("li")).toHaveCount(3);
+    await ownerCards.getByRole("button", { name: "Reject" }).click();
+    await expect(ownerCards).toHaveCount(0);
+    await expect(ownerEditor.locator("li")).toHaveCount(2);
+    await expect.poll(canonicalRuns).toEqual(["Apples", "Pears", "Quoted"]);
+
     // Enter inside a quote adds a paragraph to the quote; the owner rejects it.
     await commenterEditor.getByText("Quoted").click();
     await commenter.keyboard.press("End");
@@ -237,9 +250,32 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await expect(commenterEditor.locator("blockquote p")).toHaveCount(1);
     await expect.poll(canonicalRuns).toEqual(["Apples", "Pears", "Quoted"]);
 
+    // A block from the slash menu is a suggestion: a code block the owner accepts,
+    // after the empty paragraph the commenter opened the menu in, which is rejected.
+    await commenterEditor.getByText("Quoted").click();
+    await commenter.keyboard.press("End");
+    await commenter.keyboard.press("Enter");
+    await commenter.keyboard.type("/");
+    const menu = commenter.getByRole("combobox", { name: "Insert block" });
+    await expect(menu).toBeFocused();
+    await menu.fill("code");
+    await menu.press("Enter");
+    await expect(ownerCards).toContainText("Add: code block");
+    await ownerCards
+      .getByRole("listitem")
+      .filter({ hasText: "Add: code block" })
+      .getByRole("button", { name: "Accept" })
+      .click();
+    await expect(ownerEditor.locator("pre")).toHaveCount(1);
+    await ownerCards.getByRole("button", { name: "Reject" }).click();
+    await expect(ownerCards).toHaveCount(0);
+    await expect(commenterEditor.locator("pre")).toHaveCount(1);
+    await expect(ownerEditor.locator("blockquote p")).toHaveCount(1);
+
     // A reload agrees.
     await page.reload();
     await expect(page.locator(".ProseMirror li")).toHaveCount(2);
+    await expect(page.locator(".ProseMirror pre")).toHaveCount(1);
     await expect(page.locator(".ProseMirror .suggest-ins")).toHaveCount(0);
   } finally {
     await commenterContext.close();
