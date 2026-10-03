@@ -126,6 +126,11 @@ export function createDocumentBodyEditor(
     /** The suggestions in the body changed. */
     onSuggestionCards?: (cards: SuggestionCard[]) => void
     onSuggestionClick?: (id: string) => void
+    /** Where each comment thread sits now: a document position, or null when its text is gone. */
+    onCommentPositions?: (positions: Record<string, number | null>) => void
+    onCommentClick?: (id: string) => void
+    /** The user asked to comment on the selection (Ctrl or Cmd with Alt and M). */
+    onCommentRequest?: () => void
     /** Fires when the local selection moves; null when the editor loses focus. */
     onSelectionChange?: (selection: DocumentBodySelection | null) => void
   } = {}
@@ -178,6 +183,40 @@ export function createDocumentBodyEditor(
       },
     },
   })
+  // Comment threads are not part of the body (ADR 0027). Their text is marked
+  // here, from anchors the server keeps, so a comment follows its words.
+  const commentsKey = new PluginKey('comments')
+  type CommentThreadAnchor = {
+    id: string
+    anchor: DocumentBodyAnchor | null
+    resolved: boolean
+  }
+  let commentThreads: CommentThreadAnchor[] = []
+  let commentRanges: { id: string; from: number; to: number }[] = []
+  let focusedCommentID: string | null = null
+  let lastCommentState = ''
+  const commentsPlugin = new Plugin({
+    key: commentsKey,
+    props: {
+      decorations: (editorState): DecorationSet => {
+        const size = editorState.doc.content.size
+        return DecorationSet.create(
+          editorState.doc,
+          commentRanges
+            .filter((range) => range.to <= size)
+            .map((range) =>
+              Decoration.inline(range.from, range.to, {
+                class:
+                  range.id === focusedCommentID
+                    ? 'comment-mark comment-focus'
+                    : 'comment-mark',
+                'data-comment-id': range.id,
+              })
+            )
+        )
+      },
+    },
+  })
   let remoteCursors: RemoteCursor[] = []
   const remoteCursorPlugin = new Plugin({
     props: {
@@ -192,6 +231,7 @@ export function createDocumentBodyEditor(
       remoteCursorPlugin,
       suggestionFocusPlugin,
       suggestionBlocksPlugin,
+      commentsPlugin,
       // Block plugins (slash menu, drag handle) run before the keymaps below so
       // they can claim Enter and arrow keys while a menu is open.
       ...(options.plugins ?? []),
@@ -225,6 +265,10 @@ export function createDocumentBodyEditor(
           i: () => runInlineMark('em'),
           e: () => runInlineMark('code'),
           'Shift-x': () => runInlineMark('strike'),
+          'Alt-m': () => {
+            options.onCommentRequest?.()
+            return true
+          },
           k: () => {
             if (!canEdit()) return true
             options.onLinkRequest?.()
@@ -574,6 +618,7 @@ export function createDocumentBodyEditor(
       if (result.transactions.some((item) => item.docChanged)) {
         options.onBodyChange?.(prosemirrorToDocumentBody(state.doc))
         publishSuggestionCards()
+        refreshComments()
       }
       publishInline()
       if (
@@ -645,6 +690,12 @@ export function createDocumentBodyEditor(
         '[data-suggestion-id]'
       )?.dataset.suggestionId
       if (suggestionID) options.onSuggestionClick?.(suggestionID)
+      else {
+        const commentID =
+          event.target.closest<HTMLElement>('[data-comment-id]')?.dataset
+            .commentId
+        if (commentID) options.onCommentClick?.(commentID)
+      }
       return false
     },
     // A separator is not selectable by default (it is an atom), so a click on it
@@ -783,53 +834,120 @@ export function createDocumentBodyEditor(
   ensureEmptyParagraph()
   publishSuggestionCards()
 
+  const createAnchorFor = (from: number, to: number): DocumentBodyAnchor => {
+    const nodeID = blockNodeIDAt(state.doc, from)
+    if (from >= to || blockNodeIDAt(state.doc, to) !== nodeID)
+      throw new Error('comment anchor must stay within one block')
+    const mapping = ySyncPluginKey.getState(state)?.binding.mapping
+    if (!mapping) throw new Error('editor Yjs mapping is unavailable')
+    return {
+      nodeID,
+      start: Y.encodeRelativePosition(
+        absolutePositionToRelativePosition(from, fragment, mapping)
+      ),
+      end: Y.encodeRelativePosition(
+        absolutePositionToRelativePosition(to, fragment, mapping)
+      ),
+    }
+  }
+  const resolveAnchorRange = (anchor: DocumentBodyAnchor) => {
+    try {
+      const mapping = ySyncPluginKey.getState(state)?.binding.mapping
+      if (!mapping) return null
+      const from = relativePositionToAbsolutePosition(
+        ydoc,
+        fragment,
+        Y.decodeRelativePosition(anchor.start),
+        mapping
+      )
+      const to = relativePositionToAbsolutePosition(
+        ydoc,
+        fragment,
+        Y.decodeRelativePosition(anchor.end),
+        mapping
+      )
+      if (
+        from === null ||
+        to === null ||
+        from >= to ||
+        blockNodeIDAt(state.doc, from) !== anchor.nodeID ||
+        blockNodeIDAt(state.doc, to) !== anchor.nodeID
+      )
+        return null
+      return { from, to }
+    } catch {
+      return null
+    }
+  }
+  // Works out where every comment thread is now, and redraws the marks only
+  // when something moved.
+  const refreshComments = () => {
+    const view = viewHolder.current
+    if (!view) return
+    const positions: Record<string, number | null> = {}
+    const ranges: { id: string; from: number; to: number }[] = []
+    for (const thread of commentThreads) {
+      const range = thread.anchor ? resolveAnchorRange(thread.anchor) : null
+      positions[thread.id] = range ? range.from : null
+      if (range && !thread.resolved)
+        ranges.push({ id: thread.id, from: range.from, to: range.to })
+    }
+    const encoded = JSON.stringify([ranges, positions])
+    if (encoded === lastCommentState) return
+    lastCommentState = encoded
+    commentRanges = ranges
+    options.onCommentPositions?.(positions)
+    view.dispatch(view.state.tr.setMeta(commentsKey, 'refresh'))
+  }
+
   return {
     view,
     ydoc,
     getBody: () => prosemirrorToDocumentBody(state.doc),
-    createAnchor: (from: number, to: number): DocumentBodyAnchor => {
-      const nodeID = blockNodeIDAt(state.doc, from)
-      if (from >= to || blockNodeIDAt(state.doc, to) !== nodeID)
-        throw new Error('comment anchor must stay within one block')
-      const mapping = ySyncPluginKey.getState(state)?.binding.mapping
-      if (!mapping) throw new Error('editor Yjs mapping is unavailable')
-      return {
-        nodeID,
-        start: Y.encodeRelativePosition(
-          absolutePositionToRelativePosition(from, fragment, mapping)
-        ),
-        end: Y.encodeRelativePosition(
-          absolutePositionToRelativePosition(to, fragment, mapping)
-        ),
-      }
+    createAnchor: (from: number, to: number): DocumentBodyAnchor =>
+      createAnchorFor(from, to),
+    resolveAnchor: (anchor: DocumentBodyAnchor) => resolveAnchorRange(anchor),
+    /** The comment threads to mark and place; call again whenever they change. */
+    setComments: (threads: CommentThreadAnchor[]) => {
+      commentThreads = threads
+      lastCommentState = ''
+      refreshComments()
     },
-    resolveAnchor: (anchor: DocumentBodyAnchor) => {
+    setFocusedComment: (id: string | null) => {
+      focusedCommentID = id
+      view.dispatch(view.state.tr.setMeta(commentsKey, 'focus'))
+    },
+    scrollToComment: (id: string) => {
+      const target = [
+        ...view.dom.querySelectorAll<HTMLElement>('[data-comment-id]'),
+      ].find((element) => element.dataset.commentId === id)
+      if (!target) return false
+      focusedCommentID = id
+      view.dispatch(view.state.tr.setMeta(commentsKey, 'focus'))
+      target.scrollIntoView({ block: 'center' })
+      return true
+    },
+    /** What a new comment would be anchored to: the current selection, in one block. */
+    getCommentDraft: ():
+      | { ok: true; anchor: DocumentBodyAnchor; selectedText: string }
+      | { ok: false; message: string } => {
+      const selection = selectionNow(view)
+      if (selection.empty)
+        return { ok: false, message: 'Select the text to comment on first.' }
       try {
-        const mapping = ySyncPluginKey.getState(state)?.binding.mapping
-        if (!mapping) return null
-        const from = relativePositionToAbsolutePosition(
-          ydoc,
-          fragment,
-          Y.decodeRelativePosition(anchor.start),
-          mapping
-        )
-        const to = relativePositionToAbsolutePosition(
-          ydoc,
-          fragment,
-          Y.decodeRelativePosition(anchor.end),
-          mapping
-        )
-        if (
-          from === null ||
-          to === null ||
-          from >= to ||
-          blockNodeIDAt(state.doc, from) !== anchor.nodeID ||
-          blockNodeIDAt(state.doc, to) !== anchor.nodeID
-        )
-          return null
-        return { from, to }
+        const anchor = createAnchorFor(selection.from, selection.to)
+        return {
+          ok: true,
+          anchor,
+          selectedText: state.doc
+            .textBetween(selection.from, selection.to, ' ')
+            .slice(0, 500),
+        }
       } catch {
-        return null
+        return {
+          ok: false,
+          message: 'A comment can cover text inside one paragraph at a time.',
+        }
       }
     },
     getHistory: readHistory,
