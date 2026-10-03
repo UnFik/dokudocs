@@ -327,6 +327,21 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await expect
       .poll(canonicalRuns)
       .toEqual(["Original", " phrase", "Second line"]);
+
+    // A block's type is proposed too: the block keeps its look until accepted.
+    await commenterEditor.getByText("Original").first().click();
+    await commenter.keyboard.press("Control+Alt+2");
+    await openReview();
+    await expect(ownerCards).toContainText('Format: heading 2 "Original"');
+    await expect(ownerEditor.locator("h2")).toHaveCount(0);
+    await expect(ownerEditor.locator(".suggest-block-fmt")).toHaveAttribute(
+      "data-suggest-label",
+      "heading 2",
+    );
+    await ownerCards.getByRole("button", { name: "Accept" }).click();
+    await expect(ownerEditor.locator("h2")).toContainText("Original");
+    await expect(commenterEditor.locator("h2")).toContainText("Original");
+    await expect(ownerEditor.locator(".suggest-block-fmt")).toHaveCount(0);
   } finally {
     await commenterContext.close();
   }
