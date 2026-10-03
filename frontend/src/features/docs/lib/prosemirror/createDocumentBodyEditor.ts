@@ -41,6 +41,7 @@ import {
   type InsertableBlock,
 } from './blockCommands'
 import { decideSuggestion } from './decideSuggestion'
+import { withEmptiedParents } from './deleteTargets'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
 import {
   emptyInlineState,
@@ -449,8 +450,9 @@ export function createDocumentBodyEditor(
     }
   }
   const viewHolder: { current?: EditorView } = {}
-  const queueDeleteNode = (nodeIDs: string[]) => {
+  const queueDeleteNode = (requested: string[]) => {
     if (!options.onDeleteNode) return false
+    const nodeIDs = withEmptiedParents(state.doc, requested)
     structuralCommandPending = true
     viewHolder.current?.setProps({ editable: () => false })
     void Promise.resolve()
