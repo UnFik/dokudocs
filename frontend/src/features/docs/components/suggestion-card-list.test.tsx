@@ -1,6 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { userEvent } from 'vitest/browser'
+import type { CommentThread } from '@/lib/domain-api'
 import type { SuggestionCard } from '../lib/prosemirror/suggestionCards'
 import { SuggestionCardList } from './suggestion-card-list'
 
@@ -108,15 +110,182 @@ describe('SuggestionCardList', () => {
       .toBeInTheDocument()
   })
 
-  it('says how to make a suggestion when there are none', async () => {
+  it('says how to start when there are no suggestions and no comments', async () => {
     const { getByText } = await renderList({ cards: [] })
 
     await expect
-      .element(
-        getByText(
-          'No suggestions in this document. In Suggest mode, what you type becomes one.'
-        )
-      )
+      .element(getByText(/No suggestions or comments yet/))
       .toBeInTheDocument()
+  })
+})
+
+const thread = (
+  id: string,
+  content: string,
+  extra: Partial<CommentThread> = {}
+): CommentThread => ({
+  id,
+  documentId: 'document',
+  authorId: OTHER,
+  authorName: 'Dewi Lestari',
+  selectedText: `quote of ${content}`,
+  content,
+  anchor: null,
+  createdAt: '2026-10-03T00:00:00Z',
+  resolvedAt: null,
+  resolvedBy: null,
+  replies: [],
+  ...extra,
+})
+
+async function renderWithComments(
+  over: Partial<Parameters<typeof SuggestionCardList>[0]> = {}
+) {
+  const client = new QueryClient()
+  const onSelectComment = vi.fn()
+  const result = await render(
+    <QueryClientProvider client={client}>
+      <SuggestionCardList
+        cards={cards}
+        userID={ME}
+        canDecide
+        disabled={false}
+        onDecide={vi.fn()}
+        onSelect={vi.fn()}
+        focusedSuggestionID={null}
+        discussions={[]}
+        canInteract
+        workspaceID='workspace'
+        documentID='document'
+        onSelectComment={onSelectComment}
+        {...over}
+      />
+    </QueryClientProvider>
+  )
+  return { ...result, onSelectComment }
+}
+
+const order = (container: Element) =>
+  [
+    ...container.querySelectorAll(
+      'ul[aria-label="Suggestions and comments"] > li'
+    ),
+  ].map((item) =>
+    item.getAttribute('data-comment-thread-id')
+      ? `comment:${item.getAttribute('data-comment-thread-id')}`
+      : item.hasAttribute('data-new-comment')
+        ? 'new'
+        : `suggestion:${item.getAttribute('data-suggestion-id')}`
+  )
+
+describe('SuggestionCardList with comments', () => {
+  it('lists suggestions and comments in document order, with threads whose text is gone last', async () => {
+    const { container } = await renderWithComments({
+      comments: [
+        thread('lost', 'text was deleted'),
+        thread('late', 'near the end'),
+        thread('early', 'near the start'),
+      ],
+      commentPositions: { early: 0, late: 20, lost: null },
+    })
+
+    expect(order(container)).toEqual([
+      'comment:early',
+      'suggestion:mine',
+      'suggestion:theirs',
+      'comment:late',
+      'comment:lost',
+    ])
+  })
+
+  it('labels a thread whose text changed, and still shows its quote', async () => {
+    const { getByText } = await renderWithComments({
+      comments: [thread('lost', 'text was deleted')],
+      commentPositions: { lost: null },
+    })
+
+    await expect.element(getByText('text changed')).toBeInTheDocument()
+    await expect
+      .element(getByText('quote of text was deleted'))
+      .toBeInTheDocument()
+  })
+
+  it('hides resolved threads behind one control that shows them', async () => {
+    const { container, getByRole } = await renderWithComments({
+      cards: [],
+      comments: [
+        thread('open', 'still open'),
+        thread('done', 'settled', { resolvedAt: '2026-10-03T01:00:00Z' }),
+      ],
+      commentPositions: { open: 1, done: 2 },
+    })
+
+    expect(order(container)).toEqual(['comment:open'])
+    await userEvent.click(
+      getByRole('button', { name: 'Show 1 resolved comment' })
+    )
+    expect(order(container)).toEqual(['comment:open', 'comment:done'])
+    await expect
+      .element(getByRole('button', { name: 'Hide resolved comments' }))
+      .toBeInTheDocument()
+  })
+
+  it('says comments are loading while they load', async () => {
+    const { getByText } = await renderWithComments({
+      cards: [],
+      commentsLoading: true,
+    })
+
+    await expect.element(getByText('Loading comments...')).toBeInTheDocument()
+  })
+
+  it('says so when every comment is resolved, and renders no empty list', async () => {
+    const { container, getByText } = await renderWithComments({
+      cards: [],
+      comments: [
+        thread('done', 'settled', { resolvedAt: '2026-10-03T01:00:00Z' }),
+      ],
+      commentPositions: { done: 2 },
+    })
+
+    await expect
+      .element(getByText('Every comment is resolved.'))
+      .toBeInTheDocument()
+    expect(
+      container.querySelector('ul[aria-label="Suggestions and comments"]')
+    ).toBeNull()
+  })
+
+  it('shows the comment being written first, and asks the list to focus a thread on click', async () => {
+    const { container, getByRole, onSelectComment } = await renderWithComments({
+      comments: [thread('t1', 'a question')],
+      commentPositions: { t1: 3 },
+      newComment: {
+        selectedText: 'quoted words',
+        anchor: { nodeID: 'n', start: 'AA==', end: 'AQ==' },
+      },
+    })
+
+    expect(order(container)[0]).toBe('new')
+    await userEvent.click(
+      getByRole('button', { name: 'Show in document: quote of a question' })
+    )
+    expect(onSelectComment).toHaveBeenCalledWith('t1')
+  })
+
+  it('does not offer replies or resolve to someone who cannot comment', async () => {
+    const { getByRole } = await renderWithComments({
+      cards: [],
+      canInteract: false,
+      comments: [thread('t1', 'a question')],
+      commentPositions: { t1: 3 },
+    })
+
+    expect(
+      getByRole('button', { name: 'Resolve comment' }).elements()
+    ).toHaveLength(0)
+    expect(getByRole('button', { name: 'Send reply' }).elements()).toHaveLength(
+      0
+    )
   })
 })

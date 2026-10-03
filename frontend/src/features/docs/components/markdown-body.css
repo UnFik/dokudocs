@@ -295,3 +295,23 @@
 .markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-code {
   font-family: var(--font-mono, monospace);
 }
+
+/* Text under a comment thread. A neutral ink tint and a dashed underline: the
+   accent is for the one key action, and author colors mean a suggestion. A
+   comment changes nothing in the text. */
+.markdown-body .comment-mark {
+  background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-bottom: 1px dashed var(--muted-foreground);
+  cursor: pointer;
+}
+
+.markdown-body .comment-focus {
+  background-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-bottom-style: solid;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .comment-mark,
+.markdown-body[data-suggestion-preview='rejected'] .comment-mark {
+  background: none;
+  border-bottom: none;
+}

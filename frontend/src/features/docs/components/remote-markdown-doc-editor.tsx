@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
 import { toast } from 'sonner'
@@ -12,6 +12,9 @@ import {
   listDocumentRevisions,
   restoreDocumentRevision,
   updateDocumentMetadata,
+  listDocumentComments,
+  type CommentAnchor,
+  type CommentThread,
 } from '@/lib/domain-api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
@@ -31,7 +34,11 @@ import {
   loadReviewModel,
   resolveHeldCommand,
 } from '../lib/collaboration-review'
-import type { PresenceUser } from '../lib/collaboration-socket'
+import {
+  decodeBase64,
+  encodeBase64,
+  type PresenceUser,
+} from '../lib/collaboration-socket'
 import {
   IndexedDBCollaborationStore,
   type PendingCollaborationUpdate,
@@ -349,6 +356,63 @@ function CollaborativeMarkdownBody({
   const [focusedSuggestionID, setFocusedSuggestionID] = useState<string | null>(
     null
   )
+  const [commentPositions, setCommentPositions] = useState<
+    Record<string, number | null>
+  >({})
+  const [focusedCommentID, setFocusedCommentID] = useState<string | null>(null)
+  const [commentDraft, setCommentDraft] = useState<{
+    selectedText: string
+    anchor: CommentAnchor
+  } | null>(null)
+  const [sessionReady, setSessionReady] = useState(false)
+  const queryClient = useQueryClient()
+  const commentsQuery = useQuery({
+    queryKey: ['document-comments', workspaceID, documentID],
+    queryFn: ({ signal }) =>
+      listDocumentComments(workspaceID, documentID, signal),
+    retry: false,
+    refetchOnWindowFocus: true,
+  })
+  const comments = useMemo(() => commentsQuery.data ?? [], [commentsQuery.data])
+  // The editor marks and places every thread; it needs the threads and a session.
+  useEffect(() => {
+    if (!sessionReady) return
+    sessionRef.current?.editor.setComments(
+      comments.map((thread) => ({
+        id: thread.id,
+        resolved: Boolean(thread.resolvedAt),
+        anchor: thread.anchor
+          ? {
+              nodeID: thread.anchor.nodeID,
+              start: decodeBase64(thread.anchor.start),
+              end: decodeBase64(thread.anchor.end),
+            }
+          : null,
+      }))
+    )
+  }, [comments, sessionReady])
+  const startComment = () => {
+    const editor = sessionRef.current?.editor
+    if (!editor) return
+    const draft = editor.getCommentDraft()
+    if (!draft.ok) {
+      toast.error(draft.message, { id: 'comment-draft' })
+      return
+    }
+    setCommentDraft({
+      selectedText: draft.selectedText,
+      anchor: {
+        nodeID: draft.anchor.nodeID,
+        start: encodeBase64(draft.anchor.start),
+        end: encodeBase64(draft.anchor.end),
+      },
+    })
+    setIsSuggestionsOpen(true)
+  }
+  const startCommentRef = useRef(startComment)
+  useEffect(() => {
+    startCommentRef.current = startComment
+  })
   const reviewStore = useMemo(() => new IndexedDBCollaborationStore(), [])
   const [history, setHistory] = useState<EditorHistoryState>({
     canUndo: false,
@@ -426,6 +490,26 @@ function CollaborativeMarkdownBody({
       onSuggestRefused: (message) =>
         toast.error(message, { id: 'suggest-refused' }),
       onSuggestionCards: setCards,
+      onCommentPositions: setCommentPositions,
+      onCommentsChanged: () =>
+        void queryClient.invalidateQueries({
+          queryKey: ['document-comments', workspaceID, documentID],
+        }),
+      onCommentRequest: () => startCommentRef.current(),
+      onCommentClick: (id) => {
+        setFocusedCommentID(id)
+        setFocusedSuggestionID(null)
+        setIsSuggestionsOpen(true)
+        requestAnimationFrame(() => {
+          const card = [
+            ...(window.document
+              .getElementById('suggestion-panel')
+              ?.querySelectorAll<HTMLElement>('li[data-comment-thread-id]') ??
+              []),
+          ].find((element) => element.dataset.commentThreadId === id)
+          card?.scrollIntoView({ block: 'nearest' })
+        })
+      },
       onSuggestionClick: (id) => {
         setFocusedSuggestionID(id)
         const card = [
@@ -490,6 +574,7 @@ function CollaborativeMarkdownBody({
           return
         }
         sessionRef.current = session
+        setSessionReady(true)
         setCards(session.editor.getSuggestionCards())
         onMarkdownChange(documentBodyToMarkdown(session.editor.getBody()))
         applyEditorMode()
@@ -727,8 +812,24 @@ function CollaborativeMarkdownBody({
             preview={suggestionPreview}
             onPreviewChange={changeSuggestionPreview}
             focusedSuggestionID={focusedSuggestionID}
+            comments={comments}
+            commentPositions={commentPositions}
+            focusedCommentID={focusedCommentID}
+            newComment={commentDraft}
+            canComment={canEdit || Boolean(snapshot.canSuggest)}
+            commentsFailed={Boolean(commentsQuery.error)}
+            commentsLoading={commentsQuery.isPending}
+            onStartComment={startComment}
+            onNewCommentDone={() => setCommentDraft(null)}
+            onSelectComment={(id) => {
+              setFocusedCommentID(id)
+              setFocusedSuggestionID(null)
+              sessionRef.current?.editor.scrollToComment(id)
+            }}
             onSelect={(id) => {
               setFocusedSuggestionID(id)
+              setFocusedCommentID(null)
+              sessionRef.current?.editor.setFocusedComment(null)
               sessionRef.current?.editor.scrollToSuggestion(id)
             }}
             onDecide={(id, decision) =>
@@ -763,6 +864,16 @@ function SuggestionPanel({
   focusedSuggestionID,
   onSelect,
   onDecide,
+  comments,
+  commentPositions,
+  focusedCommentID,
+  newComment,
+  canComment,
+  commentsFailed,
+  commentsLoading,
+  onStartComment,
+  onNewCommentDone,
+  onSelectComment,
 }: {
   open: boolean
   workspaceID: string
@@ -777,6 +888,16 @@ function SuggestionPanel({
   focusedSuggestionID: string | null
   onSelect: (id: string) => void
   onDecide: (id: string, decision: 'accept' | 'reject') => void
+  comments: CommentThread[]
+  commentPositions: Record<string, number | null>
+  focusedCommentID: string | null
+  newComment: { selectedText: string; anchor: CommentAnchor } | null
+  canComment: boolean
+  commentsFailed: boolean
+  commentsLoading: boolean
+  onStartComment: () => void
+  onNewCommentDone: () => void
+  onSelectComment: (id: string) => void
 }) {
   const [bulkDecision, setBulkDecision] = useState<'accept' | 'reject' | null>(
     null
@@ -801,6 +922,19 @@ function SuggestionPanel({
           aria-label='Review'
           className='max-h-[40vh] min-w-0 shrink-0 overflow-auto border-t bg-card md:max-h-none md:w-80 md:border-t-0 md:border-l'
         >
+          {canComment ? (
+            <div className='flex justify-end px-4 pt-3'>
+              <Button
+                size='sm'
+                variant='outline'
+                // Keep the text selected: a click would otherwise clear it.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={onStartComment}
+              >
+                Comment
+              </Button>
+            </div>
+          ) : null}
           {cards.length ? (
             <div className='flex flex-wrap items-center justify-between gap-2 px-4 pt-3'>
               <div
@@ -861,7 +995,20 @@ function SuggestionPanel({
             canInteract={canInteract}
             workspaceID={workspaceID}
             documentID={documentID}
+            comments={comments}
+            commentPositions={commentPositions}
+            focusedCommentID={focusedCommentID}
+            onSelectComment={onSelectComment}
+            newComment={newComment}
+            onNewCommentDone={onNewCommentDone}
+            commentsLoading={commentsLoading}
           />
+          {commentsFailed ? (
+            <p className='px-4 pb-3 text-xs text-destructive'>
+              Could not load comments. They will load again when this window
+              regains focus.
+            </p>
+          ) : null}
           {suggestionsQuery.error ? (
             <p className='px-4 pb-3 text-xs text-destructive'>
               Could not load suggestion discussions.
