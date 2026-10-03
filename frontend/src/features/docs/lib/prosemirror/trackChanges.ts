@@ -37,16 +37,16 @@ export class UnsupportedSuggestionError extends Error {
 
 const marks = documentBodySchema.marks
 
-type Chunk = { start: number; end: number; marks: readonly Mark[] }
+export type Chunk = { start: number; end: number; marks: readonly Mark[] }
 
 const isSuggestion = (mark: Mark) => mark.type.name.startsWith('suggestion_')
 
-function markOf(chunk: Chunk, kind: 'insert' | 'delete') {
+export function markOf(chunk: Chunk, kind: 'insert' | 'delete') {
   return chunk.marks.find((mark) => mark.type.name === `suggestion_${kind}`)
 }
 
 /** The textblock around a position, with the position where its content starts. */
-function textblockAt(doc: ProseMirrorNode, pos: number) {
+export function textblockAt(doc: ProseMirrorNode, pos: number) {
   const $pos = doc.resolve(pos)
   for (let depth = $pos.depth; depth > 0; depth--)
     if ($pos.node(depth).isTextblock)
@@ -59,7 +59,7 @@ function textblockAt(doc: ProseMirrorNode, pos: number) {
 }
 
 /** The text of a textblock in pieces, one per text node, with document positions. */
-function chunksOf(block: { node: ProseMirrorNode; start: number }) {
+export function chunksOf(block: { node: ProseMirrorNode; start: number }) {
   const chunks: Chunk[] = []
   block.node.descendants((node, offset) => {
     if (node.isText)
@@ -142,8 +142,14 @@ export function suggestReplace(
 
   const tr = state.tr
   let id: string | null = null
+  const ownBlock = nodeSuggestionOf(block.node)
+  const ownBlockID =
+    ownBlock?.kind === 'insert' && ownBlock.author === options.author
+      ? ownBlock.id
+      : null
   const suggestionID = () =>
     (id ??=
+      ownBlockID ??
       (options.continueAdjacent === false
         ? null
         : ownIDNextTo(chunks, from, to, options.author)) ??
@@ -160,11 +166,8 @@ export function suggestReplace(
       id: suggestionID(),
       author: options.author,
     })
-    tr.replaceWith(
-      to,
-      to,
-      documentBodySchema.text(text, [...formatting, insert])
-    )
+    const typed = documentBodySchema.text(text, [...formatting, insert])
+    tr.replaceWith(to, to, typed)
     afterInsert = tr.steps.length
   }
   if (toMark.length) {

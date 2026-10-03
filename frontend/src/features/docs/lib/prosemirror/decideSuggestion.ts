@@ -1,7 +1,9 @@
 import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model'
 import type { EditorState, Transaction } from 'prosemirror-state'
+import { documentBodySchema } from './documentBody'
 import { nodeSuggestionOf, withNodeSuggestion } from './nodeSuggestion'
 import { UnsupportedSuggestionError } from './trackChanges'
+import { formatKeys } from './trackFormat'
 
 // Accepting or rejecting a suggestion is an ordinary edit by an editor (ADR 0027).
 //
@@ -30,7 +32,7 @@ type Piece = {
   block: number
 }
 
-function isKind(mark: Mark, kind: 'insert' | 'delete') {
+function isKind(mark: Mark, kind: 'insert' | 'delete' | 'format') {
   return mark.type.name === `suggestion_${kind}`
 }
 
@@ -60,10 +62,11 @@ export function decideSuggestion(
   decision: 'accept' | 'reject'
 ): SuggestionDecision {
   const all = pieces(state.doc)
-  const mine = (piece: Piece, kind: 'insert' | 'delete') =>
+  const mine = (piece: Piece, kind: 'insert' | 'delete' | 'format') =>
     piece.marks.find((mark) => isKind(mark, kind) && mark.attrs.id === id)
   const inserted = all.filter((piece) => mine(piece, 'insert'))
   const deleted = all.filter((piece) => mine(piece, 'delete'))
+  const formatted = all.filter((piece) => mine(piece, 'format'))
 
   const tr = state.tr
   const structuralDeletes: string[] = []
@@ -72,6 +75,7 @@ export function decideSuggestion(
     | { kind: 'clear'; start: number; end: number; mark: Mark }
     | { kind: 'remove'; start: number; end: number }
     | { kind: 'removeRun'; start: number; end: number }
+    | { kind: 'applyFormat'; start: number; end: number; mark: Mark }
     | { kind: 'clearBlock'; start: number; node: ProseMirrorNode }
     | { kind: 'removeBlock'; start: number; end: number }
   const operations: Operation[] = []
@@ -129,6 +133,13 @@ export function decideSuggestion(
         })
     }
     for (const piece of inserted) clearMark(piece, mine(piece, 'insert')!)
+    for (const piece of formatted)
+      operations.push({
+        kind: 'applyFormat',
+        start: piece.start,
+        end: piece.end,
+        mark: mine(piece, 'format')!,
+      })
     // A run deleted whole is canonical: it goes through DeleteNode.
     const runs = new Map<number, Piece[]>()
     for (const piece of deleted)
@@ -200,12 +211,38 @@ export function decideSuggestion(
       })
     )
     for (const piece of deleted) clearMark(piece, mine(piece, 'delete')!)
+    for (const piece of formatted) clearMark(piece, mine(piece, 'format')!)
   }
 
-  for (const operation of operations.sort((a, b) => b.start - a.start)) {
+  // A block that goes takes its contents with it; edits inside would delete
+  // positions that no longer exist.
+  const removedBlocks = operations.filter(
+    (operation) => operation.kind === 'removeBlock'
+  )
+  const surviving = operations.filter(
+    (operation) =>
+      operation.kind === 'removeBlock' ||
+      !removedBlocks.some(
+        (block) =>
+          block.kind === 'removeBlock' &&
+          operation.start > block.start &&
+          operation.start < block.end
+      )
+  )
+  for (const operation of surviving.sort((a, b) => b.start - a.start)) {
     if (operation.kind === 'clear')
       tr.removeMark(operation.start, operation.end, operation.mark)
-    else if (operation.kind === 'clearBlock')
+    else if (operation.kind === 'applyFormat') {
+      const set = (operation.mark.attrs.set ?? {}) as Record<string, boolean>
+      for (const [mark, key] of Object.entries(formatKeys)) {
+        const type = documentBodySchema.marks[mark]!
+        if (set[key] === true)
+          tr.addMark(operation.start, operation.end, type.create())
+        else if (set[key] === false)
+          tr.removeMark(operation.start, operation.end, type)
+      }
+      tr.removeMark(operation.start, operation.end, operation.mark)
+    } else if (operation.kind === 'clearBlock')
       tr.setNodeMarkup(
         operation.start,
         undefined,

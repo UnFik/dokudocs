@@ -140,7 +140,11 @@ export async function mountCollaborativeDocumentBody(
       onCanonicalBody: input.onCanonicalBody,
       onHeldEdits: input.onHeldEdits,
       onCanEdit: (canEdit) => {
-        setEditorReadOnly(forceReadOnly || !canEdit)
+        // A caller that handles onCanEdit owns the mode, whether or not it asked
+        // for a read-only editor to start with. Setting read-only here first
+        // would flip the editor off and on again on every resync, and a
+        // contenteditable that flips loses focus in the middle of typing.
+        if (!input.onCanEdit) setEditorReadOnly(forceReadOnly || !canEdit)
         input.onCanEdit?.(canEdit)
       },
     })

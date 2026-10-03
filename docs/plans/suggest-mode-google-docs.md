@@ -100,9 +100,17 @@ What P3 must know:
 - Done when: a split, a join, a pasted list, an inserted table, and a deleted block each round-trip through suggest, accept, reject, and reload.
 - Spike first: accepting a join and a split. If copy-then-delete loses too much (comment anchors on the originals orphan), decide before building the rest.
 
+**Status: split and join done, most of the rest not.** Enter at the end or start of a paragraph adds an inserted paragraph; Enter in the middle splits without moving anything: the tail stays where it is, marked as deleted, and a copy of it opens an inserted paragraph (card `Split paragraph`). Backspace at the start of a paragraph, or Delete at the end of the one before, joins: the second paragraph is marked as deleted and a copy of its text is added to the first (card `Join paragraphs`). A multi-line paste at the end of a paragraph is one suggestion. Accept and reject are the ordinary decisions, so no new accept path was needed.
+
+The spike's answer: no node moves, so no `MoveNode` is involved. The cost is that the runs that were copied (the tail on a split, the second paragraph's text on a join) get new node IDs when accepted, so a comment anchored on them would orphan. Accepted for now; P7 decides whether comments need to follow.
+
+Not done: Enter, split and join inside lists, quotes and headings; pasting in the middle of a paragraph; splitting or joining where the text holds other suggestions or inline content that cannot be copied; inserted blocks from the slash menu (image, table, code). Those are refused with a message.
+
 ### P6. Formats and block types
 - Bold, italic, strike, code, link as Format suggestions on a range; paragraph to heading, heading level, list type as block Format suggestions; cards "Format: ...".
 - Done when: each is suggested, previewed in Preview accepted, accepted, and rejected.
+
+**Status: text formats done, block types and links not.** Bold, italic, strike, and code on a selection are Format suggestions (card `Format: bold "text"`): the text keeps its look, carries a `suggestion_format` mark with the proposed values, and a second format on the same text joins the same card. Toggling a format the text already has proposes removing it (`remove bold`). Accept applies the values and clears the mark; reject clears the mark; Preview accepted shows the result by CSS. Your own inserted text is formatted for real. Not done: links, and paragraph, heading, and list type changes as block Format suggestions.
 
 ### P7. Comments in the rail
 Comments are not in the live editor today, and the old store lives in the browser only.

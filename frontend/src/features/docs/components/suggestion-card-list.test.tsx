@@ -8,8 +8,28 @@ const ME = '00000000-0000-4000-8000-0000000000a1'
 const OTHER = '00000000-0000-4000-8000-0000000000a2'
 
 const cards: SuggestionCard[] = [
-  { id: 'mine', author: ME, inserted: 'new', deleted: 'old', position: 1 },
-  { id: 'theirs', author: OTHER, inserted: '', deleted: 'gone', position: 9 },
+  {
+    id: 'mine',
+    author: ME,
+    inserted: 'new',
+    deleted: 'old',
+    formatted: '',
+    formats: [],
+    insertedBlocks: 0,
+    deletedBlocks: 0,
+    position: 1,
+  },
+  {
+    id: 'theirs',
+    author: OTHER,
+    inserted: '',
+    deleted: 'gone',
+    formatted: '',
+    formats: [],
+    insertedBlocks: 0,
+    deletedBlocks: 0,
+    position: 9,
+  },
 ]
 
 async function renderList(

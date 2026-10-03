@@ -19,6 +19,27 @@ type BodyHandler struct {
 	reader      *collaboration.BodyReadUseCase
 	mover       *collaboration.MoveNodeUseCase
 	deleter     *collaboration.DeleteNodeUseCase
+	rooms       RoomNotifier
+}
+
+// RoomNotifier tells the people connected to a document that its body changed
+// outside the websocket, so they need not wait for the next periodic check.
+type RoomNotifier interface {
+	Nudge(documentID, workspaceID uuid.UUID)
+}
+
+// WithRoomNotifier makes structural commands wake the document's room at once.
+// Without it, other editors learn of the new body epoch only on the room's tick
+// and an edit made in between is rejected as stale.
+func (h *BodyHandler) WithRoomNotifier(rooms RoomNotifier) *BodyHandler {
+	h.rooms = rooms
+	return h
+}
+
+func (h *BodyHandler) nudge(documentID, workspaceID uuid.UUID) {
+	if h.rooms != nil {
+		h.rooms.Nudge(documentID, workspaceID)
+	}
 }
 
 func NewBodyHandler(initializer *collaboration.BodyInitializationUseCase, reader *collaboration.BodyReadUseCase, mover *collaboration.MoveNodeUseCase, deleter *collaboration.DeleteNodeUseCase) *BodyHandler {
@@ -244,6 +265,7 @@ func (h *BodyHandler) MoveNode(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	h.nudge(documentID, workspaceID)
 	_ = response.Data(w, http.StatusOK, result)
 }
 
@@ -295,5 +317,6 @@ func (h *BodyHandler) DeleteNode(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	h.nudge(documentID, workspaceID)
 	_ = response.Data(w, http.StatusOK, result)
 }
