@@ -242,6 +242,12 @@ func syncSuggestionIndex(
 	documentID, actorID uuid.UUID,
 	beforeState, afterState []byte,
 ) error {
+	// Mark and attribute names are stored as plain strings in the encoded state,
+	// so a state without the word holds no suggestion and needs no decode.
+	marker := []byte("suggestion")
+	if !bytes.Contains(beforeState, marker) && !bytes.Contains(afterState, marker) {
+		return nil
+	}
 	before, err := yjs.SuggestionsV1(beforeState)
 	if err != nil {
 		return err

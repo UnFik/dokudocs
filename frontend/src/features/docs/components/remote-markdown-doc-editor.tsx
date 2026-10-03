@@ -163,7 +163,7 @@ export function RemoteMarkdownDocEditor({
   const restoreRevision = (revision: DocumentRevision) => {
     if (
       !window.confirm(
-        'Restore this revision? Pending suggestions will be discarded.'
+        'Restore this revision? Any suggestions still pending are discarded.'
       )
     )
       return
