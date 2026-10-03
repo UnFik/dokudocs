@@ -454,3 +454,37 @@ test("@live @smoke @deletegestures: Ctrl+Z after joining two lines does not brea
     await expectNoReviewBanner(page);
   });
 });
+
+test("@live @smoke @deletegestures: Ctrl+Backspace and Ctrl+Delete remove one word", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, [
+    { kind: "paragraph", text: "one two three" },
+    { kind: "paragraph", text: "alone" },
+  ]);
+  await diagnose(async () => {
+    const first = editor.locator("p").first();
+    await first.click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Control+Backspace");
+    await expect(first).toHaveText("one two ");
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Control+Delete");
+    await expect(first).toHaveText(" two ");
+    await expectNoReviewBanner(page);
+
+    // A line with a single word: the word is the whole run.
+    const second = editor.locator("p").nth(1);
+    await second.click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Control+Backspace");
+    await expect(editor).not.toContainText("alone");
+    await expectNoReviewBanner(page);
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expect(editor.locator("p").first()).toHaveText(" two ");
+    await expect(editor).not.toContainText("alone");
+  });
+});
