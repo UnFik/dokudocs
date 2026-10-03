@@ -260,3 +260,38 @@
   outline: none;
   text-decoration: none;
 }
+
+/* A format suggestion keeps the text as it is; the previews show the result. */
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-fmt {
+  background: none;
+  border-bottom: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-bold {
+  font-weight: 700;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-no-bold {
+  font-weight: 400;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-italic {
+  font-style: italic;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-no-italic {
+  font-style: normal;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-strike {
+  text-decoration: line-through;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-no-strike {
+  text-decoration: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-code {
+  font-family: var(--font-mono, monospace);
+}

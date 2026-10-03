@@ -2,6 +2,7 @@ import { TextSelection } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { prosemirrorToYDoc } from 'y-prosemirror'
+import { documentBodyToMarkdown } from '../muya/state/documentBodyToMarkdown'
 import { documentBodyToProseMirror } from './documentBody'
 import { mountTestEditor, paragraphsBody, runStart } from './editorTestKit'
 import { cardTitle, type SuggestionCard } from './suggestionCards'
@@ -266,15 +267,46 @@ describe('Suggest mode, split and join', () => {
   })
 })
 
+describe('Suggest mode, formatting after a split', () => {
+  it('formats the first half of an accepted split', async () => {
+    const editor = suggestEditor('hello world')
+    const errors: unknown[] = []
+    try {
+      editor.caret('hello world', 5)
+      await userEvent.keyboard('{Enter}')
+      editor.editor.decide(editor.cards()[0]!.id, 'accept')
+      expect(editor.canonical()).toEqual(['hello', ' world'])
+      expect(() =>
+        documentBodyToMarkdown(editor.editor.getBody())
+      ).not.toThrow()
+
+      editor.select('hello', 0, 5)
+      await userEvent.keyboard('{Control>}b{/Control}')
+      expect(errors).toEqual([])
+      expect(editor.refused).toEqual([])
+      expect(editor.titles()).toEqual(['Format: bold "hello"'])
+    } finally {
+      editor.cleanup()
+    }
+  })
+})
+
 describe('Suggest mode, what it refuses', () => {
-  it('refuses a formatting shortcut', async () => {
+  it('turns a formatting shortcut on a selection into a Format suggestion', async () => {
     const editor = suggestEditor('hello')
     try {
       editor.select('hello', 0, 5)
       await userEvent.keyboard('{Control>}b{/Control}')
 
-      expect(editor.refused).toHaveLength(1)
+      expect(editor.refused).toEqual([])
+      expect(editor.titles()).toEqual(['Format: bold "hello"'])
+      expect(
+        editor.editor.getBody().map((node) => node.attributes)
+      ).not.toContain(expect.stringContaining('strong'))
+
+      editor.editor.decide(editor.cards()[0]!.id, 'accept')
       expect(editor.titles()).toEqual([])
+      expect(editor.dom('strong')).toEqual(['hello'])
     } finally {
       editor.cleanup()
     }

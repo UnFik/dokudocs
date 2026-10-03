@@ -220,7 +220,16 @@ export const documentBodySchema = new Schema({
     suggestion_format: {
       attrs: { id: {}, author: {}, set: { default: {} } },
       inclusive: false,
-      toDOM: (mark) => suggestionDOM(mark, 'suggest-fmt'),
+      toDOM: (mark) => {
+        // One class per proposed value, so a preview can show the result.
+        const set = (mark.attrs.set ?? {}) as Record<string, unknown>
+        const proposed = Object.entries(set)
+          .map(([key, value]) =>
+            value === false ? `suggest-fmt-no-${key}` : `suggest-fmt-${key}`
+          )
+          .join(' ')
+        return suggestionDOM(mark, `suggest-fmt ${proposed}`.trim())
+      },
     },
   },
 })

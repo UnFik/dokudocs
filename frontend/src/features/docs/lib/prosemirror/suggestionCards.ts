@@ -12,6 +12,9 @@ export type SuggestionCard = {
   inserted: string
   /** Text proposed to be removed, in document order. */
   deleted: string
+  /** Text whose formatting the suggestion changes, and what it changes, such as `bold` or `remove italic`. */
+  formatted: string
+  formats: string[]
   /** Whole blocks the suggestion adds or removes; they count even when empty. */
   insertedBlocks: number
   deletedBlocks: number
@@ -37,6 +40,8 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
             author: suggestion.author,
             inserted: '',
             deleted: '',
+            formatted: '',
+            formats: [],
             insertedBlocks: 0,
             deletedBlocks: 0,
             position,
@@ -55,7 +60,7 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
     }
     for (const mark of node.marks) {
       const kind = mark.type.name.replace('suggestion_', '')
-      if (kind !== 'insert' && kind !== 'delete') continue
+      if (kind !== 'insert' && kind !== 'delete' && kind !== 'format') continue
       const id = mark.attrs.id as string
       let card = cards.get(id)
       if (!card) {
@@ -64,6 +69,8 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
           author: mark.attrs.author as string,
           inserted: '',
           deleted: '',
+          formatted: '',
+          formats: [],
           insertedBlocks: 0,
           deletedBlocks: 0,
           position,
@@ -71,7 +78,15 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
         cards.set(id, card)
       }
       if (kind === 'insert') card.inserted += node.text ?? ''
-      else card.deleted += node.text ?? ''
+      else if (kind === 'delete') card.deleted += node.text ?? ''
+      else {
+        card.formatted += node.text ?? ''
+        const set = (mark.attrs.set ?? {}) as Record<string, unknown>
+        for (const [key, value] of Object.entries(set)) {
+          const label = value === false ? `remove ${key}` : key
+          if (!card.formats.includes(label)) card.formats.push(label)
+        }
+      }
     }
     return false
   })
@@ -93,6 +108,8 @@ export function cardTitle(card: SuggestionCard) {
   }
   if (card.inserted && card.deleted)
     return `Replace: "${shorten(card.deleted)}" with "${shorten(card.inserted)}"`
+  if (card.formatted && !card.inserted && !card.deleted)
+    return `Format: ${card.formats.join(', ')} "${shorten(card.formatted)}"`
   if (card.inserted) return `Add: "${shorten(card.inserted)}"`
   if (card.deleted) return `Delete: "${shorten(card.deleted)}"`
   // Blocks with no text of their own.

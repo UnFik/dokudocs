@@ -66,6 +66,7 @@ import {
   trackTransaction,
   UnsupportedSuggestionError,
 } from './trackChanges'
+import { suggestFormat } from './trackFormat'
 import {
   joinTarget,
   suggestEnter,
@@ -220,10 +221,10 @@ export function createDocumentBodyEditor(
       }),
       keymap(
         bindControlAndMeta({
-          b: () => runInline(toggleInlineMark('strong')),
-          i: () => runInline(toggleInlineMark('em')),
-          e: () => runInline(toggleInlineMark('code')),
-          'Shift-x': () => runInline(toggleInlineMark('strike')),
+          b: () => runInlineMark('strong'),
+          i: () => runInlineMark('em'),
+          e: () => runInlineMark('code'),
+          'Shift-x': () => runInlineMark('strike'),
           k: () => {
             if (!canEdit()) return true
             options.onLinkRequest?.()
@@ -262,6 +263,18 @@ export function createDocumentBodyEditor(
   const runHistory = (action: (state: EditorState) => boolean) => {
     continueSuggestion = false
     if (canEdit()) action(state)
+    return true
+  }
+  // In Suggest mode a format on a selection is proposed, not applied. With a
+  // caret there is nothing to propose: what is typed next is your own insertion.
+  const runInlineMark = (name: InlineMarkName) => {
+    if (!suggestMode || !canEdit() || state.selection.empty)
+      return runInline(toggleInlineMark(name))
+    const view = viewHolder.current
+    if (view)
+      suggest(() =>
+        suggestFormat(stateAtDomSelection(view), name, suggestionOptions())
+      )
     return true
   }
   const runInline = (command: Command) => {
@@ -821,8 +834,14 @@ export function createDocumentBodyEditor(
     },
     getHistory: readHistory,
     getInlineState: () => readInlineState(view),
-    toggleMark: (name: InlineMarkName) =>
-      canEdit() && toggleInlineMark(name)(state, view.dispatch),
+    toggleMark: (name: InlineMarkName) => {
+      if (!canEdit()) return false
+      if (suggestMode && !state.selection.empty) {
+        runInlineMark(name)
+        return true
+      }
+      return toggleInlineMark(name)(state, view.dispatch)
+    },
     setLink: (href: string) =>
       canEdit() && setLinkCommand(href)(state, view.dispatch),
     removeLink: () => canEdit() && removeLinkCommand(state, view.dispatch),
