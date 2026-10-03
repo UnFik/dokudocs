@@ -8,7 +8,10 @@ expect.configure({ timeout: 15000 });
 // Real keyboard, real editor, real server. Unit tests of the editor cannot see
 // what the server does with the commands these gestures send.
 
-type Block = { kind: "paragraph"; text: string } | { kind: "separator" };
+type Block =
+  | { kind: "paragraph"; text: string }
+  | { kind: "separator" }
+  | { kind: "list"; items: string[] };
 
 // When a gesture does nothing, the page state says why; attach it to the failure.
 function watch(page: Page) {
@@ -85,6 +88,47 @@ async function openDocument(page: Page, blocks: Block[]) {
         type: "thematic-break",
         content: "",
         attributes: {},
+      });
+      return;
+    }
+    if (block.kind === "list") {
+      nodes.push({
+        nodeID: blockID,
+        parentID: rootNodeID,
+        siblingOrder: index + 1,
+        type: "bullet-list",
+        content: "",
+        attributes: { marker: "-", loose: false },
+      });
+      block.items.forEach((text, itemIndex) => {
+        const itemID = randomUUID();
+        const paragraphID = randomUUID();
+        nodes.push(
+          {
+            nodeID: itemID,
+            parentID: blockID,
+            siblingOrder: itemIndex + 1,
+            type: "list-item",
+            content: "",
+            attributes: {},
+          },
+          {
+            nodeID: paragraphID,
+            parentID: itemID,
+            siblingOrder: 1,
+            type: "paragraph",
+            content: "",
+            attributes: {},
+          },
+          {
+            nodeID: randomUUID(),
+            parentID: paragraphID,
+            siblingOrder: 1,
+            type: "run",
+            content: text,
+            attributes: {},
+          },
+        );
       });
       return;
     }
@@ -486,5 +530,39 @@ test("@live @smoke @deletegestures: Ctrl+Backspace and Ctrl+Delete remove one wo
     await expect(page.getByRole("status")).toContainText("Synced");
     await expect(editor.locator("p").first()).toHaveText(" two ");
     await expect(editor).not.toContainText("alone");
+  });
+});
+
+test("@live @smoke @deletegestures: triple-click a list item then Backspace removes the item and the page stays responsive", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const requests: string[] = [];
+  page.on("response", (response) => {
+    const path = new URL(response.url()).pathname;
+    if (path.endsWith("/body")) requests.push(path);
+  });
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, [
+    { kind: "list", items: ["one", "two", "three"] },
+  ]);
+  await diagnose(async () => {
+    await editor
+      .locator("li")
+      .filter({ hasText: "two" })
+      .click({ clickCount: 3 });
+    await page.keyboard.press("Backspace");
+    await expect(editor.locator("li")).toHaveCount(2);
+    await expect(editor).not.toContainText("two");
+    await expectNoReviewBanner(page);
+    await expect(page.getByRole("status")).toContainText("Synced");
+    // The body is read again once after the delete, not over and over.
+    const before = requests.length;
+    await page.waitForTimeout(2000);
+    expect(requests.length - before).toBeLessThanOrEqual(1);
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expect(editor.locator("li")).toHaveCount(2);
+    await expect(editor).toContainText("three");
   });
 });
