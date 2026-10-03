@@ -1,7 +1,7 @@
 import type { Mark } from 'prosemirror-model'
 import type { EditorState, Transaction } from 'prosemirror-state'
 import { documentBodySchema } from './documentBody'
-import type { InlineMarkName } from './inlineMarks'
+import { normalizeLinkTarget, type InlineMarkName } from './inlineMarks'
 import { UnsupportedSuggestionError, type TrackOptions } from './trackChanges'
 
 // Formatting in Suggest mode (ADR 0027). Bold, italic, strike, and code on a
@@ -21,25 +21,36 @@ export type FormatKey = (typeof formatKeys)[InlineMarkName]
 
 const marks = documentBodySchema.marks
 
-type FormatSet = Partial<Record<FormatKey, boolean>>
+type FormatSet = Record<string, boolean | string | undefined>
 
 const setOf = (mark: Mark): FormatSet =>
   typeof mark.attrs.set === 'object' && mark.attrs.set !== null
     ? (mark.attrs.set as FormatSet)
     : {}
 
-/** Proposes toggling a mark on the selection: on unless all of it is already on. */
-export function suggestFormat(
-  state: EditorState,
-  name: InlineMarkName,
-  options: TrackOptions
-): Transaction {
-  const { from, to } = state.selection
-  if (from === to) return state.tr
-  const key = formatKeys[name]
-  const type = marks[name]!
+type Piece = { start: number; end: number; marks: readonly Mark[] }
 
-  type Piece = { start: number; end: number; marks: readonly Mark[] }
+const kindOf = (piece: Piece, markName: string) =>
+  piece.marks.find((mark) => mark.type.name === markName)
+
+/**
+ * Proposes a formatting change on a range. `base` is a piece's value today,
+ * `target` the value everything should take. Your own inserted text is formatted
+ * for real; text under someone else's suggestion is refused.
+ */
+function proposeFormat<V extends boolean | string>(
+  state: EditorState,
+  range: { from: number; to: number },
+  key: string,
+  options: TrackOptions,
+  how: {
+    base: (piece: Piece) => V
+    target: (current: (piece: Piece) => V, live: Piece[]) => V
+    real: (tr: Transaction, piece: Piece, value: V) => void
+  }
+): Transaction {
+  const { from, to } = range
+  if (from === to) return state.tr
   const pieces: Piece[] = []
   state.doc.nodesBetween(from, to, (node, pos) => {
     if (!node.isText) return true
@@ -49,12 +60,10 @@ export function suggestFormat(
     return false
   })
 
-  const kind = (piece: Piece, markName: string) =>
-    piece.marks.find((mark) => mark.type.name === markName)
-  const live = pieces.filter((piece) => !kind(piece, 'suggestion_delete'))
+  const live = pieces.filter((piece) => !kindOf(piece, 'suggestion_delete'))
   for (const piece of live) {
-    const insert = kind(piece, 'suggestion_insert')
-    const format = kind(piece, 'suggestion_format')
+    const insert = kindOf(piece, 'suggestion_insert')
+    const format = kindOf(piece, 'suggestion_format')
     if (
       (insert && insert.attrs.author !== options.author) ||
       (format && format.attrs.author !== options.author)
@@ -65,27 +74,24 @@ export function suggestFormat(
   }
 
   const current = (piece: Piece) => {
-    const set = kind(piece, 'suggestion_format')
+    const set = kindOf(piece, 'suggestion_format')
     const proposed = set ? setOf(set)[key] : undefined
-    return proposed ?? piece.marks.some((mark) => mark.type === type)
+    return (proposed ?? how.base(piece)) as V
   }
-  const target = !live.every(current)
+  const target = how.target(current, live)
 
   const tr = state.tr
   let id: string | null =
-    live.map((piece) => kind(piece, 'suggestion_format')).find((mark) => mark)
+    live.map((piece) => kindOf(piece, 'suggestion_format')).find((mark) => mark)
       ?.attrs.id ?? null
   for (const piece of live) {
-    const insert = kind(piece, 'suggestion_insert')
-    if (insert) {
-      if (target) tr.addMark(piece.start, piece.end, type.create())
-      else tr.removeMark(piece.start, piece.end, type)
+    if (kindOf(piece, 'suggestion_insert')) {
+      how.real(tr, piece, target)
       continue
     }
-    const existing = kind(piece, 'suggestion_format')
-    const base = piece.marks.some((mark) => mark.type === type)
+    const existing = kindOf(piece, 'suggestion_format')
     const set: FormatSet = { ...(existing ? setOf(existing) : {}) }
-    if (target === base) delete set[key]
+    if (target === how.base(piece)) delete set[key]
     else set[key] = target
     if (existing) tr.removeMark(piece.start, piece.end, existing)
     if (Object.keys(set).length) {
@@ -98,4 +104,52 @@ export function suggestFormat(
     }
   }
   return tr
+}
+
+/** Proposes toggling a mark on the selection: on unless all of it is already on. */
+export function suggestFormat(
+  state: EditorState,
+  name: InlineMarkName,
+  options: TrackOptions
+): Transaction {
+  const key = formatKeys[name]
+  const type = marks[name]!
+  return proposeFormat<boolean>(state, state.selection, key, options, {
+    base: (piece) => piece.marks.some((mark) => mark.type === type),
+    target: (current, live) => !live.every(current),
+    real: (tr, piece, value) =>
+      value
+        ? tr.addMark(piece.start, piece.end, type.create())
+        : tr.removeMark(piece.start, piece.end, type),
+  })
+}
+
+/**
+ * Proposes a link on a range, or taking the link off when `href` is null. The
+ * proposal holds the address; an empty address means no link.
+ */
+export function suggestLink(
+  state: EditorState,
+  range: { from: number; to: number },
+  href: string | null,
+  options: TrackOptions
+): Transaction {
+  const target = href === null ? '' : normalizeLinkTarget(href)
+  if (target === null)
+    throw new UnsupportedSuggestionError(
+      'Use an http, https, or mailto address, or a path that starts with / or #.'
+    )
+  const type = marks.link!
+  return proposeFormat<string>(state, range, 'href', options, {
+    base: (piece) =>
+      (piece.marks.find((mark) => mark.type === type)?.attrs.href as
+        | string
+        | undefined) ?? '',
+    target: () => target,
+    real: (tr, piece, value) => {
+      tr.removeMark(piece.start, piece.end, type)
+      if (value)
+        tr.addMark(piece.start, piece.end, type.create({ href: value }))
+    },
+  })
 }

@@ -225,7 +225,9 @@ export const documentBodySchema = new Schema({
         const set = (mark.attrs.set ?? {}) as Record<string, unknown>
         const proposed = Object.entries(set)
           .map(([key, value]) =>
-            value === false ? `suggest-fmt-no-${key}` : `suggest-fmt-${key}`
+            value === false || value === ''
+              ? `suggest-fmt-no-${key}`
+              : `suggest-fmt-${key}`
           )
           .join(' ')
         return suggestionDOM(mark, `suggest-fmt ${proposed}`.trim())
