@@ -61,11 +61,11 @@ The marker for the structural rules used to interpret a DocumentBody. A change b
 _Avoid_: BodyEpoch, BodyVersion
 
 **CommentThread**:
-A conversation attached to a selected range in a document, with replies and a resolution state.
+A conversation attached to a selected range in a document, with replies and a resolution state. Anyone who can read the document sees every thread; a User with comment or edit access may start one, reply, and resolve. Editing or deleting a comment is not part of it yet. It is not part of the DocumentBody, so a Suggestion or an accept never touches it.
 _Avoid_: Comment when referring to the full conversation rather than one message
 
 **CommentAnchor**:
-The reference connecting a CommentThread to the text range it discusses. An anchor may become orphaned if its referenced content is removed.
+The reference connecting a CommentThread to the text range it discusses. An anchor is a pair of Yjs relative positions, so it follows the text as it moves. It is orphaned when its text is removed or copied to new nodes (a split or join that is accepted); an orphaned thread stays readable with its quoted text, can still be replied to and resolved, and is listed last in the review rail.
 _Avoid_: Character offset as a durable identity
 
 **DocumentRevision**:
@@ -88,6 +88,10 @@ _Avoid_: CRDT causal clock
 The boundary between generations of collaborative edits. Changes from an earlier generation may require User review before they can be applied.
 _Avoid_: BodyVersion, CRDT state vector
 
+**CompatibleEpoch**:
+The oldest BodyEpoch whose collaborative history still continues into the current one. A structural command that edits the stored state in place (DeleteNode, MoveNode) starts a new BodyEpoch but leaves the CompatibleEpoch alone, so an update made on an older epoch in that range still merges. A rebuild from scratch, such as restoring a revision, moves the CompatibleEpoch up to the new BodyEpoch, and older updates need review.
+_Avoid_: BodyEpoch when asking whether an old update can still merge
+
 **Accepted Edit**:
 A validated change that becomes part of the canonical DocumentBody.
 _Avoid_: Received update when referring to a durable change
@@ -103,7 +107,7 @@ How a Suggestion is shown in the review rail, with a title worked out from what 
 The replies on one Suggestion, which can be resolved without deciding the Suggestion itself.
 
 **Review rail**:
-The right-hand column that lists Suggestion cards and comments in document order, with accept, reject, and resolve actions, and the preview of the body as if everything were accepted or rejected.
+The right-hand column that lists Suggestion cards and CommentThreads in document order (orphaned threads last), with accept, reject, and resolve actions, and the preview of the body as if everything were accepted or rejected.
 
 **KnowledgeSource**:
 An active Markdown document, including a draft, that a User is allowed to read and that may support a chatbot answer within its workspace. Access is checked for each question; a `public_link` document without an internal grant requires a valid token proven in the current chat session. Its title and project name aid discovery; its body supplies evidence for an answer.

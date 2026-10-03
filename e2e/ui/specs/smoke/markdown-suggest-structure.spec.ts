@@ -161,7 +161,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await expect(page.getByRole("status")).toContainText("Synced");
     await page.getByRole("button", { name: "Review", exact: true }).click();
     const ownerCards = page.getByRole("list", {
-      name: "Suggestions in this document",
+      name: "Suggestions and comments",
     });
 
     const openReview = async () => {
@@ -182,7 +182,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     // The owner accepts: the paragraph is part of the document.
     await ownerCards.getByRole("button", { name: "Accept" }).click();
     await expect(
-      page.getByText(/No suggestions in this document/),
+      page.getByText(/No suggestions or comments yet/),
     ).toBeVisible();
     await expect
       .poll(canonicalRuns)
@@ -210,7 +210,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
       .toEqual(["Original phrase", "Second line"]);
     await ownerCards.getByRole("button", { name: "Reject" }).click();
     await expect(
-      page.getByText(/No suggestions in this document/),
+      page.getByText(/No suggestions or comments yet/),
     ).toBeVisible();
     await expect(ownerEditor.locator("p")).toHaveCount(2);
     await expect(commenterEditor.locator("p")).toHaveCount(2);
@@ -267,10 +267,17 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     // Bold on a selection is a Format suggestion: the text keeps its look until
     // the owner accepts, and the preview shows the result.
     const selectOriginal = async () => {
-      await commenterEditor.getByText("Original").first().click();
-      await commenter.keyboard.press("Home");
-      for (let index = 0; index < 8; index++)
-        await commenter.keyboard.press("Shift+ArrowRight");
+      // Check what is selected and try again: the editor can reload onto a new
+      // epoch right now, and a reload swallows key presses.
+      await expect(async () => {
+        await commenterEditor.getByText("Original").first().click();
+        await commenter.keyboard.press("Home");
+        for (let index = 0; index < 8; index++)
+          await commenter.keyboard.press("Shift+ArrowRight");
+        expect(
+          await commenter.evaluate(() => window.getSelection()?.toString()),
+        ).toBe("Original");
+      }).toPass({ timeout: 15_000 });
     };
     await selectOriginal();
     await commenter.keyboard.press("Control+b");

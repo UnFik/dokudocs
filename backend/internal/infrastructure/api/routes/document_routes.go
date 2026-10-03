@@ -46,6 +46,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) func
 	if c.CollaborationPresence != nil {
 		collaborationServer.WithPresenceStore(c.CollaborationPresence)
 	}
+	commentHandler := dochandler.NewCommentHandler(appdoc.NewCommentUseCase(bodyRepository)).WithNotifier(collaborationServer)
 	bodyHandler := dochandler.NewBodyHandler(bodyInitialization, bodyReader, bodyMover, bodyDeleter).WithRoomNotifier(collaborationServer)
 
 	// Public Shared Documents (No auth required)
@@ -65,6 +66,11 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) func
 	docGroup.Post("/{id}/suggestions/{suggestionID}/replies", suggestionHandler.Reply)
 	docGroup.Post("/{id}/suggestions/{suggestionID}/resolve", suggestionHandler.Resolve)
 	docGroup.Post("/{id}/suggestions/{suggestionID}/reopen", suggestionHandler.Reopen)
+	docGroup.Get("/{id}/comments", commentHandler.List)
+	docGroup.Post("/{id}/comments", commentHandler.Create)
+	docGroup.Post("/{id}/comments/{threadID}/replies", commentHandler.Reply)
+	docGroup.Post("/{id}/comments/{threadID}/resolve", commentHandler.Resolve)
+	docGroup.Post("/{id}/comments/{threadID}/reopen", commentHandler.Reopen)
 	docGroup.Post("/{id}/body/move", bodyHandler.MoveNode)
 	docGroup.Post("/{id}/body/delete", bodyHandler.DeleteNode)
 	docGroup.Get("/{id}/revisions", revisionHandler.List)
