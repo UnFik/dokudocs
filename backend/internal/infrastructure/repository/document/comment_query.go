@@ -27,7 +27,7 @@ func (r *Repository) ListComments(ctx context.Context, workspaceID, documentID, 
 		}
 		rows, err := tx.QueryContext(ctx, `
 			SELECT t.id, t.author_id, u.full_name, t.selected_text, t.content, t.anchor,
-			       t.created_at, t.is_resolved, t.resolved_at, t.resolved_by
+			       t.created_at, t.edited_at, t.is_resolved, t.resolved_at, t.resolved_by
 			FROM comment_threads t
 			JOIN users u ON u.id = t.author_id
 			WHERE t.document_id = $1
@@ -42,11 +42,15 @@ func (r *Repository) ListComments(ctx context.Context, workspaceID, documentID, 
 			thread := model.CommentThread{DocumentID: documentID, Replies: []model.CommentReply{}}
 			var anchor []byte
 			var resolved bool
-			var resolvedAt sql.NullTime
+			var resolvedAt, editedAt sql.NullTime
 			var resolvedBy sql.NullString
 			if err := rows.Scan(&thread.ID, &thread.AuthorID, &thread.AuthorName, &thread.SelectedText,
-				&thread.Content, &anchor, &thread.CreatedAt, &resolved, &resolvedAt, &resolvedBy); err != nil {
+				&thread.Content, &anchor, &thread.CreatedAt, &editedAt, &resolved, &resolvedAt, &resolvedBy); err != nil {
 				return err
+			}
+			if editedAt.Valid {
+				at := editedAt.Time
+				thread.EditedAt = &at
 			}
 			thread.Anchor = anchor
 			if resolved {
@@ -73,7 +77,7 @@ func (r *Repository) ListComments(ctx context.Context, workspaceID, documentID, 
 			return nil
 		}
 		replies, err := tx.QueryContext(ctx, `
-			SELECT p.id, p.thread_id, p.author_id, u.full_name, p.content, p.created_at
+			SELECT p.id, p.thread_id, p.author_id, u.full_name, p.content, p.created_at, p.edited_at
 			FROM comment_replies p
 			JOIN comment_threads t ON t.id = p.thread_id
 			JOIN users u ON u.id = p.author_id
@@ -86,8 +90,13 @@ func (r *Repository) ListComments(ctx context.Context, workspaceID, documentID, 
 		defer replies.Close()
 		for replies.Next() {
 			var reply model.CommentReply
-			if err := replies.Scan(&reply.ID, &reply.ThreadID, &reply.AuthorID, &reply.AuthorName, &reply.Content, &reply.CreatedAt); err != nil {
+			var editedAt sql.NullTime
+			if err := replies.Scan(&reply.ID, &reply.ThreadID, &reply.AuthorID, &reply.AuthorName, &reply.Content, &reply.CreatedAt, &editedAt); err != nil {
 				return err
+			}
+			if editedAt.Valid {
+				at := editedAt.Time
+				reply.EditedAt = &at
 			}
 			if i, ok := index[reply.ThreadID]; ok {
 				result[i].Replies = append(result[i].Replies, reply)
@@ -217,6 +226,136 @@ func (r *Repository) SetCommentResolved(ctx context.Context, workspaceID, docume
 				WHERE id = $1
 			`, threadID)
 		}
+		return err
+	})
+}
+
+// authorOf returns who wrote a thread, or not found.
+func commentThreadAuthor(ctx context.Context, tx database.Queryer, documentID, threadID uuid.UUID) (uuid.UUID, error) {
+	var author uuid.UUID
+	err := tx.QueryRowContext(ctx, `
+		SELECT author_id FROM comment_threads WHERE id = $1 AND document_id = $2
+	`, threadID, documentID).Scan(&author)
+	if errors.Is(err, sql.ErrNoRows) {
+		return uuid.Nil, constant.ErrDocumentNotFound
+	}
+	return author, err
+}
+
+func commentReplyAuthor(ctx context.Context, tx database.Queryer, documentID, threadID, replyID uuid.UUID) (uuid.UUID, error) {
+	var author uuid.UUID
+	err := tx.QueryRowContext(ctx, `
+		SELECT p.author_id
+		FROM comment_replies p
+		JOIN comment_threads t ON t.id = p.thread_id
+		WHERE p.id = $1 AND p.thread_id = $2 AND t.document_id = $3
+	`, replyID, threadID, documentID).Scan(&author)
+	if errors.Is(err, sql.ErrNoRows) {
+		return uuid.Nil, constant.ErrDocumentNotFound
+	}
+	return author, err
+}
+
+// UpdateComment changes a thread's first message. Only its author may.
+func (r *Repository) UpdateComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, content string) error {
+	if r.tx == nil {
+		return errors.New("editing requires a transaction-capable database")
+	}
+	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
+		if err != nil {
+			return err
+		}
+		if err := canDiscuss(doc, access); err != nil {
+			return err
+		}
+		author, err := commentThreadAuthor(ctx, tx, documentID, threadID)
+		if err != nil {
+			return err
+		}
+		if author != actorID {
+			return constant.ErrForbidden
+		}
+		_, err = tx.ExecContext(ctx, `
+			UPDATE comment_threads SET content = $2, edited_at = NOW(), updated_at = NOW() WHERE id = $1
+		`, threadID, content)
+		return err
+	})
+}
+
+// UpdateCommentReply changes a reply. Only its author may.
+func (r *Repository) UpdateCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID, content string) error {
+	if r.tx == nil {
+		return errors.New("editing requires a transaction-capable database")
+	}
+	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
+		if err != nil {
+			return err
+		}
+		if err := canDiscuss(doc, access); err != nil {
+			return err
+		}
+		author, err := commentReplyAuthor(ctx, tx, documentID, threadID, replyID)
+		if err != nil {
+			return err
+		}
+		if author != actorID {
+			return constant.ErrForbidden
+		}
+		_, err = tx.ExecContext(ctx, `
+			UPDATE comment_replies SET content = $2, edited_at = NOW(), updated_at = NOW() WHERE id = $1
+		`, replyID, content)
+		return err
+	})
+}
+
+// DeleteComment removes a thread and its replies. Its author or an editor may.
+func (r *Repository) DeleteComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID) error {
+	if r.tx == nil {
+		return errors.New("deleting requires a transaction-capable database")
+	}
+	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
+		if err != nil {
+			return err
+		}
+		if err := canDiscuss(doc, access); err != nil {
+			return err
+		}
+		author, err := commentThreadAuthor(ctx, tx, documentID, threadID)
+		if err != nil {
+			return err
+		}
+		if author != actorID && !policy.CanDecideSuggestion(doc, access) {
+			return constant.ErrForbidden
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM comment_threads WHERE id = $1`, threadID)
+		return err
+	})
+}
+
+// DeleteCommentReply removes one reply. Its author or an editor may.
+func (r *Repository) DeleteCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID) error {
+	if r.tx == nil {
+		return errors.New("deleting requires a transaction-capable database")
+	}
+	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
+		if err != nil {
+			return err
+		}
+		if err := canDiscuss(doc, access); err != nil {
+			return err
+		}
+		author, err := commentReplyAuthor(ctx, tx, documentID, threadID, replyID)
+		if err != nil {
+			return err
+		}
+		if author != actorID && !policy.CanDecideSuggestion(doc, access) {
+			return constant.ErrForbidden
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM comment_replies WHERE id = $1`, replyID)
 		return err
 	})
 }
