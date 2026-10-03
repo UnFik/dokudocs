@@ -1,7 +1,7 @@
 import { TextSelection, type EditorState } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
 import { decideSuggestion } from './decideSuggestion'
-import { prosemirrorToDocumentBody } from './documentBody'
+import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
 import { cardTitle, suggestionCards } from './suggestionCards'
 import {
   canonicalRuns,
@@ -258,6 +258,155 @@ describe('Backspace at the start of a paragraph in Suggest mode', () => {
     state = state.apply(suggestJoin(state, upper!, options))
 
     expect(suggestionCards(state.doc).map(cardTitle)).toEqual([
+      'Join paragraphs',
+    ])
+  })
+})
+
+const nodes = documentBodySchema.nodes
+const idAttrs = (nodeID: string) => ({
+  nodeID,
+  bodyAttributes: '{}',
+  bodyContent: '',
+})
+
+/** document > bullet_list > list_item > paragraph > run, one item per text. */
+function listOf(...texts: string[]) {
+  return documentOf(
+    nodes.bullet_list!.create(
+      idAttrs('list'),
+      texts.map((text, index) =>
+        nodes.list_item!.create(idAttrs(`item${index}`), [
+          paragraph(`para${index}`, [run(`run${index}`, [text])]),
+        ])
+      )
+    )
+  )
+}
+
+function quoteOf(...texts: string[]) {
+  return documentOf(
+    nodes.block_quote!.create(
+      idAttrs('quote'),
+      texts.map((text, index) =>
+        paragraph(`qpara${index}`, [run(`qrun${index}`, [text])])
+      )
+    )
+  )
+}
+
+const shape = (state: EditorState) => {
+  const found: string[] = []
+  state.doc.descendants((node) => {
+    if (node.type.name === 'list_item' || node.type.name === 'block_quote')
+      found.push(`${node.type.name}:${node.childCount}`)
+    return true
+  })
+  return found
+}
+
+describe('Enter in a list in Suggest mode', () => {
+  it('at the end of an item opens the next item as a suggestion the body does not see', () => {
+    let state = caretAt(stateOf(listOf('Apples')), 'Apples', 6)
+
+    state = state.apply(suggestEnter(state, options))
+
+    expect(suggestionCards(state.doc).map(cardTitle)).toEqual([
+      'Add: new paragraph',
+    ])
+    expect(canonicalRuns(state.doc)).toEqual(['Apples'])
+    expect(shape(state)).toEqual(['list_item:1', 'list_item:1'])
+    expect(state.selection.$from.parent.type.name).toBe('paragraph')
+    expect(state.selection.$from.parent.content.size).toBe(0)
+  })
+
+  it('puts what is typed into the same suggestion, and accepting or rejecting takes the whole item', () => {
+    let state = caretAt(stateOf(listOf('Apples')), 'Apples', 6)
+    state = state.apply(suggestEnter(state, options))
+    state = state.apply(
+      suggestReplace(
+        state,
+        state.selection.from,
+        state.selection.to,
+        'Pears',
+        options
+      )
+    )
+    const cards = suggestionCards(state.doc)
+    expect(cards.map(cardTitle)).toEqual(['Add: "Pears"'])
+    expect(canonicalRuns(state.doc)).toEqual(['Apples'])
+
+    const accepted = state.apply(
+      decideSuggestion(state, cards[0]!.id, 'accept').transaction
+    )
+    expect(shape(accepted)).toEqual(['list_item:1', 'list_item:1'])
+    expect(accepted.doc.textContent).toBe('ApplesPears')
+    expect(suggestionCards(accepted.doc)).toEqual([])
+
+    const rejected = state.apply(
+      decideSuggestion(state, cards[0]!.id, 'reject').transaction
+    )
+    expect(shape(rejected)).toEqual(['list_item:1'])
+    expect(rejected.doc.textContent).toBe('Apples')
+  })
+
+  it('keeps pressing Enter in your own new item in the same suggestion', () => {
+    let state = caretAt(stateOf(listOf('Apples')), 'Apples', 6)
+    state = state.apply(suggestEnter(state, options))
+    state = state.apply(suggestEnter(state, options))
+
+    expect(suggestionCards(state.doc).map(cardTitle)).toEqual([
+      'Add: 2 new paragraphs',
+    ])
+    expect(shape(state)).toEqual(['list_item:1', 'list_item:1', 'list_item:1'])
+  })
+
+  it('refuses leaving the list from an empty item, and splitting or starting an item', () => {
+    const empty = stateOf(
+      documentOf(
+        nodes.bullet_list!.create(idAttrs('list'), [
+          nodes.list_item!.create(idAttrs('item'), [
+            nodes.paragraph!.create(idAttrs('para')),
+          ]),
+        ])
+      )
+    )
+    const inEmpty = empty.apply(
+      empty.tr.setSelection(TextSelection.create(empty.doc, 3))
+    )
+    expect(() => suggestEnter(inEmpty, options)).toThrow(
+      UnsupportedSuggestionError
+    )
+    const middle = caretAt(stateOf(listOf('Apples')), 'Apples', 3)
+    expect(() => suggestEnter(middle, options)).toThrow(
+      UnsupportedSuggestionError
+    )
+    const start = caretAt(stateOf(listOf('Apples')), 'Apples', 0)
+    expect(() => suggestEnter(start, options)).toThrow(
+      UnsupportedSuggestionError
+    )
+  })
+})
+
+describe('Enter, split, and join in a quote in Suggest mode', () => {
+  it('behave as in the document, inside the quote', () => {
+    let state = caretAt(stateOf(quoteOf('Quoted')), 'Quoted', 6)
+    state = state.apply(suggestEnter(state, options))
+    expect(shape(state)).toEqual(['block_quote:2'])
+    expect(canonicalRuns(state.doc)).toEqual(['Quoted'])
+
+    let split = caretAt(stateOf(quoteOf('Quoted')), 'Quoted', 3)
+    split = split.apply(suggestEnter(split, options))
+    expect(suggestionCards(split.doc).map(cardTitle)).toEqual([
+      'Split paragraph',
+    ])
+    expect(shape(split)).toEqual(['block_quote:2'])
+
+    let join = caretAt(stateOf(quoteOf('One', 'Two')), 'Two', 0)
+    const upper = joinTarget(join, false)
+    expect(upper).not.toBeNull()
+    join = join.apply(suggestJoin(join, upper!, options))
+    expect(suggestionCards(join.doc).map(cardTitle)).toEqual([
       'Join paragraphs',
     ])
   })

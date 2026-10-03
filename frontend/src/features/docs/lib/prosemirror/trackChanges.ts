@@ -142,11 +142,15 @@ export function suggestReplace(
 
   const tr = state.tr
   let id: string | null = null
-  const ownBlock = nodeSuggestionOf(block.node)
-  const ownBlockID =
-    ownBlock?.kind === 'insert' && ownBlock.author === options.author
-      ? ownBlock.id
-      : null
+  // Typing into a block you inserted, or one inside an item you inserted,
+  // belongs to that insertion.
+  const $block = doc.resolve(block.start)
+  let ownBlockID: string | null = null
+  for (let level = $block.depth; level > 0 && !ownBlockID; level--) {
+    const own = nodeSuggestionOf($block.node(level))
+    if (own?.kind === 'insert' && own.author === options.author)
+      ownBlockID = own.id
+  }
   const suggestionID = () =>
     (id ??=
       ownBlockID ??
