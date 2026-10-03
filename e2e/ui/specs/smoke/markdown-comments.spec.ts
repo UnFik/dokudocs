@@ -254,6 +254,32 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     await ownerThread.getByRole("button", { name: "Send reply" }).click();
     await expect(commenterRail).toContainText("Yes, keep it.");
 
+    // The author edits their comment; others see it, marked as edited.
+    const commenterThread = commenter
+      .locator("li[data-comment-thread-id]")
+      .first();
+    await commenterThread
+      .getByRole("button", { name: "Edit", exact: true })
+      .click();
+    await commenterThread
+      .getByLabel("Edit comment")
+      .fill("Is this the right title? (edited)");
+    await commenterThread.getByRole("button", { name: "Save" }).click();
+    await expect(ownerThread).toContainText(
+      "Is this the right title? (edited)",
+    );
+    await expect(ownerThread).toContainText("edited");
+    // Nobody else gets Edit on it; the owner may still delete a reply of their own.
+    await expect(
+      ownerThread.getByRole("button", { name: "Edit", exact: true }),
+    ).toHaveCount(0);
+    await ownerThread.getByRole("button", { name: "Delete reply" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Delete" })
+      .click();
+    await expect(commenterRail).not.toContainText("Yes, keep it.");
+
     // Resolving removes the marks for both and tucks the thread away.
     await ownerThread.getByRole("button", { name: "Resolve comment" }).click();
     await expect(ownerEditor.locator(".comment-mark")).toHaveCount(0);
@@ -330,6 +356,27 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
         () => document.documentElement.scrollWidth - window.innerWidth,
       ),
     ).toBeLessThanOrEqual(0);
+
+    // An editor can delete anyone's thread, after a confirmation.
+    const toDelete = page
+      .locator("li[data-comment-thread-id]")
+      .filter({ hasText: "Is this word needed?" });
+    await expect(toDelete).toBeVisible();
+    await toDelete.getByRole("button", { name: "Delete", exact: true }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Delete" })
+      .click();
+    await expect(
+      page
+        .locator("li[data-comment-thread-id]")
+        .filter({ hasText: "Is this word needed?" }),
+    ).toHaveCount(0);
+    await expect(
+      commenter
+        .locator("li[data-comment-thread-id]")
+        .filter({ hasText: "Is this word needed?" }),
+    ).toHaveCount(0);
   } finally {
     await commenterContext.close();
     await viewerContext.close();

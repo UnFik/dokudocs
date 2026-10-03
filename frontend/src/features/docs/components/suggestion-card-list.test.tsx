@@ -289,3 +289,119 @@ describe('SuggestionCardList with comments', () => {
     )
   })
 })
+
+describe('editing and deleting comments', () => {
+  const mine = thread('mine', 'my question', {
+    authorId: ME,
+    authorName: 'Me',
+    replies: [
+      {
+        id: '00000000-0000-4000-8000-0000000000b1',
+        threadId: 'mine',
+        authorId: OTHER,
+        authorName: 'Dewi Lestari',
+        content: 'their answer',
+        createdAt: '2026-10-03T00:00:00Z',
+        editedAt: '2026-10-03T00:05:00Z',
+      },
+    ],
+  })
+  const theirs = thread('theirs', 'their question')
+  const positions = { mine: 1, theirs: 2 }
+
+  it('lets the author edit and delete their own comment, and shows when a reply was edited', async () => {
+    const { getByRole, getByText } = await renderWithComments({
+      cards: [],
+      canDecide: false,
+      comments: [mine],
+      commentPositions: positions,
+    })
+
+    await expect
+      .element(getByRole('button', { name: 'Edit', exact: true }))
+      .toBeInTheDocument()
+    await expect
+      .element(getByRole('button', { name: 'Delete', exact: true }))
+      .toBeInTheDocument()
+    // The reply is someone else's: no edit or delete for an author of the thread.
+    expect(getByRole('button', { name: 'Edit reply' }).elements()).toHaveLength(
+      0
+    )
+    expect(
+      getByRole('button', { name: 'Delete reply' }).elements()
+    ).toHaveLength(0)
+    await expect.element(getByText('edited')).toBeInTheDocument()
+  })
+
+  it("offers an editor Delete on anyone's comment, but Edit only on their own", async () => {
+    const { getByRole } = await renderWithComments({
+      cards: [],
+      canDecide: true,
+      comments: [theirs],
+      commentPositions: positions,
+    })
+
+    await expect
+      .element(getByRole('button', { name: 'Delete', exact: true }))
+      .toBeInTheDocument()
+    expect(
+      getByRole('button', { name: 'Edit', exact: true }).elements()
+    ).toHaveLength(0)
+  })
+
+  it('offers someone else, and someone who cannot comment, neither', async () => {
+    const other = await renderWithComments({
+      cards: [],
+      canDecide: false,
+      comments: [theirs],
+      commentPositions: positions,
+    })
+    expect(
+      other.getByRole('button', { name: 'Delete', exact: true }).elements()
+    ).toHaveLength(0)
+    await other.unmount()
+
+    const readOnly = await renderWithComments({
+      cards: [],
+      canInteract: false,
+      canDecide: true,
+      comments: [mine],
+      commentPositions: positions,
+    })
+    expect(
+      readOnly.getByRole('button', { name: 'Edit', exact: true }).elements()
+    ).toHaveLength(0)
+    expect(
+      readOnly.getByRole('button', { name: 'Delete', exact: true }).elements()
+    ).toHaveLength(0)
+  })
+
+  it('edit opens a form with the current text, and Cancel puts the comment back', async () => {
+    const { getByRole, getByLabelText } = await renderWithComments({
+      cards: [],
+      comments: [mine],
+      commentPositions: positions,
+    })
+
+    await userEvent.click(getByRole('button', { name: 'Edit', exact: true }))
+    await expect
+      .element(getByLabelText('Edit comment'))
+      .toHaveValue('my question')
+    await userEvent.click(getByRole('button', { name: 'Cancel' }))
+    expect(getByLabelText('Edit comment').elements()).toHaveLength(0)
+  })
+
+  it('delete asks first and names what goes with it', async () => {
+    const { getByRole, getByText } = await renderWithComments({
+      cards: [],
+      comments: [mine],
+      commentPositions: positions,
+    })
+
+    await userEvent.click(getByRole('button', { name: 'Delete', exact: true }))
+    await expect.element(getByText('Delete this comment?')).toBeInTheDocument()
+    await expect
+      .element(getByText(/its 1 reply is removed|and its 1 reply are removed/))
+      .toBeInTheDocument()
+  })
+})

@@ -30,6 +30,22 @@ func (r *recordingComments) CreateCommentReply(_ context.Context, _, _ uuid.UUID
 	return nil
 }
 
+func (r *recordingComments) UpdateComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
+	return nil
+}
+
+func (r *recordingComments) UpdateCommentReply(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
+	return nil
+}
+
+func (r *recordingComments) DeleteComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) error {
+	return nil
+}
+
+func (r *recordingComments) DeleteCommentReply(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) error {
+	return nil
+}
+
 func (r *recordingComments) SetCommentResolved(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, bool) error {
 	return nil
 }
