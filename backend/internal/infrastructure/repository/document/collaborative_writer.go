@@ -73,20 +73,28 @@ func (r *Repository) CommitUpdate(ctx context.Context, actor collaboration.Actor
 		}
 
 		var rootIDText sql.NullString
-		var bodyVersion, bodyEpoch int64
+		var bodyVersion, bodyEpoch, compatEpoch int64
 		var bodySchemaVersion int
 		if err := tx.QueryRowContext(ctx, `
-			SELECT root_node_id::text, body_version, body_epoch, body_schema_version
+			SELECT root_node_id::text, body_version, body_epoch, compat_epoch, body_schema_version
 			FROM documents WHERE id = $1 AND workspace_id = $2 AND type = 'markdown' AND deleted_at IS NULL
-		`, update.DocumentID, workspaceID).Scan(&rootIDText, &bodyVersion, &bodyEpoch, &bodySchemaVersion); err != nil {
+		`, update.DocumentID, workspaceID).Scan(&rootIDText, &bodyVersion, &bodyEpoch, &compatEpoch, &bodySchemaVersion); err != nil {
 			return err
 		}
 		if !rootIDText.Valid {
 			return collaboration.ErrBodyNotInitialized
 		}
-		if update.BodyEpoch != bodyEpoch {
+		// An update from a suggester made on an older epoch still merges when the
+		// history has continued since (ADR 0028). The receipt names the current
+		// epoch, so the author learns it from the ack.
+		// Only for someone who can suggest and not edit: an editor's update can
+		// aim at text in a block a structural command deleted meanwhile, which
+		// would merge and vanish, so an editor keeps the review path.
+		if update.BodyEpoch != bodyEpoch &&
+			(canEdit || update.BodyEpoch < compatEpoch || update.BodyEpoch > bodyEpoch) {
 			return collaboration.ErrStaleBodyEpoch
 		}
+		receipt.BodyEpoch = bodyEpoch
 		if update.BodySchemaVersion != bodySchemaVersion {
 			return collaboration.ErrBodySchemaMismatch
 		}
@@ -182,7 +190,7 @@ func (r *Repository) CommitUpdate(ctx context.Context, actor collaboration.Actor
 			updatedDocument, err := tx.ExecContext(ctx, `
 				UPDATE documents SET body_version = $2, updated_at = NOW()
 				WHERE id = $1 AND root_node_id = $3 AND body_version = $4 AND body_epoch = $5
-			`, update.DocumentID, bodyVersion, rootID, previousBodyVersion, update.BodyEpoch)
+			`, update.DocumentID, bodyVersion, rootID, previousBodyVersion, bodyEpoch)
 			if err != nil {
 				return err
 			}

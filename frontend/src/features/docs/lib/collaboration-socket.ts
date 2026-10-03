@@ -37,6 +37,8 @@ export type CollaborationFrame = {
   updateID?: string
   bodyVersion?: number
   bodyEpoch?: number
+  /** The oldest epoch whose history still continues into bodyEpoch (ADR 0028). */
+  compatEpoch?: number
   bodySchemaVersion?: number
   canEdit?: boolean
   /** The user may suggest without being able to edit. */
@@ -270,7 +272,12 @@ function isServerEnvelope(value: unknown): value is ServerEnvelope {
     return false
   if (value.canSuggest !== undefined && typeof value.canSuggest !== 'boolean')
     return false
-  for (const key of ['bodyVersion', 'bodyEpoch', 'bodySchemaVersion']) {
+  for (const key of [
+    'bodyVersion',
+    'bodyEpoch',
+    'compatEpoch',
+    'bodySchemaVersion',
+  ]) {
     const number = value[key]
     if (
       number !== undefined &&

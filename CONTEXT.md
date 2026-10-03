@@ -89,7 +89,7 @@ The boundary between generations of collaborative edits. Changes from an earlier
 _Avoid_: BodyVersion, CRDT state vector
 
 **CompatibleEpoch**:
-The oldest BodyEpoch whose collaborative history still continues into the current one. A structural command that edits the stored state in place (DeleteNode, MoveNode) starts a new BodyEpoch but leaves the CompatibleEpoch alone, so an update made on an older epoch in that range still merges. A rebuild from scratch, such as restoring a revision, moves the CompatibleEpoch up to the new BodyEpoch, and older updates need review.
+The oldest BodyEpoch whose collaborative history still continues into the current one. A structural command that edits the stored state in place (DeleteNode, MoveNode) starts a new BodyEpoch but leaves the CompatibleEpoch alone, so an update from someone who can only suggest, made on an older epoch in that range, still merges. An editor's update does not, because it may aim at a block that is gone. A rebuild from scratch, such as restoring a revision, moves the CompatibleEpoch up to the new BodyEpoch, and older updates need review.
 _Avoid_: BodyEpoch when asking whether an old update can still merge
 
 **Accepted Edit**:

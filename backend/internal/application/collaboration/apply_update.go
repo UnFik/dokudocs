@@ -92,8 +92,10 @@ func (u *UseCase) Apply(ctx context.Context, actor Actor, update Update) (Commit
 	if err != nil {
 		return CommitReceipt{}, err
 	}
+	// The receipt names the current epoch, which is newer than the update's when
+	// the update was made before a structural command that kept the history.
 	if receipt.DocumentID != update.DocumentID || receipt.UpdateID != update.UpdateID ||
-		receipt.BodyEpoch != update.BodyEpoch || receipt.BodyVersion < 1 {
+		receipt.BodyEpoch < update.BodyEpoch || receipt.BodyVersion < 1 {
 		return CommitReceipt{}, ErrInvalidReceipt
 	}
 	return receipt, nil
@@ -103,12 +105,14 @@ func (u *UseCase) Apply(ctx context.Context, actor Actor, update Update) (Commit
 // to the originating client. A fan-out error cannot undo that commit or ACK.
 func (u *UseCase) PublishAfterAck(ctx context.Context, receipt CommitReceipt, update Update) error {
 	if receipt.DocumentID != update.DocumentID || receipt.UpdateID != update.UpdateID ||
-		receipt.BodyEpoch != update.BodyEpoch || receipt.BodyVersion < 1 || len(update.Bytes) == 0 {
+		receipt.BodyEpoch < update.BodyEpoch || receipt.BodyVersion < 1 || len(update.Bytes) == 0 {
 		return ErrInvalidReceipt
 	}
 	if !receipt.Changed {
 		return nil
 	}
+	// Peers are told the epoch the update now belongs to.
+	update.BodyEpoch = receipt.BodyEpoch
 	return u.fanout.Publish(ctx, receipt, update)
 }
 

@@ -32,11 +32,11 @@ func (r *Repository) ReadBody(ctx context.Context, actor collaboration.Actor, wo
 		var rootIDText sql.NullString
 		var documentType string
 		if err := tx.QueryRowContext(ctx, `
-			SELECT root_node_id::text, type::text, body_version, body_epoch, body_schema_version
+			SELECT root_node_id::text, type::text, body_version, body_epoch, compat_epoch, body_schema_version
 			FROM documents
 			WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
 		`, documentID, workspaceID).Scan(
-			&rootIDText, &documentType, &snapshot.BodyVersion, &snapshot.BodyEpoch, &snapshot.BodySchemaVersion,
+			&rootIDText, &documentType, &snapshot.BodyVersion, &snapshot.BodyEpoch, &snapshot.CompatEpoch, &snapshot.BodySchemaVersion,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return constant.ErrDocumentNotFound

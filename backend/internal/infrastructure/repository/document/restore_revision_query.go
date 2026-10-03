@@ -157,7 +157,7 @@ func (r *Repository) RestoreDocumentRevision(ctx context.Context, documentID, so
 		}
 		updatedDocument, err := tx.ExecContext(ctx, `
 			UPDATE documents
-			SET root_node_id = $2, body_version = $3, body_epoch = $4, updated_at = NOW()
+			SET root_node_id = $2, body_version = $3, body_epoch = $4, compat_epoch = $4, updated_at = NOW()
 			WHERE id = $1 AND workspace_id = $5 AND root_node_id = $6
 			  AND body_version = $7 AND body_epoch = $8
 		`, documentID, restoredBody.RootNodeID, newBodyVersion, newBodyEpoch,
