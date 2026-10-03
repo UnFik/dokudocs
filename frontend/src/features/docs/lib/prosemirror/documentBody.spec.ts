@@ -1221,10 +1221,14 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
     const canonicalRoot: DocumentBodyNode = {
       ...initialBody[0]!,
     }
-    const canonicalDoc = prosemirrorToYDoc(
-      documentBodyToProseMirror([canonicalRoot]),
-      'body'
-    )
+    // The server edits the stored state in place, so the canonical state is the
+    // same document with the block deleted, not a separate one.
+    const canonicalDoc = new Y.Doc()
+    Y.applyUpdate(canonicalDoc, state)
+    const canonicalRootElement = canonicalDoc
+      .getXmlFragment('body')
+      .get(0) as Y.XmlElement
+    canonicalRootElement.delete(0, 1)
     const canonicalState = Y.encodeStateAsUpdate(canonicalDoc)
     canonicalDoc.destroy()
 
@@ -1273,7 +1277,8 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
           encodedState: encodeBase64(canonicalState),
         }
       },
-      onCanonicalBody: (body) => {
+      // The result is merged into the live document, so the editor is not rebuilt.
+      onBodyAdvanced: (body) => {
         canonicalEpoch = body.bodyEpoch
       },
       onDeleteNodeQueued: (value) => {
@@ -1312,7 +1317,10 @@ describe('DokuDocs Body ↔ ProseMirror codec', () => {
         bodySchemaVersion: 1,
         nodeID,
       })
-      expect(session.editor.getBody()).toEqual(initialBody)
+      // The deleted block is gone from the editor that was already on screen.
+      expect(
+        session.editor.getBody().some((node) => node.nodeID === nodeID)
+      ).toBe(false)
       expect(
         socket.sent.map((frame) => (JSON.parse(frame) as { type: string }).type)
       ).toEqual(['auth'])

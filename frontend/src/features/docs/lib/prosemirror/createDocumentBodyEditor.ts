@@ -47,7 +47,6 @@ import {
   type CaretHint,
 } from './deleteTargets'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
-import { EditorNotice } from './editorNotice'
 import {
   emptyInlineState,
   readInlineState,
@@ -59,6 +58,8 @@ import {
   type InlineState,
 } from './inlineMarks'
 import { joinParagraphs } from './joinParagraphs'
+import { blockMarkdownRules, hiddenNodesPlugin } from './markdownBlockRules'
+import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
 import { nodeSuggestionOf } from './nodeSuggestion'
 import {
   DeleteNodeRequiredError,
@@ -252,7 +253,22 @@ export function createDocumentBodyEditor(
       // Block plugins (slash menu, drag handle) run before the keymaps below so
       // they can claim Enter and arrow keys while a menu is open.
       ...(options.plugins ?? []),
-      inputRules({ rules: [headingInputRule] }),
+      hiddenNodesPlugin,
+      markRuleResetPlugin,
+      inputRules({
+        rules: [
+          headingInputRule,
+          ...(options.onDeleteNode
+            ? blockMarkdownRules({
+                // The new block is already in the document; the line it replaced
+                // is deleted once this edit has been dispatched, and typing goes on.
+                replaced: (originalNodeID) =>
+                  queueMicrotask(() => deleteReplacedLine(originalNodeID)),
+              })
+            : []),
+          ...inlineMarkdownRules,
+        ],
+      }),
       keymap({
         Enter: (_state, _dispatch, editorView) => {
           if (!suggestMode) return runBlock(splitTextBlock)
@@ -458,19 +474,31 @@ export function createDocumentBodyEditor(
     }
   }
   const viewHolder: { current?: EditorView } = {}
-  const queueDeleteNode = (requested: string[]) => {
+  const queueDeleteNode = (
+    requested: string[],
+    { lock = true, hint }: { lock?: boolean; hint?: CaretHint | null } = {}
+  ) => {
     if (!options.onDeleteNode) return false
     const nodeIDs = withEmptiedParents(state.doc, requested)
-    const hint = caretAfterDelete(state.doc, nodeIDs)
-    if (hint) options.onCaretHint?.(hint)
-    structuralCommandPending = true
-    viewHolder.current?.setProps({ editable: () => false })
+    const caret =
+      hint === undefined ? caretAfterDelete(state.doc, nodeIDs) : hint
+    if (caret) options.onCaretHint?.(caret)
+    if (lock) {
+      structuralCommandPending = true
+      viewHolder.current?.setProps({ editable: () => false })
+    }
     void Promise.resolve()
       .then(() => options.onDeleteNode!(nodeIDs))
       .then(() => options.onDeleteNodeQueued?.(nodeIDs[0]!))
       .catch((cause: unknown) => options.onTransactionError?.(cause))
     return true
   }
+
+  // A line a Markdown rule replaced with a block after it. The caret is already
+  // in the new block and typing is not paused while the old line is deleted, so
+  // no caret is put back afterwards: it would jump over what was typed since.
+  const deleteReplacedLine = (originalNodeID: string) =>
+    queueDeleteNode([originalNodeID], { lock: false, hint: null })
 
   // The editor reads the browser's selection after a selectionchange event, so a
   // key pressed right after the caret moved (End, an arrow, a click) can find the
@@ -521,10 +549,8 @@ export function createDocumentBodyEditor(
     )
       return false
     const plan = planSelectionDeletion(state.doc, selection.from, selection.to)
-    if (!plan.ok) {
-      options.onTransactionError?.(new EditorNotice(plan.message))
-      return true
-    }
+    // A selection with nothing to delete does nothing, and says nothing.
+    if (!plan.ok) return true
     if (plan.trims.length) {
       let trim = state.tr
       for (const range of [...plan.trims].reverse())
@@ -622,7 +648,29 @@ export function createDocumentBodyEditor(
     const upper = joinTarget(current, forward)
     if (upper === null) return false
     const join = joinParagraphs(current, upper)
-    if (!join) return false
+    if (!join) {
+      // Next to a table or a code block there is nothing to merge into: the
+      // caret moves into it, as it would in any editor.
+      const first = current.doc.nodeAt(upper)
+      const next = first ? current.doc.nodeAt(upper + first.nodeSize) : null
+      const target = forward ? next : first
+      const targetPos = forward && first ? upper + first.nodeSize : upper
+      if (
+        target &&
+        ['table', 'code_block', 'math_block', 'diagram'].includes(
+          target.type.name
+        )
+      ) {
+        const at = forward ? targetPos + 1 : targetPos + target.nodeSize - 1
+        viewHolder.current?.dispatch(
+          current.tr.setSelection(
+            TextSelection.near(current.doc.resolve(at), forward ? 1 : -1)
+          )
+        )
+        return true
+      }
+      return false
+    }
     if (join.transaction) viewHolder.current?.dispatch(join.transaction)
     return queueDeleteNode([join.deleteNodeID])
   }
@@ -1169,7 +1217,6 @@ export function createDocumentBodyEditor(
      * outside any command, and the server refuses that.
      */
     finishStructuralCommand: () => {
-      if (!structuralCommandPending) return
       structuralCommandPending = false
       undoManager?.clear()
       view.setProps({ editable: () => !readOnly && !structuralCommandPending })
