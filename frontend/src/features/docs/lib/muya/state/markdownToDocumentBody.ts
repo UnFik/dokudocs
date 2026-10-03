@@ -24,10 +24,20 @@ interface NodeDraft {
   sourceMarkdown?: string
 }
 
+export type MarkdownImportOptions = {
+  /**
+   * Keep the parsed structure even when exporting it again would not give the
+   * source back byte for byte (trailing spaces, line endings). A file import
+   * must not change its text; pasted text only has to read right.
+   */
+  lenient?: boolean
+}
+
 export async function markdownToDocumentBody(
   documentID: string,
   markdown: string,
-  bodySchemaVersion = 1
+  bodySchemaVersion = 1,
+  options: MarkdownImportOptions = {}
 ): Promise<ParsedMarkdownBody> {
   if (
     !isUUID(documentID) ||
@@ -105,7 +115,7 @@ export async function markdownToDocumentBody(
 
   indexDocumentBody(nodes)
   const exportedMarkdown = documentBodyToMarkdown(nodes)
-  if (exportedMarkdown !== markdown) {
+  if (exportedMarkdown !== markdown && !options.lenient) {
     let characterOffset = 0
     while (
       characterOffset < markdown.length &&
