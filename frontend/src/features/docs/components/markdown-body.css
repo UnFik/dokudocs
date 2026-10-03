@@ -222,6 +222,16 @@
   border-bottom: 1px dashed var(--suggest-color);
 }
 
+.markdown-body .suggestion-focus {
+  background-color: color-mix(
+    in srgb,
+    var(--suggest-color, var(--signal)) 24%,
+    transparent
+  );
+  outline: 1px solid var(--suggest-color, var(--signal));
+  outline-offset: 2px;
+}
+
 .markdown-body .suggest-block-ins,
 .markdown-body .suggest-block-del {
   --suggest-color: var(--signal);
@@ -233,4 +243,20 @@
 .markdown-body .suggest-block-del {
   text-decoration: line-through;
   text-decoration-color: var(--suggest-color);
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-del,
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-del,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-ins,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-block-ins {
+  display: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-ins,
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-ins,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-del,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-block-del {
+  background: none;
+  outline: none;
+  text-decoration: none;
 }

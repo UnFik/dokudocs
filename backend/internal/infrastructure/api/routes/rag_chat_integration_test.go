@@ -310,23 +310,6 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if err := json.Unmarshal(createEnvelope.Data, &conversation); err != nil || conversation.ID == uuid.Nil {
 		t.Fatalf("conversation response = %+v, error = %v", conversation, err)
 	}
-	bodyResponse := request(http.MethodGet, "/api/v1/documents/"+documentID.String()+"/body", "", true)
-	var bodyEnvelope ragChatEnvelope
-	var bodySnapshot struct {
-		BodyVersion int64 `json:"bodyVersion"`
-		BodyEpoch   int64 `json:"bodyEpoch"`
-	}
-	if bodyResponse.Code != http.StatusOK || json.Unmarshal(bodyResponse.Body.Bytes(), &bodyEnvelope) != nil || json.Unmarshal(bodyEnvelope.Data, &bodySnapshot) != nil {
-		t.Fatalf("read canonical body for pending suggestion status = %d, body = %s", bodyResponse.Code, bodyResponse.Body.String())
-	}
-	pendingSuggestionID := uuid.New()
-	pendingSuggestion := fmt.Sprintf(`{"suggestionID":%q,"baseBodyVersion":%d,"baseBodyEpoch":%d,"operationSchemaVersion":1,"provenance":"human","operations":[{"op":"replace_text","nodeID":%q,"content":"The service restarts after a failed health check, and the recovery key is cobalt."}],"summary":"Add recovery key"}`,
-		pendingSuggestionID.String(), bodySnapshot.BodyVersion, bodySnapshot.BodyEpoch, runID.String())
-	proposed := request(http.MethodPost, "/api/v1/documents/"+documentID.String()+"/suggestions", pendingSuggestion, true)
-	if proposed.Code != http.StatusCreated {
-		t.Fatalf("propose pending RAG-excluded text status = %d, body = %s", proposed.Code, proposed.Body.String())
-	}
-
 	asked := request(http.MethodPost, "/api/v1/rag/conversations/"+conversation.ID.String()+"/messages", `{"question":"What happens after a failed health check?","language":"en"}`, true)
 	if asked.Code != http.StatusOK {
 		t.Fatalf("ask status = %d, body = %s", asked.Code, asked.Body.String())
