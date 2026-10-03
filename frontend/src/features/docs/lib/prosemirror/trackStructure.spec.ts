@@ -7,13 +7,19 @@ import {
   canonicalRuns,
   documentOf,
   ME,
+  OTHER,
   paragraph,
   positionIn,
   run,
   stateOf,
 } from './suggestionTestKit'
 import { suggestReplace, UnsupportedSuggestionError } from './trackChanges'
-import { suggestEnter, suggestPasteLines } from './trackStructure'
+import {
+  joinTarget,
+  suggestEnter,
+  suggestJoin,
+  suggestPasteLines,
+} from './trackStructure'
 
 let counter = 0
 const options = {
@@ -120,14 +126,6 @@ describe('Enter in Suggest mode', () => {
     expect(state.doc.child(0).child(1).textContent).toBe('')
     expect(state.doc.child(0).child(2).textContent).toBe('second')
   })
-
-  it('refuses a split in the middle of text and changes nothing', () => {
-    const state = caretAt(twoParagraphs(), 'first', 2)
-
-    expect(() => suggestEnter(state, options)).toThrow(
-      UnsupportedSuggestionError
-    )
-  })
 })
 
 describe('pasting lines in Suggest mode', () => {
@@ -153,5 +151,114 @@ describe('pasting lines in Suggest mode', () => {
     expect(() => suggestPasteLines(state, 'a\nb', options)).toThrow(
       UnsupportedSuggestionError
     )
+  })
+})
+
+const paragraphTexts = (state: EditorState) => {
+  const body = state.doc.child(0)
+  return [...Array(body.childCount).keys()].map(
+    (index) => body.child(index).textContent
+  )
+}
+
+describe('Enter in the middle of text in Suggest mode', () => {
+  it('proposes deleting the tail where it is and a copy of it in a new paragraph, as one split', () => {
+    let state = caretAt(twoParagraphs(), 'first', 2)
+
+    state = state.apply(suggestEnter(state, options))
+
+    expect(suggestionCards(state.doc).map(cardTitle)).toEqual([
+      'Split paragraph',
+    ])
+    expect(canonicalRuns(state.doc)).toEqual(['first', 'second'])
+    expect(paragraphCount(state)).toBe(2)
+    expect(paragraphTexts(state)).toEqual(['first', 'rst', 'second'])
+  })
+
+  it('accepting leaves two paragraphs and rejecting leaves the original one', () => {
+    let state = caretAt(twoParagraphs(), 'first', 2)
+    state = state.apply(suggestEnter(state, options))
+    const id = suggestionCards(state.doc)[0]!.id
+
+    const accepted = state.apply(
+      decideSuggestion(state, id, 'accept').transaction
+    )
+    expect(paragraphTexts(accepted)).toEqual(['fi', 'rst', 'second'])
+    expect(canonicalRuns(accepted.doc)).toEqual(['fi', 'rst', 'second'])
+    expect(suggestionCards(accepted.doc)).toEqual([])
+
+    const rejected = state.apply(
+      decideSuggestion(state, id, 'reject').transaction
+    )
+    expect(paragraphTexts(rejected)).toEqual(['first', 'second'])
+    expect(suggestionCards(rejected.doc)).toEqual([])
+  })
+
+  it("refuses when the tail holds someone else's suggestion", () => {
+    const state = caretAt(
+      stateOf(
+        documentOf(
+          paragraph('p1', [
+            run('r1', ['ab', { text: 'cd', mark: 'insert', by: OTHER }]),
+          ])
+        )
+      ),
+      'ab',
+      1
+    )
+
+    expect(() => suggestEnter(state, options)).toThrow(
+      UnsupportedSuggestionError
+    )
+  })
+})
+
+describe('Backspace at the start of a paragraph in Suggest mode', () => {
+  it('proposes deleting the second paragraph and a copy of its text at the end of the first, as one join', () => {
+    let state = caretAt(twoParagraphs(), 'second', 0)
+    const upper = joinTarget(state, false)
+    expect(upper).not.toBeNull()
+
+    state = state.apply(suggestJoin(state, upper!, options))
+
+    expect(suggestionCards(state.doc).map(cardTitle)).toEqual([
+      'Join paragraphs',
+    ])
+    expect(canonicalRuns(state.doc)).toEqual(['first', 'second'])
+    expect(paragraphTexts(state)).toEqual(['firstsecond', 'second'])
+  })
+
+  it('accepting leaves one paragraph and rejecting leaves two', () => {
+    let state = caretAt(twoParagraphs(), 'second', 0)
+    state = state.apply(suggestJoin(state, joinTarget(state, false)!, options))
+    const id = suggestionCards(state.doc)[0]!.id
+
+    const decision = decideSuggestion(state, id, 'accept')
+    expect(decision.structuralDeletes).toEqual(['p2'])
+    const accepted = state.apply(decision.transaction)
+    expect(accepted.doc.child(0).child(0).textContent).toBe('firstsecond')
+
+    const rejected = state.apply(
+      decideSuggestion(state, id, 'reject').transaction
+    )
+    expect(paragraphTexts(rejected)).toEqual(['first', 'second'])
+    expect(suggestionCards(rejected.doc)).toEqual([])
+  })
+
+  it('does not apply in the middle of a paragraph or in the first one', () => {
+    expect(joinTarget(caretAt(twoParagraphs(), 'second', 2), false)).toBeNull()
+    expect(joinTarget(caretAt(twoParagraphs(), 'first', 0), false)).toBeNull()
+  })
+
+  it('Delete at the end of a paragraph joins it with the next', () => {
+    let state = caretAt(twoParagraphs(), 'first', 5)
+    const upper = joinTarget(state, true)
+    expect(upper).not.toBeNull()
+
+    state = state.apply(suggestJoin(state, upper!, options))
+
+    expect(suggestionCards(state.doc).map(cardTitle)).toEqual([
+      'Join paragraphs',
+    ])
   })
 })

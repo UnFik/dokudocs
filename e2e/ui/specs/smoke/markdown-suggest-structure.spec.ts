@@ -149,6 +149,12 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
       name: "Suggestions in this document",
     });
 
+    const openReview = async () => {
+      const review = page.getByRole("button", { name: "Review", exact: true });
+      if ((await review.getAttribute("aria-expanded")) !== "true")
+        await review.click();
+    };
+
     // Enter at the end of the paragraph, then typing: one Add, in place for both.
     await commenterEditor.getByText("Original phrase").click();
     await commenter.keyboard.press("End");
@@ -194,13 +200,57 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await expect(ownerEditor.locator("p")).toHaveCount(2);
     await expect(commenterEditor.locator("p")).toHaveCount(2);
 
+    // Backspace at the start of the second paragraph joins it with the first.
+    await commenterEditor.getByText("Second line").click();
+    await commenter.keyboard.press("Home");
+    await commenter.keyboard.press("Backspace");
+    await openReview();
+    await expect(ownerCards).toContainText("Join paragraphs");
+    await expect
+      .poll(canonicalRuns)
+      .toEqual(["Original phrase", "Second line"]);
+    await ownerCards.getByRole("button", { name: "Accept" }).click();
+    await expect(ownerCards).toHaveCount(0);
+    await expect(ownerEditor.locator("p")).toHaveCount(1);
+    await expect(commenterEditor.locator("p")).toHaveCount(1);
+    await expect(ownerEditor).toContainText("Original phraseSecond line");
+
+    // Enter in the middle of the text splits it again, and the owner rejects.
+    await commenterEditor.getByText("Original phrase").click();
+    await commenter.keyboard.press("Home");
+    for (let index = 0; index < 8; index++)
+      await commenter.keyboard.press("ArrowRight");
+    await commenter.keyboard.press("Enter");
+    await openReview();
+    await expect(ownerCards).toContainText("Split paragraph");
+    await expect(ownerEditor.locator("p")).toHaveCount(2);
+    await ownerCards.getByRole("button", { name: "Reject" }).click();
+    await expect(ownerCards).toHaveCount(0);
+    await expect(ownerEditor.locator("p")).toHaveCount(1);
+    await expect(commenterEditor.locator("p")).toHaveCount(1);
+
+    // Split again and accept: two paragraphs in the canonical body.
+    await commenterEditor.getByText("Original phrase").click();
+    await commenter.keyboard.press("Home");
+    for (let index = 0; index < 8; index++)
+      await commenter.keyboard.press("ArrowRight");
+    await commenter.keyboard.press("Enter");
+    await openReview();
+    await expect(ownerCards).toContainText("Split paragraph");
+    await ownerCards.getByRole("button", { name: "Accept" }).click();
+    await expect(ownerCards).toHaveCount(0);
+    await expect(ownerEditor.locator("p")).toHaveCount(2);
+    await expect
+      .poll(canonicalRuns)
+      .toEqual(["Original", " phrase", "Second line"]);
+
     // A reload agrees.
     await page.reload();
     await expect(page.locator(".ProseMirror p")).toHaveCount(2);
     await expect(page.locator(".ProseMirror .suggest-ins")).toHaveCount(0);
     await expect
       .poll(canonicalRuns)
-      .toEqual(["Original phrase", "Second line"]);
+      .toEqual(["Original", " phrase", "Second line"]);
   } finally {
     await commenterContext.close();
   }

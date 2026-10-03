@@ -86,6 +86,11 @@ function shorten(text: string) {
 
 /** `Add: "xxx"`, `Delete: "xxx"`, or `Replace: "xxx" with "zzz"`. */
 export function cardTitle(card: SuggestionCard) {
+  // The same text added and removed along with a block is a split or a join.
+  if (card.inserted && card.inserted === card.deleted) {
+    if (card.insertedBlocks) return 'Split paragraph'
+    if (card.deletedBlocks) return 'Join paragraphs'
+  }
   if (card.inserted && card.deleted)
     return `Replace: "${shorten(card.deleted)}" with "${shorten(card.inserted)}"`
   if (card.inserted) return `Add: "${shorten(card.inserted)}"`

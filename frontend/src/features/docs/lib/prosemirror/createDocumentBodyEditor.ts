@@ -66,7 +66,12 @@ import {
   trackTransaction,
   UnsupportedSuggestionError,
 } from './trackChanges'
-import { suggestEnter, suggestPasteLines } from './trackStructure'
+import {
+  joinTarget,
+  suggestEnter,
+  suggestJoin,
+  suggestPasteLines,
+} from './trackStructure'
 
 // Marks a transaction the Suggest mode engine built, so it is applied as is.
 const trackedMeta = 'trackedSuggestion'
@@ -660,6 +665,16 @@ export function createDocumentBodyEditor(
           event.metaKey
         )
           return false
+        const forward = event.key === 'Delete'
+        if (!event.ctrlKey && !event.altKey) {
+          const current = stateAtDomSelection(editorView)
+          const upper = joinTarget(current, forward)
+          if (upper !== null) {
+            suggest(() => suggestJoin(current, upper, suggestionOptions()))
+            event.preventDefault()
+            return true
+          }
+        }
         suggest(() =>
           suggestDeleteKey(
             state,
