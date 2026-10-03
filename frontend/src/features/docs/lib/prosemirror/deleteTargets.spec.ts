@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { withEmptiedParents } from './deleteTargets'
+import { caretAfterDelete, withEmptiedParents } from './deleteTargets'
 import { documentBodySchema } from './documentBody'
 import { documentOf, paragraph, run, stateOf } from './suggestionTestKit'
 
@@ -53,5 +53,42 @@ describe('withEmptiedParents', () => {
     )
     expect(withEmptiedParents(doc, ['a'])).toEqual(['a'])
     expect(withEmptiedParents(doc, ['a', 'b'])).toEqual(['list'])
+  })
+})
+
+describe('caretAfterDelete', () => {
+  const doc3 = () =>
+    stateOf(
+      documentOf(
+        paragraph('a', [run('ra', ['Alpha'])]),
+        paragraph('b', [run('rb', ['Beta'])]),
+        paragraph('c', [run('rc', ['Gamma'])])
+      )
+    ).doc
+
+  it('goes to the end of the block before the first deleted one', () => {
+    expect(caretAfterDelete(doc3(), ['b'])).toEqual({
+      nodeID: 'a',
+      edge: 'end',
+    })
+  })
+
+  it('goes to the start of the block after when nothing is before', () => {
+    expect(caretAfterDelete(doc3(), ['a', 'b'])).toEqual({
+      nodeID: 'c',
+      edge: 'start',
+    })
+  })
+
+  it('is null when nothing is left', () => {
+    expect(caretAfterDelete(doc3(), ['a', 'b', 'c'])).toBeNull()
+  })
+
+  it('skips text blocks inside a deleted list item', () => {
+    const { doc } = stateOf(documentOf(list('one', 'two', 'three')))
+    expect(caretAfterDelete(doc, ['item-two'])).toEqual({
+      nodeID: 'para-one',
+      edge: 'end',
+    })
   })
 })
