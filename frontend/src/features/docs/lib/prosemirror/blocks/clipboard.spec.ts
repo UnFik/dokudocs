@@ -7,6 +7,7 @@ import { prepareBodyTransaction } from '../prepareBodyTransaction'
 import {
   htmlToMarkdownText,
   markdownToSlice,
+  normalizePastedMarkdown,
   pasteFromClipboard,
   sanitizePastedSlice,
   sliceToMarkdown,
@@ -204,5 +205,39 @@ describe('sliceToMarkdown', () => {
     )
     expect(sliceToMarkdown(slice)).toBe('plain')
     expect(EditorState).toBeDefined()
+  })
+})
+
+describe('normalizePastedMarkdown', () => {
+  it('drops the spaces that end a list item or a paragraph, and keeps a real line break', () => {
+    const text = [
+      '1. first  ',
+      '2. last  ',
+      '',
+      'a line  ',
+      'and the next  ',
+      '',
+      '* item  ',
+      '',
+      'tail  ',
+    ].join('\r\n')
+
+    expect(normalizePastedMarkdown(text)).toBe(
+      [
+        '1. first',
+        '2. last',
+        '',
+        'a line  ',
+        'and the next',
+        '',
+        '* item',
+        '',
+        'tail',
+      ].join('\n')
+    )
+  })
+
+  it('drops the spaces that end a table row line', () => {
+    expect(normalizePastedMarkdown('| a |  \n| b |')).toBe('| a |\n| b |')
   })
 })
