@@ -44,3 +44,38 @@ export function withEmptiedParents(
   }
   return [...wanted]
 }
+
+export type CaretHint = { nodeID: string; edge: 'start' | 'end' }
+
+/**
+ * Where the caret goes once `nodeIDs` are deleted: the end of the last text block
+ * before the first deleted node, or the start of the first one after it.
+ */
+export function caretAfterDelete(
+  doc: ProseMirrorNode,
+  nodeIDs: string[]
+): CaretHint | null {
+  const deleted = new Set(nodeIDs)
+  let firstDeleted = -1
+  doc.descendants((node, pos) => {
+    const id = idOf(node)
+    if (firstDeleted < 0 && id && deleted.has(id)) firstDeleted = pos
+    return firstDeleted < 0
+  })
+  if (firstDeleted < 0) return null
+  let before: string | null = null
+  let after: string | null = null
+  const inside: [number, number][] = []
+  doc.descendants((node, pos) => {
+    const id = idOf(node)
+    if (id && deleted.has(id)) inside.push([pos, pos + node.nodeSize])
+    if (!node.isTextblock || !id) return true
+    if (inside.some(([from, to]) => pos >= from && pos < to)) return false
+    if (pos < firstDeleted) before = id
+    else if (!after) after = id
+    return false
+  })
+  if (before) return { nodeID: before, edge: 'end' }
+  if (after) return { nodeID: after, edge: 'start' }
+  return null
+}

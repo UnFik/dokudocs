@@ -41,8 +41,13 @@ import {
   type InsertableBlock,
 } from './blockCommands'
 import { decideSuggestion } from './decideSuggestion'
-import { withEmptiedParents } from './deleteTargets'
+import {
+  caretAfterDelete,
+  withEmptiedParents,
+  type CaretHint,
+} from './deleteTargets'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
+import { EditorNotice } from './editorNotice'
 import {
   emptyInlineState,
   readInlineState,
@@ -122,6 +127,8 @@ export function createDocumentBodyEditor(
     onBodyChange?: (body: DocumentBodyNode[]) => void
     onDeleteNode?: (nodeIDs: string[]) => void | Promise<void>
     onDeleteNodeQueued?: (nodeID: string) => void
+    /** Where the caret should be put once the editor is rebuilt after a delete. */
+    onCaretHint?: (hint: CaretHint) => void
     onMoveNode?: (move: MoveNodeIntent) => void | Promise<void>
     onMoveNodeQueued?: (move: MoveNodeIntent) => void
     onTransactionError?: (error: unknown) => void
@@ -453,6 +460,8 @@ export function createDocumentBodyEditor(
   const queueDeleteNode = (requested: string[]) => {
     if (!options.onDeleteNode) return false
     const nodeIDs = withEmptiedParents(state.doc, requested)
+    const hint = caretAfterDelete(state.doc, nodeIDs)
+    if (hint) options.onCaretHint?.(hint)
     structuralCommandPending = true
     viewHolder.current?.setProps({ editable: () => false })
     void Promise.resolve()
@@ -512,7 +521,7 @@ export function createDocumentBodyEditor(
       return false
     const plan = planSelectionDeletion(state.doc, selection.from, selection.to)
     if (!plan.ok) {
-      options.onTransactionError?.(new Error(plan.message))
+      options.onTransactionError?.(new EditorNotice(plan.message))
       return true
     }
     if (plan.trims.length) {
@@ -1122,6 +1131,26 @@ export function createDocumentBodyEditor(
     insertBlock: (kind: InsertableBlock) =>
       canEdit() && insertBlockCommand(kind)(state, view.dispatch),
     focus: () => view.focus(),
+    /** Puts the caret at the start or end of a text block and focuses the editor. */
+    focusBlock: (nodeID: string, edge: 'start' | 'end') => {
+      let target: { pos: number; size: number } | null = null
+      state.doc.descendants((node, pos) => {
+        if (target) return false
+        if (node.attrs.nodeID === nodeID && node.isTextblock)
+          target = { pos, size: node.nodeSize }
+        return !target
+      })
+      if (!target) return false
+      const { pos, size } = target as { pos: number; size: number }
+      const at = edge === 'start' ? pos + 1 : pos + size - 1
+      view.dispatch(
+        state.tr.setSelection(
+          TextSelection.near(state.doc.resolve(at), edge === 'start' ? 1 : -1)
+        )
+      )
+      view.focus()
+      return true
+    },
     selectAll: selectAllContent,
     undo: () => canEdit() && undoYjs(state),
     redo: () => canEdit() && redoYjs(state),
