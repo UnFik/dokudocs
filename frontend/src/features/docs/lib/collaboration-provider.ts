@@ -874,7 +874,7 @@ export class CollaborativeDocumentProvider {
     if (
       !this.options.onBodyAdvanced ||
       this.stopped ||
-      this.pending.size > 0 ||
+      this.hasOfflineEdits() ||
       this.hasPendingStructuralCommand() ||
       body.bodySchemaVersion !== this.options.bodySchemaVersion
     )
@@ -888,12 +888,15 @@ export class CollaborativeDocumentProvider {
     } catch {
       return false
     }
-    this.options.bodyEpoch = body.bodyEpoch
+    // What was typed while the command ran moves to the new epoch with it.
+    this.takeEpoch(body.bodyEpoch)
     if (body.compatEpoch !== undefined)
       this.options.compatEpoch = body.compatEpoch
     this.bodyVersion = Math.max(this.bodyVersion, body.bodyVersion)
     this.options.onBodyVersion?.(this.bodyVersion)
     this.options.onBodyAdvanced(body)
+    this.applyingCommand = false
+    this.flushPending()
     if (this.missedDuringCommand) {
       this.missedDuringCommand = false
       void this.catchUpAfterCommand()
@@ -1064,6 +1067,10 @@ export class CollaborativeDocumentProvider {
         return
       }
     }
+    // While a DeleteNode is in flight the room is about to move to a new epoch.
+    // What is typed meanwhile waits and is sent at that epoch once the command's
+    // result is merged, instead of arriving stale.
+    if (this.applyingCommand) return
     const unsent = [...this.pending.values()].filter(
       (update) => !this.sentThisConnection.has(update.updateID)
     )
