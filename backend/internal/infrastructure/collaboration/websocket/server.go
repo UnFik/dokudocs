@@ -208,12 +208,14 @@ type clientMessage struct {
 }
 
 type serverMessage struct {
-	Type              string         `json:"type"`
-	Code              string         `json:"code,omitempty"`
-	UpdateID          uuid.UUID      `json:"updateID,omitempty"`
-	PingID            uuid.UUID      `json:"pingID,omitempty"`
-	BodyVersion       int64          `json:"bodyVersion,omitempty"`
-	BodyEpoch         int64          `json:"bodyEpoch,omitempty"`
+	Type        string    `json:"type"`
+	Code        string    `json:"code,omitempty"`
+	UpdateID    uuid.UUID `json:"updateID,omitempty"`
+	PingID      uuid.UUID `json:"pingID,omitempty"`
+	BodyVersion int64     `json:"bodyVersion,omitempty"`
+	BodyEpoch   int64     `json:"bodyEpoch,omitempty"`
+	// CompatEpoch tells the client the oldest epoch it may adopt the new one from.
+	CompatEpoch       int64          `json:"compatEpoch,omitempty"`
 	BodySchemaVersion int            `json:"bodySchemaVersion,omitempty"`
 	CanEdit           *bool          `json:"canEdit,omitempty"`
 	CanSuggest        *bool          `json:"canSuggest,omitempty"`
@@ -1168,7 +1170,7 @@ func (s *Server) closeBroker() error {
 func snapshotMessage(kind string, snapshot collaboration.BodySnapshot) serverMessage {
 	canEdit, canSuggest := snapshot.CanEdit, snapshot.CanSuggest
 	return serverMessage{
-		Type: kind, BodyVersion: snapshot.BodyVersion, BodyEpoch: snapshot.BodyEpoch,
+		Type: kind, BodyVersion: snapshot.BodyVersion, BodyEpoch: snapshot.BodyEpoch, CompatEpoch: snapshot.CompatEpoch,
 		BodySchemaVersion: snapshot.BodySchemaVersion, CanEdit: &canEdit, CanSuggest: &canSuggest,
 		State: snapshot.EncodedState,
 	}
