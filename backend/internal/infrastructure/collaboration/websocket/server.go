@@ -17,6 +17,7 @@ import (
 	appauth "backend/internal/application/auth/dto"
 	"backend/internal/application/collaboration"
 	"backend/internal/domain/documentbody"
+	"backend/internal/infrastructure/collaboration/yjs"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -1190,6 +1191,15 @@ func updateErrorCode(err error) string {
 		return "suggestion_limit"
 	case errors.Is(err, collaboration.ErrConcurrentUpdate), isTransientStoreError(err):
 		return "unavailable"
+	// The next three are the sender's editor getting something wrong, not a
+	// conflict between people. The client drops the edit and reloads quietly
+	// instead of asking the person to review it.
+	case errors.Is(err, documentbody.ErrNeedsCommand):
+		return "needs_command"
+	case errors.Is(err, yjs.ErrSuggesterChange), errors.Is(err, collaboration.ErrSuggesterUpdate):
+		return "not_permitted"
+	case errors.Is(err, documentbody.ErrInvalid):
+		return "invalid_body"
 	default:
 		return "update_rejected"
 	}

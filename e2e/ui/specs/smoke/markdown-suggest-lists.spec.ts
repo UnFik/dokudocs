@@ -18,6 +18,7 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
   const itemRunID = randomUUID();
   const quoteID = randomUUID();
   const quoteParaID = randomUUID();
+  const tailParaID = randomUUID();
   const quoteRunID = randomUUID();
   const commenterEmail = `suggestion-${suffix}@example.invalid`;
   const commenterPassword = "password12345678";
@@ -156,6 +157,30 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
             content: "Quoted",
             attributes: {},
           },
+          {
+            nodeID: randomUUID(),
+            parentID: rootNodeID,
+            siblingOrder: 3,
+            type: "thematic-break",
+            content: "",
+            attributes: {},
+          },
+          {
+            nodeID: tailParaID,
+            parentID: rootNodeID,
+            siblingOrder: 4,
+            type: "paragraph",
+            content: "",
+            attributes: {},
+          },
+          {
+            nodeID: randomUUID(),
+            parentID: tailParaID,
+            siblingOrder: 1,
+            type: "run",
+            content: "Tail",
+            attributes: {},
+          },
         ],
       },
     },
@@ -217,12 +242,14 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await commenter.keyboard.type("Pears");
     await expect(ownerCards).toContainText('Add: "Pears"');
     await expect(ownerEditor.locator("li")).toHaveCount(2);
-    await expect.poll(canonicalRuns).toEqual(["Apples", "Quoted"]);
+    await expect.poll(canonicalRuns).toEqual(["Apples", "Quoted", "Tail"]);
     await ownerCards.getByRole("button", { name: "Accept" }).click();
     await expect(ownerCards).toHaveCount(0);
     await expect(ownerEditor.locator("li")).toHaveCount(2);
     await expect(commenterEditor.locator("li")).toHaveCount(2);
-    await expect.poll(canonicalRuns).toEqual(["Apples", "Pears", "Quoted"]);
+    await expect
+      .poll(canonicalRuns)
+      .toEqual(["Apples", "Pears", "Quoted", "Tail"]);
 
     // Enter in the middle of an item splits it by copying the tail; the owner rejects.
     await commenterEditor.getByText("Pears").click();
@@ -235,7 +262,9 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await ownerCards.getByRole("button", { name: "Reject" }).click();
     await expect(ownerCards).toHaveCount(0);
     await expect(ownerEditor.locator("li")).toHaveCount(2);
-    await expect.poll(canonicalRuns).toEqual(["Apples", "Pears", "Quoted"]);
+    await expect
+      .poll(canonicalRuns)
+      .toEqual(["Apples", "Pears", "Quoted", "Tail"]);
 
     // Enter inside a quote adds a paragraph to the quote; the owner rejects it.
     await commenterEditor.getByText("Quoted").click();
@@ -248,7 +277,9 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await expect(ownerCards).toHaveCount(0);
     await expect(ownerEditor.locator("blockquote p")).toHaveCount(1);
     await expect(commenterEditor.locator("blockquote p")).toHaveCount(1);
-    await expect.poll(canonicalRuns).toEqual(["Apples", "Pears", "Quoted"]);
+    await expect
+      .poll(canonicalRuns)
+      .toEqual(["Apples", "Pears", "Quoted", "Tail"]);
 
     // A block from the slash menu is a suggestion: a code block the owner accepts,
     // after the empty paragraph the commenter opened the menu in, which is rejected.
@@ -271,6 +302,22 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await expect(ownerCards).toHaveCount(0);
     await expect(commenterEditor.locator("pre")).toHaveCount(1);
     await expect(ownerEditor.locator("blockquote p")).toHaveCount(1);
+
+    // Backspace at the start of the line after a separator proposes deleting the
+    // separator; the owner accepts and it is gone for both.
+    await expect(ownerEditor.locator("hr")).toHaveCount(1);
+    await commenterEditor.getByText("Tail").click();
+    await commenter.keyboard.press("Home");
+    await commenter.keyboard.press("Backspace");
+    await expect(ownerCards).toContainText("Delete: divider");
+    await expect(ownerEditor.locator("hr")).toHaveCount(1);
+    await ownerCards.getByRole("button", { name: "Accept" }).click();
+    await expect(ownerCards).toHaveCount(0);
+    await expect(ownerEditor.locator("hr")).toHaveCount(0);
+    await expect(commenterEditor.locator("hr")).toHaveCount(0);
+    await expect
+      .poll(canonicalRuns)
+      .toEqual(["Apples", "Pears", "Quoted", "Tail"]);
 
     // A reload agrees.
     await page.reload();

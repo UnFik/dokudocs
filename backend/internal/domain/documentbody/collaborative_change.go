@@ -45,7 +45,7 @@ func ValidateCollaborativeChange(before, after Body) error {
 			changed[node.NodeID] = struct{}{}
 		}
 		if !sameParent(previous.ParentID, node.ParentID) {
-			return invalid("existing node %s changed parent without MoveNode", node.NodeID)
+			return needsCommand("existing node %s changed parent without MoveNode", node.NodeID)
 		}
 		if isOpaque(previous.Type) && (previous.Content != node.Content || previous.Version != node.Version) {
 			return invalid("opaque node %s was removed or changed", node.NodeID)
@@ -63,7 +63,7 @@ func ValidateCollaborativeChange(before, after Body) error {
 	}
 	for _, node := range before.Nodes {
 		if _, kept := present[node.NodeID]; !kept {
-			return invalid("existing node %s was deleted without DeleteNode", node.NodeID)
+			return needsCommand("existing node %s was deleted without DeleteNode", node.NodeID)
 		}
 	}
 
@@ -103,11 +103,11 @@ func ValidateCollaborativeChange(before, after Body) error {
 	for parentID := range touchedParents {
 		left, right := beforeOrder[parentID], afterOrder[parentID]
 		if len(left) != len(right) {
-			return invalid("existing siblings under node %s were reordered without MoveNode", parentID)
+			return needsCommand("existing siblings under node %s were reordered without MoveNode", parentID)
 		}
 		for i := range left {
 			if left[i].NodeID != right[i].NodeID {
-				return invalid("existing siblings under node %s were reordered without MoveNode", parentID)
+				return needsCommand("existing siblings under node %s were reordered without MoveNode", parentID)
 			}
 		}
 	}

@@ -88,6 +88,14 @@ export function RemoteMarkdownDocEditor({
   focusNodeID?: string
 }) {
   const [localStateNonce, setLocalStateNonce] = useState(0)
+  // A delete merged into the live document moves the body to a new epoch without
+  // rebuilding the editor. The editor is rebuilt for any other change of body,
+  // so what the page mounted is tracked as a generation of its own.
+  const [advanced, setAdvanced] = useState<{
+    epoch: number
+    version: number
+  } | null>(null)
+  const [mounted, setMounted] = useState({ stamp: '', generation: 0 })
   const queryClient = useQueryClient()
   const bodyQuery = useQuery({
     queryKey: ['markdown-body', workspaceID, document.id, userID, offline],
@@ -105,6 +113,21 @@ export function RemoteMarkdownDocEditor({
     },
     retry: false,
   })
+  if (bodyQuery.data) {
+    const stamp = `${bodyQuery.data.bodyEpoch}:${bodyQuery.data.bodyVersion}`
+    if (mounted.stamp !== stamp) {
+      const followsAdvance =
+        advanced !== null &&
+        bodyQuery.data.bodyEpoch === advanced.epoch &&
+        bodyQuery.data.bodyVersion >= advanced.version
+      setMounted({
+        stamp,
+        generation: followsAdvance
+          ? mounted.generation
+          : mounted.generation + 1,
+      })
+    }
+  }
   const titleMutation = useMutation({
     mutationFn: (title: string) =>
       updateDocumentMetadata(workspaceID, document.id, { title }),
@@ -227,7 +250,7 @@ export function RemoteMarkdownDocEditor({
         </p>
       ) : bodyQuery.data ? (
         <CollaborativeMarkdownBody
-          key={`${document.id}:${bodyQuery.data.bodyEpoch}:${bodyQuery.data.bodyVersion}:${localStateNonce}`}
+          key={`${document.id}:${mounted.generation}:${localStateNonce}`}
           documentID={document.id}
           workspaceID={workspaceID}
           userID={userID}
@@ -243,6 +266,13 @@ export function RemoteMarkdownDocEditor({
             // A rebase at startup lands on the body this page already loaded,
             // so the key alone would not remount onto the rebased state.
             setLocalStateNonce((value) => value + 1)
+          }}
+          onBodyAdvanced={(body) => {
+            queryClient.setQueryData(
+              ['markdown-body', workspaceID, document.id, userID, offline],
+              body
+            )
+            setAdvanced({ epoch: body.bodyEpoch, version: body.bodyVersion })
           }}
           onMarkdownChange={setMarkdownOverride}
           onPresence={setPresence}
@@ -308,6 +338,7 @@ function CollaborativeMarkdownBody({
   snapshot,
   focusNodeID,
   onCanonicalBody,
+  onBodyAdvanced,
   onLocalStateChanged,
   onMarkdownChange,
   onPresence,
@@ -320,6 +351,7 @@ function CollaborativeMarkdownBody({
   snapshot: Awaited<ReturnType<typeof getMarkdownBody>>
   focusNodeID?: string
   onCanonicalBody: (body: Awaited<ReturnType<typeof getMarkdownBody>>) => void
+  onBodyAdvanced: (body: Awaited<ReturnType<typeof getMarkdownBody>>) => void
   onLocalStateChanged: () => void
   onMarkdownChange: (markdown: string) => void
   onPresence: (users: PresenceUser[]) => void
@@ -549,6 +581,9 @@ function CollaborativeMarkdownBody({
         setError(`Local changes need review (${reason}).`)
       },
       onCanonicalBody,
+      onBodyAdvanced,
+      // eslint-disable-next-line no-console
+      onEditDropped: (code) => console.warn('edit dropped by the server', code),
       onHeldEdits: () => setHasHeldEdits(true),
       onBodyChange: (nodes: DocumentBodyNode[]) => {
         try {
