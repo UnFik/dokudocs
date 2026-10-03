@@ -286,3 +286,171 @@ test("@live @smoke @deletegestures: deleting text across blocks keeps the rest a
     await expect(editor).not.toContainText("drop");
   });
 });
+
+const threeParagraphs: Block[] = [
+  { kind: "paragraph", text: "Alpha" },
+  { kind: "paragraph", text: "Beta" },
+  { kind: "paragraph", text: "Gamma" },
+];
+
+test("@live @smoke @deletegestures: triple-click a line then Backspace removes the line", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, threeParagraphs);
+  await diagnose(async () => {
+    await editor
+      .locator("p")
+      .filter({ hasText: "Beta" })
+      .click({ clickCount: 3 });
+    await page.keyboard.press("Backspace");
+    await expect(editor).not.toContainText("Beta");
+    await expect(editor).toContainText("Alpha");
+    await expect(editor).toContainText("Gamma");
+    await expectNoReviewBanner(page);
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expect(editor).not.toContainText("Beta");
+    await expect(editor).toContainText("Gamma");
+  });
+});
+
+test("@live @smoke @deletegestures: emptying a line and pressing Backspace again removes the empty line", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, threeParagraphs);
+  await diagnose(async () => {
+    await editor.locator("p").filter({ hasText: "Beta" }).click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Shift+Home");
+    await expect
+      .poll(() => page.evaluate(() => window.getSelection()?.toString()))
+      .toBe("Beta");
+    await page.keyboard.press("Backspace");
+    // The run goes through DeleteNode, which locks the editor until it returns.
+    await expect(editor).toBeVisible();
+    await expect(editor).not.toContainText("Beta");
+    await expect(editor.locator("p")).toHaveCount(3);
+    await editor.locator("p").nth(1).click();
+    await page.keyboard.press("Backspace");
+    await expect(editor.locator("p")).toHaveCount(2);
+    await expectNoReviewBanner(page);
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expect(editor.locator("p")).toHaveCount(2);
+    await expect(editor).toContainText("Gamma");
+  });
+});
+
+test("@live @smoke @deletegestures: Ctrl+A Delete then Ctrl+Z does not break the document", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, threeParagraphs);
+  await diagnose(async () => {
+    await editor.locator("p").filter({ hasText: "Beta" }).click();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("Delete");
+    await expect(editor).not.toContainText("Beta");
+    await expectNoReviewBanner(page);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expectNoReviewBanner(page);
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expectNoReviewBanner(page);
+  });
+});
+
+test("@live @smoke @deletegestures: Backspace at the start of a line joins it with the line above", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, threeParagraphs);
+  await diagnose(async () => {
+    await editor.locator("p").filter({ hasText: "Beta" }).click();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Backspace");
+    await expect(editor.locator("p")).toHaveCount(2);
+    await expect(editor.locator("p").first()).toHaveText("AlphaBeta");
+    await expectNoReviewBanner(page);
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expect(editor.locator("p")).toHaveCount(2);
+    await expect(editor.locator("p").first()).toHaveText("AlphaBeta");
+    await expect(editor).toContainText("Gamma");
+  });
+});
+
+test("@live @smoke @deletegestures: Delete at the end of a line joins it with the line below", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, threeParagraphs);
+  await diagnose(async () => {
+    await editor.locator("p").filter({ hasText: "Alpha" }).click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Delete");
+    await expect(editor.locator("p")).toHaveCount(2);
+    await expect(editor.locator("p").first()).toHaveText("AlphaBeta");
+    await expectNoReviewBanner(page);
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expect(editor.locator("p").first()).toHaveText("AlphaBeta");
+  });
+});
+
+test("@live @smoke @deletegestures: typing, Ctrl+A Delete, then Ctrl+Z twice leaves the document usable", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, threeParagraphs);
+  await diagnose(async () => {
+    await editor.locator("p").filter({ hasText: "Gamma" }).click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" typed");
+    await expect(editor).toContainText("Gamma typed");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("Delete");
+    await expect(editor).not.toContainText("Alpha");
+    await expectNoReviewBanner(page);
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await page.keyboard.press("ControlOrMeta+z");
+    await page.keyboard.press("ControlOrMeta+z");
+    await expectNoReviewBanner(page);
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expectNoReviewBanner(page);
+  });
+});
+
+test("@live @smoke @deletegestures: Ctrl+Z after joining two lines does not break the document", async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, threeParagraphs);
+  await diagnose(async () => {
+    await editor.locator("p").filter({ hasText: "Beta" }).click();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Backspace");
+    await expect(editor.locator("p")).toHaveCount(2);
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expect(editor).toBeVisible();
+    await editor.locator("p").first().click();
+    await page.keyboard.press("ControlOrMeta+z");
+    await expectNoReviewBanner(page);
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expectNoReviewBanner(page);
+  });
+});
