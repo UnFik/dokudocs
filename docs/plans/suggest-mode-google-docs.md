@@ -136,3 +136,26 @@ Comments are not in the live editor today, and the old store lives in the browse
 ## Out of scope
 
 Email notifications, in-app notifications, offline suggestions, table column suggestions.
+
+
+## Remaining work: decisions
+
+Settled in a grilling round after P7's server API. Order: P7 frontend, then the epoch fix, then P6 rest, then P5 rest. Slash-menu blocks (image, table, code) leave this plan and become their own issue, because they need asset upload and validation of an inserted block before accept.
+
+### P7 frontend (comments in the live editor)
+- Start a comment from a non-empty selection with a Comment button in the format toolbar and a shortcut. It opens an input card at the top of the rail, focused. Allowed in Edit, Suggest, and View for a user with comment or edit access; a viewer without it does not see the button.
+- The rail is one list in document order, suggestions and comments together; orphaned threads last, labelled. Resolved threads and suggestions hide behind one "Show resolved" control. No filter by kind.
+- Commented text gets one neutral highlight (`--signal` tint, dashed underline), never an author color. Resolved threads are not highlighted. Clicking the text focuses its card and the other way round, as for suggestions.
+- Only create, reply, resolve, and reopen. Edit and delete of comments become an issue. Browser-only comments from the old `comment-store` stay where they are and do not migrate.
+- Other people see changes at once: a new websocket frame (`comments_changed`, no payload beyond the document) is sent to the room after a comment write, and clients refetch. It must work across instances through the existing broker. Refetch also on window focus.
+- Accepting a split or join leaves comments on the copied text orphaned (see CommentAnchor).
+
+### Epoch fix (#87)
+Follows ADR 0028, for every user and not only commenters. `restore` keeps the old path.
+
+### P6 rest
+- Links as Format suggestions on a non-empty selection, `http`, `https`, and `mailto` only, through `normalizeLinkTarget`; card `Format: link "text"`.
+- Block types: paragraph to heading, heading level 1 to 6, and back, as a node suggestion of kind `format` with `toType` and `toAttributes`; the block is highlighted with its new type, and Preview accepted shows it. List type changes wait for the list work below.
+
+### P5 rest
+- Quote paragraphs behave like document paragraphs. In lists only Enter at the end of an item (an inserted item) and Backspace joining paragraphs inside one item. Splitting in the middle of an item, leaving a list with Enter on an empty item, nested lists, and tables stay refused with a message. Paste in the middle of a paragraph stays refused.
