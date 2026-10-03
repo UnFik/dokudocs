@@ -184,6 +184,43 @@ const documentSuggestionSchema = z.object({
     .nullish()
     .transform((v) => v ?? []),
 })
+// Where a comment sits: the block and two Yjs relative positions, as base64.
+const commentAnchorSchema = z.object({
+  nodeID: z.string().min(1),
+  start: z.string().min(1),
+  end: z.string().min(1),
+})
+const commentReplySchema = z.object({
+  id: z.guid(),
+  threadId: z.guid(),
+  authorId: z.guid(),
+  authorName: z.string().optional().default(''),
+  content: z.string(),
+  createdAt: z.string(),
+})
+const commentThreadSchema = z.object({
+  id: z.guid(),
+  documentId: z.guid(),
+  authorId: z.guid(),
+  authorName: z.string().optional().default(''),
+  selectedText: z.string().optional().default(''),
+  content: z.string(),
+  // Threads made before anchors existed have none; a malformed one is none too.
+  anchor: z
+    .unknown()
+    .optional()
+    .transform((value) => {
+      const parsed = commentAnchorSchema.safeParse(value)
+      return parsed.success ? parsed.data : null
+    }),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable().optional(),
+  resolvedBy: z.guid().nullable().optional(),
+  replies: z
+    .array(commentReplySchema)
+    .nullish()
+    .transform((v) => v ?? []),
+})
 const shareTokenSchema = z.object({ shareToken: z.string().min(1) })
 const ragCitationSchema = z.object({
   chunkId: z.string().uuid().optional(),
@@ -304,6 +341,9 @@ export type MoveMarkdownNodeInput = {
 export type MoveMarkdownNodeResult = z.infer<typeof moveNodeResultSchema>
 export type DocumentSuggestion = z.infer<typeof documentSuggestionSchema>
 export type SuggestionReply = z.infer<typeof suggestionReplySchema>
+export type CommentAnchor = z.infer<typeof commentAnchorSchema>
+export type CommentReply = z.infer<typeof commentReplySchema>
+export type CommentThread = z.infer<typeof commentThreadSchema>
 export type RAGCitation = z.infer<typeof ragCitationSchema>
 export type RAGConversation = z.infer<typeof ragConversationSchema>
 export type RAGMessage = z.infer<typeof ragMessageSchema>
@@ -588,6 +628,69 @@ export async function setDocumentSuggestionResolved(
 ): Promise<void> {
   await apiFetch<void>(
     `/api/v1/documents/${documentId}/suggestions/${suggestionId}/${resolved ? 'resolve' : 'reopen'}`,
+    { method: 'POST', headers: workspaceHeaders(workspaceId) }
+  )
+}
+
+export const maxCommentLength = 2000
+export const maxCommentSelection = 500
+
+export async function listDocumentComments(
+  workspaceId: string,
+  documentId: string,
+  signal?: AbortSignal
+): Promise<CommentThread[]> {
+  return z.array(commentThreadSchema).parse(
+    await apiFetch<unknown>(`/api/v1/documents/${documentId}/comments`, {
+      headers: workspaceHeaders(workspaceId),
+      signal,
+    })
+  )
+}
+
+/** Starts a thread. The id is the client's, so sending it again changes nothing. */
+export async function createDocumentComment(
+  workspaceId: string,
+  documentId: string,
+  input: {
+    threadID: string
+    selectedText: string
+    content: string
+    anchor?: CommentAnchor
+  }
+): Promise<void> {
+  await apiFetch<void>(`/api/v1/documents/${documentId}/comments`, {
+    method: 'POST',
+    headers: workspaceHeaders(workspaceId),
+    body: JSON.stringify(input),
+  })
+}
+
+export async function replyToDocumentComment(
+  workspaceId: string,
+  documentId: string,
+  threadId: string,
+  input: { replyID: string; content: string }
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/comments/${threadId}/replies`,
+    {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceId),
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+/** Closes a thread, or reopens it. A reply also reopens it. */
+export async function setDocumentCommentResolved(
+  workspaceId: string,
+  documentId: string,
+  threadId: string,
+  resolved: boolean
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/comments/${threadId}/${resolved ? 'resolve' : 'reopen'}`,
     { method: 'POST', headers: workspaceHeaders(workspaceId) }
   )
 }

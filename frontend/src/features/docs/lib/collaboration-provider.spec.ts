@@ -2415,3 +2415,47 @@ describe('CollaborativeDocumentProvider access loss and session expiry', () => {
     provider.stop()
   })
 })
+
+describe('CollaborativeDocumentProvider comments hint', () => {
+  it('tells the caller when the server says comments changed', async () => {
+    const document = new Y.Doc()
+    const socket = new FakeSocket()
+    let hints = 0
+    const provider = new CollaborativeDocumentProvider({
+      documentID: 'document-1',
+      workspaceID: 'workspace-1',
+      userID: 'user-1',
+      token: 'jwt-token',
+      document,
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      store: new MemoryStore(),
+      socketFactory: () => socket,
+      onCommentsChanged: () => {
+        hints++
+      },
+    })
+
+    try {
+      await provider.start()
+      socket.open()
+      socket.receive({
+        type: 'ready',
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: base64(Y.encodeStateAsUpdate(document)),
+      })
+      await flushPromises()
+
+      socket.receive({ type: 'comments_changed' })
+      socket.receive({ type: 'comments_changed' })
+
+      expect(hints).toBe(2)
+    } finally {
+      provider.stop()
+    }
+  })
+})

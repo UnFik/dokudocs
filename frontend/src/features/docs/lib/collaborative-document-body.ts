@@ -78,6 +78,7 @@ export async function mountCollaborativeDocumentBody(
     onSuggestRefused?: (message: string) => void
     onSuggestionCards?: (cards: SuggestionCard[]) => void
     onSuggestionClick?: (id: string) => void
+    onCommentsChanged?: () => void
   }
 ) {
   const document = new Y.Doc()
@@ -137,6 +138,7 @@ export async function mountCollaborativeDocumentBody(
       onRecovery: input.onRecovery,
       onPresence: input.onPresence,
       onRemoteCursors: (cursors) => showRemoteCursors(cursors),
+      onCommentsChanged: input.onCommentsChanged,
       onCanonicalBody: input.onCanonicalBody,
       onHeldEdits: input.onHeldEdits,
       onCanEdit: (canEdit) => {
