@@ -1321,6 +1321,20 @@ func (p *peer) fanoutNeedsFullSnapshot(receipt collaboration.CommitReceipt, sche
 	return receipt.BodyVersion <= p.bodyVersion && receipt.Changed && receipt.BodyVersion == p.bodyVersion
 }
 
+// Nudge checks a room now instead of on the next tick. A structural command
+// raises the body epoch without a websocket update, so without this the room's
+// peers keep the old epoch for up to resyncEvery and any edit they make in that
+// time is rejected as stale.
+func (s *Server) Nudge(documentID, workspaceID uuid.UUID) {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		s.checkRoom(ctx, documentID, workspaceID)
+	}()
+}
+
 // pollRoom replaces per-peer polling: one cheap room read per tick covers
 // access revocation and missed fan-out for everyone in the document.
 func (s *Server) pollRoom(ctx context.Context, documentID, workspaceID uuid.UUID) {
