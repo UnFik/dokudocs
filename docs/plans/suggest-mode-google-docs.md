@@ -117,6 +117,8 @@ Comments are not in the live editor today, and the old store lives in the browse
 - Server API over the existing `comment_threads` and `comment_replies` tables; anchors to a block or range; the rail shows comments and suggestions together; Resolve for both.
 - Can be dropped from this plan without blocking P1 to P6.
 
+**Status: server API done, editor and rail not.** `GET /documents/{id}/comments`, `POST /documents/{id}/comments` (thread id from the client, so a retry is a no-op), `POST .../comments/{threadID}/replies`, `.../resolve`, `.../reopen`, over `comment_threads` and `comment_replies`. `comment_threads.anchor` (new, JSONB) holds the Yjs relative-position anchor the editor already builds. Readers can read; commenters and editors can start threads, reply, and resolve; a reply reopens a resolved thread. Not done: creating a comment from a selection in the live editor, showing threads in the rail beside suggestions, and keeping an anchor on text that a split or join copies.
+
 ## Risks
 
 - **The write rule is the security boundary.** A comment-only user writes into the shared body. It is P2's whole job, and P3 does not start until its adversarial tests pass.
