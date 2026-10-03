@@ -53,11 +53,26 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
       { headers: ownerHeaders },
     );
     const data = (await response.json()) as {
-      data: { nodes: { type: string; content: string }[] };
+      data: {
+        nodes: {
+          nodeID: string;
+          parentID: string | null;
+          siblingOrder: number;
+          type: string;
+          content: string;
+        }[];
+      };
     };
-    return data.data.nodes
-      .filter((node) => node.type === "run")
-      .map((node) => node.content);
+    // The API does not promise a row order, so walk the tree in document order.
+    const nodes = data.data.nodes;
+    const walk = (parentID: string | null): string[] =>
+      nodes
+        .filter((node) => node.parentID === parentID)
+        .sort((a, b) => a.siblingOrder - b.siblingOrder)
+        .flatMap((node) =>
+          node.type === "run" ? [node.content] : walk(node.nodeID),
+        );
+    return walk(null);
   };
   const createResponse = await page.request.post(`${apiURL}/api/v1/documents`, {
     headers: { ...ownerHeaders, "Idempotency-Key": randomUUID() },
@@ -244,10 +259,10 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
       .poll(canonicalRuns)
       .toEqual(["Original", " phrase", "Second line"]);
 
-    // Two structural accepts in a row raise the body epoch twice, and the server
-    // tells other peers on its 5 s tick. An edit before that is rebased onto the
-    // canonical body and closes the editor (issue #87), so wait for the tick.
-    await commenter.waitForTimeout(6000);
+    // The server wakes the room right after a structural accept; the commenter
+    // reloads onto the new epoch a moment later. Selecting during that reload
+    // would lose part of the selection, which no person does within 100 ms.
+    await commenter.waitForTimeout(1000);
 
     // Bold on a selection is a Format suggestion: the text keeps its look until
     // the owner accepts, and the preview shows the result.
