@@ -2655,4 +2655,72 @@ describe('CollaborativeDocumentProvider compatible epochs', () => {
       provider.stop()
     }
   })
+
+  describe('edits saved under an older epoch before a reload', () => {
+    async function reloadedProvider(access: {
+      canEdit: boolean
+      canSuggest: boolean
+    }) {
+      const typed = new Y.Doc()
+      typed.getText('body').insert(0, 'typed offline')
+      const store = new MemoryStore()
+      store.snapshot = {
+        bodyVersion: 1,
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        encodedState: Y.encodeStateAsUpdate(new Y.Doc()),
+      }
+      store.updates.set('offline', {
+        updateID: 'offline',
+        bodyEpoch: 1,
+        bodySchemaVersion: 1,
+        update: Y.encodeStateAsUpdate(typed),
+      })
+      const socket = new FakeSocket()
+      const statuses: string[] = []
+      const provider = new CollaborativeDocumentProvider({
+        documentID: 'document-1',
+        workspaceID: 'workspace-1',
+        userID: 'user-1',
+        token: 'jwt-token',
+        document: new Y.Doc(),
+        bodyVersion: 2,
+        bodyEpoch: 2,
+        compatEpoch: 1,
+        bodySchemaVersion: 1,
+        ...access,
+        store,
+        socketFactory: () => socket,
+        batchIntervalMs: 0,
+        onStatus: (status) => statuses.push(status),
+      })
+      await provider.start()
+      return { store, socket, statuses, provider }
+    }
+
+    it('takes the current epoch for someone who can only suggest', async () => {
+      const { store, statuses, provider } = await reloadedProvider({
+        canEdit: false,
+        canSuggest: true,
+      })
+      try {
+        expect(statuses).not.toContain('recovery-required')
+        expect(store.updates.get('offline')?.bodyEpoch).toBe(2)
+      } finally {
+        provider.stop()
+      }
+    })
+
+    it('keeps the review path for an editor', async () => {
+      const { statuses, provider } = await reloadedProvider({
+        canEdit: true,
+        canSuggest: false,
+      })
+      try {
+        expect(statuses).toContain('recovery-required')
+      } finally {
+        provider.stop()
+      }
+    })
+  })
 })
