@@ -36,7 +36,6 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) func
 	publicBodyReader := appcollab.NewPublicBodyReadUseCase(bodyRepository)
 	bodyMover := appcollab.NewMoveNodeUseCase(bodyRepository)
 	bodyDeleter := appcollab.NewDeleteNodeUseCase(bodyRepository)
-	bodyHandler := dochandler.NewBodyHandler(bodyInitialization, bodyReader, bodyMover, bodyDeleter)
 	suggestionService := appdoc.NewSuggestionUseCase(bodyRepository)
 	suggestionHandler := dochandler.NewSuggestionHandler(suggestionService)
 	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel))
@@ -47,6 +46,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) func
 	if c.CollaborationPresence != nil {
 		collaborationServer.WithPresenceStore(c.CollaborationPresence)
 	}
+	bodyHandler := dochandler.NewBodyHandler(bodyInitialization, bodyReader, bodyMover, bodyDeleter).WithRoomNotifier(collaborationServer)
 
 	// Public Shared Documents (No auth required)
 	f.Get("/public/documents/{shareToken}", docHandler.GetPublic)

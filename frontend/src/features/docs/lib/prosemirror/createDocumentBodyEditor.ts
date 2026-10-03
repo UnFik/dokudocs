@@ -66,6 +66,13 @@ import {
   trackTransaction,
   UnsupportedSuggestionError,
 } from './trackChanges'
+import { suggestFormat } from './trackFormat'
+import {
+  joinTarget,
+  suggestEnter,
+  suggestJoin,
+  suggestPasteLines,
+} from './trackStructure'
 
 // Marks a transaction the Suggest mode engine built, so it is applied as is.
 const trackedMeta = 'trackedSuggestion'
@@ -190,7 +197,13 @@ export function createDocumentBodyEditor(
       ...(options.plugins ?? []),
       inputRules({ rules: [headingInputRule] }),
       keymap({
-        Enter: () => runBlock(splitTextBlock),
+        Enter: (_state, _dispatch, editorView) => {
+          if (!suggestMode) return runBlock(splitTextBlock)
+          if (!canEdit() || !editorView) return false
+          const current = stateAtDomSelection(editorView)
+          suggest(() => suggestEnter(current, suggestionOptions()))
+          return true
+        },
         'Ctrl-Enter': () => runBlock(toggleTaskChecked),
         'Meta-Enter': () => runBlock(toggleTaskChecked),
         'Ctrl-Alt-c': () => runBlock(insertBlockCommand('code-block')),
@@ -208,10 +221,10 @@ export function createDocumentBodyEditor(
       }),
       keymap(
         bindControlAndMeta({
-          b: () => runInline(toggleInlineMark('strong')),
-          i: () => runInline(toggleInlineMark('em')),
-          e: () => runInline(toggleInlineMark('code')),
-          'Shift-x': () => runInline(toggleInlineMark('strike')),
+          b: () => runInlineMark('strong'),
+          i: () => runInlineMark('em'),
+          e: () => runInlineMark('code'),
+          'Shift-x': () => runInlineMark('strike'),
           k: () => {
             if (!canEdit()) return true
             options.onLinkRequest?.()
@@ -250,6 +263,18 @@ export function createDocumentBodyEditor(
   const runHistory = (action: (state: EditorState) => boolean) => {
     continueSuggestion = false
     if (canEdit()) action(state)
+    return true
+  }
+  // In Suggest mode a format on a selection is proposed, not applied. With a
+  // caret there is nothing to propose: what is typed next is your own insertion.
+  const runInlineMark = (name: InlineMarkName) => {
+    if (!suggestMode || !canEdit() || state.selection.empty)
+      return runInline(toggleInlineMark(name))
+    const view = viewHolder.current
+    if (view)
+      suggest(() =>
+        suggestFormat(stateAtDomSelection(view), name, suggestionOptions())
+      )
     return true
   }
   const runInline = (command: Command) => {
@@ -398,6 +423,13 @@ export function createDocumentBodyEditor(
     } catch {
       return current
     }
+  }
+  /** The editor state with the selection the browser has now, not the one the editor last heard of. */
+  const stateAtDomSelection = (editorView: EditorView) => {
+    const selection = selectionNow(editorView)
+    return selection === editorView.state.selection
+      ? editorView.state
+      : editorView.state.apply(editorView.state.tr.setSelection(selection))
   }
 
   // Delete with a selection that is not inside one textblock (select all, a
@@ -586,17 +618,19 @@ export function createDocumentBodyEditor(
       suggest(() => suggestReplace(state, from, to, text, suggestionOptions()))
       return true
     },
-    handlePaste: (_view, event) => {
+    handlePaste: (editorView, event) => {
       if (!suggestMode) return false
       const text = event.clipboardData?.getData('text/plain') ?? ''
-      if (!text || /[\r\n]/.test(text)) {
-        options.onSuggestRefused?.(
-          'Pasting several paragraphs as a suggestion is not available yet.'
-        )
+      if (!text) return true
+      const current = stateAtDomSelection(editorView)
+      const { from, to } = current.selection
+      if (/[\r\n]/.test(text)) {
+        suggest(() => suggestPasteLines(current, text, suggestionOptions()))
         return true
       }
-      const { from, to } = state.selection
-      suggest(() => suggestReplace(state, from, to, text, suggestionOptions()))
+      suggest(() =>
+        suggestReplace(current, from, to, text, suggestionOptions())
+      )
       return true
     },
     handleDOMEvents: {
@@ -644,6 +678,16 @@ export function createDocumentBodyEditor(
           event.metaKey
         )
           return false
+        const forward = event.key === 'Delete'
+        if (!event.ctrlKey && !event.altKey) {
+          const current = stateAtDomSelection(editorView)
+          const upper = joinTarget(current, forward)
+          if (upper !== null) {
+            suggest(() => suggestJoin(current, upper, suggestionOptions()))
+            event.preventDefault()
+            return true
+          }
+        }
         suggest(() =>
           suggestDeleteKey(
             state,
@@ -790,8 +834,14 @@ export function createDocumentBodyEditor(
     },
     getHistory: readHistory,
     getInlineState: () => readInlineState(view),
-    toggleMark: (name: InlineMarkName) =>
-      canEdit() && toggleInlineMark(name)(state, view.dispatch),
+    toggleMark: (name: InlineMarkName) => {
+      if (!canEdit()) return false
+      if (suggestMode && !state.selection.empty) {
+        runInlineMark(name)
+        return true
+      }
+      return toggleInlineMark(name)(state, view.dispatch)
+    },
     setLink: (href: string) =>
       canEdit() && setLinkCommand(href)(state, view.dispatch),
     removeLink: () => canEdit() && removeLinkCommand(state, view.dispatch),
@@ -855,8 +905,12 @@ export function createDocumentBodyEditor(
       }
     },
     setReadOnly: (next: boolean) => {
+      const changed = readOnly !== next
       readOnly = next
-      view.setProps({ editable: () => !readOnly && !structuralCommandPending })
+      if (changed)
+        view.setProps({
+          editable: () => !readOnly && !structuralCommandPending,
+        })
       if (!next) ensureEmptyParagraph()
     },
     destroy: () => {
