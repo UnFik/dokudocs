@@ -233,13 +233,27 @@ export function decideSuggestion(
     if (operation.kind === 'clear')
       tr.removeMark(operation.start, operation.end, operation.mark)
     else if (operation.kind === 'applyFormat') {
-      const set = (operation.mark.attrs.set ?? {}) as Record<string, boolean>
+      const set = (operation.mark.attrs.set ?? {}) as Record<
+        string,
+        boolean | string
+      >
       for (const [mark, key] of Object.entries(formatKeys)) {
         const type = documentBodySchema.marks[mark]!
         if (set[key] === true)
           tr.addMark(operation.start, operation.end, type.create())
         else if (set[key] === false)
           tr.removeMark(operation.start, operation.end, type)
+      }
+      // A link is an address; an empty one takes the link off.
+      if (typeof set.href === 'string') {
+        const link = documentBodySchema.marks.link!
+        tr.removeMark(operation.start, operation.end, link)
+        if (set.href)
+          tr.addMark(
+            operation.start,
+            operation.end,
+            link.create({ href: set.href })
+          )
       }
       tr.removeMark(operation.start, operation.end, operation.mark)
     } else if (operation.kind === 'clearBlock')

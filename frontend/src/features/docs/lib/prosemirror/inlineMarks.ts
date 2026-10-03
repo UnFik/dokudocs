@@ -78,7 +78,7 @@ function canMark(state: EditorState, type: MarkType) {
   return allowed && state.doc.resolve(from).parent.type.allowsMarkType(type)
 }
 
-function linkRange(state: EditorState) {
+export function linkRange(state: EditorState) {
   const linkType = documentBodySchema.marks.link!
   const { from, to, empty, $from } = state.selection
   if (!empty)

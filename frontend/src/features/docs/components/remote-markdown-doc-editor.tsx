@@ -778,7 +778,7 @@ function CollaborativeMarkdownBody({
         >
           <div ref={mountRef} />
         </div>
-        {mode === 'edit' && canEdit ? (
+        {(mode === 'edit' && canEdit) || mode === 'suggest' ? (
           <SelectionToolbar
             inline={inline}
             linkRequest={linkRequest}
