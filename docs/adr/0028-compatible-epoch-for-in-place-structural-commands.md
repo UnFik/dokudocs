@@ -1,3 +1,7 @@
+---
+status: accepted
+---
+
 # A structural command in place keeps older updates mergeable
 
 DeleteNode and MoveNode edit the stored Yjs state in place, so its history continues, yet each still starts a new BodyEpoch, and the server rejects an update from the old epoch as `stale_epoch`. A collaborator who types before the room's next check then loses their unsent suggestions to the canonical rebase. We keep the epoch bump (restore and other rebuilds need it) and add a CompatibleEpoch: the server stores the oldest epoch whose history still continues, accepts an update whose epoch lies between it and the current one, and sends `compatEpoch` with `ready` and `resync` so the client can adopt the new epoch, merge the state, and resend what is pending, without a rebase. Restore moves the CompatibleEpoch up to the new epoch, so older updates still go to review.

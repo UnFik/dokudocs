@@ -456,6 +456,43 @@ export class CollaborativeDocumentProvider {
     }
   }
 
+  /**
+   * The server raised the body epoch but kept the history (ADR 0028): this
+   * client's epoch is still compatible, so it takes the new one and keeps what
+   * it has not sent yet, instead of treating it as a conflict. A pending
+   * structural command is bound to its epoch and still needs the old path.
+   */
+  private adoptCompatibleEpoch(
+    frame: Pick<
+      Parameters<CollaborationSocketOptions['onFrame']>[0],
+      'bodyEpoch' | 'compatEpoch' | 'bodySchemaVersion'
+    >
+  ) {
+    if (
+      frame.bodyEpoch === undefined ||
+      frame.compatEpoch === undefined ||
+      frame.bodyEpoch <= this.options.bodyEpoch ||
+      this.options.bodyEpoch < frame.compatEpoch ||
+      frame.bodySchemaVersion !== this.options.bodySchemaVersion ||
+      this.hasPendingStructuralCommand()
+    )
+      return false
+    this.takeEpoch(frame.bodyEpoch)
+    return true
+  }
+
+  private takeEpoch(epoch: number) {
+    this.options.bodyEpoch = epoch
+    const restamped = [...this.pending.values()]
+    for (const update of restamped) update.bodyEpoch = epoch
+    if (!restamped.length) return
+    const snapshot = this.snapshot()
+    void this.enqueueStorage(async () => {
+      for (const update of restamped)
+        await this.store.saveUpdate(this.scope, snapshot, update)
+    })
+  }
+
   private async initialize(
     frame: Parameters<CollaborationSocketOptions['onFrame']>[0]
   ) {
@@ -469,6 +506,7 @@ export class CollaborativeDocumentProvider {
       this.requireRecovery('update-rejected')
       return
     }
+    this.adoptCompatibleEpoch(frame)
     if (frame.bodyEpoch !== this.options.bodyEpoch) {
       if (
         frame.bodyEpoch > this.options.bodyEpoch &&
@@ -563,6 +601,7 @@ export class CollaborativeDocumentProvider {
   private async applyResync(
     frame: Parameters<CollaborationSocketOptions['onFrame']>[0]
   ) {
+    this.adoptCompatibleEpoch(frame)
     if (!this.isCurrentGeneration(frame) || !frame.state) {
       if (
         frame.bodyEpoch !== undefined &&
@@ -626,6 +665,19 @@ export class CollaborativeDocumentProvider {
   private async acknowledge(
     frame: Parameters<CollaborationSocketOptions['onFrame']>[0]
   ) {
+    // The server accepted an update made on an older epoch and says which epoch
+    // it now belongs to. It only does so when the history continues.
+    if (
+      frame.updateID &&
+      frame.bodyEpoch !== undefined &&
+      frame.bodyEpoch > this.options.bodyEpoch &&
+      frame.bodySchemaVersion === this.options.bodySchemaVersion &&
+      (this.batches.get(frame.updateID) ?? [frame.updateID]).some((updateID) =>
+        this.pending.has(updateID)
+      ) &&
+      !this.hasPendingStructuralCommand()
+    )
+      this.takeEpoch(frame.bodyEpoch)
     if (
       !frame.updateID ||
       frame.bodyEpoch !== this.options.bodyEpoch ||

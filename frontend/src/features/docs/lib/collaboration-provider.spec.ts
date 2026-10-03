@@ -2459,3 +2459,123 @@ describe('CollaborativeDocumentProvider comments hint', () => {
     }
   })
 })
+
+describe('CollaborativeDocumentProvider compatible epochs', () => {
+  const sentUpdates = (socket: FakeSocket) =>
+    socket.sent
+      .map(
+        (message) =>
+          JSON.parse(message) as {
+            type: string
+            bodyEpoch: number
+            updateID: string
+          }
+      )
+      .filter((message) => message.type === 'update')
+
+  async function readyProvider() {
+    const document = new Y.Doc()
+    const socket = new FakeSocket()
+    const statuses: string[] = []
+    const provider = new CollaborativeDocumentProvider({
+      documentID: 'document-1',
+      workspaceID: 'workspace-1',
+      userID: 'user-1',
+      token: 'jwt-token',
+      document,
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      store: new MemoryStore(),
+      socketFactory: () => socket,
+      batchIntervalMs: 0,
+      onStatus: (status) => statuses.push(status),
+    })
+    await provider.start()
+    socket.open()
+    socket.receive({
+      type: 'ready',
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      compatEpoch: 1,
+      bodySchemaVersion: 1,
+      canEdit: true,
+      state: base64(Y.encodeStateAsUpdate(document)),
+    })
+    await flushPromises()
+    return { document, socket, statuses, provider }
+  }
+
+  it('takes the new epoch from the ack of an update the server accepted from the old one', async () => {
+    const { document, socket, statuses, provider } = await readyProvider()
+    try {
+      document.getText('body').insert(0, 'typed before the delete')
+      await flushPromises()
+      const [first] = sentUpdates(socket)
+      expect(first?.bodyEpoch).toBe(1)
+
+      socket.receive({
+        type: 'ack',
+        updateID: first!.updateID,
+        bodyVersion: 2,
+        bodyEpoch: 2,
+        bodySchemaVersion: 1,
+      })
+      await flushPromises()
+      expect(statuses).not.toContain('recovery-required')
+
+      document.getText('body').insert(0, 'and after ')
+      await flushPromises()
+      expect(sentUpdates(socket).at(-1)?.bodyEpoch).toBe(2)
+    } finally {
+      provider.stop()
+    }
+  })
+
+  it('adopts a resync whose history is compatible, and sends later edits on the new epoch', async () => {
+    const { document, socket, statuses, provider } = await readyProvider()
+    try {
+      socket.receive({
+        type: 'resync',
+        bodyVersion: 2,
+        bodyEpoch: 2,
+        compatEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: base64(Y.encodeStateAsUpdate(document)),
+      })
+      await flushPromises()
+      expect(statuses).not.toContain('recovery-required')
+
+      document.getText('body').insert(0, 'after the resync')
+      await flushPromises()
+      expect(sentUpdates(socket).at(-1)?.bodyEpoch).toBe(2)
+    } finally {
+      provider.stop()
+    }
+  })
+
+  it('does not adopt a resync whose history starts over', async () => {
+    const { document, socket, provider } = await readyProvider()
+    try {
+      document.getText('body').insert(0, 'unsent edit')
+      socket.receive({
+        type: 'resync',
+        bodyVersion: 2,
+        bodyEpoch: 2,
+        compatEpoch: 2,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: base64(Y.encodeStateAsUpdate(new Y.Doc())),
+      })
+      await flushPromises()
+
+      // The old path: the edit is not sent as if the history continued.
+      expect(
+        sentUpdates(socket).filter((message) => message.bodyEpoch === 2)
+      ).toEqual([])
+    } finally {
+      provider.stop()
+    }
+  })
+})
