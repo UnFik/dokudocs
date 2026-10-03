@@ -202,7 +202,22 @@ export function decideSuggestion(
     for (const piece of deleted) clearMark(piece, mine(piece, 'delete')!)
   }
 
-  for (const operation of operations.sort((a, b) => b.start - a.start)) {
+  // A block that goes takes its contents with it; edits inside would delete
+  // positions that no longer exist.
+  const removedBlocks = operations.filter(
+    (operation) => operation.kind === 'removeBlock'
+  )
+  const surviving = operations.filter(
+    (operation) =>
+      operation.kind === 'removeBlock' ||
+      !removedBlocks.some(
+        (block) =>
+          block.kind === 'removeBlock' &&
+          operation.start > block.start &&
+          operation.start < block.end
+      )
+  )
+  for (const operation of surviving.sort((a, b) => b.start - a.start)) {
     if (operation.kind === 'clear')
       tr.removeMark(operation.start, operation.end, operation.mark)
     else if (operation.kind === 'clearBlock')
