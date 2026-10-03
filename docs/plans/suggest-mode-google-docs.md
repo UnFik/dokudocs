@@ -100,6 +100,8 @@ What P3 must know:
 - Done when: a split, a join, a pasted list, an inserted table, and a deleted block each round-trip through suggest, accept, reject, and reload.
 - Spike first: accepting a join and a split. If copy-then-delete loses too much (comment anchors on the originals orphan), decide before building the rest.
 
+**Status: first slice done.** Enter at the end or start of a paragraph adds an inserted paragraph, and typing in it joins the same suggestion (card `Add: new paragraph`, then `Add: "..."`). A multi-line paste at the end of a paragraph is one suggestion: the first line as text, the rest as inserted paragraphs. Accept clears the block mark; reject removes the block and what is typed in it. Not done: splitting in the middle of text, Backspace join, Enter inside lists, quotes and headings, pasting in the middle of a paragraph, inserted blocks from the slash menu, and the copy-then-delete spike. Those are refused with a message.
+
 ### P6. Formats and block types
 - Bold, italic, strike, code, link as Format suggestions on a range; paragraph to heading, heading level, list type as block Format suggestions; cards "Format: ...".
 - Done when: each is suggested, previewed in Preview accepted, accepted, and rejected.

@@ -12,6 +12,9 @@ export type SuggestionCard = {
   inserted: string
   /** Text proposed to be removed, in document order. */
   deleted: string
+  /** Whole blocks the suggestion adds or removes; they count even when empty. */
+  insertedBlocks: number
+  deletedBlocks: number
   /** Where the suggestion first appears in the document. */
   position: number
 }
@@ -34,12 +37,19 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
             author: suggestion.author,
             inserted: '',
             deleted: '',
+            insertedBlocks: 0,
+            deletedBlocks: 0,
             position,
           }
           cards.set(suggestion.id, card)
         }
-        if (suggestion.kind === 'insert') card.inserted += node.textContent
-        else card.deleted += node.textContent
+        if (suggestion.kind === 'insert') {
+          // Its text carries insert marks of its own, counted below.
+          card.insertedBlocks++
+        } else {
+          card.deleted += node.textContent
+          card.deletedBlocks++
+        }
       }
       return true
     }
@@ -54,6 +64,8 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
           author: mark.attrs.author as string,
           inserted: '',
           deleted: '',
+          insertedBlocks: 0,
+          deletedBlocks: 0,
           position,
         }
         cards.set(id, card)
@@ -77,5 +89,9 @@ export function cardTitle(card: SuggestionCard) {
   if (card.inserted && card.deleted)
     return `Replace: "${shorten(card.deleted)}" with "${shorten(card.inserted)}"`
   if (card.inserted) return `Add: "${shorten(card.inserted)}"`
-  return `Delete: "${shorten(card.deleted)}"`
+  if (card.deleted) return `Delete: "${shorten(card.deleted)}"`
+  // Blocks with no text of their own.
+  return card.insertedBlocks
+    ? `Add: ${card.insertedBlocks === 1 ? 'new paragraph' : `${card.insertedBlocks} new paragraphs`}`
+    : `Delete: ${card.deletedBlocks === 1 ? 'empty paragraph' : `${card.deletedBlocks} empty paragraphs`}`
 }

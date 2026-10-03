@@ -182,8 +182,56 @@ describe('Suggest mode, typing', () => {
   })
 })
 
+describe('Suggest mode, structure', () => {
+  it('Enter at the end of a paragraph suggests a new paragraph that typing then fills, and rejecting removes it', async () => {
+    const editor = suggestEditor('hello')
+    try {
+      editor.caret('hello', 5)
+      await userEvent.keyboard('{Enter}')
+      expect(editor.titles()).toEqual(['Add: new paragraph'])
+      expect(editor.refused).toEqual([])
+
+      await userEvent.keyboard('next')
+      expect(editor.titles()).toEqual(['Add: "next"'])
+      expect(editor.canonical()).toEqual(['hello'])
+
+      editor.editor.decide(editor.cards()[0]!.id, 'reject')
+      expect(editor.titles()).toEqual([])
+      expect(editor.editor.getBody().map((node) => node.type)).toEqual([
+        'document',
+        'paragraph',
+        'run',
+      ])
+    } finally {
+      editor.cleanup()
+    }
+  })
+
+  it('pastes several lines at the end of a paragraph as one suggestion', () => {
+    const editor = suggestEditor('hello')
+    try {
+      editor.caret('hello', 5)
+      const data = new DataTransfer()
+      data.setData('text/plain', ' one\ntwo')
+      editor.editor.view.dom.dispatchEvent(
+        new ClipboardEvent('paste', {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+      expect(editor.cards()).toHaveLength(1)
+      expect(editor.canonical()).toEqual(['hello'])
+      editor.editor.decide(editor.cards()[0]!.id, 'accept')
+      expect(editor.canonical()).toEqual(['hello one', 'two'])
+    } finally {
+      editor.cleanup()
+    }
+  })
+})
+
 describe('Suggest mode, what it refuses', () => {
-  it('refuses Enter, saying so, and changes nothing', async () => {
+  it('refuses Enter in the middle of text, saying so, and changes nothing', async () => {
     const editor = suggestEditor('hello')
     try {
       editor.caret('hello', 2)
@@ -210,10 +258,9 @@ describe('Suggest mode, what it refuses', () => {
     }
   })
 
-  it('accepts a single-line paste and refuses a multi-line one', () => {
+  it('accepts a single-line paste and refuses a multi-line one in the middle of text', () => {
     const editor = suggestEditor('hello')
     try {
-      editor.caret('hello', 5)
       const paste = (text: string) => {
         const data = new DataTransfer()
         data.setData('text/plain', text)
@@ -225,11 +272,12 @@ describe('Suggest mode, what it refuses', () => {
           })
         )
       }
-      paste(' there')
-      expect(editor.titles()).toEqual(['Add: " there"'])
-
+      editor.caret('hello', 2)
       paste('one\ntwo')
       expect(editor.refused).toHaveLength(1)
+      expect(editor.titles()).toEqual([])
+      editor.caret('hello', 5)
+      paste(' there')
       expect(editor.titles()).toEqual(['Add: " there"'])
     } finally {
       editor.cleanup()
