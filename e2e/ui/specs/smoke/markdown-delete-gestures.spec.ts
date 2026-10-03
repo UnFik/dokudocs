@@ -182,6 +182,7 @@ async function openDocument(page: Page, blocks: Block[]) {
 async function expectNoReviewBanner(page: Page) {
   await expect(page.getByText(/Local changes need review/)).toHaveCount(0);
   await expect(page.getByText(/structural deletion requires/)).toHaveCount(0);
+  await expect(page.getByText(/Block deletion is queued/)).toHaveCount(0);
 }
 
 const separatorDoc: Block[] = [
@@ -378,7 +379,7 @@ test("@live @smoke @deletegestures: emptying a line and pressing Backspace again
     await expect(editor).toBeVisible();
     await expect(editor).not.toContainText("Beta");
     await expect(editor.locator("p")).toHaveCount(3);
-    await editor.locator("p").nth(1).click();
+    // The caret is put back after the delete: no click needed to go on.
     await page.keyboard.press("Backspace");
     await expect(editor.locator("p")).toHaveCount(2);
     await expectNoReviewBanner(page);
@@ -564,5 +565,32 @@ test("@live @smoke @deletegestures: triple-click a list item then Backspace remo
     await expect(page.getByRole("status")).toContainText("Synced");
     await expect(editor.locator("li")).toHaveCount(2);
     await expect(editor).toContainText("three");
+  });
+});
+
+test("@live @smoke @deletegestures: after a line is deleted the caret is back and typing continues without a click", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const diagnose = watch(page);
+  const { editor } = await openDocument(page, threeParagraphs);
+  await diagnose(async () => {
+    await editor
+      .locator("p")
+      .filter({ hasText: "Beta" })
+      .click({ clickCount: 3 });
+    await page.keyboard.press("Backspace");
+    await expect(editor).not.toContainText("Beta");
+    await expect(editor).toBeVisible();
+    await expect(editor.locator("p").first())
+      .toBeFocused({ timeout: 10000 })
+      .catch(() => {});
+    await page.keyboard.type("X");
+    await expect(editor).toContainText("X");
+    await expectNoReviewBanner(page);
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expect(editor).toContainText("X");
   });
 });

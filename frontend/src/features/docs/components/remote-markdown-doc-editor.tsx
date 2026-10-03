@@ -51,6 +51,7 @@ import {
   type DocumentBodyNode,
 } from '../lib/muya/state/documentBodyToMarkdown'
 import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
+import { EditorNotice } from '../lib/prosemirror/editorNotice'
 import {
   emptyInlineState,
   type InlineMarkName,
@@ -549,10 +550,6 @@ function CollaborativeMarkdownBody({
       },
       onCanonicalBody,
       onHeldEdits: () => setHasHeldEdits(true),
-      onDeleteNodeQueued: () =>
-        setError('Block deletion is queued; editing is paused until it syncs.'),
-      onMoveNodeQueued: () =>
-        setError('Block move is queued; editing is paused until it syncs.'),
       onBodyChange: (nodes: DocumentBodyNode[]) => {
         try {
           onMarkdownChange(documentBodyToMarkdown(nodes))
@@ -562,8 +559,13 @@ function CollaborativeMarkdownBody({
           )
         }
       },
-      onTransactionError: (cause) =>
-        setError(cause instanceof Error ? cause.message : 'Invalid body edit'),
+      // Only messages written for the person editing are shown; anything else
+      // the editor raises is internal and goes to the log.
+      onTransactionError: (cause) => {
+        if (cause instanceof EditorNotice) setError(cause.message)
+        // eslint-disable-next-line no-console
+        else console.error('editor error', cause)
+      },
       onHistoryChange: setHistory,
       onInlineStateChange: setInline,
       onLinkRequest: () => setLinkRequest((count) => count + 1),
