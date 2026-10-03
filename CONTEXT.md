@@ -92,6 +92,10 @@ _Avoid_: BodyVersion, CRDT state vector
 The oldest BodyEpoch whose collaborative history still continues into the current one. A structural command that edits the stored state in place (DeleteNode, MoveNode) starts a new BodyEpoch but leaves the CompatibleEpoch alone, so an update from someone who can only suggest, made on an older epoch in that range, still merges. An editor's update does not, because it may aim at a block that is gone. A rebuild from scratch, such as restoring a revision, moves the CompatibleEpoch up to the new BodyEpoch, and older updates need review.
 _Avoid_: BodyEpoch when asking whether an old update can still merge
 
+**Seamless Edit**:
+An edit a User makes with an ordinary gesture (typing, deleting a character, a word, a line, several lines, a separator, everything; undo and redo) that never shows an internal error, a pause, a lost caret, or a request to review. A structural command that the gesture needs runs behind the editor. The review path is for real conflicts, such as offline edits that collide, not for what a gesture produces by itself. A gesture the editor cannot perform does the closest sensible thing or nothing; it never shows machine text.
+_Avoid_: Showing `structural deletion requires a DeleteNode command`, `Local changes need review (update-rejected)`, or `Block deletion is queued` for a normal gesture
+
 **Accepted Edit**:
 A validated change that becomes part of the canonical DocumentBody.
 _Avoid_: Received update when referring to a durable change
