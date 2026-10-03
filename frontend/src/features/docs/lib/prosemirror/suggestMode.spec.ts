@@ -230,21 +230,43 @@ describe('Suggest mode, structure', () => {
   })
 })
 
-describe('Suggest mode, what it refuses', () => {
-  it('refuses Enter in the middle of text, saying so, and changes nothing', async () => {
+describe('Suggest mode, split and join', () => {
+  it('Enter in the middle of text suggests a split that accepting makes two paragraphs', async () => {
     const editor = suggestEditor('hello')
     try {
       editor.caret('hello', 2)
       await userEvent.keyboard('{Enter}')
-
-      expect(editor.refused).toHaveLength(1)
-      expect(editor.titles()).toEqual([])
+      expect(editor.refused).toEqual([])
+      expect(editor.titles()).toEqual(['Split paragraph'])
       expect(editor.canonical()).toEqual(['hello'])
+
+      editor.editor.decide(editor.cards()[0]!.id, 'accept')
+      expect(editor.deletes.flat()).toEqual([])
+      expect(editor.canonical()).toEqual(['he', 'llo'])
     } finally {
       editor.cleanup()
     }
   })
 
+  it('Backspace at the start of a paragraph suggests a join that rejecting undoes', async () => {
+    const editor = suggestEditor('one', 'two')
+    try {
+      editor.caret('two', 0)
+      await userEvent.keyboard('{Backspace}')
+      expect(editor.refused).toEqual([])
+      expect(editor.titles()).toEqual(['Join paragraphs'])
+      expect(editor.canonical()).toEqual(['one', 'two'])
+
+      editor.editor.decide(editor.cards()[0]!.id, 'reject')
+      expect(editor.titles()).toEqual([])
+      expect(editor.canonical()).toEqual(['one', 'two'])
+    } finally {
+      editor.cleanup()
+    }
+  })
+})
+
+describe('Suggest mode, what it refuses', () => {
   it('refuses a formatting shortcut', async () => {
     const editor = suggestEditor('hello')
     try {
