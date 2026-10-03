@@ -19,6 +19,7 @@ const cards: SuggestionCard[] = [
     formats: [],
     insertedBlocks: 0,
     deletedBlocks: 0,
+    blockKinds: [],
     position: 1,
   },
   {
@@ -30,6 +31,7 @@ const cards: SuggestionCard[] = [
     formats: [],
     insertedBlocks: 0,
     deletedBlocks: 0,
+    blockKinds: [],
     position: 9,
   },
 ]

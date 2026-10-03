@@ -2,6 +2,7 @@ import type { Node as ProseMirrorNode } from 'prosemirror-model'
 import { Plugin } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import { documentBodySchema } from '../documentBody'
+import { blockMenuMeta, type BlockMenuMeta } from '../trackBlockInsert'
 import { createNode, insertBlock, type Command } from './insertBlock'
 import { insertDiagram, insertMathBlock } from './mediaCommands'
 import { insertTable } from './tableCommands'
@@ -12,6 +13,8 @@ export interface BlockItem {
   hint: string
   keywords: string[]
   command: Command
+  /** A heading entry only sets the level of the paragraph it is used in. */
+  headingLevel?: number
 }
 
 const paragraph = () => createNode('paragraph', {})
@@ -24,6 +27,7 @@ export const blockItems: BlockItem[] = [
     label: `Heading ${level}`,
     hint: '#'.repeat(level),
     keywords: ['heading', 'title', 'h' + level],
+    headingLevel: level,
     command: insertBlock(createNode('atx_heading', { level })),
   })),
   {
@@ -225,7 +229,10 @@ class BlockMenu {
     const item = this.items[index]
     if (!item) return
     this.close(true)
-    item.command(this.view.state, (tr) => this.view.dispatch(tr))
+    const meta: BlockMenuMeta = { headingLevel: item.headingLevel }
+    item.command(this.view.state, (tr) =>
+      this.view.dispatch(tr.setMeta(blockMenuMeta, meta))
+    )
   }
 
   close(refocus: boolean) {

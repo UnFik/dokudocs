@@ -361,8 +361,81 @@ describe('Enter in a list in Suggest mode', () => {
     expect(shape(state)).toEqual(['list_item:1', 'list_item:1', 'list_item:1'])
   })
 
-  it('refuses leaving the list from an empty item, and splitting or starting an item', () => {
+  it('splits an item in the middle by copying its tail into a new item', () => {
+    let state = caretAt(stateOf(listOf('Apples', 'Pears')), 'Apples', 3)
+    state = state.apply(suggestEnter(state, options))
+
+    const cards = suggestionCards(state.doc)
+    expect(cards.map(cardTitle)).toEqual(['Split paragraph'])
+    expect(canonicalRuns(state.doc)).toEqual(['Apples', 'Pears'])
+    expect(shape(state)).toEqual(['list_item:1', 'list_item:1', 'list_item:1'])
+
+    const accepted = state.apply(
+      decideSuggestion(state, cards[0]!.id, 'accept').transaction
+    )
+    expect(shape(accepted)).toEqual([
+      'list_item:1',
+      'list_item:1',
+      'list_item:1',
+    ])
+    expect(accepted.doc.textContent).toBe('ApplesPears')
+    const rejected = state.apply(
+      decideSuggestion(state, cards[0]!.id, 'reject').transaction
+    )
+    expect(shape(rejected)).toEqual(['list_item:1', 'list_item:1'])
+    expect(rejected.doc.textContent).toBe('ApplesPears')
+  })
+
+  it('opens an item above when the caret is at the start of an item with text', () => {
+    let state = caretAt(stateOf(listOf('Apples')), 'Apples', 0)
+    state = state.apply(suggestEnter(state, options))
+
+    expect(suggestionCards(state.doc).map(cardTitle)).toEqual([
+      'Add: new paragraph',
+    ])
+    expect(canonicalRuns(state.doc)).toEqual(['Apples'])
+    expect(shape(state)).toEqual(['list_item:1', 'list_item:1'])
+    expect(state.selection.$from.parent.textContent).toBe('Apples')
+  })
+
+  it('leaves the list from an empty last item: the item goes, a paragraph follows the list', () => {
     const empty = stateOf(
+      documentOf(
+        nodes.bullet_list!.create(idAttrs('list'), [
+          nodes.list_item!.create(idAttrs('item0'), [
+            paragraph('para0', [run('run0', ['Apples'])]),
+          ]),
+          nodes.list_item!.create(idAttrs('item1'), [
+            nodes.paragraph!.create(idAttrs('para1')),
+          ]),
+        ])
+      )
+    )
+    let state = empty
+    state.doc.descendants((node, pos) => {
+      if (node.attrs.nodeID === 'para1')
+        state = state.apply(
+          state.tr.setSelection(TextSelection.create(state.doc, pos + 1))
+        )
+      return true
+    })
+
+    state = state.apply(suggestEnter(state, options))
+
+    const cards = suggestionCards(state.doc)
+    expect(cards).toHaveLength(1)
+    expect(state.doc.firstChild?.lastChild?.type.name).toBe('paragraph')
+    const accepted = decideSuggestion(state, cards[0]!.id, 'accept')
+    expect(accepted.structuralDeletes).toEqual(['item1'])
+    const rejected = state.apply(
+      decideSuggestion(state, cards[0]!.id, 'reject').transaction
+    )
+    expect(rejected.doc.childCount).toBe(1)
+    expect(shape(rejected)).toEqual(['list_item:1', 'list_item:1'])
+  })
+
+  it('refuses leaving the list from the only item', () => {
+    const only = stateOf(
       documentOf(
         nodes.bullet_list!.create(idAttrs('list'), [
           nodes.list_item!.create(idAttrs('item'), [
@@ -371,20 +444,38 @@ describe('Enter in a list in Suggest mode', () => {
         ])
       )
     )
-    const inEmpty = empty.apply(
-      empty.tr.setSelection(TextSelection.create(empty.doc, 3))
+    const inEmpty = only.apply(
+      only.tr.setSelection(TextSelection.create(only.doc, 4))
     )
     expect(() => suggestEnter(inEmpty, options)).toThrow(
       UnsupportedSuggestionError
     )
-    const middle = caretAt(stateOf(listOf('Apples')), 'Apples', 3)
-    expect(() => suggestEnter(middle, options)).toThrow(
-      UnsupportedSuggestionError
+  })
+
+  it('joins two items with Backspace as one suggestion: the second item goes, its text joins the first', () => {
+    let state = caretAt(stateOf(listOf('Apples', 'Pears')), 'Pears', 0)
+    const upper = joinTarget(state, false)
+    expect(upper).not.toBeNull()
+    state = state.apply(suggestJoin(state, upper!, options))
+
+    const cards = suggestionCards(state.doc)
+    expect(cards.map(cardTitle)).toEqual(['Join paragraphs'])
+    expect(canonicalRuns(state.doc)).toEqual(['Apples', 'Pears'])
+
+    const accepted = decideSuggestion(state, cards[0]!.id, 'accept')
+    expect(accepted.structuralDeletes).toEqual(['item1'])
+    const rejected = state.apply(
+      decideSuggestion(state, cards[0]!.id, 'reject').transaction
     )
-    const start = caretAt(stateOf(listOf('Apples')), 'Apples', 0)
-    expect(() => suggestEnter(start, options)).toThrow(
-      UnsupportedSuggestionError
-    )
+    expect(rejected.doc.textContent).toBe('ApplesPears')
+    expect(shape(rejected)).toEqual(['list_item:1', 'list_item:1'])
+  })
+
+  it('Delete at the end of an item joins it with the next one, and the first item has nothing to join into', () => {
+    const forward = caretAt(stateOf(listOf('Apples', 'Pears')), 'Apples', 6)
+    expect(joinTarget(forward, true)).not.toBeNull()
+    const first = caretAt(stateOf(listOf('Apples', 'Pears')), 'Apples', 0)
+    expect(joinTarget(first, false)).toBeNull()
   })
 })
 
