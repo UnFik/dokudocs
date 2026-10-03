@@ -27,8 +27,13 @@ import {
   type DocumentBodySelection,
   type MoveNodeIntent,
 } from './prosemirror/createDocumentBodyEditor'
+import type { CaretHint } from './prosemirror/deleteTargets'
 import type { InlineState } from './prosemirror/inlineMarks'
 import type { SuggestionCard } from './prosemirror/suggestionCards'
+
+// A delete rebuilds the editor, so the place the caret should return to is kept
+// here, outside it, until the next editor for the same document asks.
+const caretHints = new Map<string, CaretHint>()
 
 type CollaborativeBodySnapshot = {
   bodyVersion: number
@@ -176,6 +181,7 @@ export async function mountCollaborativeDocumentBody(
       onBodyChange: input.onBodyChange,
       onDeleteNode: (nodeIDs) => provider!.deleteNode(nodeIDs),
       onDeleteNodeQueued: input.onDeleteNodeQueued,
+      onCaretHint: (hint) => caretHints.set(input.documentID, hint),
       onMoveNode: (move) => provider!.moveNode(move),
       onMoveNodeQueued: input.onMoveNodeQueued,
       onTransactionError: input.onTransactionError,
@@ -192,6 +198,12 @@ export async function mountCollaborativeDocumentBody(
       onSelectionChange: cursorSender.send,
     })
     showRemoteCursors = (cursors) => editor.setRemoteCursors(cursors)
+    const caretHint = caretHints.get(input.documentID)
+    caretHints.delete(input.documentID)
+    if (caretHint && !editorReadOnly)
+      requestAnimationFrame(() =>
+        editor.focusBlock(caretHint.nodeID, caretHint.edge)
+      )
     if (input.focusNodeID) {
       requestAnimationFrame(() => {
         const target = Array.from(
