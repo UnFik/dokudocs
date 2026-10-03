@@ -77,6 +77,7 @@ const documentSchema = z.object({
 const markdownBodySchema = z.object({
   bodyVersion: z.number().int().positive(),
   bodyEpoch: z.number().int().positive(),
+  compatEpoch: z.number().int().positive().optional(),
   bodySchemaVersion: z.number().int().positive(),
   canEdit: z.boolean().default(false),
   canSuggest: z.boolean().optional(),

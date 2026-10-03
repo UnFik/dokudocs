@@ -61,6 +61,11 @@ import {
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
 import { suggestionBlocksPlugin } from './suggestionBlocks'
 import { suggestionCards, type SuggestionCard } from './suggestionCards'
+import {
+  blockMenuMeta,
+  suggestBlockInsert,
+  type BlockMenuMeta,
+} from './trackBlockInsert'
 import { suggestBlockType, type HeadingLevel } from './trackBlockType'
 import {
   suggestDeleteKey,
@@ -601,6 +606,24 @@ export function createDocumentBodyEditor(
     try {
       if (structuralCommandPending && transaction.docChanged && !remote) return
       if (readOnly && transaction.docChanged && !remote) return
+      const menu = transaction.getMeta(blockMenuMeta) as
+        | BlockMenuMeta
+        | undefined
+      if (suggestMode && menu && transaction.docChanged && !remote) {
+        // A block from the "/" menu: a heading changes the level of the
+        // paragraph, anything else is added after it, both as suggestions.
+        suggest(() =>
+          menu.headingLevel
+            ? suggestBlockType(
+                state,
+                menu.headingLevel as HeadingLevel,
+                suggestionOptions()
+              )
+            : suggestBlockInsert(state, transaction, suggestionOptions())
+        )
+        viewHolder.current?.updateState(state)
+        return
+      }
       if (suggestMode && transaction.docChanged && !remote && !tracked) {
         // An edit the browser made itself (an input method, a drop): recorded
         // as a suggestion if it is plain text, refused otherwise.
