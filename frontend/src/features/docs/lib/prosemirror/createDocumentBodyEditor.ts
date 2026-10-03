@@ -5,6 +5,7 @@ import {
   EditorState,
   NodeSelection,
   Plugin,
+  PluginKey,
   type Selection,
   TextSelection,
   type Command,
@@ -50,6 +51,7 @@ import {
   type InlineMarkName,
   type InlineState,
 } from './inlineMarks'
+import { nodeSuggestionOf } from './nodeSuggestion'
 import {
   DeleteNodeRequiredError,
   MoveNodeRequiredError,
@@ -116,6 +118,7 @@ export function createDocumentBodyEditor(
     suggestAuthor?: string
     /** The suggestions in the body changed. */
     onSuggestionCards?: (cards: SuggestionCard[]) => void
+    onSuggestionClick?: (id: string) => void
     /** Fires when the local selection moves; null when the editor loses focus. */
     onSelectionChange?: (selection: DocumentBodySelection | null) => void
   } = {}
@@ -125,6 +128,49 @@ export function createDocumentBodyEditor(
   let suggestMode = false
   let continueSuggestion = false
   let structuralCommandPending = false
+  const suggestionFocusKey = new PluginKey<string | null>('suggestionFocus')
+  const suggestionFocusPlugin = new Plugin<string | null>({
+    key: suggestionFocusKey,
+    state: {
+      init: (): string | null => null,
+      apply: (transaction, focusedID) =>
+        transaction.getMeta(suggestionFocusKey) ?? focusedID,
+    },
+    props: {
+      decorations: (editorState): DecorationSet => {
+        const focusedID = suggestionFocusKey.getState(editorState)
+        if (!focusedID) return DecorationSet.empty
+        const decorations: Decoration[] = []
+        editorState.doc.descendants((node, pos) => {
+          if (node.isText) {
+            if (
+              node.marks.some(
+                (mark) =>
+                  mark.type.name.startsWith('suggestion_') &&
+                  mark.attrs.id === focusedID
+              )
+            )
+              decorations.push(
+                Decoration.inline(pos, pos + node.nodeSize, {
+                  class: 'suggestion-focus',
+                  'data-suggestion-focus-id': focusedID,
+                })
+              )
+            return false
+          }
+          if (nodeSuggestionOf(node)?.id === focusedID)
+            decorations.push(
+              Decoration.node(pos, pos + node.nodeSize, {
+                class: 'suggestion-focus',
+                'data-suggestion-focus-id': focusedID,
+              })
+            )
+          return true
+        })
+        return DecorationSet.create(editorState.doc, decorations)
+      },
+    },
+  })
   let remoteCursors: RemoteCursor[] = []
   const remoteCursorPlugin = new Plugin({
     props: {
@@ -137,6 +183,7 @@ export function createDocumentBodyEditor(
       ySyncPlugin(fragment),
       yUndoPlugin(),
       remoteCursorPlugin,
+      suggestionFocusPlugin,
       suggestionBlocksPlugin,
       // Block plugins (slash menu, drag handle) run before the keymaps below so
       // they can claim Enter and arrow keys while a menu is open.
@@ -558,6 +605,14 @@ export function createDocumentBodyEditor(
         return false
       },
     },
+    handleClick: (_editorView, _pos, event) => {
+      if (!(event.target instanceof Element)) return false
+      const suggestionID = event.target.closest<HTMLElement>(
+        '[data-suggestion-id]'
+      )?.dataset.suggestionId
+      if (suggestionID) options.onSuggestionClick?.(suggestionID)
+      return false
+    },
     // A separator is not selectable by default (it is an atom), so a click on it
     // would only move the caret. Select it, so Delete can remove it.
     handleClickOn: (editorView, _pos, node, nodePos, _event, direct) => {
@@ -763,6 +818,18 @@ export function createDocumentBodyEditor(
       suggestMode = next
     },
     getSuggestionCards: () => suggestionCards(state.doc),
+    scrollToSuggestion: (id: string) => {
+      const target = [
+        ...view.dom.querySelectorAll<HTMLElement>('[data-suggestion-id]'),
+      ].find((element) => element.dataset.suggestionId === id)
+      if (!target) return false
+      view.dispatch(view.state.tr.setMeta(suggestionFocusKey, id))
+      const currentTarget = [
+        ...view.dom.querySelectorAll<HTMLElement>('[data-suggestion-id]'),
+      ].find((element) => element.dataset.suggestionId === id)
+      currentTarget?.scrollIntoView({ block: 'center' })
+      return true
+    },
     /**
      * Accepts or rejects one suggestion as an ordinary edit. Canonical runs and
      * blocks it removes entirely are sent as a structural delete; their node

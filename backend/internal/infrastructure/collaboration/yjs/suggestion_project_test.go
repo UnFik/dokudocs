@@ -393,3 +393,24 @@ func TestProjectV1AgreesWithTheFrontendOnASuggestionFixture(t *testing.T) {
 		t.Fatalf("SuggestionsV1() = (%+v, %v), want the five suggestions in the fixture", suggestions, err)
 	}
 }
+
+// The commit path skips its suggestion index when the encoded state does not
+// contain the word "suggestion". That is only safe while every state that holds
+// a suggestion spells the word out.
+func TestEncodedStateWithSuggestionsContainsTheWord(t *testing.T) {
+	encoded, err := os.ReadFile("testdata/suggestions_v1.b64")
+	if err != nil {
+		t.Fatalf("read frontend Yjs fixture: %v", err)
+	}
+	state, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(encoded)))
+	if err != nil {
+		t.Fatalf("decode frontend Yjs fixture: %v", err)
+	}
+	found, err := SuggestionsV1(state)
+	if err != nil || len(found) == 0 {
+		t.Fatalf("SuggestionsV1() = (%+v, %v), want suggestions", found, err)
+	}
+	if !strings.Contains(string(state), "suggestion") {
+		t.Fatal("a state with suggestions does not contain the word suggestion")
+	}
+}

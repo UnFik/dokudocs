@@ -26,11 +26,13 @@ export function SuggestionThread({
   workspaceID,
   documentID,
   userID,
+  canInteract = true,
 }: {
   suggestion: DocumentSuggestion
   workspaceID: string
   documentID: string
   userID: string
+  canInteract?: boolean
 }) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
@@ -90,15 +92,17 @@ export function SuggestionThread({
               : `Show ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}
           </Button>
         ) : null}
-        <Button
-          size='sm'
-          variant='ghost'
-          className='ml-auto'
-          disabled={resolveMutation.isPending}
-          onClick={() => resolveMutation.mutate(!resolved)}
-        >
-          {resolved ? 'Reopen discussion' : 'Resolve discussion'}
-        </Button>
+        {canInteract ? (
+          <Button
+            size='sm'
+            variant='ghost'
+            className='ml-auto'
+            disabled={resolveMutation.isPending}
+            onClick={() => resolveMutation.mutate(!resolved)}
+          >
+            {resolved ? 'Reopen discussion' : 'Resolve discussion'}
+          </Button>
+        ) : null}
       </div>
       {repliesShown && replies.length ? (
         <ul className='mt-2 space-y-2'>
@@ -120,7 +124,7 @@ export function SuggestionThread({
           ))}
         </ul>
       ) : null}
-      {!resolved ? (
+      {canInteract && !resolved ? (
         <form
           className='mt-2 space-y-1'
           onSubmit={(event) => {

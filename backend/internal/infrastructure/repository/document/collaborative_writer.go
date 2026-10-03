@@ -167,6 +167,9 @@ func (r *Repository) CommitUpdate(ctx context.Context, actor collaboration.Actor
 			committed = &commitCacheEntry{key: key, state: persisted, body: before, doc: document}
 			return nil
 		}
+		if err := syncSuggestionIndex(ctx, tx, update.DocumentID, actor.UserID, persisted, merged); err != nil {
+			return err
+		}
 		if bodyChanged {
 			if bodyVersion == 1<<63-1 {
 				return constant.ErrDocumentConflict
@@ -231,6 +234,54 @@ func (r *Repository) CommitUpdate(ctx context.Context, actor collaboration.Actor
 		r.commits.put(update.DocumentID, *committed)
 	}
 	return receipt, nil
+}
+
+func syncSuggestionIndex(
+	ctx context.Context,
+	tx database.Queryer,
+	documentID, actorID uuid.UUID,
+	beforeState, afterState []byte,
+) error {
+	// Mark and attribute names are stored as plain strings in the encoded state,
+	// so a state without the word holds no suggestion and needs no decode.
+	marker := []byte("suggestion")
+	if !bytes.Contains(beforeState, marker) && !bytes.Contains(afterState, marker) {
+		return nil
+	}
+	before, err := yjs.SuggestionsV1(beforeState)
+	if err != nil {
+		return err
+	}
+	after, err := yjs.SuggestionsV1(afterState)
+	if err != nil {
+		return err
+	}
+	active := make(map[uuid.UUID]struct{}, len(after))
+	for _, suggestion := range after {
+		active[suggestion.ID] = struct{}{}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO document_suggestions (document_id, suggestion_id, proposer_id)
+			SELECT $1, $2, id FROM users WHERE id = $3
+			ON CONFLICT (document_id, suggestion_id) DO UPDATE
+			SET status = 'pending', decider_id = NULL, decided_at = NULL
+			WHERE document_suggestions.status = 'closed'
+		`, documentID, suggestion.ID, suggestion.Author); err != nil {
+			return err
+		}
+	}
+	for _, suggestion := range before {
+		if _, remains := active[suggestion.ID]; remains {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE document_suggestions
+			SET status = 'closed', decider_id = $3, decided_at = NOW()
+			WHERE document_id = $1 AND suggestion_id = $2 AND status = 'pending'
+		`, documentID, suggestion.ID, actorID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func loadDocumentBody(ctx context.Context, tx database.Queryer, documentID, rootID uuid.UUID) (documentbody.Body, error) {

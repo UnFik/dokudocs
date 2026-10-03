@@ -30,13 +30,6 @@ function suggestion(
     documentId: '00000000-0000-4000-8000-0000000000dd',
     suggestionId: SUGGESTION,
     proposerId: OTHER,
-    baseBodyVersion: 1,
-    baseBodyEpoch: 1,
-    operationSchemaVersion: 1,
-    provenance: 'human',
-    operations: [],
-    summary: 'Insert “!”',
-    reason: '',
     conflictReason: '',
     status: 'pending',
     createdAt: '2026-10-02T10:00:00Z',
@@ -57,6 +50,7 @@ function suggestion(
       },
     ],
     ...over,
+    proposerName: over.proposerName ?? 'Suggestion author',
   }
 }
 
