@@ -315,3 +315,13 @@
   background: none;
   border-bottom: none;
 }
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-href {
+  color: var(--signal);
+  text-decoration: underline;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-no-href {
+  color: inherit;
+  text-decoration: none;
+}
