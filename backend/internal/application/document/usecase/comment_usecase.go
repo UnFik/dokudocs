@@ -98,3 +98,42 @@ func (u *CommentUseCase) Resolve(ctx context.Context, workspaceID, documentID, t
 	}
 	return u.comments.SetCommentResolved(ctx, workspaceID, documentID, threadID, actorID, resolved)
 }
+
+func validContent(content string) (string, bool) {
+	trimmed := strings.TrimSpace(content)
+	return trimmed, trimmed != "" && utf8.RuneCountInString(trimmed) <= MaxCommentLength
+}
+
+// Edit changes the text of a thread's first message.
+func (u *CommentUseCase) Edit(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, content string) error {
+	trimmed, ok := validContent(content)
+	if !ok || workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || actorID == uuid.Nil {
+		return ErrInvalidComment
+	}
+	return u.comments.UpdateComment(ctx, workspaceID, documentID, threadID, actorID, trimmed)
+}
+
+// EditReply changes the text of a reply.
+func (u *CommentUseCase) EditReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID, content string) error {
+	trimmed, ok := validContent(content)
+	if !ok || workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || replyID == uuid.Nil || actorID == uuid.Nil {
+		return ErrInvalidComment
+	}
+	return u.comments.UpdateCommentReply(ctx, workspaceID, documentID, threadID, replyID, actorID, trimmed)
+}
+
+// Delete removes a thread with its replies.
+func (u *CommentUseCase) Delete(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID) error {
+	if workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || actorID == uuid.Nil {
+		return ErrInvalidComment
+	}
+	return u.comments.DeleteComment(ctx, workspaceID, documentID, threadID, actorID)
+}
+
+// DeleteReply removes one reply.
+func (u *CommentUseCase) DeleteReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID) error {
+	if workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || replyID == uuid.Nil || actorID == uuid.Nil {
+		return ErrInvalidComment
+	}
+	return u.comments.DeleteCommentReply(ctx, workspaceID, documentID, threadID, replyID, actorID)
+}
