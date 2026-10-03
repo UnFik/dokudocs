@@ -207,7 +207,7 @@ func TestApplyRejectsReceiptThatCannotAcknowledgeRequest(t *testing.T) {
 	}{
 		{name: "document", mutate: func(receipt *CommitReceipt) { receipt.DocumentID = uuid.New() }},
 		{name: "update id", mutate: func(receipt *CommitReceipt) { receipt.UpdateID = uuid.New() }},
-		{name: "epoch", mutate: func(receipt *CommitReceipt) { receipt.BodyEpoch++ }},
+		{name: "epoch older than the update", mutate: func(receipt *CommitReceipt) { receipt.BodyEpoch-- }},
 		{name: "body version", mutate: func(receipt *CommitReceipt) { receipt.BodyVersion = 0 }},
 	}
 	for _, test := range tests {

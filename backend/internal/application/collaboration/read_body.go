@@ -17,8 +17,10 @@ var (
 )
 
 type BodySnapshot struct {
-	BodyVersion       int64
-	BodyEpoch         int64
+	BodyVersion int64
+	BodyEpoch   int64
+	// CompatEpoch is the oldest epoch whose history still continues into BodyEpoch.
+	CompatEpoch       int64
 	BodySchemaVersion int
 	CanEdit           bool
 	CanSuggest        bool

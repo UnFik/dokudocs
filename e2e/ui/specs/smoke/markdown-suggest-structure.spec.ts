@@ -259,16 +259,10 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
       .poll(canonicalRuns)
       .toEqual(["Original", " phrase", "Second line"]);
 
-    // The server wakes the room right after a structural accept; the commenter
-    // reloads onto the new epoch a moment later. Selecting during that reload
-    // would lose part of the selection, which no person does within 100 ms.
-    await commenter.waitForTimeout(1000);
-
     // Bold on a selection is a Format suggestion: the text keeps its look until
     // the owner accepts, and the preview shows the result.
     const selectOriginal = async () => {
-      // Check what is selected and try again: the editor can reload onto a new
-      // epoch right now, and a reload swallows key presses.
+      // Check what is selected, so a lost key press cannot suggest the wrong words.
       await expect(async () => {
         await commenterEditor.getByText("Original").first().click();
         await commenter.keyboard.press("Home");

@@ -153,6 +153,8 @@ Settled in a grilling round after P7's server API. Order: P7 frontend, then the 
 ### Epoch fix (#87)
 Follows ADR 0028, for every user and not only commenters. `restore` keeps the old path.
 
+**Status: done.** `documents.compat_epoch` (new, checked to lie between 1 and `body_epoch`; existing documents start at their current epoch). DeleteNode and MoveNode leave it alone; restore sets it to the new epoch. `CommitUpdate` accepts an update whose epoch lies between `compat_epoch` and `body_epoch` and returns a receipt with the current epoch; `ready` and `resync` carry `compatEpoch`. The client adopts the new epoch from a `ready` or `resync` it is compatible with, or from the ack of an update the server accepted from the old epoch, re-stamps what it has not sent, and keeps going without a rebase. A pending structural command still takes the old path, because it is bound to its epoch. Not covered: the offline reload path (updates stored under an older epoch, read back by `start()`), and DeleteNode or MoveNode sent from an older epoch.
+
 ### P6 rest
 - Links as Format suggestions on a non-empty selection, `http`, `https`, and `mailto` only, through `normalizeLinkTarget`; card `Format: link "text"`.
 - Block types: paragraph to heading, heading level 1 to 6, and back, as a node suggestion of kind `format` with `toType` and `toAttributes`; the block is highlighted with its new type, and Preview accepted shows it. List type changes wait for the list work below.
