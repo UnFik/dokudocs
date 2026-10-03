@@ -1,4 +1,8 @@
-import { Fragment, type Node as ProseMirrorNode } from 'prosemirror-model'
+import {
+  Fragment,
+  type Node as ProseMirrorNode,
+  type ResolvedPos,
+} from 'prosemirror-model'
 import {
   TextSelection,
   type EditorState,
@@ -17,9 +21,10 @@ import {
 
 // Structure in Suggest mode (ADR 0027). A new paragraph is a node carrying an
 // insert suggestion; nothing existing moves, so accepting clears the mark and
-// rejecting removes the paragraph. Only the cases that need no copying are here:
-// Enter at the edge of a paragraph, and pasting lines at the end of one. A split
-// in the middle of text is refused until the copy-then-delete design lands.
+// rejecting removes the paragraph. Enter at the edge of a paragraph, a split in
+// the middle of one (by copying the tail), a join, and pasting lines at the end
+// of one all work in the document and in a quote. In a list, only Enter at the
+// end of an item works: it opens the next item.
 
 const newID = (options: TrackOptions) =>
   (options.newID ?? (() => crypto.randomUUID()))()
@@ -54,33 +59,88 @@ export function suggestEnter(
     throw new UnsupportedSuggestionError(
       'A new line as a suggestion works in paragraphs for now.'
     )
-  if ($from.node(blockDepth - 1).type.name !== 'document')
+  const parent = $from.node(blockDepth - 1)
+  const inItem =
+    parent.type.name === 'list_item' || parent.type.name === 'task_list_item'
+  if (
+    parent.type.name !== 'document' &&
+    parent.type.name !== 'block_quote' &&
+    !inItem
+  )
     throw new UnsupportedSuggestionError(
-      'A new line as a suggestion is not available inside lists and quotes yet.'
+      'A new line as a suggestion is not available here yet.'
     )
   const { before, after } = visibleBounds(block, selection.from)
-  const own = nodeSuggestionOf(block.node)
-  const ownInsert = own?.kind === 'insert' && own.author === options.author
+  const ownID = ownInsertAbove($from, blockDepth, options.author)
   const empty = !before && !after
   // Before the first character only when there is text to push down.
   const insertBefore = !before && after && !empty
+  if (inItem && after)
+    throw new UnsupportedSuggestionError(
+      'Splitting a list item as a suggestion is not available yet. Put the caret at its end.'
+    )
   if (before && after) return suggestSplit(state, blockDepth, options)
 
-  const id = ownInsert ? own.id : newID(options)
-  const created = documentBodySchema.nodes.paragraph!.create(
-    withNodeSuggestion(
-      documentBodySchema.nodes.paragraph!.create({
-        nodeID: crypto.randomUUID(),
-        bodyAttributes: '{}',
-        bodyContent: '',
+  const id = ownID ?? newID(options)
+  const newParagraph = () =>
+    documentBodySchema.nodes.paragraph!.create({
+      nodeID: crypto.randomUUID(),
+      bodyAttributes: '{}',
+      bodyContent: '',
+    })
+
+  // At the end of a list item's last paragraph, Enter opens the next item.
+  if (inItem && $from.index(blockDepth - 1) === parent.childCount - 1) {
+    if (empty && !ownID)
+      throw new UnsupportedSuggestionError(
+        'Leaving a list as a suggestion is not available yet. Delete the empty item instead.'
+      )
+    const itemType = parent.type
+    const template = itemType.create({
+      nodeID: crypto.randomUUID(),
+      bodyAttributes: JSON.stringify(
+        itemType.name === 'task_list_item' ? { checked: false } : {}
+      ),
+      bodyContent: '',
+    })
+    const item = itemType.create(
+      withNodeSuggestion(template, {
+        kind: 'insert',
+        id,
+        author: options.author,
       }),
-      { kind: 'insert', id, author: options.author }
+      newParagraph()
     )
+    const afterItem = $from.after(blockDepth - 1)
+    const tr = state.tr.insert(afterItem, item)
+    return tr.setSelection(TextSelection.create(tr.doc, afterItem + 2))
+  }
+
+  const created = documentBodySchema.nodes.paragraph!.create(
+    withNodeSuggestion(newParagraph(), {
+      kind: 'insert',
+      id,
+      author: options.author,
+    })
   )
   const at = insertBefore ? $from.before(blockDepth) : $from.after(blockDepth)
   const tr = state.tr.insert(at, created)
   if (!insertBefore) tr.setSelection(TextSelection.create(tr.doc, at + 1))
   return tr
+}
+
+/** The id of your own insert suggestion on the block at `depth` or on a block above it, such as a list item you inserted. */
+export function ownInsertAbove(
+  $pos: ResolvedPos,
+  depth: number,
+  author: string
+): string | null {
+  for (let level = depth; level > 0; level--) {
+    const suggestion = nodeSuggestionOf($pos.node(level))
+    if (suggestion?.kind === 'insert' && suggestion.author === author)
+      return suggestion.id
+  }
+  return null
 }
 
 /**
@@ -260,7 +320,7 @@ export function suggestJoin(
   if (
     !first ||
     !second ||
-    parentName !== 'document' ||
+    (parentName !== 'document' && parentName !== 'block_quote') ||
     first.type.name !== 'paragraph' ||
     second.type.name !== 'paragraph' ||
     nodeSuggestionOf(first) ||
