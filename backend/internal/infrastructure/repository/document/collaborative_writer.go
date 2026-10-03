@@ -84,10 +84,14 @@ func (r *Repository) CommitUpdate(ctx context.Context, actor collaboration.Actor
 		if !rootIDText.Valid {
 			return collaboration.ErrBodyNotInitialized
 		}
-		// An update made on an older epoch still merges when the history has
-		// continued since (ADR 0028). The receipt names the current epoch, so
-		// the author learns it from the ack.
-		if update.BodyEpoch < compatEpoch || update.BodyEpoch > bodyEpoch {
+		// An update from a suggester made on an older epoch still merges when the
+		// history has continued since (ADR 0028). The receipt names the current
+		// epoch, so the author learns it from the ack.
+		// Only for someone who can suggest and not edit: an editor's update can
+		// aim at text in a block a structural command deleted meanwhile, which
+		// would merge and vanish, so an editor keeps the review path.
+		if update.BodyEpoch != bodyEpoch &&
+			(canEdit || update.BodyEpoch < compatEpoch || update.BodyEpoch > bodyEpoch) {
 			return collaboration.ErrStaleBodyEpoch
 		}
 		receipt.BodyEpoch = bodyEpoch

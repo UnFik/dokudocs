@@ -115,6 +115,8 @@ export class CollaborativeDocumentProvider {
     PendingMoveNodeCommand
   >()
   private readonly sentThisConnection = new Set<string>()
+  // Edits that were waiting when this connection became ready: made offline.
+  private offlineUpdateIDs = new Set<string>()
   private socket?: CollaborationSocket
   private readonly remoteCursors = new Map<string, RemoteCursor>()
   private status: CollaborativeDocumentStatus = 'connecting'
@@ -459,13 +461,15 @@ export class CollaborativeDocumentProvider {
   /**
    * The server raised the body epoch but kept the history (ADR 0028): this
    * client's epoch is still compatible, so it takes the new one and keeps what
-   * it has not sent yet, instead of treating it as a conflict. A pending
-   * structural command is bound to its epoch and still needs the old path.
+   * it has not sent yet, instead of treating it as a conflict. Only for someone
+   * who cannot edit: an editor's edit can aim at a deleted block and vanish, so
+   * it keeps the review path. A pending structural command is bound to its
+   * epoch and still needs the old path.
    */
   private adoptCompatibleEpoch(
     frame: Pick<
       Parameters<CollaborationSocketOptions['onFrame']>[0],
-      'bodyEpoch' | 'compatEpoch' | 'bodySchemaVersion'
+      'bodyEpoch' | 'compatEpoch' | 'bodySchemaVersion' | 'canEdit'
     >
   ) {
     if (
@@ -474,11 +478,17 @@ export class CollaborativeDocumentProvider {
       frame.bodyEpoch <= this.options.bodyEpoch ||
       this.options.bodyEpoch < frame.compatEpoch ||
       frame.bodySchemaVersion !== this.options.bodySchemaVersion ||
-      this.hasPendingStructuralCommand()
+      this.hasPendingStructuralCommand() ||
+      this.hasOfflineEdits() ||
+      (frame.canEdit ?? this.canEdit) === true
     )
       return false
     this.takeEpoch(frame.bodyEpoch)
     return true
+  }
+
+  private hasOfflineEdits() {
+    return [...this.pending.keys()].some((id) => this.offlineUpdateIDs.has(id))
   }
 
   private takeEpoch(epoch: number) {
@@ -506,7 +516,10 @@ export class CollaborativeDocumentProvider {
       this.requireRecovery('update-rejected')
       return
     }
-    this.adoptCompatibleEpoch(frame)
+    // Edits made offline never take a newer epoch on trust: one aimed at a
+    // block that was deleted meanwhile would merge and vanish, so they keep the
+    // review path.
+    this.offlineUpdateIDs = new Set(this.pending.keys())
     if (frame.bodyEpoch !== this.options.bodyEpoch) {
       if (
         frame.bodyEpoch > this.options.bodyEpoch &&
@@ -675,7 +688,9 @@ export class CollaborativeDocumentProvider {
       (this.batches.get(frame.updateID) ?? [frame.updateID]).some((updateID) =>
         this.pending.has(updateID)
       ) &&
-      !this.hasPendingStructuralCommand()
+      !this.hasPendingStructuralCommand() &&
+      !this.hasOfflineEdits() &&
+      this.canEdit !== true
     )
       this.takeEpoch(frame.bodyEpoch)
     if (
