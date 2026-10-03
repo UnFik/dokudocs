@@ -33,7 +33,7 @@ func TestSuggestionMigrationProvidesAtomicProposalStorage(t *testing.T) {
 		SELECT count(*)
 		FROM pg_constraint
 		WHERE conrelid = 'document_suggestions'::regclass
-		  AND conname IN ('document_suggestions_status_valid', 'document_suggestions_provenance_valid')
+		  AND conname IN ('document_suggestions_status_valid', 'document_suggestions_decision_complete')
 	`).Scan(&checkCount); err != nil {
 		t.Fatalf("check suggestion constraints: %v", err)
 	}

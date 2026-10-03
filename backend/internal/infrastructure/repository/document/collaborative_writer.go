@@ -255,8 +255,10 @@ func syncSuggestionIndex(
 		active[suggestion.ID] = struct{}{}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO document_suggestions (document_id, suggestion_id, proposer_id)
-			VALUES ($1, $2, $3)
-			ON CONFLICT (document_id, suggestion_id) DO NOTHING
+			SELECT $1, $2, id FROM users WHERE id = $3
+			ON CONFLICT (document_id, suggestion_id) DO UPDATE
+			SET status = 'pending', decider_id = NULL, decided_at = NULL
+			WHERE document_suggestions.status = 'closed'
 		`, documentID, suggestion.ID, suggestion.Author); err != nil {
 			return err
 		}
