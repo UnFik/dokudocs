@@ -83,7 +83,9 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
         card.formatted += node.text ?? ''
         const set = (mark.attrs.set ?? {}) as Record<string, unknown>
         for (const [key, value] of Object.entries(set)) {
-          const label = value === false ? `remove ${key}` : key
+          const name = key === 'href' ? 'link' : key
+          const label =
+            value === false || value === '' ? `remove ${name}` : name
           if (!card.formats.includes(label)) card.formats.push(label)
         }
       }

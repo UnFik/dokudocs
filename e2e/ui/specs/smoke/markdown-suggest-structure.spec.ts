@@ -301,6 +301,24 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await expect(commenterEditor.locator("em")).toHaveCount(0);
     await expect(commenterEditor.locator(".suggest-fmt")).toHaveCount(0);
 
+    // A link on a selection is proposed too, and accepting links the words.
+    await selectOriginal();
+    await commenter.getByRole("button", { name: "Link", exact: true }).click();
+    await commenter
+      .getByLabel("Link address")
+      .fill("https://example.com/title");
+    await commenter.getByRole("button", { name: "Apply link" }).click();
+    await openReview();
+    await expect(ownerCards).toContainText('Format: link "Original"');
+    await expect(ownerEditor.locator("[data-link-href]")).toHaveCount(0);
+    await ownerCards.getByRole("button", { name: "Accept" }).click();
+    await expect(
+      ownerEditor.locator('[data-link-href="https://example.com/title"]'),
+    ).toHaveText("Original");
+    await expect(
+      commenterEditor.locator('[data-link-href="https://example.com/title"]'),
+    ).toHaveText("Original");
+
     // A reload agrees.
     await page.reload();
     await expect(page.locator(".ProseMirror p")).toHaveCount(2);
