@@ -26,7 +26,14 @@ const inlineTypes = new Set([
 
 /** Markdown text to a slice whose nodes carry no IDs; the editor assigns them. */
 export async function markdownToSlice(markdown: string): Promise<Slice> {
-  const parsed = await markdownToDocumentBody(crypto.randomUUID(), markdown)
+  // Pasted text only has to read right, so it is imported leniently: a trailing
+  // space or a line ending that does not survive an export must not refuse it.
+  const parsed = await markdownToDocumentBody(
+    crypto.randomUUID(),
+    markdown.replace(/\r\n?/g, '\n'),
+    1,
+    { lenient: true }
+  )
   const blocks = documentBodyToProseMirror(parsed.nodes).child(0).content
   const content = sanitizePastedSlice(new Slice(blocks, 0, 0)).content
   if (
@@ -120,10 +127,36 @@ export async function pasteFromClipboard(
   const markdown =
     source.kind === 'html' ? htmlToMarkdownText(source.text) : source.text
   if (!markdown.trim()) return false
-  const slice = await markdownToSlice(markdown)
-  if (view.isDestroyed) return true
-  view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView())
+  // Pasting must never do nothing. If the converted blocks cannot be placed
+  // where the caret is, or the text cannot be converted at all, it goes in as
+  // plain paragraphs.
+  const before = view.state.doc
+  try {
+    const slice = await markdownToSlice(markdown)
+    if (view.isDestroyed) return true
+    view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView())
+    if (view.state.doc !== before) return true
+  } catch {
+    if (view.isDestroyed) return true
+  }
+  view.dispatch(
+    view.state.tr.replaceSelection(plainTextSlice(markdown)).scrollIntoView()
+  )
   return true
+}
+
+/** The text as paragraphs, one per line, with no formatting. */
+export function plainTextSlice(text: string): Slice {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  const paragraphs = lines.map((line) =>
+    documentBodySchema.nodes.paragraph!.create(
+      { nodeID: null, bodyAttributes: '{}', bodyContent: '' },
+      line ? [documentBodySchema.text(line)] : []
+    )
+  )
+  return paragraphs.length === 1
+    ? new Slice(Fragment.from(paragraphs), 1, 1)
+    : new Slice(Fragment.from(paragraphs), 0, 0)
 }
 
 function wrapInlineRuns(nodes: ProseMirrorNode[]) {
