@@ -5,7 +5,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
   page,
   browser,
 }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
   const suffix = randomUUID();
   const workspaceName = `Suggestion workspace ${suffix}`;
   const documentID = randomUUID();
@@ -244,10 +244,52 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
       .poll(canonicalRuns)
       .toEqual(["Original", " phrase", "Second line"]);
 
+    // Two structural accepts in a row raise the body epoch twice, and the server
+    // tells other peers on its 5 s tick. An edit before that is rebased onto the
+    // canonical body and closes the editor (issue #87), so wait for the tick.
+    await commenter.waitForTimeout(6000);
+
+    // Bold on a selection is a Format suggestion: the text keeps its look until
+    // the owner accepts, and the preview shows the result.
+    const selectOriginal = async () => {
+      await commenterEditor.getByText("Original").first().click();
+      await commenter.keyboard.press("Home");
+      for (let index = 0; index < 8; index++)
+        await commenter.keyboard.press("Shift+ArrowRight");
+    };
+    await selectOriginal();
+    await commenter.keyboard.press("Control+b");
+    await openReview();
+    await expect(ownerCards).toContainText('Format: bold "Original"');
+    await expect(ownerEditor.locator("strong")).toHaveCount(0);
+    await expect(ownerEditor.locator(".suggest-fmt")).toContainText("Original");
+    await page.getByRole("button", { name: "Preview accepted" }).click();
+    await expect(ownerEditor.locator(".suggest-fmt-bold").first()).toHaveCSS(
+      "font-weight",
+      "700",
+    );
+    await page.getByRole("button", { name: "Show suggestions" }).click();
+    await ownerCards.getByRole("button", { name: "Accept" }).click();
+    await expect(ownerEditor.locator("strong")).toHaveText("Original");
+    await expect(commenterEditor.locator("strong")).toHaveText("Original");
+    await expect(ownerEditor.locator(".suggest-fmt")).toHaveCount(0);
+
+    // Italic is proposed and rejected: nothing changes.
+    await selectOriginal();
+    await commenter.keyboard.press("Control+i");
+    await openReview();
+    await expect(ownerCards).toContainText('Format: italic "Original"');
+    await ownerCards.getByRole("button", { name: "Reject" }).click();
+    await expect(ownerCards).toHaveCount(0);
+    await expect(ownerEditor.locator("em")).toHaveCount(0);
+    await expect(commenterEditor.locator("em")).toHaveCount(0);
+    await expect(commenterEditor.locator(".suggest-fmt")).toHaveCount(0);
+
     // A reload agrees.
     await page.reload();
     await expect(page.locator(".ProseMirror p")).toHaveCount(2);
     await expect(page.locator(".ProseMirror .suggest-ins")).toHaveCount(0);
+    await expect(page.locator(".ProseMirror strong")).toHaveText("Original");
     await expect
       .poll(canonicalRuns)
       .toEqual(["Original", " phrase", "Second line"]);

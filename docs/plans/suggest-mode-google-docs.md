@@ -110,6 +110,8 @@ Not done: Enter, split and join inside lists, quotes and headings; pasting in th
 - Bold, italic, strike, code, link as Format suggestions on a range; paragraph to heading, heading level, list type as block Format suggestions; cards "Format: ...".
 - Done when: each is suggested, previewed in Preview accepted, accepted, and rejected.
 
+**Status: text formats done, block types and links not.** Bold, italic, strike, and code on a selection are Format suggestions (card `Format: bold "text"`): the text keeps its look, carries a `suggestion_format` mark with the proposed values, and a second format on the same text joins the same card. Toggling a format the text already has proposes removing it (`remove bold`). Accept applies the values and clears the mark; reject clears the mark; Preview accepted shows the result by CSS. Your own inserted text is formatted for real. Not done: links, and paragraph, heading, and list type changes as block Format suggestions.
+
 ### P7. Comments in the rail
 Comments are not in the live editor today, and the old store lives in the browser only.
 - Server API over the existing `comment_threads` and `comment_replies` tables; anchors to a block or range; the rail shows comments and suggestions together; Resolve for both.
