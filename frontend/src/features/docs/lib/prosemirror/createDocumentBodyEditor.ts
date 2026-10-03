@@ -567,6 +567,23 @@ export function createDocumentBodyEditor(
     return queueDeleteNode(roots)
   }
 
+  // Ctrl or Alt with Backspace or Delete: the browser finds the word, then the
+  // selection it made is deleted by the same routes as any other selection, so a
+  // word that is a whole run does not hit the guard against emptying a run.
+  const deleteWord = (forward: boolean) => {
+    const range = window.getSelection()
+    if (!range || !range.isCollapsed) return false
+    range.modify('extend', forward ? 'forward' : 'backward', 'word')
+    const selection = selectionNow(viewHolder.current!)
+    if (selection.empty) return false
+    if (deleteAcrossBlocks(selection) || deleteWholeRuns(selection)) return true
+    if (!(selection instanceof TextSelection)) return false
+    const tr = state.tr.delete(selection.from, selection.to)
+    tr.setSelection(TextSelection.create(tr.doc, selection.from))
+    viewHolder.current?.dispatch(tr)
+    return true
+  }
+
   // Backspace at the start of a paragraph, or Delete at the end of the one
   // before: the two become one. The text goes up as an edit first, then the
   // lower paragraph is deleted.
@@ -911,6 +928,17 @@ export function createDocumentBodyEditor(
             suggestionOptions()
           )
         )
+        event.preventDefault()
+        return true
+      }
+      if (
+        (event.altKey || event.ctrlKey) &&
+        !(event.altKey && event.ctrlKey) &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        (event.key === 'Backspace' || event.key === 'Delete') &&
+        deleteWord(event.key === 'Delete')
+      ) {
         event.preventDefault()
         return true
       }
