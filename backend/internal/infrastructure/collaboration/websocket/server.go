@@ -182,6 +182,7 @@ type peer struct {
 	profile       PresenceUser
 	wantsPresence bool
 	wantsCursor   bool
+	wantsComments bool
 	present       bool
 	presenceKey   string
 }
@@ -346,7 +347,7 @@ func (s *Server) servePeer(ctx context.Context, conn *ws.Conn, documentID uuid.U
 		pong:        make(chan uuid.UUID, 1),
 		bodyVersion: snapshot.BodyVersion, bodyEpoch: snapshot.BodyEpoch, level: snapshotLevel(snapshot),
 		connectionID: uuid.New(), profile: PresenceUser{UserID: userID}, wantsPresence: hasCapability(auth.Capabilities, "presence"),
-		wantsCursor: hasCapability(auth.Capabilities, "cursor"),
+		wantsCursor: hasCapability(auth.Capabilities, "cursor"), wantsComments: hasCapability(auth.Capabilities, "comments"),
 	}
 	if s.profiles != nil {
 		if profile, err := s.profiles.PresenceProfile(ctx, userID); err == nil {
@@ -834,6 +835,12 @@ func (s *Server) readBrokerEvents(events <-chan collaboration.BroadcastEvent, su
 		case event, ok := <-events:
 			if !ok {
 				events = nil
+				continue
+			}
+			if event.Kind == collaboration.BroadcastKindComments {
+				if event.OriginID != s.instanceID && event.OriginID != uuid.Nil && event.DocumentID != uuid.Nil {
+					s.fanoutComments(event.DocumentID)
+				}
 				continue
 			}
 			if event.OriginID == s.instanceID || !validBroadcastEvent(event) {
@@ -1333,6 +1340,41 @@ func (s *Server) Nudge(documentID, workspaceID uuid.UUID) {
 		defer cancel()
 		s.checkRoom(ctx, documentID, workspaceID)
 	}()
+}
+
+// NotifyComments tells everyone connected to a document, on every instance,
+// that its comments changed so they fetch them again. The frame names no
+// comment; it is a hint, so a peer whose queue is full simply misses it and
+// catches up the next time its window gains focus.
+func (s *Server) NotifyComments(documentID uuid.UUID) {
+	s.fanoutComments(documentID)
+	if s.broker == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fanoutTimeout)
+	defer cancel()
+	_ = s.broker.PublishEvent(ctx, collaboration.BroadcastEvent{
+		OriginID: s.instanceID, Kind: collaboration.BroadcastKindComments, DocumentID: documentID,
+	})
+}
+
+func (s *Server) fanoutComments(documentID uuid.UUID) {
+	s.mu.RLock()
+	peers := make([]*peer, 0, len(s.rooms[documentID]))
+	for p := range s.rooms[documentID] {
+		peers = append(peers, p)
+	}
+	s.mu.RUnlock()
+	for _, p := range peers {
+		if !p.wantsComments {
+			continue
+		}
+		select {
+		case <-p.done:
+		case p.out <- outbound{message: serverMessage{Type: "comments_changed"}}:
+		default:
+		}
+	}
 }
 
 // pollRoom replaces per-peer polling: one cheap room read per tick covers
