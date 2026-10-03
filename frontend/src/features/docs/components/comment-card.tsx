@@ -235,19 +235,23 @@ export function CommentCard({
         {resolved ? <span>Resolved</span> : null}
       </div>
       <Quote text={thread.selectedText} />
-      <Button
-        type='button'
-        variant='ghost'
-        size='sm'
-        className='h-auto min-h-11 w-full justify-start px-0 py-2 text-left text-xs font-normal whitespace-normal text-foreground'
-        aria-label={`Show in document: ${thread.selectedText || thread.content}`}
-        disabled={orphaned}
-        onClick={() => onSelect(thread.id)}
-      >
-        <span className='break-words whitespace-pre-wrap'>
-          {thread.content}
-        </span>
-      </Button>
+      {orphaned ? (
+        // Nothing to show in the document, so this is plain text.
+        <p className='py-2 break-words whitespace-pre-wrap'>{thread.content}</p>
+      ) : (
+        <Button
+          type='button'
+          variant='ghost'
+          size='sm'
+          className='h-auto min-h-11 w-full justify-start px-0 py-2 text-left text-xs font-normal whitespace-normal text-foreground'
+          aria-label={`Show in document: ${thread.selectedText || thread.content}`}
+          onClick={() => onSelect(thread.id)}
+        >
+          <span className='break-words whitespace-pre-wrap'>
+            {thread.content}
+          </span>
+        </Button>
+      )}
       {resolved && thread.replies.length ? (
         <Button
           size='sm'
