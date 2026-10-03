@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"backend/internal/application/collaboration"
+	"backend/internal/domain/documentbody"
+	"backend/internal/infrastructure/collaboration/yjs"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -28,6 +30,11 @@ func TestUpdateErrorCodeSeparatesInfrastructureOutagesFromRejections(t *testing.
 		{"refused connection", &net.OpError{Op: "dial", Err: errors.New("connection refused")}, "unavailable"},
 		{"wrapped refused connection", fmt.Errorf("commit: %w", &net.OpError{Op: "read", Err: io.ErrUnexpectedEOF}), "unavailable"},
 		{"connection dropped", io.ErrUnexpectedEOF, "unavailable"},
+		{"delete without DeleteNode", fmt.Errorf("commit: %w", documentbody.ErrNeedsCommand), "needs_command"},
+		{"invalid body", fmt.Errorf("commit: %w", documentbody.ErrInvalid), "invalid_body"},
+		{"suggester overreach", fmt.Errorf("commit: %w", yjs.ErrSuggesterChange), "not_permitted"},
+		{"suggester update refused", fmt.Errorf("commit: %w", collaboration.ErrSuggesterUpdate), "not_permitted"},
+		{"unknown failure", errors.New("something else"), "update_rejected"},
 		{"driver bad connection", driver.ErrBadConn, "unavailable"},
 		{"deadline", context.DeadlineExceeded, "unavailable"},
 		{"failover shutdown", &pgconn.PgError{Code: "57P01"}, "unavailable"},

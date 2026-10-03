@@ -84,6 +84,7 @@ import { suggestFormat, suggestLink } from './trackFormat'
 import {
   joinTarget,
   suggestEnter,
+  suggestDeleteSeparator,
   suggestJoin,
   suggestPasteLines,
 } from './trackStructure'
@@ -584,10 +585,28 @@ export function createDocumentBodyEditor(
   const deleteWord = (forward: boolean) => {
     const range = window.getSelection()
     if (!range || !range.isCollapsed) return false
+    const { anchorNode, anchorOffset } = range
     range.modify('extend', forward ? 'forward' : 'backward', 'word')
     const selection = selectionNow(viewHolder.current!)
-    if (selection.empty) return false
-    if (deleteAcrossBlocks(selection) || deleteWholeRuns(selection)) return true
+    if (selection.empty) {
+      joinNeighbours(forward)
+      return true
+    }
+    const { $from, $to } = selection
+    const blockOf = ($pos: typeof $from) => {
+      for (let depth = $pos.depth; depth > 0; depth--)
+        if ($pos.node(depth).isTextblock) return $pos.node(depth)
+      return null
+    }
+    // On an empty line, or at the edge of one, the word runs into the next
+    // block. That is a plain Delete or Backspace: the lines join, or the empty
+    // one goes. The caret goes back first so the join starts from where it was.
+    if (blockOf($from) !== blockOf($to)) {
+      if (anchorNode) range.collapse(anchorNode, anchorOffset)
+      joinNeighbours(forward)
+      return true
+    }
+    if (deleteWholeRuns(selection)) return true
     if (!(selection instanceof TextSelection)) return false
     const tr = state.tr.delete(selection.from, selection.to)
     tr.setSelection(TextSelection.create(tr.doc, selection.from))
@@ -919,6 +938,18 @@ export function createDocumentBodyEditor(
         )
           return false
         const forward = event.key === 'Delete'
+        // A separator that is selected: its deletion is proposed.
+        const picked = selectionNow(editorView)
+        if (
+          picked instanceof NodeSelection &&
+          picked.node.type.name === 'thematic_break'
+        ) {
+          suggest(() =>
+            suggestDeleteSeparator(state, picked.from, suggestionOptions())
+          )
+          event.preventDefault()
+          return true
+        }
         if (!event.ctrlKey && !event.altKey) {
           const current = stateAtDomSelection(editorView)
           const upper = joinTarget(current, forward)
@@ -1131,6 +1162,18 @@ export function createDocumentBodyEditor(
     insertBlock: (kind: InsertableBlock) =>
       canEdit() && insertBlockCommand(kind)(state, view.dispatch),
     focus: () => view.focus(),
+    /**
+     * A DeleteNode finished and was merged in place: typing is allowed again.
+     * Undo history from before it is dropped, as rebuilding the editor used to
+     * do: undoing an edit to a block the command removed would delete nodes
+     * outside any command, and the server refuses that.
+     */
+    finishStructuralCommand: () => {
+      if (!structuralCommandPending) return
+      structuralCommandPending = false
+      undoManager?.clear()
+      view.setProps({ editable: () => !readOnly && !structuralCommandPending })
+    },
     /** Puts the caret at the start or end of a text block and focuses the editor. */
     focusBlock: (nodeID: string, edge: 'start' | 'end') => {
       let target: { pos: number; size: number } | null = null

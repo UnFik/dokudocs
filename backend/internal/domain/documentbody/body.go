@@ -13,6 +13,11 @@ import (
 
 var ErrInvalid = errors.New("invalid document body")
 
+// ErrNeedsCommand marks an update that deletes, moves or reorders existing nodes
+// in an ordinary edit. It wraps ErrInvalid. The sender did nothing wrong as a
+// person: its editor built an edit that must go through DeleteNode or MoveNode.
+var ErrNeedsCommand = fmt.Errorf("%w: needs a structural command", ErrInvalid)
+
 type Body struct {
 	DocumentID uuid.UUID `json:"documentID"`
 	RootNodeID uuid.UUID `json:"rootNodeID"`
@@ -234,14 +239,14 @@ func ValidateExistingStructure(before, after Body, authorizedMoveNodeIDs map[uui
 	for id, oldNode := range oldNodes {
 		newNode, exists := newNodes[id]
 		if !exists {
-			return invalid("existing node %s was deleted without DeleteNode", id)
+			return needsCommand("existing node %s was deleted without DeleteNode", id)
 		}
 		if oldNode.Type != newNode.Type && !isParagraphHeadingConversion(oldNode.Type, newNode.Type) {
 			return invalid("existing node %s changed type", id)
 		}
 		if !sameParent(oldNode.ParentID, newNode.ParentID) {
 			if _, authorized := authorizedMoveNodeIDs[id]; !authorized {
-				return invalid("existing node %s changed parent without MoveNode", id)
+				return needsCommand("existing node %s changed parent without MoveNode", id)
 			}
 		}
 	}
@@ -250,12 +255,12 @@ func ValidateExistingStructure(before, after Body, authorizedMoveNodeIDs map[uui
 	newOrder := stableSiblingOrder(after.Nodes, oldNodes, newNodes, authorizedMoveNodeIDs)
 	for parentID, oldIDs := range oldOrder {
 		if !equalIDs(oldIDs, newOrder[parentID]) {
-			return invalid("existing siblings under node %s were reordered without MoveNode", parentID)
+			return needsCommand("existing siblings under node %s were reordered without MoveNode", parentID)
 		}
 	}
 	for parentID, newIDs := range newOrder {
 		if !equalIDs(oldOrder[parentID], newIDs) {
-			return invalid("existing siblings under node %s were reordered without MoveNode", parentID)
+			return needsCommand("existing siblings under node %s were reordered without MoveNode", parentID)
 		}
 	}
 	return nil
@@ -317,6 +322,11 @@ func orderRelation(left, right float64) int {
 		return 1
 	}
 	return 0
+}
+
+// needsCommand is invalid for an edit that belongs to a structural command.
+func needsCommand(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", ErrNeedsCommand, fmt.Sprintf(format, args...))
 }
 
 func invalid(format string, args ...any) error {

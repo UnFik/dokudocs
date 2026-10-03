@@ -22,6 +22,8 @@ export type SuggestionCard = {
   deletedBlocks: number
   /** What the inserted blocks are, when they are more than paragraphs: a code block, a table. */
   blockKinds: string[]
+  /** The same for blocks the suggestion removes. */
+  deletedKinds: string[]
   /** Where the suggestion first appears in the document. */
   position: number
 }
@@ -51,6 +53,7 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
             insertedBlocks: 0,
             deletedBlocks: 0,
             blockKinds: [],
+            deletedKinds: [],
             position,
           }
           cards.set(suggestion.id, card)
@@ -67,6 +70,8 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
         } else {
           card.deleted += node.textContent
           card.deletedBlocks++
+          const label = blockLabels[node.type.name]
+          if (label) card.deletedKinds.push(label)
         }
       }
       return true
@@ -87,6 +92,7 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
           insertedBlocks: 0,
           deletedBlocks: 0,
           blockKinds: [],
+          deletedKinds: [],
           position,
         }
         cards.set(id, card)
@@ -131,6 +137,8 @@ export function cardTitle(card: SuggestionCard) {
   // Blocks with no text of their own.
   if (card.insertedBlocks && card.deletedBlocks) return 'Leave list'
   if (card.blockKinds.length) return `Add: ${card.blockKinds.join(', ')}`
+  if (card.deletedKinds.length && !card.insertedBlocks)
+    return `Delete: ${card.deletedKinds.join(', ')}`
   return card.insertedBlocks
     ? `Add: ${card.insertedBlocks === 1 ? 'new paragraph' : `${card.insertedBlocks} new paragraphs`}`
     : `Delete: ${card.deletedBlocks === 1 ? 'empty paragraph' : `${card.deletedBlocks} empty paragraphs`}`

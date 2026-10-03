@@ -16,6 +16,7 @@ import {
 import { suggestReplace, UnsupportedSuggestionError } from './trackChanges'
 import {
   joinTarget,
+  suggestDeleteSeparator,
   suggestEnter,
   suggestJoin,
   suggestPasteLines,
@@ -500,5 +501,74 @@ describe('Enter, split, and join in a quote in Suggest mode', () => {
     expect(suggestionCards(join.doc).map(cardTitle)).toEqual([
       'Join paragraphs',
     ])
+  })
+})
+
+describe('deleting a separator in Suggest mode', () => {
+  const withSeparator = () =>
+    stateOf(
+      documentOf(
+        paragraph('p1', [run('r1', ['First'])]),
+        nodes.thematic_break!.create({
+          nodeID: 'hr',
+          bodyAttributes: '{}',
+          bodyContent: '---',
+        }),
+        paragraph('p2', [run('r2', ['Second'])])
+      )
+    )
+  const separatorAt = (state: EditorState) => {
+    let at = -1
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === 'thematic_break') at = pos
+    })
+    return at
+  }
+
+  it('Delete at the end of the line before it proposes deleting the separator', () => {
+    let state = caretAt(withSeparator(), 'First', 5)
+    const upper = joinTarget(state, true)
+    expect(upper).not.toBeNull()
+    state = state.apply(suggestJoin(state, upper!, options))
+
+    const cards = suggestionCards(state.doc)
+    expect(cards.map(cardTitle)).toEqual(['Delete: divider'])
+    expect(canonicalRuns(state.doc)).toEqual(['First', 'Second'])
+    expect(
+      decideSuggestion(state, cards[0]!.id, 'accept').structuralDeletes
+    ).toEqual(['hr'])
+    const rejected = state.apply(
+      decideSuggestion(state, cards[0]!.id, 'reject').transaction
+    )
+    expect(suggestionCards(rejected.doc)).toEqual([])
+  })
+
+  it('Backspace at the start of the line after it does the same', () => {
+    let state = caretAt(withSeparator(), 'Second', 0)
+    const upper = joinTarget(state, false)
+    expect(upper).not.toBeNull()
+    state = state.apply(suggestJoin(state, upper!, options))
+    expect(suggestionCards(state.doc).map(cardTitle)).toEqual([
+      'Delete: divider',
+    ])
+  })
+
+  it('a selected separator is proposed for deletion, and the same gesture again takes it back', () => {
+    let state = withSeparator()
+    state = state.apply(
+      suggestDeleteSeparator(state, separatorAt(state), options)
+    )
+    expect(suggestionCards(state.doc)).toHaveLength(1)
+    state = state.apply(
+      suggestDeleteSeparator(state, separatorAt(state), options)
+    )
+    expect(suggestionCards(state.doc)).toEqual([])
+  })
+
+  it('refuses a separator that is not there', () => {
+    const state = withSeparator()
+    expect(() => suggestDeleteSeparator(state, 1, options)).toThrow(
+      UnsupportedSuggestionError
+    )
   })
 })
