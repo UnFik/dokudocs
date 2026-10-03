@@ -565,7 +565,10 @@ export function joinTarget(
     if (index !== 0 || itemIndex === 0) return null
     return itemAt - list.child(itemIndex - 1).nodeSize
   }
-  if (forward) return doc.nodeAt(here)?.type.name === 'paragraph' ? here : null
+  if (forward) {
+    const name = doc.nodeAt(here)?.type.name
+    return name === 'paragraph' || name === 'atx_heading' ? here : null
+  }
   const previous = doc.resolve(here).nodeBefore
   return previous ? here - previous.nodeSize : null
 }

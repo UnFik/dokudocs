@@ -24,13 +24,35 @@ const inlineTypes = new Set([
   'opaque_inline',
 ])
 
+const blockStart = /^\s*([-*+]\s|\d+[.)]\s|#{1,6}\s|>|\||```|---+\s*$)/
+
+/**
+ * Pasted Markdown with its line endings made plain and the spaces that end a
+ * block removed. Two spaces at the end of a list item or a paragraph are how
+ * some tools write "and then a line break", but nothing follows them; they would
+ * become two spaces of text. Inside a paragraph, where another line of it
+ * follows, they stay: that is a real line break.
+ */
+export function normalizePastedMarkdown(text: string): string {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  return lines
+    .map((line, index) => {
+      if (!/ {2,}$/.test(line)) return line.replace(/\t+$/, '')
+      const next = lines[index + 1]
+      const endsBlock =
+        next === undefined || next.trim() === '' || blockStart.test(next)
+      return endsBlock ? line.replace(/[ \t]+$/, '') : line
+    })
+    .join('\n')
+}
+
 /** Markdown text to a slice whose nodes carry no IDs; the editor assigns them. */
 export async function markdownToSlice(markdown: string): Promise<Slice> {
   // Pasted text only has to read right, so it is imported leniently: a trailing
   // space or a line ending that does not survive an export must not refuse it.
   const parsed = await markdownToDocumentBody(
     crypto.randomUUID(),
-    markdown.replace(/\r\n?/g, '\n'),
+    normalizePastedMarkdown(markdown),
     1,
     { lenient: true }
   )
