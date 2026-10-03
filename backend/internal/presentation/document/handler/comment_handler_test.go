@@ -29,6 +29,18 @@ func (f commentRepoFake) CreateComment(context.Context, uuid.UUID, model.Comment
 func (f commentRepoFake) CreateCommentReply(context.Context, uuid.UUID, uuid.UUID, model.CommentReply) error {
 	return f.err
 }
+func (f commentRepoFake) UpdateComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
+	return f.err
+}
+func (f commentRepoFake) UpdateCommentReply(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
+	return f.err
+}
+func (f commentRepoFake) DeleteComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) error {
+	return f.err
+}
+func (f commentRepoFake) DeleteCommentReply(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) error {
+	return f.err
+}
 func (f commentRepoFake) SetCommentResolved(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, bool) error {
 	return f.err
 }
@@ -125,5 +137,50 @@ func TestCommentErrorsMapToTheRightStatus(t *testing.T) {
 		if len(notifier.documents) != 0 {
 			t.Fatalf("%s: a failed write woke the room", name)
 		}
+	}
+}
+
+func TestCommentEditAndDeleteWakeTheRoomAndCheckTheText(t *testing.T) {
+	documentID, threadID := uuid.New(), uuid.New()
+	notifier := &notifierFake{}
+	h := NewCommentHandler(appdoc.NewCommentUseCase(commentRepoFake{})).WithNotifier(notifier)
+	call := func(invoke func(http.ResponseWriter, *http.Request), body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPatch, "/documents/"+documentID.String()+"/comments/"+threadID.String(), strings.NewReader(body))
+		r.SetPathValue("id", documentID.String())
+		r.SetPathValue("threadID", threadID.String())
+		r.SetPathValue("replyID", uuid.NewString())
+		r.Header.Set("X-Workspace-Id", uuid.NewString())
+		r = r.WithContext(middleware.ContextWithUser(r.Context(), authdto.ResponseUser{ID: uuid.NewString()}))
+		rr := httptest.NewRecorder()
+		middleware.RequireWorkspace(documentErrorWorkspaceStub{})(http.HandlerFunc(invoke)).ServeHTTP(rr, r)
+		return rr
+	}
+
+	for name, step := range map[string]struct {
+		invoke func(http.ResponseWriter, *http.Request)
+		body   string
+	}{
+		"edit":         {h.Edit, `{"content":"fixed"}`},
+		"edit reply":   {h.EditReply, `{"content":"fixed"}`},
+		"delete":       {h.Delete, ""},
+		"delete reply": {h.DeleteReply, ""},
+	} {
+		before := len(notifier.documents)
+		if rr := call(step.invoke, step.body); rr.Code != http.StatusNoContent {
+			t.Fatalf("%s status = %d, want 204; body: %s", name, rr.Code, rr.Body.String())
+		}
+		if len(notifier.documents) != before+1 {
+			t.Fatalf("%s did not wake the room", name)
+		}
+	}
+	before := len(notifier.documents)
+	if rr := call(h.Edit, `{"content":"   "}`); rr.Code != http.StatusBadRequest {
+		t.Fatalf("an empty edit = %d, want 400", rr.Code)
+	}
+	if rr := call(h.EditReply, `{"content":"`+strings.Repeat("a", appdoc.MaxCommentLength+1)+`"}`); rr.Code != http.StatusBadRequest {
+		t.Fatalf("a too long edit = %d, want 400", rr.Code)
+	}
+	if len(notifier.documents) != before {
+		t.Fatal("a refused edit woke the room")
 	}
 }

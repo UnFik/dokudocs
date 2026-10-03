@@ -139,6 +139,85 @@ func (h *CommentHandler) setResolved(w http.ResponseWriter, r *http.Request, res
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type commentEditRequest struct {
+	Content string `json:"content"`
+}
+
+func (h *CommentHandler) Edit(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, documentID, threadID, ok := h.threadPath(w, r)
+	if !ok {
+		return
+	}
+	var request commentEditRequest
+	if err := response.DecodeJSON(r, &request); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if err := h.service.Edit(r.Context(), workspaceID, documentID, threadID, actorID, request.Content); err != nil {
+		h.writeError(w, err)
+		return
+	}
+	h.notify(documentID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CommentHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, documentID, threadID, ok := h.threadPath(w, r)
+	if !ok {
+		return
+	}
+	if err := h.service.Delete(r.Context(), workspaceID, documentID, threadID, actorID); err != nil {
+		h.writeError(w, err)
+		return
+	}
+	h.notify(documentID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CommentHandler) EditReply(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, documentID, threadID, replyID, ok := h.replyPath(w, r)
+	if !ok {
+		return
+	}
+	var request commentEditRequest
+	if err := response.DecodeJSON(r, &request); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if err := h.service.EditReply(r.Context(), workspaceID, documentID, threadID, replyID, actorID, request.Content); err != nil {
+		h.writeError(w, err)
+		return
+	}
+	h.notify(documentID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CommentHandler) DeleteReply(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, documentID, threadID, replyID, ok := h.replyPath(w, r)
+	if !ok {
+		return
+	}
+	if err := h.service.DeleteReply(r.Context(), workspaceID, documentID, threadID, replyID, actorID); err != nil {
+		h.writeError(w, err)
+		return
+	}
+	h.notify(documentID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CommentHandler) replyPath(w http.ResponseWriter, r *http.Request) (actorID, workspaceID, documentID, threadID, replyID uuid.UUID, ok bool) {
+	actorID, workspaceID, documentID, threadID, ok = h.threadPath(w, r)
+	if !ok {
+		return
+	}
+	replyID, err := parsePathUUID(r, "replyID")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid reply ID")
+		return uuid.Nil, uuid.Nil, uuid.Nil, uuid.Nil, uuid.Nil, false
+	}
+	return actorID, workspaceID, documentID, threadID, replyID, true
+}
+
 func (h *CommentHandler) threadPath(w http.ResponseWriter, r *http.Request) (actorID, workspaceID, documentID, threadID uuid.UUID, ok bool) {
 	actorID, workspaceID, err := getUserAndWorkspace(r)
 	if err != nil {

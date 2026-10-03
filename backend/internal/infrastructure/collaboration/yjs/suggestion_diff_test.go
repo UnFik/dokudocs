@@ -134,6 +134,10 @@ func TestValidateSuggesterChangeAllowsOwnSuggestionsAndRejectsEditsToTheBody(t *
 			root.Children()[0].(*crdt.YXmlElement).SetAttributeValue(tx, "bodyAttributes", f.block("delete", f.sender, mine))
 		}, true},
 
+		"own block-type suggestion on a canonical block": {func(tx *crdt.Transaction, root *crdt.YXmlElement) {
+			root.Children()[0].(*crdt.YXmlElement).SetAttributeValue(tx, "bodyAttributes", `{"suggestion":{"kind":"format","id":"`+mine.String()+`","author":"`+f.sender.String()+`","toType":"atx_heading","toAttributes":{"level":2}}}`)
+		}, true},
+
 		"a plain character typed into canonical text": {func(tx *crdt.Transaction, root *crdt.YXmlElement) {
 			runText(root, 0).Insert(tx, 9, "!", crdt.Attributes{})
 		}, false},
@@ -174,5 +178,29 @@ func TestValidateSuggesterChangeAllowsOwnSuggestionsAndRejectsEditsToTheBody(t *
 				t.Fatalf("ValidateSuggesterChange() = %v, want %v", err, ErrSuggesterChange)
 			}
 		})
+	}
+}
+
+// A block-type suggestion changes nothing canonical: the block keeps its type
+// and attributes, and the proposed level (a number) is only validated.
+func TestProjectV1KeepsTheCurrentTypeUnderABlockTypeSuggestion(t *testing.T) {
+	f := newLayerFixture()
+	state := f.build(t, func(tx *crdt.Transaction, root *crdt.YXmlElement) {
+		root.Children()[0].(*crdt.YXmlElement).SetAttributeValue(tx, "bodyAttributes",
+			`{"suggestion":{"kind":"format","id":"`+uuid.New().String()+`","author":"`+f.sender.String()+`","toType":"atx_heading","toAttributes":{"level":2}}}`)
+	})
+
+	body, err := ProjectV1(state, uuid.New())
+	if err != nil {
+		t.Fatalf("ProjectV1() = %v, want the body with the suggestion ignored", err)
+	}
+	for _, node := range body.Nodes {
+		if node.NodeID == f.p1 && (node.Type != "paragraph" || string(node.Attributes) != "{}") {
+			t.Fatalf("block = %s %s, want the canonical paragraph with no attributes", node.Type, node.Attributes)
+		}
+	}
+	found, err := SuggestionsV1(state)
+	if err != nil || len(found) != 1 {
+		t.Fatalf("SuggestionsV1() = (%+v, %v), want the one block-type suggestion", found, err)
 	}
 }

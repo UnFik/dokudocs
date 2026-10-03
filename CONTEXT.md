@@ -61,7 +61,7 @@ The marker for the structural rules used to interpret a DocumentBody. A change b
 _Avoid_: BodyEpoch, BodyVersion
 
 **CommentThread**:
-A conversation attached to a selected range in a document, with replies and a resolution state. Anyone who can read the document sees every thread; a User with comment or edit access may start one, reply, and resolve. Editing or deleting a comment is not part of it yet. It is not part of the DocumentBody, so a Suggestion or an accept never touches it.
+A conversation attached to a selected range in a document, with replies and a resolution state. Anyone who can read the document sees every thread; a User with comment or edit access may start one, reply, and resolve. The author may edit their own comment or reply; the author or an editor may delete one. It is not part of the DocumentBody, so a Suggestion or an accept never touches it.
 _Avoid_: Comment when referring to the full conversation rather than one message
 
 **CommentAnchor**:

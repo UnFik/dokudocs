@@ -3,6 +3,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   createDocumentComment,
+  deleteDocumentComment,
+  deleteDocumentCommentReply,
+  editDocumentComment,
+  editDocumentCommentReply,
   maxCommentLength,
   replyToDocumentComment,
   setDocumentCommentResolved,
@@ -12,6 +16,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 function initials(name: string) {
   return (
@@ -42,6 +47,7 @@ function CommentForm({
   onSubmit,
   onCancel,
   autoFocus,
+  initial = '',
 }: {
   id: string
   label: string
@@ -50,8 +56,9 @@ function CommentForm({
   onSubmit: (content: string) => void
   onCancel?: () => void
   autoFocus?: boolean
+  initial?: string
 }) {
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState(initial)
   const trimmed = draft.trim()
   const tooLong = draft.length > maxCommentLength
   const send = () => {
@@ -167,6 +174,7 @@ export function CommentCard({
   thread,
   userID,
   canInteract,
+  canDecide = false,
   orphaned,
   focused,
   workspaceID,
@@ -176,6 +184,8 @@ export function CommentCard({
   thread: CommentThread
   userID: string
   canInteract: boolean
+  /** An editor may delete anyone's comment; everyone else only their own. */
+  canDecide?: boolean
   /** The words the thread was about are gone or were copied elsewhere. */
   orphaned: boolean
   focused: boolean
@@ -205,7 +215,53 @@ export function CommentCard({
     onSuccess: refresh,
     onError: (error) => toast.error(error.message),
   })
+  // 'thread' or a reply's id while its text is being edited.
+  const [editing, setEditing] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<{
+    replyID: string | null
+  } | null>(null)
+  const edit = useMutation({
+    mutationFn: ({
+      replyID,
+      content,
+    }: {
+      replyID: string | null
+      content: string
+    }) =>
+      replyID
+        ? editDocumentCommentReply(
+            workspaceID,
+            documentID,
+            thread.id,
+            replyID,
+            content
+          )
+        : editDocumentComment(workspaceID, documentID, thread.id, content),
+    onSuccess: async () => {
+      setEditing(null)
+      await refresh()
+    },
+    onError: (error) => toast.error(error.message),
+  })
+  const remove = useMutation({
+    mutationFn: (replyID: string | null) =>
+      replyID
+        ? deleteDocumentCommentReply(
+            workspaceID,
+            documentID,
+            thread.id,
+            replyID
+          )
+        : deleteDocumentComment(workspaceID, documentID, thread.id),
+    onSuccess: async () => {
+      setDeleting(null)
+      await refresh()
+    },
+    onError: (error) => toast.error(error.message),
+  })
   const repliesShown = !resolved || showReplies
+  const canChange = (authorID: string) =>
+    canInteract && (authorID === userID || canDecide)
   const who = (id: string, name: string) =>
     id === userID ? 'You' : name || 'Collaborator'
 
@@ -227,6 +283,7 @@ export function CommentCard({
         <time className='text-[10px] tabular-nums' dateTime={thread.createdAt}>
           {new Date(thread.createdAt).toLocaleString()}
         </time>
+        {thread.editedAt ? <span className='text-[10px]'>edited</span> : null}
         {orphaned ? (
           <span className='rounded-sm bg-border px-1 font-mono text-[10.5px] text-foreground'>
             text changed
@@ -235,22 +292,59 @@ export function CommentCard({
         {resolved ? <span>Resolved</span> : null}
       </div>
       <Quote text={thread.selectedText} />
-      {orphaned ? (
-        // Nothing to show in the document, so this is plain text.
-        <p className='py-2 break-words whitespace-pre-wrap'>{thread.content}</p>
+      {editing === 'thread' ? (
+        <CommentForm
+          id={`comment-edit-${thread.id}`}
+          label='Edit comment'
+          submitLabel='Save'
+          initial={thread.content}
+          autoFocus
+          pending={edit.isPending}
+          onSubmit={(content) => edit.mutate({ replyID: null, content })}
+          onCancel={() => setEditing(null)}
+        />
       ) : (
-        <Button
-          type='button'
-          variant='ghost'
-          size='sm'
-          className='h-auto min-h-11 w-full justify-start px-0 py-2 text-left text-xs font-normal whitespace-normal text-foreground'
-          aria-label={`Show in document: ${thread.selectedText || thread.content}`}
-          onClick={() => onSelect(thread.id)}
-        >
-          <span className='break-words whitespace-pre-wrap'>
-            {thread.content}
-          </span>
-        </Button>
+        <>
+          {orphaned ? (
+            // Nothing to show in the document, so this is plain text.
+            <p className='py-2 break-words whitespace-pre-wrap'>
+              {thread.content}
+            </p>
+          ) : (
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='h-auto min-h-11 w-full justify-start px-0 py-2 text-left text-xs font-normal whitespace-normal text-foreground'
+              aria-label={`Show in document: ${thread.selectedText || thread.content}`}
+              onClick={() => onSelect(thread.id)}
+            >
+              <span className='break-words whitespace-pre-wrap'>
+                {thread.content}
+              </span>
+            </Button>
+          )}
+          {canChange(thread.authorId) ? (
+            <div className='flex gap-1'>
+              {thread.authorId === userID ? (
+                <Button
+                  size='sm'
+                  variant='ghost'
+                  onClick={() => setEditing('thread')}
+                >
+                  Edit
+                </Button>
+              ) : null}
+              <Button
+                size='sm'
+                variant='ghost'
+                onClick={() => setDeleting({ replyID: null })}
+              >
+                Delete
+              </Button>
+            </div>
+          ) : null}
+        </>
       )}
       {resolved && thread.replies.length ? (
         <Button
@@ -278,8 +372,52 @@ export function CommentCard({
                 >
                   {new Date(item.createdAt).toLocaleString()}
                 </time>
+                {item.editedAt ? (
+                  <span className='text-[10px] text-muted-foreground'>
+                    edited
+                  </span>
+                ) : null}
               </p>
-              <p className='break-words whitespace-pre-wrap'>{item.content}</p>
+              {editing === item.id ? (
+                <CommentForm
+                  id={`comment-edit-${item.id}`}
+                  label='Edit reply'
+                  submitLabel='Save'
+                  initial={item.content}
+                  autoFocus
+                  pending={edit.isPending}
+                  onSubmit={(content) =>
+                    edit.mutate({ replyID: item.id, content })
+                  }
+                  onCancel={() => setEditing(null)}
+                />
+              ) : (
+                <>
+                  <p className='break-words whitespace-pre-wrap'>
+                    {item.content}
+                  </p>
+                  {canChange(item.authorId) ? (
+                    <div className='flex gap-1'>
+                      {item.authorId === userID ? (
+                        <Button
+                          size='sm'
+                          variant='ghost'
+                          onClick={() => setEditing(item.id)}
+                        >
+                          Edit reply
+                        </Button>
+                      ) : null}
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => setDeleting({ replyID: item.id })}
+                      >
+                        Delete reply
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
+              )}
             </li>
           ))}
         </ul>
@@ -305,6 +443,26 @@ export function CommentCard({
           </Button>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null)
+        }}
+        title={
+          deleting?.replyID ? 'Delete this reply?' : 'Delete this comment?'
+        }
+        desc={
+          deleting?.replyID
+            ? 'The reply is removed for everyone.'
+            : thread.replies.length
+              ? `The comment and its ${thread.replies.length} ${thread.replies.length === 1 ? 'reply are' : 'replies are'} removed for everyone.`
+              : 'The comment is removed for everyone.'
+        }
+        confirmText='Delete'
+        destructive
+        isLoading={remove.isPending}
+        handleConfirm={() => remove.mutate(deleting?.replyID ?? null)}
+      />
     </li>
   )
 }

@@ -209,7 +209,8 @@ func validateTypedObject(raw json.RawMessage, types map[string]string, nonEmpty 
 	return nil
 }
 
-// validateScalarObject accepts an object whose values are all booleans or strings.
+// validateScalarObject accepts an object whose values are all booleans, numbers,
+// or strings (a heading level is a number).
 func validateScalarObject(raw json.RawMessage) error {
 	object, err := suggestionObject(raw)
 	if err != nil {
@@ -221,9 +222,9 @@ func validateScalarObject(raw json.RawMessage) error {
 			return fmt.Errorf("%q is not valid JSON", key)
 		}
 		switch decoded.(type) {
-		case bool, string:
+		case bool, string, float64:
 		default:
-			return fmt.Errorf("%q must be a boolean or a string", key)
+			return fmt.Errorf("%q must be a boolean, a number, or a string", key)
 		}
 	}
 	return nil
