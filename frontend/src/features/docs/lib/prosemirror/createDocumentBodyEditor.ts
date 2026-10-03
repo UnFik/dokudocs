@@ -52,6 +52,7 @@ import {
   type InlineMarkName,
   type InlineState,
 } from './inlineMarks'
+import { joinParagraphs } from './joinParagraphs'
 import { nodeSuggestionOf } from './nodeSuggestion'
 import {
   DeleteNodeRequiredError,
@@ -522,6 +523,80 @@ export function createDocumentBodyEditor(
     return true
   }
 
+  // Delete or Backspace over a selection inside one paragraph. Text that leaves
+  // a run with some text is an ordinary edit, left to the browser. A run whose
+  // whole text is selected would end up empty, and a canonical run cannot be
+  // emptied by an edit: it goes through DeleteNode, with the text left at the
+  // ends trimmed, as for a selection across blocks.
+  const deleteWholeRuns = (selection: Selection) => {
+    if (selection.empty || !(selection instanceof TextSelection)) return false
+    const { $from, $to } = selection
+    let depth = $from.depth
+    while (depth > 0 && !$from.node(depth).isTextblock) depth--
+    if (
+      depth === 0 ||
+      $to.depth < depth ||
+      $to.node(depth) !== $from.node(depth)
+    )
+      return false
+    const block = $from.node(depth)
+    const roots: string[] = []
+    const trims: { from: number; to: number }[] = []
+    let onlyRuns = true
+    block.forEach((child, offset) => {
+      const nodeID = child.attrs.nodeID
+      if (child.type.name !== 'run' || typeof nodeID !== 'string') {
+        onlyRuns = false
+        return
+      }
+      const textStart = $from.start(depth) + offset + 1
+      const textEnd = textStart + child.content.size
+      const from = Math.max(selection.from, textStart)
+      const to = Math.min(selection.to, textEnd)
+      if (from >= to) return
+      if (from === textStart && to === textEnd) roots.push(nodeID)
+      else trims.push({ from, to })
+    })
+    if (!onlyRuns || !roots.length) return false
+    if (trims.length) {
+      let trim = state.tr
+      for (const range of [...trims].reverse())
+        trim = trim.delete(range.from, range.to)
+      viewHolder.current?.dispatch(trim)
+    }
+    return queueDeleteNode(roots)
+  }
+
+  // Ctrl or Alt with Backspace or Delete: the browser finds the word, then the
+  // selection it made is deleted by the same routes as any other selection, so a
+  // word that is a whole run does not hit the guard against emptying a run.
+  const deleteWord = (forward: boolean) => {
+    const range = window.getSelection()
+    if (!range || !range.isCollapsed) return false
+    range.modify('extend', forward ? 'forward' : 'backward', 'word')
+    const selection = selectionNow(viewHolder.current!)
+    if (selection.empty) return false
+    if (deleteAcrossBlocks(selection) || deleteWholeRuns(selection)) return true
+    if (!(selection instanceof TextSelection)) return false
+    const tr = state.tr.delete(selection.from, selection.to)
+    tr.setSelection(TextSelection.create(tr.doc, selection.from))
+    viewHolder.current?.dispatch(tr)
+    return true
+  }
+
+  // Backspace at the start of a paragraph, or Delete at the end of the one
+  // before: the two become one. The text goes up as an edit first, then the
+  // lower paragraph is deleted.
+  const joinNeighbours = (forward: boolean) => {
+    const current = stateAtDomSelection(viewHolder.current!)
+    const upper = joinTarget(current, forward)
+    if (upper === null) return false
+    const join = joinParagraphs(current, upper)
+    if (!join) return false
+    if (join.transaction) viewHolder.current?.dispatch(join.transaction)
+    return queueDeleteNode([join.deleteNodeID])
+  }
+
   // Delete at the end of a paragraph, or Backspace at the start of one, next to
   // a separator removes the separator. The browser has nothing to merge with, so
   // it does nothing on its own.
@@ -857,6 +932,17 @@ export function createDocumentBodyEditor(
         return true
       }
       if (
+        (event.altKey || event.ctrlKey) &&
+        !(event.altKey && event.ctrlKey) &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        (event.key === 'Backspace' || event.key === 'Delete') &&
+        deleteWord(event.key === 'Delete')
+      ) {
+        event.preventDefault()
+        return true
+      }
+      if (
         !event.altKey &&
         !event.ctrlKey &&
         !event.metaKey &&
@@ -876,6 +962,8 @@ export function createDocumentBodyEditor(
         !event.shiftKey &&
         (event.key === 'Backspace' || event.key === 'Delete') &&
         (deleteAcrossBlocks(selectionNow(editorView)) ||
+          deleteWholeRuns(selectionNow(editorView)) ||
+          joinNeighbours(event.key === 'Delete') ||
           deleteNeighbouringSeparator(
             event.key as 'Delete' | 'Backspace',
             selectionNow(editorView)
