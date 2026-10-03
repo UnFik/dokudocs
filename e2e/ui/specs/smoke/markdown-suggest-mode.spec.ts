@@ -191,7 +191,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await expect(page.getByRole("status")).toContainText("Synced");
     await page.getByRole("button", { name: "Review", exact: true }).click();
     const ownerCards = page.getByRole("list", {
-      name: "Suggestions in this document",
+      name: "Suggestions and comments",
     });
 
     // Add: typing at the end is one suggestion, shown in place to both.
@@ -335,7 +335,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenter.keyboard.press("End");
     await commenter.keyboard.type("?");
     const commenterCards = commenter.getByRole("list", {
-      name: "Suggestions in this document",
+      name: "Suggestions and comments",
     });
     await expect(commenterCards).toContainText('Add: "?"');
     await expect(
@@ -356,7 +356,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
       viewer.getByRole("complementary", { name: "Review" }),
     ).toBeVisible();
     const viewerCards = viewer.getByRole("list", {
-      name: "Suggestions in this document",
+      name: "Suggestions and comments",
     });
     await expect(viewerCards).toContainText('Add: "?"');
     await viewer.getByRole("button", { name: "Preview rejected" }).click();
@@ -396,7 +396,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
       .getByRole("button", { name: "Accept all", exact: true })
       .click();
     await expect(
-      page.getByText(/No suggestions in this document/),
+      page.getByText(/No suggestions or comments yet/),
     ).toBeVisible();
     await expect(ownerEditor).toContainText("Changed phrase?");
     await expect.poll(canonicalRuns).toEqual(["Changed phrase?"]);
@@ -412,7 +412,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
       .getByRole("button", { name: "Reject all", exact: true })
       .click();
     await expect(
-      page.getByText(/No suggestions in this document/),
+      page.getByText(/No suggestions or comments yet/),
     ).toBeVisible();
     await expect(ownerEditor).toContainText("Changed phrase?");
     await expect.poll(canonicalRuns).toEqual(["Changed phrase?"]);

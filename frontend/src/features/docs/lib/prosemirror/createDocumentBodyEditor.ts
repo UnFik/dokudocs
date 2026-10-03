@@ -653,6 +653,73 @@ export function createDocumentBodyEditor(
     }
   }
 
+  // Defined before the view: creating it can already dispatch a transaction.
+  const createAnchorFor = (from: number, to: number): DocumentBodyAnchor => {
+    const nodeID = blockNodeIDAt(state.doc, from)
+    if (from >= to || blockNodeIDAt(state.doc, to) !== nodeID)
+      throw new Error('comment anchor must stay within one block')
+    const mapping = ySyncPluginKey.getState(state)?.binding.mapping
+    if (!mapping) throw new Error('editor Yjs mapping is unavailable')
+    return {
+      nodeID,
+      start: Y.encodeRelativePosition(
+        absolutePositionToRelativePosition(from, fragment, mapping)
+      ),
+      end: Y.encodeRelativePosition(
+        absolutePositionToRelativePosition(to, fragment, mapping)
+      ),
+    }
+  }
+  const resolveAnchorRange = (anchor: DocumentBodyAnchor) => {
+    try {
+      const mapping = ySyncPluginKey.getState(state)?.binding.mapping
+      if (!mapping) return null
+      const from = relativePositionToAbsolutePosition(
+        ydoc,
+        fragment,
+        Y.decodeRelativePosition(anchor.start),
+        mapping
+      )
+      const to = relativePositionToAbsolutePosition(
+        ydoc,
+        fragment,
+        Y.decodeRelativePosition(anchor.end),
+        mapping
+      )
+      if (
+        from === null ||
+        to === null ||
+        from >= to ||
+        blockNodeIDAt(state.doc, from) !== anchor.nodeID ||
+        blockNodeIDAt(state.doc, to) !== anchor.nodeID
+      )
+        return null
+      return { from, to }
+    } catch {
+      return null
+    }
+  }
+  // Works out where every comment thread is now, and redraws the marks only
+  // when something moved.
+  const refreshComments = () => {
+    const view = viewHolder.current
+    if (!view) return
+    const positions: Record<string, number | null> = {}
+    const ranges: { id: string; from: number; to: number }[] = []
+    for (const thread of commentThreads) {
+      const range = thread.anchor ? resolveAnchorRange(thread.anchor) : null
+      positions[thread.id] = range ? range.from : null
+      if (range && !thread.resolved)
+        ranges.push({ id: thread.id, from: range.from, to: range.to })
+    }
+    const encoded = JSON.stringify([ranges, positions])
+    if (encoded === lastCommentState) return
+    lastCommentState = encoded
+    commentRanges = ranges
+    options.onCommentPositions?.(positions)
+    view.dispatch(view.state.tr.setMeta(commentsKey, 'refresh'))
+  }
+
   const view = new EditorView(mount, {
     state,
     nodeViews: options.nodeViews,
@@ -833,72 +900,6 @@ export function createDocumentBodyEditor(
   undoManager?.on('stack-cleared', publishHistory)
   ensureEmptyParagraph()
   publishSuggestionCards()
-
-  const createAnchorFor = (from: number, to: number): DocumentBodyAnchor => {
-    const nodeID = blockNodeIDAt(state.doc, from)
-    if (from >= to || blockNodeIDAt(state.doc, to) !== nodeID)
-      throw new Error('comment anchor must stay within one block')
-    const mapping = ySyncPluginKey.getState(state)?.binding.mapping
-    if (!mapping) throw new Error('editor Yjs mapping is unavailable')
-    return {
-      nodeID,
-      start: Y.encodeRelativePosition(
-        absolutePositionToRelativePosition(from, fragment, mapping)
-      ),
-      end: Y.encodeRelativePosition(
-        absolutePositionToRelativePosition(to, fragment, mapping)
-      ),
-    }
-  }
-  const resolveAnchorRange = (anchor: DocumentBodyAnchor) => {
-    try {
-      const mapping = ySyncPluginKey.getState(state)?.binding.mapping
-      if (!mapping) return null
-      const from = relativePositionToAbsolutePosition(
-        ydoc,
-        fragment,
-        Y.decodeRelativePosition(anchor.start),
-        mapping
-      )
-      const to = relativePositionToAbsolutePosition(
-        ydoc,
-        fragment,
-        Y.decodeRelativePosition(anchor.end),
-        mapping
-      )
-      if (
-        from === null ||
-        to === null ||
-        from >= to ||
-        blockNodeIDAt(state.doc, from) !== anchor.nodeID ||
-        blockNodeIDAt(state.doc, to) !== anchor.nodeID
-      )
-        return null
-      return { from, to }
-    } catch {
-      return null
-    }
-  }
-  // Works out where every comment thread is now, and redraws the marks only
-  // when something moved.
-  const refreshComments = () => {
-    const view = viewHolder.current
-    if (!view) return
-    const positions: Record<string, number | null> = {}
-    const ranges: { id: string; from: number; to: number }[] = []
-    for (const thread of commentThreads) {
-      const range = thread.anchor ? resolveAnchorRange(thread.anchor) : null
-      positions[thread.id] = range ? range.from : null
-      if (range && !thread.resolved)
-        ranges.push({ id: thread.id, from: range.from, to: range.to })
-    }
-    const encoded = JSON.stringify([ranges, positions])
-    if (encoded === lastCommentState) return
-    lastCommentState = encoded
-    commentRanges = ranges
-    options.onCommentPositions?.(positions)
-    view.dispatch(view.state.tr.setMeta(commentsKey, 'refresh'))
-  }
 
   return {
     view,
