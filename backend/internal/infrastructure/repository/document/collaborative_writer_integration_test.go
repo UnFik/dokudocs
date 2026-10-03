@@ -440,7 +440,7 @@ func TestCollaborativeWriterCommitsBodyAndYjsAtomically(t *testing.T) {
 	}
 }
 
-func TestMoveNodeCommitsReceiptAndKeepsOldEpochMergeable(t *testing.T) {
+func TestMoveNodeCommitsReceiptAndFencesOldEpoch(t *testing.T) {
 	ctx := context.Background()
 	db, err := sql.Open("pgx", integrationDatabaseURL(t))
 	if err != nil {
@@ -522,15 +522,11 @@ func TestMoveNodeCommitsReceiptAndKeepsOldEpochMergeable(t *testing.T) {
 	if err != nil || !documentbody.SameContent(snapshot.Body, projected) {
 		t.Fatalf("moved Yjs projection = (%v, %v), want committed AST", projected, err)
 	}
-	// The command edited the stored state in place, so the history continues and
-	// an update from the old epoch still merges (ADR 0028). The receipt names
-	// the current epoch.
-	oldEpochReceipt, err := writer.CommitUpdate(ctx, actor, collaboration.Update{
+	if _, err := writer.CommitUpdate(ctx, actor, collaboration.Update{
 		DocumentID: documentID, UpdateID: uuid.New(), BodyEpoch: 1,
 		BodySchemaVersion: yjs.BodySchemaVersionV1, Bytes: state,
-	})
-	if err != nil || oldEpochReceipt.BodyEpoch != snapshot.BodyEpoch {
-		t.Fatalf("old-epoch update = (%+v, %v), want it merged and acknowledged at epoch %d", oldEpochReceipt, err, snapshot.BodyEpoch)
+	}); !errors.Is(err, collaboration.ErrStaleBodyEpoch) {
+		t.Fatalf("old-epoch update error = %v, want %v", err, collaboration.ErrStaleBodyEpoch)
 	}
 
 	noOp := collaboration.MoveNodeCommand{
@@ -544,7 +540,7 @@ func TestMoveNodeCommitsReceiptAndKeepsOldEpochMergeable(t *testing.T) {
 	}
 }
 
-func TestDeleteNodeCommitsReceiptAndKeepsOldEpochMergeable(t *testing.T) {
+func TestDeleteNodeCommitsReceiptAndFencesOldEpoch(t *testing.T) {
 	ctx := context.Background()
 	db, err := sql.Open("pgx", integrationDatabaseURL(t))
 	if err != nil {
@@ -656,15 +652,11 @@ func TestDeleteNodeCommitsReceiptAndKeepsOldEpochMergeable(t *testing.T) {
 	if err != nil || !documentbody.SameContent(snapshot.Body, projected) {
 		t.Fatalf("deleted Yjs projection = (%v, %v), want committed AST", projected, err)
 	}
-	// The command edited the stored state in place, so the history continues and
-	// an update from the old epoch still merges (ADR 0028). The receipt names
-	// the current epoch.
-	oldEpochReceipt, err := writer.CommitUpdate(ctx, actor, collaboration.Update{
+	if _, err := writer.CommitUpdate(ctx, actor, collaboration.Update{
 		DocumentID: documentID, UpdateID: uuid.New(), BodyEpoch: 1,
 		BodySchemaVersion: yjs.BodySchemaVersionV1, Bytes: state,
-	})
-	if err != nil || oldEpochReceipt.BodyEpoch != snapshot.BodyEpoch {
-		t.Fatalf("old-epoch update = (%+v, %v), want it merged and acknowledged at epoch %d", oldEpochReceipt, err, snapshot.BodyEpoch)
+	}); !errors.Is(err, collaboration.ErrStaleBodyEpoch) {
+		t.Fatalf("old-epoch update error = %v, want %v", err, collaboration.ErrStaleBodyEpoch)
 	}
 }
 

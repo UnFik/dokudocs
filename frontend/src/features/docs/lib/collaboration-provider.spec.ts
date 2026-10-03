@@ -2499,7 +2499,8 @@ describe('CollaborativeDocumentProvider compatible epochs', () => {
       bodyEpoch: 1,
       compatEpoch: 1,
       bodySchemaVersion: 1,
-      canEdit: true,
+      canEdit: false,
+      canSuggest: true,
       state: base64(Y.encodeStateAsUpdate(document)),
     })
     await flushPromises()
@@ -2541,7 +2542,8 @@ describe('CollaborativeDocumentProvider compatible epochs', () => {
         bodyEpoch: 2,
         compatEpoch: 1,
         bodySchemaVersion: 1,
-        canEdit: true,
+        canEdit: false,
+        canSuggest: true,
         state: base64(Y.encodeStateAsUpdate(document)),
       })
       await flushPromises()
@@ -2550,6 +2552,80 @@ describe('CollaborativeDocumentProvider compatible epochs', () => {
       document.getText('body').insert(0, 'after the resync')
       await flushPromises()
       expect(sentUpdates(socket).at(-1)?.bodyEpoch).toBe(2)
+    } finally {
+      provider.stop()
+    }
+  })
+
+  it('keeps the review path for an editor, whose edit could aim at a deleted block', async () => {
+    const { document, socket, provider } = await readyProvider()
+    try {
+      socket.receive({
+        type: 'resync',
+        bodyVersion: 2,
+        bodyEpoch: 2,
+        compatEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: true,
+        state: base64(Y.encodeStateAsUpdate(document)),
+      })
+      await flushPromises()
+
+      document.getText('body').insert(0, 'an editor typing')
+      await flushPromises()
+      expect(
+        sentUpdates(socket).filter((message) => message.bodyEpoch === 2)
+      ).toEqual([])
+    } finally {
+      provider.stop()
+    }
+  })
+
+  it('does not take a newer epoch on trust for an edit made offline', async () => {
+    const document = new Y.Doc()
+    document.getText('body').insert(0, 'typed offline')
+    const store = new MemoryStore()
+    store.updates.set('offline', {
+      updateID: 'offline',
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      update: Y.encodeStateAsUpdate(document),
+    })
+    const socket = new FakeSocket()
+    const provider = new CollaborativeDocumentProvider({
+      documentID: 'document-1',
+      workspaceID: 'workspace-1',
+      userID: 'user-1',
+      token: 'jwt-token',
+      document: new Y.Doc(),
+      bodyVersion: 1,
+      bodyEpoch: 1,
+      bodySchemaVersion: 1,
+      store,
+      socketFactory: () => socket,
+      batchIntervalMs: 0,
+    })
+    try {
+      await provider.start()
+      socket.open()
+      socket.receive({
+        type: 'ready',
+        bodyVersion: 2,
+        bodyEpoch: 2,
+        compatEpoch: 1,
+        bodySchemaVersion: 1,
+        canEdit: false,
+        canSuggest: true,
+        state: base64(Y.encodeStateAsUpdate(new Y.Doc())),
+      })
+      await flushPromises()
+
+      // The edit may be aimed at a block deleted meanwhile, so it is not sent
+      // as if nothing had changed; it keeps the review path.
+      expect(
+        sentUpdates(socket).filter((message) => message.bodyEpoch === 2)
+      ).toEqual([])
+      expect(store.updates.has('offline')).toBe(true)
     } finally {
       provider.stop()
     }
@@ -2565,7 +2641,8 @@ describe('CollaborativeDocumentProvider compatible epochs', () => {
         bodyEpoch: 2,
         compatEpoch: 2,
         bodySchemaVersion: 1,
-        canEdit: true,
+        canEdit: false,
+        canSuggest: true,
         state: base64(Y.encodeStateAsUpdate(new Y.Doc())),
       })
       await flushPromises()
