@@ -120,6 +120,7 @@ type CommentThread struct {
 	Content      string          `json:"content"`
 	Anchor       json.RawMessage `json:"anchor,omitempty"`
 	CreatedAt    time.Time       `json:"createdAt"`
+	EditedAt     *time.Time      `json:"editedAt,omitempty"`
 	ResolvedAt   *time.Time      `json:"resolvedAt,omitempty"`
 	ResolvedBy   *uuid.UUID      `json:"resolvedBy,omitempty"`
 	Replies      []CommentReply  `json:"replies"`
@@ -133,4 +134,6 @@ type CommentReply struct {
 	AuthorName string    `json:"authorName"`
 	Content    string    `json:"content"`
 	CreatedAt  time.Time `json:"createdAt"`
+	// EditedAt is set once the author has changed the text.
+	EditedAt *time.Time `json:"editedAt,omitempty"`
 }

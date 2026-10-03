@@ -197,6 +197,7 @@ const commentReplySchema = z.object({
   authorName: z.string().optional().default(''),
   content: z.string(),
   createdAt: z.string(),
+  editedAt: z.string().nullable().optional(),
 })
 const commentThreadSchema = z.object({
   id: z.guid(),
@@ -214,6 +215,7 @@ const commentThreadSchema = z.object({
       return parsed.success ? parsed.data : null
     }),
   createdAt: z.string(),
+  editedAt: z.string().nullable().optional(),
   resolvedAt: z.string().nullable().optional(),
   resolvedBy: z.guid().nullable().optional(),
   replies: z
@@ -679,6 +681,61 @@ export async function replyToDocumentComment(
       headers: workspaceHeaders(workspaceId),
       body: JSON.stringify(input),
     }
+  )
+}
+
+/** Changes the text of a thread's first message. Only its author may. */
+export async function editDocumentComment(
+  workspaceId: string,
+  documentId: string,
+  threadId: string,
+  content: string
+): Promise<void> {
+  await apiFetch<void>(`/api/v1/documents/${documentId}/comments/${threadId}`, {
+    method: 'PATCH',
+    headers: workspaceHeaders(workspaceId),
+    body: JSON.stringify({ content }),
+  })
+}
+
+/** Removes a thread with its replies. Its author or an editor may. */
+export async function deleteDocumentComment(
+  workspaceId: string,
+  documentId: string,
+  threadId: string
+): Promise<void> {
+  await apiFetch<void>(`/api/v1/documents/${documentId}/comments/${threadId}`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(workspaceId),
+  })
+}
+
+export async function editDocumentCommentReply(
+  workspaceId: string,
+  documentId: string,
+  threadId: string,
+  replyId: string,
+  content: string
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/comments/${threadId}/replies/${replyId}`,
+    {
+      method: 'PATCH',
+      headers: workspaceHeaders(workspaceId),
+      body: JSON.stringify({ content }),
+    }
+  )
+}
+
+export async function deleteDocumentCommentReply(
+  workspaceId: string,
+  documentId: string,
+  threadId: string,
+  replyId: string
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/comments/${threadId}/replies/${replyId}`,
+    { method: 'DELETE', headers: workspaceHeaders(workspaceId) }
   )
 }
 
