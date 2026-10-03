@@ -7,6 +7,9 @@ export type NodeSuggestion = {
   kind: 'insert' | 'delete' | 'format'
   id: string
   author: string
+  /** A format suggestion: the node type and attributes it would take. */
+  toType?: string
+  toAttributes?: Record<string, unknown>
 }
 
 function parse(node: ProseMirrorNode): Record<string, unknown> {

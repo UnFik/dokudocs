@@ -1,5 +1,6 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model'
 import { nodeSuggestionOf } from './nodeSuggestion'
+import { levelLabel, proposedLevel } from './trackBlockType'
 
 // What the review rail shows for a suggestion. A card is not stored: its kind and
 // title are worked out from the marks, so a suggestion that gains a deletion next
@@ -31,7 +32,9 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
       const suggestion = nodeSuggestionOf(node)
       if (
         suggestion &&
-        (suggestion.kind === 'insert' || suggestion.kind === 'delete')
+        (suggestion.kind === 'insert' ||
+          suggestion.kind === 'delete' ||
+          suggestion.kind === 'format')
       ) {
         let card = cards.get(suggestion.id)
         if (!card) {
@@ -51,6 +54,10 @@ export function suggestionCards(doc: ProseMirrorNode): SuggestionCard[] {
         if (suggestion.kind === 'insert') {
           // Its text carries insert marks of its own, counted below.
           card.insertedBlocks++
+        } else if (suggestion.kind === 'format') {
+          const label = levelLabel(proposedLevel(node) ?? 0)
+          if (!card.formats.includes(label)) card.formats.push(label)
+          card.formatted += node.textContent
         } else {
           card.deleted += node.textContent
           card.deletedBlocks++
