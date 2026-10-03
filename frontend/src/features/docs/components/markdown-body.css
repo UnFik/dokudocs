@@ -325,3 +325,59 @@
   color: inherit;
   text-decoration: none;
 }
+
+/* A block-type suggestion: the block keeps its type, a small label names the
+   proposed one, and Preview accepted shows the block as that type. */
+.markdown-body .suggest-block-fmt {
+  background-color: color-mix(in srgb, var(--suggest-color) 10%, transparent);
+  outline: 1px dashed var(--suggest-color);
+  outline-offset: 2px;
+}
+
+.markdown-body .suggest-block-fmt::before {
+  content: attr(data-suggest-label);
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-fmt,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-block-fmt {
+  background: none;
+  outline: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-fmt::before,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-block-fmt::before {
+  content: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-p {
+  font-size: 1em;
+  font-weight: 400;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h1 {
+  font-size: 2em;
+  font-weight: 700;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h2 {
+  font-size: 1.5em;
+  font-weight: 700;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h3 {
+  font-size: 1.25em;
+  font-weight: 700;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h4,
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h5,
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h6 {
+  font-size: 1.05em;
+  font-weight: 700;
+}
