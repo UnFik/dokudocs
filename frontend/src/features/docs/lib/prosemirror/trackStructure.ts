@@ -390,6 +390,44 @@ function suggestSplit(
 }
 
 /**
+ * Deleting a separator in Suggest mode: the separator stays, marked as proposed
+ * for deletion, and an editor accepting it deletes it for real. Backspace after
+ * it, Delete before it, or the separator selected and Delete all come here.
+ */
+export function suggestDeleteSeparator(
+  state: EditorState,
+  position: number,
+  options: TrackOptions
+): Transaction {
+  const node = state.doc.nodeAt(position)
+  if (!node || node.type.name !== 'thematic_break')
+    throw new UnsupportedSuggestionError('There is no separator here.')
+  const existing = nodeSuggestionOf(node)
+  if (existing && existing.author !== options.author)
+    throw new UnsupportedSuggestionError(
+      'Decide the other suggestion on this separator first.'
+    )
+  const tr = state.tr
+  if (existing?.kind === 'delete') {
+    // The same gesture again takes the proposal back.
+    tr.setNodeMarkup(position, undefined, withNodeSuggestion(node, null))
+    return tr
+  }
+  if (existing)
+    throw new UnsupportedSuggestionError('This separator is already changing.')
+  tr.setNodeMarkup(
+    position,
+    undefined,
+    withNodeSuggestion(node, {
+      kind: 'delete',
+      id: newID(options),
+      author: options.author,
+    })
+  )
+  return tr
+}
+
+/**
  * Backspace at the start of a paragraph, or Delete at the end of the one before
  * it: join the two. `upper` is the position before the first paragraph. The
  * second paragraph is proposed for deletion and a copy of its text is added to
@@ -405,6 +443,11 @@ export function suggestJoin(
   const secondPos = first ? upper + first.nodeSize : -1
   const second = secondPos >= 0 ? doc.nodeAt(secondPos) : null
   const parentName = doc.resolve(upper).parent.type.name
+  // A separator between the two is deleted, not joined into anything.
+  if (first?.type.name === 'thematic_break')
+    return suggestDeleteSeparator(state, upper, options)
+  if (second?.type.name === 'thematic_break')
+    return suggestDeleteSeparator(state, secondPos, options)
   if (
     first &&
     second &&

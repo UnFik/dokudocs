@@ -73,6 +73,8 @@ export async function mountCollaborativeDocumentBody(
       deleteCommands: PendingDeleteNodeCommand[],
       moveCommands: PendingMoveNodeCommand[]
     ) => void
+    onBodyAdvanced?: (body: MarkdownBodySnapshot) => void
+    onEditDropped?: (code: string) => void
     onCanonicalBody?: (body: MarkdownBodySnapshot) => void
     onHeldEdits?: (edits: HeldEdit[]) => void
     onBodyChange?: (body: DocumentBodyNode[]) => void
@@ -100,6 +102,7 @@ export async function mountCollaborativeDocumentBody(
   }
   let destroyEditor = () => {}
   let showRemoteCursors: (cursors: RemoteCursor[]) => void = () => {}
+  let finishStructural = () => {}
   const cursorSender = createCursorSender((selection) =>
     provider?.sendCursor(selection)
   )
@@ -152,6 +155,11 @@ export async function mountCollaborativeDocumentBody(
       onRemoteCursors: (cursors) => showRemoteCursors(cursors),
       onCommentsChanged: input.onCommentsChanged,
       onCanonicalBody: input.onCanonicalBody,
+      onBodyAdvanced: (body) => {
+        finishStructural()
+        input.onBodyAdvanced?.(body)
+      },
+      onEditDropped: input.onEditDropped,
       onHeldEdits: input.onHeldEdits,
       onCanEdit: (canEdit) => {
         // A caller that handles onCanEdit owns the mode, whether or not it asked
@@ -198,12 +206,19 @@ export async function mountCollaborativeDocumentBody(
       onSelectionChange: cursorSender.send,
     })
     showRemoteCursors = (cursors) => editor.setRemoteCursors(cursors)
-    const caretHint = caretHints.get(input.documentID)
-    caretHints.delete(input.documentID)
-    if (caretHint && !editorReadOnly)
-      requestAnimationFrame(() =>
-        editor.focusBlock(caretHint.nodeID, caretHint.edge)
-      )
+    const placeCaret = () => {
+      const caretHint = caretHints.get(input.documentID)
+      caretHints.delete(input.documentID)
+      if (caretHint && !editorReadOnly)
+        requestAnimationFrame(() =>
+          editor.focusBlock(caretHint.nodeID, caretHint.edge)
+        )
+    }
+    finishStructural = () => {
+      editor.finishStructuralCommand()
+      placeCaret()
+    }
+    placeCaret()
     if (input.focusNodeID) {
       requestAnimationFrame(() => {
         const target = Array.from(

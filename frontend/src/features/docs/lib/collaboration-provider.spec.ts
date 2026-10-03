@@ -2236,6 +2236,72 @@ describe('CollaborativeDocumentProvider access loss and session expiry', () => {
   const sentUpdates = (socket: FakeSocket) =>
     socket.sent.map((f) => JSON.parse(f)).filter((f) => f.type === 'update')
 
+  const reloadedBody = {
+    bodyVersion: 2,
+    bodyEpoch: 1,
+    bodySchemaVersion: 1,
+    canEdit: true,
+    rootNodeID: 'root',
+    nodes: [],
+    encodedState: base64(new Uint8Array()),
+  } as unknown as Awaited<
+    ReturnType<typeof import('@/lib/domain-api').getMarkdownBody>
+  >
+
+  it.each(['needs_command', 'invalid_body', 'not_permitted'])(
+    'drops an edit the server refuses as %s and reloads the body without asking for review',
+    async (code) => {
+      const reloaded: unknown[] = []
+      const dropped: string[] = []
+      const { provider, document, store, sockets, statuses } =
+        await connectedProvider({
+          documentID: `document-${code}`,
+          refreshCanonicalBody: async () => reloadedBody,
+          onCanonicalBody: (body) => reloaded.push(body),
+          onEditDropped: (reason) => dropped.push(reason),
+        })
+      document.getText('body').insert(4, ' typed')
+      await wait(60)
+      const [first] = sentUpdates(sockets[0]!)
+      expect(first).toBeDefined()
+
+      sockets[0]!.receive({ type: 'error', updateID: first.updateID, code })
+      await wait(40)
+
+      expect(statuses).not.toContain('recovery-required')
+      expect(dropped).toEqual([code])
+      expect(store.updates.size).toBe(0)
+      expect(reloaded).toHaveLength(1)
+      provider.stop()
+    }
+  )
+
+  it('asks for review when the same refusal keeps coming back on every load', async () => {
+    const outcomes: string[][] = []
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const statuses: string[] = []
+      const { provider, document, sockets } = await connectedProvider({
+        documentID: 'document-repeating',
+        refreshCanonicalBody: async () => reloadedBody,
+        onStatus: (status) => statuses.push(status),
+      })
+      document.getText('body').insert(4, ' typed')
+      await wait(60)
+      const [first] = sentUpdates(sockets[0]!)
+      sockets[0]!.receive({
+        type: 'error',
+        updateID: first.updateID,
+        code: 'invalid_body',
+      })
+      await wait(40)
+      outcomes.push(statuses)
+      provider.stop()
+    }
+    expect(outcomes[0]).not.toContain('recovery-required')
+    expect(outcomes[1]).not.toContain('recovery-required')
+    expect(outcomes[2]).toContain('recovery-required')
+  })
+
   it('drops the cached body and pending edits when access is revoked mid-edit', async () => {
     const { provider, document, store, sockets, statuses } =
       await connectedProvider()

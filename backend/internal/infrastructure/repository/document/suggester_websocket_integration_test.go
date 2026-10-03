@@ -153,10 +153,10 @@ func TestWebSocketCarriesACommentersSuggestionAndRefusesAnythingElse(t *testing.
 			}
 		}
 	}
-	expectRefused("an edit to canonical text", "update_rejected", func(tx *crdt.Transaction, root *crdt.YXmlElement) {
+	expectRefused("an edit to canonical text", "not_permitted", func(tx *crdt.Transaction, root *crdt.YXmlElement) {
 		w.text(root).Insert(tx, 0, ">", crdt.Attributes{})
 	})
-	expectRefused("a suggestion in the editor's name", "update_rejected", func(tx *crdt.Transaction, root *crdt.YXmlElement) {
+	expectRefused("a suggestion in the editor's name", "not_permitted", func(tx *crdt.Transaction, root *crdt.YXmlElement) {
 		w.text(root).Insert(tx, 0, "x", w.mark("insert", w.editor, uuid.New()))
 	})
 	// The editor makes a suggestion of their own; the commenter may not alter it.
@@ -174,7 +174,7 @@ func TestWebSocketCarriesACommentersSuggestionAndRefusesAnythingElse(t *testing.
 			break
 		}
 	}
-	expectRefused("another user's suggestion changed", "update_rejected", func(tx *crdt.Transaction, root *crdt.YXmlElement) {
+	expectRefused("another user's suggestion changed", "not_permitted", func(tx *crdt.Transaction, root *crdt.YXmlElement) {
 		w.text(root).Delete(tx, 0, 2)
 	})
 	expectRefused("too much suggested text", "suggestion_limit", func(tx *crdt.Transaction, root *crdt.YXmlElement) {

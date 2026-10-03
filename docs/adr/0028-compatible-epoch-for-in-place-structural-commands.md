@@ -11,3 +11,6 @@ Considered: letting the client compare state vectors and adopt the new epoch whe
 Editors are left out on purpose. An editor's update can aim at text in a block the structural command deleted, or be an edit made offline, and a merge would make it vanish without a word; for them a stale epoch still sends the edit to review. A suggestion that lands in a deleted block costs less, and a commenter has no review path to fall back on.
 
 Consequence: one more column and one more frame field, and every writer of `body_epoch` must say whether it rebuilt the state.
+
+Follow-up (issue #99): because the history continues, the client that ran a DeleteNode merges the server's state into its live document instead of rebuilding the editor. The caret, scroll and focus stay, and nothing flashes. The undo history from before the command is dropped, as the rebuild used to do, since undoing an edit to a block the command removed would delete nodes outside any command. A frame for the new epoch that reaches the room while the command is in flight is left to the command's own result, and the client catches up once afterwards. MoveNode still rebuilds.
+

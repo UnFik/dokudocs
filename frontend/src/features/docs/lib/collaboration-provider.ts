@@ -87,8 +87,15 @@ export type CollaborativeDocumentProviderOptions = Omit<
   ) => Promise<MarkdownBodySnapshot>
   refreshCanonicalBody?: () => Promise<MarkdownBodySnapshot>
   onCanonicalBody?: (body: MarkdownBodySnapshot) => void
+  /**
+   * A DeleteNode finished and its result was merged into the live document, so
+   * the editor was not rebuilt. The body is what the server now holds.
+   */
+  onBodyAdvanced?: (body: MarkdownBodySnapshot) => void
   /** Called when a partial rebase kept some conflicting edits back for review. */
   onHeldEdits?: (edits: HeldEdit[]) => void
+  /** An edit the server refused as the editor's own mistake was dropped; for the log. */
+  onEditDropped?: (code: string) => void
   onRecovery?: (
     reason: RecoveryReason,
     pending: PendingCollaborationUpdate[],
@@ -98,6 +105,13 @@ export type CollaborativeDocumentProviderOptions = Omit<
 }
 
 const activeProviders = new Map<string, CollaborativeDocumentProvider>()
+
+// Edits the server refused as the editor's own mistake are dropped and the body
+// is loaded again. If that keeps happening the mistake is repeating on every
+// load, so the person is asked to review instead of being stuck in a loop.
+const droppedEditTimes = new Map<string, number[]>()
+const droppedEditLimit = 2
+const droppedEditWindowMs = 30_000
 
 /** The running provider for this user and document, if the editor is open. */
 export function activeProviderFor(scope: CollaborationScope) {
@@ -135,6 +149,9 @@ export class CollaborativeDocumentProvider {
   private storageQueue: Promise<void> = Promise.resolve()
   private started = false
   private applyingCommand = false
+  // A frame for a newer epoch arrived while a DeleteNode was in flight and was
+  // left for the command's own result to cover; catch up once it lands.
+  private missedDuringCommand = false
   private canonicalRefreshStarted = false
   private rebasing = false
   private lastBatchSentAt = 0
@@ -656,6 +673,7 @@ export class CollaborativeDocumentProvider {
   private async applyResync(
     frame: Parameters<CollaborationSocketOptions['onFrame']>[0]
   ) {
+    if (this.coveredByCommandInFlight(frame)) return
     this.adoptCompatibleEpoch(frame)
     if (!this.isCurrentGeneration(frame) || !frame.state) {
       if (
@@ -700,6 +718,7 @@ export class CollaborativeDocumentProvider {
   private async applyRemoteUpdate(
     frame: Parameters<CollaborationSocketOptions['onFrame']>[0]
   ) {
+    if (this.coveredByCommandInFlight(frame)) return
     if (!this.isCurrentGeneration(frame) || !frame.update) {
       this.requireRecovery(this.generationMismatchReason(frame))
       return
@@ -807,6 +826,14 @@ export class CollaborativeDocumentProvider {
       void this.rebaseOnline()
       return
     }
+    if (
+      code === 'needs_command' ||
+      code === 'invalid_body' ||
+      code === 'not_permitted'
+    ) {
+      await this.dropRejectedEdit(code)
+      return
+    }
     this.requireRecovery(
       code === 'stale_epoch'
         ? 'epoch-changed'
@@ -814,6 +841,132 @@ export class CollaborativeDocumentProvider {
           ? 'schema-changed'
           : 'update-rejected'
     )
+  }
+
+  /**
+   * A frame for a newer epoch while this client's own DeleteNode is in flight is
+   * the room hearing about that very command. The command's result brings the
+   * state, so the frame is left alone instead of being taken for a conflict.
+   */
+  private coveredByCommandInFlight(
+    frame: Parameters<CollaborationSocketOptions['onFrame']>[0]
+  ) {
+    if (
+      !this.applyingCommand ||
+      this.pendingDeleteCommands.size === 0 ||
+      frame.bodyEpoch === undefined ||
+      frame.bodyEpoch <= this.options.bodyEpoch ||
+      frame.bodySchemaVersion !== this.options.bodySchemaVersion
+    )
+      return false
+    this.missedDuringCommand = true
+    return true
+  }
+
+  /**
+   * A DeleteNode succeeded. The server edited the stored state in place and kept
+   * its history (ADR 0028), so its state merges into the live document: the
+   * deleted blocks disappear where they are and the editor, its caret and its
+   * undo history stay. Returns false when that is not possible and the caller
+   * rebuilds the editor instead.
+   */
+  private adoptDeleteInPlace(body: MarkdownBodySnapshot) {
+    if (
+      !this.options.onBodyAdvanced ||
+      this.stopped ||
+      this.pending.size > 0 ||
+      this.hasPendingStructuralCommand() ||
+      body.bodySchemaVersion !== this.options.bodySchemaVersion
+    )
+      return false
+    try {
+      Y.applyUpdate(
+        this.options.document,
+        decodeBase64(body.encodedState),
+        this.remoteOrigin
+      )
+    } catch {
+      return false
+    }
+    this.options.bodyEpoch = body.bodyEpoch
+    if (body.compatEpoch !== undefined)
+      this.options.compatEpoch = body.compatEpoch
+    this.bodyVersion = Math.max(this.bodyVersion, body.bodyVersion)
+    this.options.onBodyVersion?.(this.bodyVersion)
+    this.options.onBodyAdvanced(body)
+    if (this.missedDuringCommand) {
+      this.missedDuringCommand = false
+      void this.catchUpAfterCommand()
+    }
+    return true
+  }
+
+  // Updates that reached the room while the command was in flight were left
+  // out; the body as the server has it now holds them.
+  private async catchUpAfterCommand() {
+    try {
+      const body = this.options.refreshCanonicalBody
+        ? await this.options.refreshCanonicalBody()
+        : await getMarkdownBody(
+            this.options.workspaceID,
+            this.options.documentID
+          )
+      if (
+        this.stopped ||
+        this.terminal ||
+        body.bodyEpoch !== this.options.bodyEpoch ||
+        body.bodySchemaVersion !== this.options.bodySchemaVersion
+      )
+        return
+      Y.applyUpdate(
+        this.options.document,
+        decodeBase64(body.encodedState),
+        this.remoteOrigin
+      )
+      this.bodyVersion = Math.max(this.bodyVersion, body.bodyVersion)
+      this.options.onBodyVersion?.(this.bodyVersion)
+    } catch {
+      // The next frame from the room carries the same state.
+    }
+  }
+
+  /**
+   * The server refused an edit because the editor built something it should
+   * not have (a delete outside a command, an invalid body, a change someone who
+   * can only suggest may not make). That is not a conflict between people, so
+   * there is nothing to review: the edit and the ones built on it are dropped
+   * and the body is loaded again. Offline edits and a loop of the same mistake
+   * keep the review path, so nothing a person wrote is lost silently.
+   */
+  private async dropRejectedEdit(code: string) {
+    const key = `${this.scope.userID}:${this.scope.documentID}`
+    const now = Date.now()
+    const recent = (droppedEditTimes.get(key) ?? []).filter(
+      (time) => now - time < droppedEditWindowMs
+    )
+    if (
+      this.hasPendingStructuralCommand() ||
+      this.hasOfflineEdits() ||
+      recent.length >= droppedEditLimit
+    ) {
+      this.requireRecovery('update-rejected')
+      return
+    }
+    droppedEditTimes.set(key, [...recent, now])
+    this.terminal = true
+    this.ready = false
+    this.options.document.off('update', this.handleYUpdate)
+    this.socket?.close()
+    this.pending.clear()
+    try {
+      await this.enqueueStorage(() => this.store.clear(this.scope))
+    } catch {
+      this.failStorage()
+      return
+    }
+    this.options.onEditDropped?.(code)
+    this.setStatus('closed')
+    await this.refreshCanonicalBody()
   }
 
   private isCurrentGeneration(
@@ -1023,6 +1176,7 @@ export class CollaborativeDocumentProvider {
       )
       if (this.storageFailed || this.stopped) return
       this.pendingDeleteCommands.delete(command.commandID)
+      if (this.adoptDeleteInPlace(body)) return
       this.terminal = true
       this.ready = false
       this.options.document.off('update', this.handleYUpdate)
@@ -1322,6 +1476,7 @@ export class CollaborativeDocumentProvider {
       if (deleteCommand)
         this.pendingDeleteCommands.delete(deleteCommand.commandID)
       if (moveCommand) this.pendingMoveCommands.delete(moveCommand.commandID)
+      if (deleteCommand && this.adoptDeleteInPlace(body)) return
       this.terminal = true
       this.ready = false
       this.options.document.off('update', this.handleYUpdate)

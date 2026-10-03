@@ -575,6 +575,11 @@ test("@live @smoke @deletegestures: after a line is deleted the caret is back an
   const diagnose = watch(page);
   const { editor } = await openDocument(page, threeParagraphs);
   await diagnose(async () => {
+    // The editor element is marked: if it is the same one after the delete, the
+    // editor was not rebuilt (no flash, caret and undo history stay).
+    await editor.evaluate((element) => {
+      element.setAttribute("data-probe", "same-editor");
+    });
     await editor
       .locator("p")
       .filter({ hasText: "Beta" })
@@ -582,6 +587,7 @@ test("@live @smoke @deletegestures: after a line is deleted the caret is back an
     await page.keyboard.press("Backspace");
     await expect(editor).not.toContainText("Beta");
     await expect(editor).toBeVisible();
+    await expect(editor).toHaveAttribute("data-probe", "same-editor");
     await expect(editor.locator("p").first())
       .toBeFocused({ timeout: 10000 })
       .catch(() => {});
@@ -594,3 +600,37 @@ test("@live @smoke @deletegestures: after a line is deleted the caret is back an
     await expect(editor).toContainText("X");
   });
 });
+
+for (const key of ["Control+Delete", "Control+Backspace"]) {
+  test(`@live @smoke @deletegestures: ${key} on an empty line joins or removes it and shows no message`, async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    const diagnose = watch(page);
+    const { editor } = await openDocument(page, threeParagraphs);
+    await diagnose(async () => {
+      await editor.locator("p").filter({ hasText: "Beta" }).click();
+      await page.keyboard.press("Home");
+      await page.keyboard.press("Shift+End");
+      await expect
+        .poll(() => page.evaluate(() => window.getSelection()?.toString()))
+        .toBe("Beta");
+      await page.keyboard.press("Backspace");
+      await expect(editor).not.toContainText("Beta");
+      await expect(editor.locator("p")).toHaveCount(3);
+      // The caret is put back next to the empty line; click into it.
+      await editor.locator("p").nth(1).click();
+      await page.keyboard.press(key);
+      await expect(editor.locator("p")).toHaveCount(2);
+      await expect(editor).toContainText("Alpha");
+      await expect(editor).toContainText("Gamma");
+      await expect(page.getByText(/cannot be deleted in one step/)).toHaveCount(
+        0,
+      );
+      await expectNoReviewBanner(page);
+      await page.reload();
+      await expect(page.getByRole("status")).toContainText("Synced");
+      await expect(editor.locator("p")).toHaveCount(2);
+    });
+  });
+}
