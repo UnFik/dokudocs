@@ -32,6 +32,7 @@ export type CollaborationFrame = {
     | 'presence'
     | 'cursor'
     | 'cursor_leave'
+    | 'comments_changed'
   code?: string
   updateID?: string
   bodyVersion?: number
@@ -55,6 +56,7 @@ const serverFrameTypes = [
   'presence',
   'cursor',
   'cursor_leave',
+  'comments_changed',
 ]
 
 type SocketLike = {
@@ -110,7 +112,7 @@ export class CollaborationSocket {
         type: 'auth',
         token: this.options.token,
         workspaceID: this.options.workspaceID,
-        capabilities: ['presence', 'cursor'],
+        capabilities: ['presence', 'cursor', 'comments'],
       })
     )
   }
@@ -319,6 +321,9 @@ function isServerEnvelope(value: unknown): value is ServerEnvelope {
           (typeof value.cursor.anchor === 'string' &&
             typeof value.cursor.head === 'string'))
       )
+    // A hint that comments changed; it names nothing.
+    case 'comments_changed':
+      return true
     case 'presence':
       return (
         Array.isArray(value.users) &&

@@ -15,6 +15,9 @@ import {
   initializeMarkdownBody,
   listDocuments,
   listDocumentSuggestions,
+  listDocumentComments,
+  createDocumentComment,
+  setDocumentCommentResolved,
   listProjects,
   listRAGConversations,
   listWorkspaces,
@@ -149,6 +152,70 @@ describe('Dokudocs domain API adapter', () => {
     const [suggestion] = await listDocumentSuggestions(workspaceId, documentId)
     expect(suggestion?.deciderId).toBe(seededUser)
     expect(suggestion?.conflictReason).toBe('base')
+  })
+
+  it('lists comment threads, reading a malformed or missing anchor as none', async () => {
+    const thread = {
+      id: '11111111-1111-4111-8111-111111111111',
+      documentId,
+      authorId: '22222222-2222-4222-8222-222222222222',
+      authorName: 'Dewi',
+      selectedText: 'plain',
+      content: 'is this right?',
+      createdAt: '2026-10-03T00:00:00Z',
+      replies: null,
+    }
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse([
+        { ...thread, anchor: { nodeID: 'n1', start: 'AA==', end: 'AQ==' } },
+        { ...thread, id: '33333333-3333-4333-8333-333333333333' },
+        {
+          ...thread,
+          id: '44444444-4444-4444-8444-444444444444',
+          anchor: { nodeID: 'n1' },
+        },
+      ])
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    const threads = await listDocumentComments(workspaceId, documentId)
+
+    expect(threads.map((item) => item.anchor?.nodeID ?? null)).toEqual([
+      'n1',
+      null,
+      null,
+    ])
+    expect(threads[0]?.replies).toEqual([])
+    expect(String(fetch.mock.calls[0]![0])).toContain(
+      `/documents/${documentId}/comments`
+    )
+  })
+
+  it('starts a comment thread with the client id and resolves it', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 201 }))
+    vi.stubGlobal('fetch', fetch)
+    const threadID = '11111111-1111-4111-8111-111111111111'
+
+    await createDocumentComment(workspaceId, documentId, {
+      threadID,
+      selectedText: 'plain',
+      content: 'why?',
+      anchor: { nodeID: 'n1', start: 'AA==', end: 'AQ==' },
+    })
+    await setDocumentCommentResolved(workspaceId, documentId, threadID, true)
+    await setDocumentCommentResolved(workspaceId, documentId, threadID, false)
+
+    const [create, resolve, reopen] = fetch.mock.calls as [
+      string,
+      RequestInit,
+    ][]
+    expect(String(create[0])).toContain(`/documents/${documentId}/comments`)
+    expect(JSON.parse(String(create[1].body))).toMatchObject({
+      threadID,
+      content: 'why?',
+    })
+    expect(String(resolve[0])).toMatch(/comments\/.+\/resolve$/)
+    expect(String(reopen[0])).toMatch(/comments\/.+\/reopen$/)
   })
 
   it('requests a public share token with workspace scope', async () => {
