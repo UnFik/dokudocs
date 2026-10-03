@@ -55,3 +55,83 @@ test("@live @smoke @markdowninput: a paste the importer cannot read lands as pla
   await expect(editor).toContainText("after the list");
   await expectNoInternalMessage(page);
 });
+
+test("@live @smoke @markdowninput: typing Markdown marks turns into formatting without its delimiters", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const { editor } = await openMarkdownDocument(page, ["start", ""]);
+  await editor.locator("p").nth(1).click();
+  await page.keyboard.type(
+    "**bold** and *it* and `code` and ~~gone~~ and [docs](https://example.test/a) done",
+  );
+
+  await expect(editor.locator("strong")).toHaveText("bold");
+  await expect(editor.locator("em")).toHaveText("it");
+  await expect(editor.locator("code")).toHaveText("code");
+  await expect(editor.locator("s")).toHaveText("gone");
+  await expect(editor.locator("[data-link-href]")).toHaveText("docs");
+  await expect(editor.locator("p").nth(1)).toHaveText(
+    "bold and it and code and gone and docs done",
+  );
+  await expectNoInternalMessage(page);
+
+  await expect(page.getByRole("status")).toContainText("Synced");
+  await page.reload();
+  await expect(page.getByRole("status")).toContainText("Synced");
+  await expect(editor.locator("strong")).toHaveText("bold");
+  await expect(editor.locator("[data-link-href]")).toHaveText("docs");
+});
+
+const blockCases: [string, string, string, string][] = [
+  ["- one", "ul > li", "one", "a bulleted list"],
+  ["1. one", "ol > li", "one", "a numbered list"],
+  ["[ ] one", "ul > li", "one", "a task list"],
+  ["> one", "blockquote", "one", "a quote"],
+  ["```js ", "pre", "", "a code block"],
+  ["# one", "h1", "one", "a heading"],
+];
+
+for (const [typed, selector, text, name] of blockCases) {
+  test(`@live @smoke @markdowninput: typing "${typed}" at the start of a line makes ${name}, and what follows is not lost`, async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    const { editor } = await openMarkdownDocument(page, ["start", ""]);
+    await editor.locator("p").nth(1).click();
+    // Typed in one go: the keys after the marker arrive while the old line is
+    // being replaced, and must not be dropped.
+    await page.keyboard.type(typed);
+
+    await expect(editor.locator(selector)).toHaveCount(1);
+    if (text) await expect(editor.locator(selector)).toContainText(text);
+    // The line the marker was typed on is gone.
+    await expect(editor.locator(":scope > div > p")).toHaveCount(1);
+    await expectNoInternalMessage(page);
+
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await page.reload();
+    await expect(page.getByRole("status")).toContainText("Synced");
+    await expect(editor.locator(selector)).toHaveCount(1);
+    if (text) await expect(editor.locator(selector)).toContainText(text);
+    await expect(editor.locator(":scope > div > p")).toHaveCount(1);
+  });
+}
+
+test("@live @smoke @markdowninput: typing --- makes a separator with a line after it", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const { editor } = await openMarkdownDocument(page, ["start", ""]);
+  await editor.locator("p").nth(1).click();
+  await page.keyboard.type("---");
+  await expect(editor.locator("hr")).toHaveCount(1);
+  await page.keyboard.type("after");
+  await expect(editor.locator("p").last()).toHaveText("after");
+  await expectNoInternalMessage(page);
+  await expect(page.getByRole("status")).toContainText("Synced");
+  await page.reload();
+  await expect(page.getByRole("status")).toContainText("Synced");
+  await expect(editor.locator("hr")).toHaveCount(1);
+  await expect(editor.locator("p").last()).toHaveText("after");
+});
