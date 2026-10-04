@@ -84,3 +84,23 @@ Run P0 on a branch (`spike/hocuspocus`), time-boxed to 4 days, with the exit cri
 ## Schema changes in short
 
 Almost none are needed up front. The Yjs state already has a table (`document_collab_states`), comment anchors are Yjs relative positions and stay valid, and the AST table stays as a derived read model. New: a rollout flag (`documents.collab_engine`), and optionally a JSON cache column. Removed later, in the cleanup phase only: `body_epoch`, `compat_epoch`, `document_command_receipts` and the restore-receipt columns on revisions. No data conversion: existing states are used byte for byte.
+
+## Editor and page features: a separate workstream
+
+This plan is about collaboration and storage only. Outline's document page also has features that do not depend on the engine and can be built on the current stack at any time. Compared from `references/outline` (what its code has) and this repository (what exists):
+
+| Feature | Outline | DokuDocs now |
+|---|---|---|
+| Heading, list, bold, italic, code, strike, link by shortcut or Markdown typing | yes | yes (shortcuts, selection toolbar, typing rules from #104) |
+| Slash block menu | yes (headings, lists, quote, code, table, divider, math, diagrams, notice, embeds, attachments, toggle) | yes, shorter: headings 1 to 3, lists, task list, quote, code, table, divider, math, mermaid |
+| "+" button on an empty line that opens the block menu | yes (`block-menu-trigger` decoration) | no, only the `/` key |
+| Drag handle to move a block | yes | yes (block handle, MoveNode) |
+| Table of contents beside the text, with the current heading highlighted | yes (`Contents`) | no |
+| Document meta line under the title: updated by whom, relative time, draft, last viewed | yes (`DocumentMeta`) | only a "Last saved at" tooltip |
+| Title as the first line of the page | yes (`DocumentTitle`) | title is edited in the header |
+| Underline, highlight, mentions (`@`), emoji menu, notice blocks, toggle blocks, embeds, video, attachments | yes | no |
+| Find and replace, hover previews, document stats, references and backlinks, presentation mode | yes | no |
+| Comments in a gutter, suggestions, version history, share, presence | comments, history, share, presence | all of these, and suggest mode, which Outline lacks |
+
+Order if this workstream is taken on: the "+" trigger and the document meta line (small, no schema), the contents panel (reads headings from the editor state), then new block types. A new block type is the expensive kind: it needs a schema node, Markdown import and export, and, while the AST projection and its validation exist (D3 (a)), a Go node type. Under the new engine the server stops validating contents, so only the projection needs to learn it, or treat it as opaque.
+
