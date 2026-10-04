@@ -1,12 +1,14 @@
-# Plan: Hocuspocus and Yjs state, mirroring Outline's collaboration flow
+# Plan: mirroring Outline: Hocuspocus and Yjs state, and the editor and page features
 
-Status: draft for discussion. Nothing here is built. Numbers marked "measured" come from the repository; durations are rough estimates by one reader of the code, not commitments.
+Status: draft for discussion. Two tracks: **A** the collaboration engine (Hocuspocus, Yjs state) and **B** the editor and page features Outline has. Nothing here is built. Numbers marked "measured" come from the repository; durations are rough estimates by one reader of the code, not commitments.
 
 ## Why
 
 Most of the trouble in collaborative editing comes from one design choice: the server checks every update against a canonical AST and answers with epochs, structural commands (DeleteNode, MoveNode) and a review screen. Deleting a line, undoing a delete, pasting a document and offline merging each need a special path, and each path has produced a user-visible error (`update-rejected`, "structural deletion requires a DeleteNode command", a rebuilt editor that loses the caret). Outline avoids the class of problem: the Yjs document is the only source of truth and the server relays and stores it.
 
-Goal: users never see an internal error from an ordinary edit (CONTEXT.md, Seamless Edit), deletes and undo behave like any editor, and the collaboration code is small enough to own.
+Second goal: the document page and editor offer what Outline's do (contents panel, document meta line, title as the first line, the "+" on empty lines, the full block menu and the editing helpers around it), on top of the suggest mode and comments that Outline lacks.
+
+Goal of track A: users never see an internal error from an ordinary edit (CONTEXT.md, Seamless Edit), deletes and undo behave like any editor, and the collaboration code is small enough to own.
 
 ## What Outline does (read from `references/outline`)
 
@@ -61,8 +63,12 @@ Goal: users never see an internal error from an ordinary edit (CONTEXT.md, Seaml
 | P5 Consumers | search, RAG, export, import, duplicate, list, revisions, restore | each reads the projection or `content`; restore reloads the room | 1 week |
 | P6 Cutover | flag per workspace, dual run, switch, watch error rates | no `update-rejected`-class errors in the logs for a week | 1 week plus watching |
 | P7 Cleanup | delete the Go collaboration stack, epochs, commands, review UI and their tests; mark ADRs 0017 to 0028 superseded where they are; update CONTEXT.md | no dead code left | 3 to 5 days |
+| B1 Small features | see track B | each feature has an e2e or unit test; no regression in smoke | 2 to 3 weeks, parallel to P0 to P3 |
+| B2 New node types | see track B | each type round-trips Markdown and persists | 2 to 3 weeks, after P6 |
+| B3 Service-backed features | see track B | | about 3 weeks |
+| B4 Uploads, embeds, large features | see track B | storage decision recorded as an ADR first | months |
 
-Total, one engineer: about 6 to 10 weeks with D2 (a), 4 to 6 weeks with D2 (b). The spike is what makes these numbers real.
+Total for track A, one engineer: about 6 to 10 weeks with D2 (a), 4 to 6 weeks with D2 (b). Track B1 to B3 adds about 7 to 9 weeks and can overlap track A; B4 is not estimated. The spike is what makes these numbers real.
 
 ## Risks
 
@@ -75,32 +81,62 @@ Total, one engineer: about 6 to 10 weeks with D2 (a), 4 to 6 weeks with D2 (b). 
 
 ## Not in scope
 
-Changing the editor's look or features, the permission model, the Markdown importer, or moving file storage. Images and attachments keep their current handling; the orphaned-asset question for suggestions (issue #94) stays open under D2.
+The permission model and moving file storage. Uploads and embeds are in track B tier 3 and wait for a storage decision; the orphaned-asset question for suggestions (issue #94) stays open under D2.
 
 ## First step
 
-Run P0 on a branch (`spike/hocuspocus`), time-boxed to 4 days, with the exit criteria above, and decide go or stop from what it shows. Until then the incremental fixes (#98, #101, #103, #104) stay the way to improve the editor.
+Two things can start at once and do not block each other. Track A: run P0 on a branch (`spike/hocuspocus`), time-boxed to 4 days, with the exit criteria above, and decide go or stop from what it shows. Track B: start B1 on the current stack, beginning with the "+" trigger and the document meta line. Until the cutover, the incremental editor fixes (#98, #101, #103, #104) remain the way to improve the editor.
 
 ## Schema changes in short
 
 Almost none are needed up front. The Yjs state already has a table (`document_collab_states`), comment anchors are Yjs relative positions and stay valid, and the AST table stays as a derived read model. New: a rollout flag (`documents.collab_engine`), and optionally a JSON cache column. Removed later, in the cleanup phase only: `body_epoch`, `compat_epoch`, `document_command_receipts` and the restore-receipt columns on revisions. No data conversion: existing states are used byte for byte.
 
-## Editor and page features: a separate workstream
+## Track B: mirroring Outline's editor and page features
 
-This plan is about collaboration and storage only. Outline's document page also has features that do not depend on the engine and can be built on the current stack at any time. Compared from `references/outline` (what its code has) and this repository (what exists):
+Read from `references/outline` (names, menus, and the doc comments of the extensions). Where only a name or a one-line comment was read, the row says "check before building". Do not copy code (licence, above); reimplement behaviour.
+
+### What exists on each side
 
 | Feature | Outline | DokuDocs now |
 |---|---|---|
-| Heading, list, bold, italic, code, strike, link by shortcut or Markdown typing | yes | yes (shortcuts, selection toolbar, typing rules from #104) |
-| Slash block menu | yes (headings, lists, quote, code, table, divider, math, diagrams, notice, embeds, attachments, toggle) | yes, shorter: headings 1 to 3, lists, task list, quote, code, table, divider, math, mermaid |
-| "+" button on an empty line that opens the block menu | yes (`block-menu-trigger` decoration) | no, only the `/` key |
-| Drag handle to move a block | yes | yes (block handle, MoveNode) |
-| Table of contents beside the text, with the current heading highlighted | yes (`Contents`) | no |
-| Document meta line under the title: updated by whom, relative time, draft, last viewed | yes (`DocumentMeta`) | only a "Last saved at" tooltip |
-| Title as the first line of the page | yes (`DocumentTitle`) | title is edited in the header |
-| Underline, highlight, mentions (`@`), emoji menu, notice blocks, toggle blocks, embeds, video, attachments | yes | no |
-| Find and replace, hover previews, document stats, references and backlinks, presentation mode | yes | no |
-| Comments in a gutter, suggestions, version history, share, presence | comments, history, share, presence | all of these, and suggest mode, which Outline lacks |
+| Heading, list, bold, italic, code, strike, link | yes | yes (shortcuts, selection toolbar, typing rules) |
+| Block menu `/` | headings in 4 sizes, todo, bulleted, ordered, image, video, embed PDF, file attachment, table, quote, code, math, divider, page break, current date, toggle block and 4 toggle headings, 4 notices (info, success, warning, tip), Mermaid, Diagrams.net | headings 1 to 3, bulleted, ordered, task, quote, code, table, divider, math, mermaid |
+| "+" button on an empty line that opens the block menu | yes (`block-menu-trigger`) | no |
+| Contents panel beside the text, current heading highlighted; headings inside tables left out | yes (`Contents`) | no |
+| Document meta line: updated by, relative time, draft, last viewed | yes (`DocumentMeta`) | a "Last saved at" tooltip |
+| Title as the first line, Up arrow at the start of the body goes to it | yes (`DocumentTitle`, `UpArrowAtStart`; check before building) | title edited in the header |
+| Heading anchors (copy link to a heading) | yes (`HeadingPrefix`; check before building) | no |
+| Trailing empty paragraph so the end of the page can be clicked | yes (`TrailingNode`) | no |
+| Undo a Markdown conversion with Backspace right after it | yes (`InputRuleUndo`; check before building) | no |
+| Smart quotes, ellipsis, arrows | yes (`SmartText`, a user preference) | no |
+| Marks: underline, highlight (colours) | yes | no |
+| Notice and toggle blocks, current date, page break | yes | no |
+| Mentions `@`, emoji menu `:` | yes | no |
+| Find and replace | yes (`FindAndReplace`) | no |
+| Paste handling: link paste, paste menu, other tools' HTML | yes (`PasteHandler`, `PasteMenu`) | Markdown and HTML paste, no menu |
+| Hover previews of links | yes (`HoverPreviews`) | no |
+| Comment gutter indicator | yes (`CommentGutter`, off on narrow screens) | comment rail |
+| Size warning, maximum length, document stats | yes (`SizeWarning`, `MaxLength`, `DocumentStats`; check before building) | no |
+| Image, video, file attachment, embeds (15 embed types in `shared/editor/embeds`) | yes | image node only |
+| Presentation mode, references and backlinks, insights (views), revision change navigation | yes | no |
+| Following another user (`ObservingBanner`), connection status | yes (need awareness and the provider; check before building) | presence avatars and cursors, status text |
+| Version history, share, presence, comments | yes | yes |
+| Suggest mode | no | yes |
 
-Order if this workstream is taken on: the "+" trigger and the document meta line (small, no schema), the contents panel (reads headings from the editor state), then new block types. A new block type is the expensive kind: it needs a schema node, Markdown import and export, and, while the AST projection and its validation exist (D3 (a)), a Go node type. Under the new engine the server stops validating contents, so only the projection needs to learn it, or treat it as opaque.
+### Tiers and rough effort (one engineer)
+
+| Tier | Items | Depends on | Effort |
+|---|---|---|---|
+| B1: small, no schema | "+" trigger; document meta line (needs "updated by" from the API); title as first line with Up arrow and Enter; contents panel; heading anchors; trailing paragraph; Backspace undo of a typing rule; smart text | nothing in track A | 2 to 3 weeks |
+| B2: new node or mark types | underline and highlight; 4th heading level; page break; current date; notices; toggle blocks | Markdown import and export for each (underline and highlight have no Markdown form: decide HTML or drop on export); Go AST type and validation until the new engine is live | 2 to 3 weeks; do after the cutover (P6) so the Go validation is not written and then deleted |
+| B3: needs services | mentions and emoji (user directory API); find and replace; paste menu; link hover previews; comment gutter; size warning and stats | mentions need the workspace member API | 3 weeks |
+| B4: large | uploads (image, video, file, PDF) and embeds; presentation mode; references and backlinks; insights; revision change navigation; following a user | storage decision (S3 or local, orphan assets, issue #94); awareness from track A for following | open-ended, months |
+
+Order: B1 can start now, in parallel with P0, on the current stack. B2 waits for track A's cutover. B3 can interleave. B4 is planned only after a storage decision.
+
+### Interactions with track A
+
+- Under D3 (a) every new node type needs a Go node type and validation for the AST projection; under the new engine the projection can skip unknown types as opaque, so building B2 after P6 is cheaper.
+- Following a user and the live connection indicator come from Hocuspocus awareness and provider status, so they are built in P3, not in B4.
+- The "+" trigger, contents panel and document meta line are independent of the engine and survive the migration unchanged.
 
