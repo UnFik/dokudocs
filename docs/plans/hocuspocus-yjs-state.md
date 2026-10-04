@@ -55,7 +55,7 @@ Goal: users never see an internal error from an ordinary edit (CONTEXT.md, Seaml
 |---|---|---|---|
 | P0 Spike | Node Hocuspocus service, auth call to Go, load and store `state`, our schema in the editor, two browsers | delete line, delete all, Ctrl+Z after delete, paste the PRD fixture, offline edit and reconnect all work with no special path and no error; decide D2 | 3 to 4 days |
 | P1 Service | Production Node service: auth, persistence, limits, Redis, logging, metrics, health; compose and CI; internal Go endpoints | service runs behind the gateway; load test (collab-load) passes at current targets | 1 to 2 weeks |
-| P2 Data | `state` BYTEA and `content` JSONB on documents (backfill from existing Yjs state); AST projection from `state` | migration reversible; backfilled `content` matches the AST export for every seeded document | 3 to 5 days |
+| P2 Data | The Yjs state already lives in `document_collab_states.encoded_state` and keeps working as is (same schema, same field `body`). Add `documents.collab_engine` for the rollout flag; `documents.content_json` only if the first paint should come from a JSON cache (optional, the client can render from `encoded_state`). The AST projection (`document_nodes`) and `document_suggestions` are written after each debounced store instead of each update. Epoch, receipt and restore-receipt columns stay until P7 | migration reversible; projection and suggestion index match the legacy ones for every seeded document; search and RAG tolerate the projection lagging a few seconds | 3 to 5 days |
 | P3 Frontend | HocuspocusProvider + y-indexeddb; cached `content` first paint; drop provider, recovery, review, epochs, command locks, remount code; awareness for presence and cursors | existing editor e2e specs pass minus the removed ones | 1 to 2 weeks |
 | P4 Permissions, suggestions, comments | per D2; comment hints by stateless message | suggester cannot change canonical text (ported tests); comments live | 1 to 3 weeks (D2 (a) is the long end) |
 | P5 Consumers | search, RAG, export, import, duplicate, list, revisions, restore | each reads the projection or `content`; restore reloads the room | 1 week |
@@ -80,3 +80,7 @@ Changing the editor's look or features, the permission model, the Markdown impor
 ## First step
 
 Run P0 on a branch (`spike/hocuspocus`), time-boxed to 4 days, with the exit criteria above, and decide go or stop from what it shows. Until then the incremental fixes (#98, #101, #103, #104) stay the way to improve the editor.
+
+## Schema changes in short
+
+Almost none are needed up front. The Yjs state already has a table (`document_collab_states`), comment anchors are Yjs relative positions and stay valid, and the AST table stays as a derived read model. New: a rollout flag (`documents.collab_engine`), and optionally a JSON cache column. Removed later, in the cleanup phase only: `body_epoch`, `compat_epoch`, `document_command_receipts` and the restore-receipt columns on revisions. No data conversion: existing states are used byte for byte.
