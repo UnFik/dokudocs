@@ -3,18 +3,27 @@ export type Access = { canRead: boolean; canEdit: boolean; canSuggest: boolean }
 
 export type Authorized = Access & { userID: string }
 
+/** What is kept of a document: the Yjs state and the JSON derived from it. */
 export type StoredDocument = {
   workspaceID: string
   documentID: string
   /** The whole Yjs state, as `Y.encodeStateAsUpdate` gives it. */
   state: Uint8Array
+  /** The document as ProseMirror JSON. */
+  content: unknown
+}
+
+export type LoadedDocument = {
+  /** Null for a document made from JSON alone; the service builds the state from `content`. */
+  state: Uint8Array | null
+  content: unknown | null
 }
 
 /** The Go API, seen from the collaboration service. */
 export interface BackendApi {
   /** The user behind the token and what they may do here, or null when the token is not valid. */
   authorize(token: string, workspaceID: string, documentID: string): Promise<Authorized | null>
-  /** The stored state, or null for a document that has none yet. */
-  loadState(workspaceID: string, documentID: string): Promise<Uint8Array | null>
+  /** Throws when the document is not in the workspace. */
+  loadDocument(workspaceID: string, documentID: string): Promise<LoadedDocument>
   storeState(document: StoredDocument): Promise<void>
 }
