@@ -33,6 +33,7 @@ func InitRoutesWithShutdown(c *container.Container, cfg config.Config) (http.Han
 	addWorkspaceRoutes(appGroup, c, cfg)
 	addProjectRoutes(appGroup, c, cfg)
 	shutdownCollaboration := addDocumentRoutes(appGroup, c, cfg)
+	addCollabInternalRoutes(mux, c, cfg)
 
 	return mux, shutdownCollaboration
 }
