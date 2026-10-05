@@ -1,7 +1,7 @@
 import { createServer } from 'node:net'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import * as Y from 'yjs'
-import type { BackendApi, Access, StoredDocument } from '../src/backend-api'
+import type { BackendApi, Access, LoadedDocument, StoredDocument } from '../src/backend-api'
 
 export function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -17,7 +17,7 @@ export function freePort(): Promise<number> {
 /** An in-memory stand-in for the Go API: the boundary the service talks to. */
 export class FakeBackend implements BackendApi {
   tokens = new Map<string, { userID: string; access: Access }>()
-  states = new Map<string, Uint8Array>()
+  documents = new Map<string, LoadedDocument>()
   stores: StoredDocument[] = []
 
   grant(token: string, userID: string, access: Partial<Access> = {}) {
@@ -33,13 +33,13 @@ export class FakeBackend implements BackendApi {
     return { userID: found.userID, ...found.access }
   }
 
-  async loadState(_workspaceID: string, documentID: string) {
-    return this.states.get(documentID) ?? null
+  async loadDocument(_workspaceID: string, documentID: string): Promise<LoadedDocument> {
+    return this.documents.get(documentID) ?? { state: null, content: null }
   }
 
   async storeState(document: StoredDocument) {
     this.stores.push(document)
-    this.states.set(document.documentID, document.state)
+    this.documents.set(document.documentID, { state: document.state, content: document.content })
   }
 }
 

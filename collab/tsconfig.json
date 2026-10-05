@@ -8,8 +8,28 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "types": ["node"],
-    "noEmit": true
+    "types": [
+      "node"
+    ],
+    "noEmit": true,
+    "paths": {
+      "prosemirror-model": [
+        "./node_modules/prosemirror-model"
+      ],
+      "y-prosemirror": [
+        "./node_modules/y-prosemirror"
+      ],
+      "yjs": [
+        "./node_modules/yjs"
+      ]
+    },
+    "lib": [
+      "ES2022",
+      "DOM"
+    ]
   },
-  "include": ["src", "test"]
+  "include": [
+    "src",
+    "test"
+  ]
 }

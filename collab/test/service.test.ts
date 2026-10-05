@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { yDocToProsemirrorJSON } from 'y-prosemirror'
+import { documentBodySchema } from '../src/schema'
 import { createCollabServer, type CollabServer } from '../src/server'
 import { connect, FakeBackend, freePort, waitFor } from './support'
 
@@ -27,11 +29,11 @@ describe('collaboration service', () => {
     const b = connect(port, room, 'tok-b')
     await Promise.all([a.synced, b.synced])
 
-    a.doc.getText('body').insert(0, 'hello')
-    await waitFor(() => b.doc.getText('body').toString() === 'hello')
+    a.doc.getText('scratch').insert(0, 'hello')
+    await waitFor(() => b.doc.getText('scratch').toString() === 'hello')
 
-    b.doc.getText('body').insert(5, ' world')
-    await waitFor(() => a.doc.getText('body').toString() === 'hello world')
+    b.doc.getText('scratch').insert(5, ' world')
+    await waitFor(() => a.doc.getText('scratch').toString() === 'hello world')
     a.provider.destroy()
     b.provider.destroy()
   })
@@ -48,12 +50,12 @@ describe('collaboration service', () => {
     const viewer = connect(port, room, 'tok-viewer')
     await Promise.all([editor.synced, viewer.synced])
 
-    viewer.doc.getText('body').insert(0, 'vandal')
-    editor.doc.getText('body').insert(0, 'real')
-    await waitFor(() => viewer.doc.getText('body').toString().includes('real'))
+    viewer.doc.getText('scratch').insert(0, 'vandal')
+    editor.doc.getText('scratch').insert(0, 'real')
+    await waitFor(() => viewer.doc.getText('scratch').toString().includes('real'))
     await new Promise((r) => setTimeout(r, 200))
 
-    expect(editor.doc.getText('body').toString()).toBe('real')
+    expect(editor.doc.getText('scratch').toString()).toBe('real')
     editor.provider.destroy()
     viewer.provider.destroy()
   })
@@ -61,7 +63,7 @@ describe('collaboration service', () => {
   it('stores the state once the room is empty, and a later editor gets it back', async () => {
     const first = connect(port, room, 'tok-a')
     await first.synced
-    first.doc.getText('body').insert(0, 'kept')
+    first.doc.getText('scratch').insert(0, 'kept')
     await waitFor(() => backend.stores.length > 0)
     first.provider.destroy()
 
@@ -71,8 +73,43 @@ describe('collaboration service', () => {
 
     const second = connect(port, room, 'tok-b')
     await second.synced
-    expect(second.doc.getText('body').toString()).toBe('kept')
+    expect(second.doc.getText('scratch').toString()).toBe('kept')
     second.provider.destroy()
+  })
+
+  /** A document of one paragraph, as the editor's schema writes it. */
+  function documentWith(text: string) {
+    const attrs = (id: string) => ({ nodeID: id, bodyAttributes: '{}', bodyContent: '' })
+    const nodes = documentBodySchema.nodes
+    const run = nodes.run!.create(attrs('run-1'), [documentBodySchema.text(text)])
+    const paragraph = nodes.paragraph!.create(attrs('para-1'), [run])
+    const root = nodes.document!.create(attrs('root-1'), [paragraph])
+    return documentBodySchema.topNodeType.create(null, [root]).toJSON()
+  }
+
+  it('opens a document that has only JSON content, by building its state', async () => {
+    const content = documentWith('from json')
+    backend.documents.set(document, { state: null, content })
+    const client = connect(port, room, 'tok-a')
+    await client.synced
+
+    expect(yDocToProsemirrorJSON(client.doc, 'body')).toEqual(content)
+    client.provider.destroy()
+  })
+
+  it('stores the JSON next to the state, derived from what the editors wrote', async () => {
+    backend.documents.set(document, { state: null, content: documentWith('start') })
+    const client = connect(port, room, 'tok-a')
+    await client.synced
+
+    const run = (client.doc.getXmlFragment('body').get(0) as any).get(0).get(0)
+    run.get(0).insert(5, ' more')
+    await waitFor(() => backend.stores.length > 0)
+
+    const stored = backend.stores.at(-1)!
+    expect(JSON.stringify(stored.content)).toContain('start more')
+    expect(stored.content).toEqual(yDocToProsemirrorJSON(client.doc, 'body'))
+    client.provider.destroy()
   })
 })
 
