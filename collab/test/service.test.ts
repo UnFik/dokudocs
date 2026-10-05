@@ -134,5 +134,44 @@ describe('collaboration service', () => {
     expect(response.status).toBe(200)
     expect(await response.text()).toBe('ok')
   })
+
+  it('tells a token that is not valid apart from a user with no access', async () => {
+    backend.grant('tok-outsider', 'user-o', { canRead: false, canEdit: false, canSuggest: false })
+    const invalid = connect(port, room, 'tok-unknown')
+    const outsider = connect(port, room, 'tok-outsider')
+    await expect(invalid.refused).resolves.toBe('unauthorized')
+    await expect(outsider.refused).resolves.toBe('forbidden')
+    invalid.provider.destroy()
+    outsider.provider.destroy()
+  })
+
+  it('tells each editor what it may do once it is connected', async () => {
+    backend.grant('tok-viewer', 'user-v', { canEdit: false, canSuggest: false })
+    backend.grant('tok-commenter', 'user-c', { canEdit: false, canSuggest: true })
+    const editor = connect(port, room, 'tok-a')
+    const viewer = connect(port, room, 'tok-viewer')
+    const commenter = connect(port, room, 'tok-commenter')
+    await Promise.all([editor.synced, viewer.synced, commenter.synced])
+
+    await waitFor(() => [editor, viewer, commenter].every((c) => c.statelessMessages.length > 0))
+    expect(editor.statelessMessages[0]).toEqual({ type: 'access', canEdit: true, canSuggest: true })
+    expect(viewer.statelessMessages[0]).toEqual({ type: 'access', canEdit: false, canSuggest: false })
+    expect(commenter.statelessMessages[0]).toEqual({ type: 'access', canEdit: false, canSuggest: true })
+    for (const c of [editor, viewer, commenter]) c.provider.destroy()
+  })
+
+  it('passes a comments-changed signal to everyone else in the room', async () => {
+    const a = connect(port, room, 'tok-a')
+    const b = connect(port, room, 'tok-b')
+    await Promise.all([a.synced, b.synced])
+    await waitFor(() => a.statelessMessages.length > 0 && b.statelessMessages.length > 0)
+
+    a.provider.sendStateless(JSON.stringify({ type: 'comments_changed' }))
+    await waitFor(() => b.statelessMessages.some((m: any) => m.type === 'comments_changed'))
+    await new Promise((r) => setTimeout(r, 150))
+    expect(a.statelessMessages.some((m: any) => m.type === 'comments_changed')).toBe(false)
+    a.provider.destroy()
+    b.provider.destroy()
+  })
 })
 

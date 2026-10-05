@@ -45,12 +45,19 @@ export class FakeBackend implements BackendApi {
 
 export function connect(port: number, name: string, token: string) {
   const doc = new Y.Doc()
-  const provider = new HocuspocusProvider({ url: `ws://127.0.0.1:${port}`, name, document: doc, token })
+  const statelessMessages: unknown[] = []
+  const provider = new HocuspocusProvider({
+    url: `ws://127.0.0.1:${port}`,
+    name,
+    document: doc,
+    token,
+    onStateless: ({ payload }) => statelessMessages.push(JSON.parse(payload)),
+  })
   const synced = new Promise<void>((resolve) => provider.on('synced', () => resolve()))
   const refused = new Promise<string>((resolve) =>
     provider.on('authenticationFailed', ({ reason }: { reason: string }) => resolve(reason))
   )
-  return { doc, provider, synced, refused }
+  return { doc, provider, synced, refused, statelessMessages }
 }
 
 export async function waitFor(check: () => boolean | Promise<boolean>, ms = 5000) {

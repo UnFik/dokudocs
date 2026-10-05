@@ -23,18 +23,48 @@ export type CollabOptions = {
   redisURL?: string | null
 }
 
+/** What the provider shows as the reason a connection was refused. */
+function refusal(reason: 'unauthorized' | 'forbidden') {
+  return Object.assign(new Error(reason), { reason })
+}
+
 function authentication(backend: BackendApi): Extension<CollabContext> {
   return {
     extensionName: 'authentication',
     async onAuthenticate({ token, documentName, connectionConfig }) {
       const room = parseRoom(documentName)
-      if (!room) throw new Error('forbidden')
+      if (!room) throw refusal('forbidden')
       const access = await backend.authorize(token, room.workspaceID, room.documentID)
-      if (!access?.canRead) throw new Error('forbidden')
+      // A token that is not valid means signing in again; no access means asking for it.
+      if (!access) throw refusal('unauthorized')
+      if (!access.canRead) throw refusal('forbidden')
       // A viewer only reads. Someone who can suggest still writes; what they may
       // write is checked per message.
       connectionConfig.readOnly = !access.canEdit && !access.canSuggest
       return { userID: access.userID, access, ...room }
+    },
+    // The editor needs to know what it may do; the connection itself only says read or write.
+    async connected({ connection, context }) {
+      connection.sendStateless(
+        JSON.stringify({ type: 'access', canEdit: context.access.canEdit, canSuggest: context.access.canSuggest })
+      )
+    },
+  }
+}
+
+/** Signals one editor sends to the others in the room, such as "the comments changed". */
+function signals(): Extension<CollabContext> {
+  return {
+    extensionName: 'signals',
+    async onStateless({ payload, document, connection }) {
+      let message: { type?: unknown }
+      try {
+        message = JSON.parse(payload)
+      } catch {
+        return
+      }
+      if (message.type !== 'comments_changed') return
+      document.broadcastStateless(JSON.stringify({ type: 'comments_changed' }), (other) => other !== connection)
     },
   }
 }
@@ -100,6 +130,7 @@ export async function createCollabServer(options: CollabOptions): Promise<Collab
     extensions: [
       health(),
       authentication(options.backend),
+      signals(),
       persistence(options.backend),
       ...(options.redisURL ? [redis(options.redisURL)] : []),
     ],
