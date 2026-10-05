@@ -49,17 +49,23 @@ type storedState struct {
 }
 
 type fakeStore struct {
-	states map[uuid.UUID][]byte
-	stored []storedState
+	states   map[uuid.UUID][]byte
+	contents map[uuid.UUID]json.RawMessage
+	missing  map[uuid.UUID]bool
+	stored   []storedState
 }
 
-func (f *fakeStore) LoadState(_ context.Context, documentID uuid.UUID) ([]byte, error) {
-	return f.states[documentID], nil
+func (f *fakeStore) LoadDocument(_ context.Context, _, documentID uuid.UUID) ([]byte, json.RawMessage, error) {
+	if f.missing[documentID] {
+		return nil, nil, ErrDocumentNotFound
+	}
+	return f.states[documentID], f.contents[documentID], nil
 }
 
 func (f *fakeStore) StoreState(_ context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage) error {
 	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content})
 	f.states[documentID] = state
+	f.contents[documentID] = content
 	return nil
 }
 
@@ -72,7 +78,7 @@ var (
 
 func newHandler(t *testing.T) (*InternalHandler, *fakeStore) {
 	t.Helper()
-	store := &fakeStore{states: map[uuid.UUID][]byte{}}
+	store := &fakeStore{states: map[uuid.UUID][]byte{}, contents: map[uuid.UUID]json.RawMessage{}, missing: map[uuid.UUID]bool{}}
 	h := NewInternalHandler(
 		fakeVerifier{users: map[string]string{"tok-editor": editorID.String(), "tok-stranger": strangerID.String()}},
 		fakeAccess{access: map[uuid.UUID]collaboration.RoomAccess{
@@ -133,12 +139,15 @@ func TestAuthorizeReturnsWhatTheUserMayDo(t *testing.T) {
 	}
 }
 
-func TestStateRoundTrip(t *testing.T) {
+func TestDocumentRoundTrip(t *testing.T) {
 	h, store := newHandler(t)
-	target := "/internal/collab/state?workspaceID=" + workspaceID.String() + "&documentID=" + documentID.String()
+	target := "/internal/collab/document?workspaceID=" + workspaceID.String() + "&documentID=" + documentID.String()
 
-	if got := do(h, http.MethodGet, target, nil, true).Code; got != http.StatusNoContent {
-		t.Fatalf("load of a document with no state = %d, want 204", got)
+	empty := do(h, http.MethodGet, target, nil, true)
+	var loaded map[string]any
+	_ = json.Unmarshal(empty.Body.Bytes(), &loaded)
+	if empty.Code != http.StatusOK || loaded["state"] != nil || loaded["content"] != nil {
+		t.Fatalf("load of a document with nothing = %d %v, want 200 with null state and content", empty.Code, loaded)
 	}
 
 	state := []byte{1, 2, 3, 250}
@@ -154,14 +163,27 @@ func TestStateRoundTrip(t *testing.T) {
 	}
 
 	got := do(h, http.MethodGet, target, nil, true)
-	if got.Code != http.StatusOK || !bytes.Equal(got.Body.Bytes(), state) {
-		t.Fatalf("load = %d %v, want the stored bytes", got.Code, got.Body.Bytes())
+	_ = json.Unmarshal(got.Body.Bytes(), &loaded)
+	if got.Code != http.StatusOK || loaded["state"] != base64.StdEncoding.EncodeToString(state) {
+		t.Fatalf("load = %d %v, want the stored state", got.Code, loaded)
+	}
+	if content, _ := loaded["content"].(map[string]any); content["type"] != "doc" {
+		t.Fatalf("load content = %v, want the stored content", loaded["content"])
+	}
+}
+
+func TestLoadingADocumentThatIsNotThereIsA404(t *testing.T) {
+	h, store := newHandler(t)
+	store.missing[documentID] = true
+	target := "/internal/collab/document?workspaceID=" + workspaceID.String() + "&documentID=" + documentID.String()
+	if got := do(h, http.MethodGet, target, nil, true).Code; got != http.StatusNotFound {
+		t.Fatalf("load of a missing document = %d, want 404", got)
 	}
 }
 
 func TestStoreRefusesWhatIsNotAStateAndContent(t *testing.T) {
 	h, store := newHandler(t)
-	target := "/internal/collab/state?workspaceID=" + workspaceID.String() + "&documentID=" + documentID.String()
+	target := "/internal/collab/document?workspaceID=" + workspaceID.String() + "&documentID=" + documentID.String()
 
 	for name, body := range map[string]any{
 		"state is not base64":      map[string]any{"state": "***", "content": map[string]any{}},
@@ -175,7 +197,7 @@ func TestStoreRefusesWhatIsNotAStateAndContent(t *testing.T) {
 	if len(store.stored) != 0 {
 		t.Fatalf("nothing should have been stored, got %+v", store.stored)
 	}
-	if got := do(h, http.MethodPut, "/internal/collab/state?workspaceID=x&documentID=y", map[string]any{}, true).Code; got != http.StatusBadRequest {
+	if got := do(h, http.MethodPut, "/internal/collab/document?workspaceID=x&documentID=y", map[string]any{}, true).Code; got != http.StatusBadRequest {
 		t.Fatalf("bad ids = %d, want 400", got)
 	}
 }

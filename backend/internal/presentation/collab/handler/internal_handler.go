@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -30,10 +31,14 @@ type AccessReader interface {
 	ReadRoomHead(ctx context.Context, workspaceID, documentID uuid.UUID, userIDs []uuid.UUID) (collaboration.RoomHead, error)
 }
 
+// ErrDocumentNotFound means the document does not exist in that workspace.
+var ErrDocumentNotFound = collaboration.ErrCollabDocumentNotFound
+
 // StateStore keeps the Yjs state of a document and the JSON derived from it.
 type StateStore interface {
-	// LoadState returns nil when the document has no state yet.
-	LoadState(ctx context.Context, documentID uuid.UUID) ([]byte, error)
+	// LoadDocument returns the state and the JSON content; either may be nil. A
+	// document made from JSON alone has no state yet, and the service builds one.
+	LoadDocument(ctx context.Context, workspaceID, documentID uuid.UUID) ([]byte, json.RawMessage, error)
 	StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage) error
 }
 
@@ -56,9 +61,9 @@ func (h *InternalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == "/internal/collab/authorize":
 		h.authorize(w, r)
-	case r.Method == http.MethodGet && r.URL.Path == "/internal/collab/state":
-		h.loadState(w, r)
-	case r.Method == http.MethodPut && r.URL.Path == "/internal/collab/state":
+	case r.Method == http.MethodGet && r.URL.Path == "/internal/collab/document":
+		h.loadDocument(w, r)
+	case r.Method == http.MethodPut && r.URL.Path == "/internal/collab/document":
 		h.storeState(w, r)
 	default:
 		http.NotFound(w, r)
@@ -111,23 +116,29 @@ func ids(r *http.Request) (uuid.UUID, uuid.UUID, bool) {
 	return workspaceID, documentID, err1 == nil && err2 == nil
 }
 
-func (h *InternalHandler) loadState(w http.ResponseWriter, r *http.Request) {
-	_, documentID, ok := ids(r)
+func (h *InternalHandler) loadDocument(w http.ResponseWriter, r *http.Request) {
+	workspaceID, documentID, ok := ids(r)
 	if !ok {
 		http.Error(w, "invalid ids", http.StatusBadRequest)
 		return
 	}
-	state, err := h.store.LoadState(r.Context(), documentID)
+	state, content, err := h.store.LoadDocument(r.Context(), workspaceID, documentID)
+	if errors.Is(err, ErrDocumentNotFound) {
+		http.NotFound(w, r)
+		return
+	}
 	if err != nil {
 		http.Error(w, "load failed", http.StatusServiceUnavailable)
 		return
 	}
-	if len(state) == 0 {
-		w.WriteHeader(http.StatusNoContent)
-		return
+	response := map[string]any{"state": nil, "content": nil}
+	if len(state) > 0 {
+		response["state"] = base64.StdEncoding.EncodeToString(state)
 	}
-	w.Header().Set("Content-Type", "application/octet-stream")
-	_, _ = w.Write(state)
+	if len(content) > 0 {
+		response["content"] = content
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +166,10 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content); err != nil {
+		if errors.Is(err, ErrDocumentNotFound) {
+			http.NotFound(w, r)
+			return
+		}
 		http.Error(w, "store failed", http.StatusServiceUnavailable)
 		return
 	}

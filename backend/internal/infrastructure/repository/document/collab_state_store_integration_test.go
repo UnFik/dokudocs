@@ -42,8 +42,11 @@ func TestCollabStateStoreKeepsStateAndContentTogether(t *testing.T) {
 	})
 
 	store := NewCollabStateStore(db)
-	if state, err := store.LoadState(ctx, documentID); err != nil || state != nil {
-		t.Fatalf("LoadState() for a document with no state = (%v, %v), want (nil, nil)", state, err)
+	if state, content, err := store.LoadDocument(ctx, workspaceID, documentID); err != nil || state != nil || content != nil {
+		t.Fatalf("LoadDocument() for a document with nothing = (%v, %s, %v), want nils", state, content, err)
+	}
+	if _, _, err := store.LoadDocument(ctx, otherWorkspaceID, documentID); err == nil {
+		t.Fatal("LoadDocument() with the wrong workspace succeeded, want not found")
 	}
 
 	first := []byte{1, 2, 3}
@@ -54,9 +57,9 @@ func TestCollabStateStoreKeepsStateAndContentTogether(t *testing.T) {
 	if err := store.StoreState(ctx, workspaceID, documentID, second, json.RawMessage(`{"type":"doc","content":[{"type":"paragraph"}]}`)); err != nil {
 		t.Fatalf("StoreState() the second time = %v", err)
 	}
-	state, err := store.LoadState(ctx, documentID)
-	if err != nil || !bytes.Equal(state, second) {
-		t.Fatalf("LoadState() = (%v, %v), want the second state", state, err)
+	state, loaded, err := store.LoadDocument(ctx, workspaceID, documentID)
+	if err != nil || !bytes.Equal(state, second) || len(loaded) == 0 {
+		t.Fatalf("LoadDocument() = (%v, %s, %v), want the second state and content", state, loaded, err)
 	}
 	var content string
 	if err := sqlDB.QueryRowContext(ctx, `SELECT content_json::text FROM documents WHERE id = $1`, documentID).Scan(&content); err != nil {
@@ -70,7 +73,7 @@ func TestCollabStateStoreKeepsStateAndContentTogether(t *testing.T) {
 	if err := store.StoreState(ctx, otherWorkspaceID, documentID, []byte{9}, json.RawMessage(`{"type":"doc"}`)); err == nil {
 		t.Fatal("StoreState() with the wrong workspace succeeded, want an error")
 	}
-	if state, _ := store.LoadState(ctx, documentID); !bytes.Equal(state, second) {
+	if state, _, _ := store.LoadDocument(ctx, workspaceID, documentID); !bytes.Equal(state, second) {
 		t.Fatalf("state after the refused write = %v, want it unchanged", state)
 	}
 }
