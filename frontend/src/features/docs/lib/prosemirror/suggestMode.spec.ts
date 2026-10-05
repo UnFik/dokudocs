@@ -4,7 +4,12 @@ import { userEvent } from 'vitest/browser'
 import { prosemirrorToYDoc } from 'y-prosemirror'
 import { documentBodyToMarkdown } from '../muya/state/documentBodyToMarkdown'
 import { documentBodyToProseMirror } from './documentBody'
-import { mountTestEditor, paragraphsBody, runStart } from './editorTestKit'
+import {
+  mountTestEditor,
+  paragraphsBody,
+  runStart,
+  trackRemovedBlocks,
+} from './editorTestKit'
 import { cardTitle, type SuggestionCard } from './suggestionCards'
 
 // Suggest mode with a real keyboard: what the user types is recorded as
@@ -14,14 +19,13 @@ const ME = '00000000-0000-4000-8000-0000000000a1'
 
 function suggestEditor(...texts: string[]) {
   const refused: string[] = []
-  const deletes: string[][] = []
   let cards: SuggestionCard[] = []
-  const mounted = mountTestEditor(paragraphsBody(...texts), {
+  const body = paragraphsBody(...texts)
+  const { batches: deletes, onBodyChange } = trackRemovedBlocks(body)
+  const mounted = mountTestEditor(body, {
+    onBodyChange,
     suggestAuthor: ME,
     onSuggestRefused: (message) => refused.push(message),
-    onDeleteNode: (nodeIDs) => {
-      deletes.push(nodeIDs)
-    },
     onSuggestionCards: (next) => {
       cards = next
     },
@@ -412,7 +416,7 @@ describe('Suggest mode, deciding', () => {
     }
   })
 
-  it('sends the paragraphs of an accepted deletion to the structural delete', async () => {
+  it('removes the paragraphs of an accepted deletion', async () => {
     const editor = suggestEditor('first', 'second')
     try {
       await userEvent.keyboard('{Control>}a{/Control}{Delete}')

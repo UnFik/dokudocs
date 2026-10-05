@@ -85,8 +85,7 @@ export const headingInputRule = new InputRule(
       $start.parent.type !== run ||
       $start.node(-1).type !== paragraph ||
       $start.index(-1) !== 0 ||
-      start !== $start.start() ||
-      $start.parent.content.size <= end - start
+      start !== $start.start()
     )
       return null
     const level = match[1]!.length as 1 | 2 | 3 | 4 | 5 | 6

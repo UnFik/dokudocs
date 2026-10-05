@@ -1,10 +1,7 @@
 import { EditorState } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  MoveNodeRequiredError,
-  prepareBodyTransaction,
-} from '../prepareBodyTransaction'
+import { prepareBodyTransaction } from '../prepareBodyTransaction'
 import { blockHandlePlugin } from './blockHandle'
 import { moveTopLevelBlock } from './moveBlock'
 import { bodyBuilder, stateFor } from './testSupport'
@@ -72,8 +69,8 @@ describe('block handle', () => {
     expect(handle.draggable).toBe(true)
   })
 
-  it('moves the block with arrow keys through a MoveNode intent', () => {
-    const { view, host, errors, ids, root } = mount()
+  it('moves the block with arrow keys', () => {
+    const { view, host, errors } = mount()
     hover(view, 0)
     const handle = host.querySelector<HTMLElement>('.dd-handle')!
     handle.dispatchEvent(
@@ -83,12 +80,9 @@ describe('block handle', () => {
         cancelable: true,
       })
     )
-    expect(errors).toHaveLength(1)
-    const move = errors[0] as MoveNodeRequiredError
-    expect(move).toBeInstanceOf(MoveNodeRequiredError)
-    expect(move.nodeID).toBe(ids[0])
-    expect(move.targetParentID).toBe(root)
-    expect(move.beforeNodeID).toBe(ids[2])
+    expect(errors).toEqual([])
+    const order = [...view.dom.querySelectorAll('p')].map((p) => p.textContent)
+    expect(order).toEqual(['two', 'one', 'three'])
   })
 
   it('does nothing for ArrowUp on the first block', () => {
@@ -137,24 +131,5 @@ describe('block handle', () => {
       })
     )
     expect(view.hasFocus()).toBe(true)
-  })
-  it('keeps keyboard focus on the handle when the editor rebuilds its plugin views', async () => {
-    const { view, host } = mount()
-    hover(view, 0)
-    const handle = host.querySelector<HTMLElement>('.dd-handle')!
-    handle.focus()
-    handle.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'ArrowDown',
-        bubbles: true,
-        cancelable: true,
-      })
-    )
-    // A structural command can swap the plugin set; the old handle is removed.
-    view.updateState(view.state.reconfigure({ plugins: [blockHandlePlugin()] }))
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    const active = document.activeElement as HTMLElement
-    expect(active.classList.contains('dd-handle')).toBe(true)
-    expect(active.hidden).toBe(false)
   })
 })

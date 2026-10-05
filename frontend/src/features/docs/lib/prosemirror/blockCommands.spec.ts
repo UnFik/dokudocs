@@ -134,13 +134,13 @@ describe('heading commands', () => {
     }
   })
 
-  it('leaves "# " as text when the paragraph would lose its only run', () => {
+  it('turns "# " into an empty heading when it is all the paragraph holds', () => {
     const harness = mountTestEditor(paragraphsBody('#'))
     try {
       caret(harness, '#', 1)
       typeText(harness, ' ')
-      expect(node(harness, 'p0')?.type).toBe('paragraph')
-      expect(node(harness, 'r0')?.content).toBe('# ')
+      expect(node(harness, 'p0')?.type).toBe('atx-heading')
+      expect(node(harness, 'r0')).toBeUndefined()
     } finally {
       harness.cleanup()
     }

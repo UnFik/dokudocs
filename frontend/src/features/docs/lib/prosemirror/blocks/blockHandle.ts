@@ -19,14 +19,7 @@ function blockElement(view: EditorView, index: number) {
   return dom instanceof HTMLElement ? dom : null
 }
 
-// A block move is a structural command: the editor locks, then the plugin views
-// are rebuilt and the focused handle disappears with the old DOM. The key press
-// leaves a note here so the next handle takes focus back for the same block and
-// a keyboard user can keep moving it instead of landing on <body>.
-let restoreFocus: { nodeID: string; index: number; at: number } | null = null
-const RESTORE_WINDOW_MS = 10000
-
-/** Drag handle for top-level blocks; every move is a MoveNode intent. */
+/** Drag handle for top-level blocks; a move is an ordinary edit. */
 export function blockHandlePlugin() {
   return new Plugin({
     view(view) {
@@ -64,12 +57,6 @@ export function blockHandlePlugin() {
         if (current === null) return
         const tr = moveTopLevelBlock(view.state, current, target)
         if (!tr) return
-        if (currentID)
-          restoreFocus = {
-            nodeID: currentID,
-            index: target > current ? current + 1 : current - 1,
-            at: Date.now(),
-          }
         view.dispatch(tr)
       }
 
@@ -123,29 +110,6 @@ export function blockHandlePlugin() {
         if (tr) view.dispatch(tr)
       }
 
-      let destroyed = false
-      const restoreFocusIfPending = () => {
-        if (!restoreFocus || destroyed) return
-        if (Date.now() - restoreFocus.at > RESTORE_WINDOW_MS) {
-          restoreFocus = null
-          return
-        }
-        const blocks = view.state.doc.child(0)
-        let found = -1
-        blocks.forEach((child, _offset, index) => {
-          if (child.attrs.nodeID === restoreFocus!.nodeID) found = index
-        })
-        if (found < 0 && restoreFocus.index < blocks.childCount)
-          found = restoreFocus.index
-        if (found < 0) return
-        // While a move is still syncing the editor is locked and the handle
-        // stays hidden; keep the note and try again on the next update.
-        if (!show(found)) return
-        restoreFocus = null
-        handle.focus()
-      }
-      setTimeout(restoreFocusIfPending, 0)
-
       view.dom.addEventListener('mousemove', onMove)
       view.dom.addEventListener('mouseleave', onLeave)
       view.dom.addEventListener('dragover', onDragOver)
@@ -169,11 +133,9 @@ export function blockHandlePlugin() {
           } else if (current !== null && current >= blocks.childCount) {
             handle.hidden = true
           }
-          restoreFocusIfPending()
           if (view.hasFocus()) showForSelection()
         },
         destroy() {
-          destroyed = true
           view.dom.removeEventListener('mousemove', onMove)
           view.dom.removeEventListener('mouseleave', onLeave)
           view.dom.removeEventListener('dragover', onDragOver)
