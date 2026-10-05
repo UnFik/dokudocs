@@ -111,5 +111,28 @@ describe('collaboration service', () => {
     expect(stored.content).toEqual(yDocToProsemirrorJSON(client.doc, 'body'))
     client.provider.destroy()
   })
+
+  it('stores what is still waiting when the service stops', async () => {
+    await server.stop()
+    // A service with a long wait before storing: only stopping can save the edit.
+    port = await freePort()
+    server = await createCollabServer({ backend, port, debounceMs: 60_000, maxDebounceMs: 120_000 })
+    const client = connect(port, room, 'tok-a')
+    await client.synced
+    client.doc.getText('scratch').insert(0, 'last words')
+    await new Promise((r) => setTimeout(r, 200))
+    expect(backend.stores).toHaveLength(0)
+
+    await server.stop()
+
+    expect(backend.stores).toHaveLength(1)
+    client.provider.destroy()
+  })
+
+  it('answers a health check over plain HTTP', async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/health`)
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('ok')
+  })
 })
 
