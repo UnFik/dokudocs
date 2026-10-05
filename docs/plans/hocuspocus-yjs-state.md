@@ -31,15 +31,25 @@ Goal of track A: users never see an internal error from an ordinary edit (CONTEX
 | ProseMirror engine | 7.4 k | kept; suggestion tracking kept or cut (decision D2); delete/paste/undo special cases shrink |
 | e2e smoke | 5.6 k | structural, offline-review and rebase specs removed; the rest adapts |
 
-## Decisions needed before building
+## Decisions taken (2026-10-05)
+
+- **D1** Hocuspocus runs as a Node service next to the Go API.
+- **D2** Suggest mode is kept: the suggester validator moves to TypeScript in a Hocuspocus message hook.
+- **D3** Consumers read the JSON `content`; the AST table goes.
+- **D4** The ProseMirror schema (node IDs, runs) is kept. **D5** Restore writes `state` and `content_json` and asks the room to reload. **D6** The current Hocuspocus major is chosen in P0, after checking the message hook, the Redis extension and the auth flow.
+- **D7** One cutover; legacy data is not migrated (seed documents are deleted, mock documents use the new schema).
+- Underline and highlight export to Markdown as inline HTML (`<u>`, `<mark>`) and import back.
+- Scope of the first implementation run: P0 to P6 in one go, no gate in the middle. P7 (deleting the old stack) follows once the logs are clean. Track B beyond B1 is not part of that run.
+
+## Decisions needed before building (kept for the reasoning)
 
 - **D1. Where Hocuspocus runs.** (a) A Node service next to the Go API, calling the Go API for authorization and storage; or (b) implement the Hocuspocus wire protocol in Go. Recommendation: (a). The protocol is not just y-protocols and (b) is a second project.
 - **D2. Suggest mode.** Today a commenter writes suggestions into the shared body and the server proves they changed nothing else (ADR 0027, `suggestion*.go`, 1.5 k lines). Outline has nothing like it. (a) Keep it: port the validator to a Hocuspocus message hook (`beforeHandleMessage`, to be verified for the chosen version), TypeScript, same rules. (b) Drop suggestions in the body; commenters propose text through comments and an editor applies it. (c) Keep the legacy stack for documents that use suggestions. Recommendation: decide after the spike; (a) keeps the product goal and costs the most.
-- **D3. Derived data.** `content` JSON is derived from `state` on store. Search, RAG, duplicate and list read AST rows today. (a) Keep AST rows as an asynchronous projection built after each store (Go projects from `state`, as it does now); (b) move consumers to `content`. Recommendation: (a) first, it keeps consumers untouched.
+- **D3. Derived data. Decided: consumers read the JSON `content`.** `content` (JSONB, ProseMirror JSON) is derived from `state` on store, as in Outline. Search, RAG, duplicate, list and export move to it; the AST table `document_nodes` is dropped with the epoch and receipt columns. Needs a new `documents.content_json` column.
 - **D4. Schema.** Keep our ProseMirror schema (node IDs, runs). Existing Yjs states then migrate byte for byte with no conversion. Adopting Outline's schema is not worth it and brings the licence problem.
 - **D5. Revisions and restore.** Epochs go. Restore writes `state` and `content` and tells the live room to reload (Outline's API-update path), instead of a new epoch.
 - **D6. Hocuspocus version.** Outline pins 1.1.3. Check the current major (hooks, `beforeHandleMessage`, Redis extension, auth flow) before committing.
-- **D7. Rollout.** Per-document engine flag with both stacks live for a while, or a single cutover. Recommendation: flag per workspace, then remove the legacy stack.
+- **D7. Rollout. Decided: one cutover, no legacy data.** Existing documents are not migrated: the seed documents are deleted and mock documents are written with the new schema. No backfill, no engine flag, no two stacks side by side. Migrations may reset the schema.
 
 ## Target flow
 
@@ -57,11 +67,11 @@ Goal of track A: users never see an internal error from an ordinary edit (CONTEX
 |---|---|---|---|
 | P0 Spike | Node Hocuspocus service, auth call to Go, load and store `state`, our schema in the editor, two browsers | delete line, delete all, Ctrl+Z after delete, paste the PRD fixture, offline edit and reconnect all work with no special path and no error; decide D2 | 3 to 4 days |
 | P1 Service | Production Node service: auth, persistence, limits, Redis, logging, metrics, health; compose and CI; internal Go endpoints | service runs behind the gateway; load test (collab-load) passes at current targets | 1 to 2 weeks |
-| P2 Data | The Yjs state already lives in `document_collab_states.encoded_state` and keeps working as is (same schema, same field `body`). Add `documents.collab_engine` for the rollout flag; `documents.content_json` only if the first paint should come from a JSON cache (optional, the client can render from `encoded_state`). The AST projection (`document_nodes`) and `document_suggestions` are written after each debounced store instead of each update. Epoch, receipt and restore-receipt columns stay until P7 | migration reversible; projection and suggestion index match the legacy ones for every seeded document; search and RAG tolerate the projection lagging a few seconds | 3 to 5 days |
+| P2 Data | New: `documents.content_json` (JSONB) derived from `state` on each debounced store. The state table `document_collab_states` stays. Reset the schema: drop `document_nodes`, the epoch, version and receipt columns and `document_command_receipts` when the consumers have moved (P5). Seed and mock documents are written in the new schema. No backfill, no `collab_engine` flag | store writes `state` and `content_json` in one transaction; mock documents open and edit | 3 to 5 days |
 | P3 Frontend | HocuspocusProvider + y-indexeddb; cached `content` first paint; drop provider, recovery, review, epochs, command locks, remount code; awareness for presence and cursors | existing editor e2e specs pass minus the removed ones | 1 to 2 weeks |
 | P4 Permissions, suggestions, comments | per D2; comment hints by stateless message | suggester cannot change canonical text (ported tests); comments live | 1 to 3 weeks (D2 (a) is the long end) |
 | P5 Consumers | search, RAG, export, import, duplicate, list, revisions, restore | each reads the projection or `content`; restore reloads the room | 1 week |
-| P6 Cutover | flag per workspace, dual run, switch, watch error rates | no `update-rejected`-class errors in the logs for a week | 1 week plus watching |
+| P6 Cutover | switch the app to the Hocuspocus service in one step (no flag, no dual run); delete the seed documents and load the mock documents; watch error rates | no `update-rejected`-class errors in the logs; smoke suite green on the new engine | 3 to 5 days plus watching |
 | P7 Cleanup | delete the Go collaboration stack, epochs, commands, review UI and their tests; mark ADRs 0017 to 0028 superseded where they are; update CONTEXT.md | no dead code left | 3 to 5 days |
 | B1 Small features | see track B | each feature has an e2e or unit test; no regression in smoke | 2 to 3 weeks, parallel to P0 to P3 |
 | B2 New node types | see track B | each type round-trips Markdown and persists | 2 to 3 weeks, after P6 |
@@ -74,7 +84,7 @@ Total for track A, one engineer: about 6 to 10 weeks with D2 (a), 4 to 6 weeks w
 
 - D2 (a) is the largest single piece and the one place where Outline gives no help.
 - A debounced store means a crash can lose the last seconds of edits unless the service persists on disconnect and on shutdown (Outline stores on the last disconnect; copy that behaviour, and add a store on SIGTERM).
-- Two stacks in production during P6 double the surface; keep the window short.
+- Without a flag there is no quick way back to the old engine after P6: keep the old stack in git until the first week of logs is clean, then delete it (P7).
 - Large documents: Outline caps `state` size; decide our cap and the error shown.
 - Node service is one more thing to deploy, monitor and secure; auth to Go must not leak tokens in URLs (our socket already keeps the token out of the URL).
 - Tests are the real cost: about 5.6 k lines of e2e and thousands of unit lines touch the removed paths.
