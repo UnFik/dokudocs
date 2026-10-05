@@ -30,7 +30,7 @@ import {
   yXmlFragmentToProseMirrorRootNode,
 } from 'y-prosemirror'
 import * as Y from 'yjs'
-import type { RemoteCursor } from '../collaboration-socket'
+import type { RemoteCursor } from '../collab-session'
 import type { DocumentBodyNode } from '../documentBody'
 import {
   headingInputRule,

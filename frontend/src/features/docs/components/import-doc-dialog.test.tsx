@@ -26,7 +26,8 @@ afterEach(() => {
 })
 
 describe('ImportDocDialog', () => {
-  it('creates imported Markdown through the API with an initial AST body', async () => {
+  it('creates imported Markdown through the API with the editor document', async () => {
+    const createdID = crypto.randomUUID()
     const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input)).pathname
       if (path === '/api/v1/workspaces')
@@ -46,7 +47,7 @@ describe('ImportDocDialog', () => {
         return Promise.resolve(
           jsonResponse(
             {
-              id: request.initialBody.documentID,
+              id: createdID,
               workspaceId,
               title: request.title,
               type: 'markdown',
@@ -100,21 +101,18 @@ describe('ImportDocDialog', () => {
       title: 'Imported Guide',
       type: 'markdown',
       isDraft: true,
-      initialBody: {
-        bodySchemaVersion: 1,
-        nodes: expect.arrayContaining([
-          expect.objectContaining({ type: 'atx-heading' }),
-          expect.objectContaining({ type: 'paragraph' }),
-        ]),
-      },
+      contentJSON: { type: 'doc' },
     })
-    expect(payload).not.toHaveProperty('content')
+    expect(payload.content).toEqual(expect.any(String))
+    expect(JSON.stringify(payload.contentJSON)).toContain('atx_heading')
+    expect(JSON.stringify(payload.contentJSON)).toContain('paragraph')
+    expect(payload).not.toHaveProperty('initialBody')
     expect(new Headers(request?.headers).get('Idempotency-Key')).toEqual(
       expect.any(String)
     )
     expect(navigate).toHaveBeenCalledWith({
       to: '/docs/$docId',
-      params: { docId: payload.initialBody.documentID },
+      params: { docId: createdID },
     })
   })
 

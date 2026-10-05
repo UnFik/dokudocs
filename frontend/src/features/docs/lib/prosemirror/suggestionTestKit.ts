@@ -30,11 +30,7 @@ export type Piece =
       bold?: boolean
     }
 
-function suggestionMark(
-  kind: 'insert' | 'delete',
-  author: string,
-  id: string
-) {
+function suggestionMark(kind: 'insert' | 'delete', author: string, id: string) {
   return marks[`suggestion_${kind}`]!.create({ id, author })
 }
 

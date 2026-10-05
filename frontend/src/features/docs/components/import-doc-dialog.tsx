@@ -57,7 +57,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
-import { markdownToDocumentBody } from '../lib/muya/state/markdownToDocumentBody'
+import { markdownToDocumentJSON } from '../lib/markdown-to-document-json'
 
 const importDocSchema = z.object({
   title: z.string().min(1, 'Please enter a document title'),
@@ -321,18 +321,14 @@ function ImportDocForm({
 
     if (values.type === 'markdown') {
       try {
-        const body = await markdownToDocumentBody(documentID, values.content)
+        const contentJSON = await markdownToDocumentJSON(values.content)
         createMutation.mutate({
           requestID,
           input: {
             ...common,
             type: 'markdown',
-            initialBody: {
-              documentID,
-              bodySchemaVersion: 1,
-              rootNodeID: body.rootNodeID,
-              nodes: body.nodes,
-            },
+            content: values.content,
+            contentJSON,
           },
         })
       } catch (error) {

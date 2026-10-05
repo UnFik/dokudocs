@@ -650,7 +650,10 @@ export class Muya {
   hasFocus() {
     const { activeElement } = document
 
-    if (this.domNode === activeElement || this.domNode.contains(activeElement)) {
+    if (
+      this.domNode === activeElement ||
+      this.domNode.contains(activeElement)
+    ) {
       return true
     }
 

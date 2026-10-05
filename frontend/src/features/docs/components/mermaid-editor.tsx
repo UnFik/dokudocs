@@ -169,7 +169,7 @@ export function MermaidEditor({
               >
                 <div>
                   <div className='mb-1.5 flex items-center justify-between'>
-                    <span className='text-xs font-bold text-foreground '>
+                    <span className='text-xs font-bold text-foreground'>
                       {tmpl.name}
                     </span>
                     <span className='rounded-sm bg-border px-1.5 py-0.5 font-mono text-[9px] font-medium text-foreground'>

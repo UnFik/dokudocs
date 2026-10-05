@@ -52,6 +52,13 @@ export function clearLocalCopy(workspaceID: string, documentID: string) {
   })
 }
 
+/** Whether this device holds a copy of the document, so it can open without a connection. */
+export async function hasLocalCopy(workspaceID: string, documentID: string) {
+  const name = `dokudocs:${roomName(workspaceID, documentID)}`
+  const databases = await indexedDB.databases()
+  return databases.some((database) => database.name === name)
+}
+
 export function openCollabSession(input: {
   workspaceID: string
   documentID: string
@@ -64,6 +71,8 @@ export function openCollabSession(input: {
   onPresence?: (users: PresenceUser[]) => void
   onCursors?: (cursors: RemoteCursor[]) => void
   onCommentsChanged?: () => void
+  /** The server replaced the document (a restored revision): this device's copy is stale. */
+  onReloaded?: () => void
 }) {
   const name = roomName(input.workspaceID, input.documentID)
   const ydoc = new Y.Doc()
@@ -108,6 +117,7 @@ export function openCollabSession(input: {
           canSuggest: Boolean(message.canSuggest),
         })
       else if (message.type === 'comments_changed') input.onCommentsChanged?.()
+      else if (message.type === 'reloaded') input.onReloaded?.()
     },
   })
   const awareness = provider.awareness
@@ -153,6 +163,27 @@ export function openCollabSession(input: {
     ydoc,
     provider,
     awareness,
+    /** Tells the others in the room that the comments changed. */
+    signalCommentsChanged() {
+      provider.sendStateless(JSON.stringify({ type: 'comments_changed' }))
+    },
+    unsyncedChanges: () => provider.unsyncedChanges,
+    /** Resolves true once the server has every change made here, false at the timeout. */
+    drained(timeoutMs: number) {
+      if (provider.unsyncedChanges === 0) return Promise.resolve(true)
+      return new Promise<boolean>((resolve) => {
+        const finish = (value: boolean) => {
+          clearTimeout(timer)
+          provider.off('unsyncedChanges', onChange)
+          resolve(value)
+        }
+        const onChange = ({ number }: { number: number }) => {
+          if (number === 0) finish(true)
+        }
+        const timer = setTimeout(() => finish(false), timeoutMs)
+        provider.on('unsyncedChanges', onChange)
+      })
+    },
     /** Shares the local selection, or clears it when the editor loses focus. */
     setCursor(selection: { anchor: Uint8Array; head: Uint8Array } | null) {
       awareness?.setLocalStateField('cursor', selection)

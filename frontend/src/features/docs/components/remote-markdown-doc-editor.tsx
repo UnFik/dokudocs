@@ -179,6 +179,11 @@ export function RemoteMarkdownDocEditor({
         access={access}
         focusNodeID={focusNodeID}
         onAccess={setAccess}
+        onReloaded={() => {
+          void clearLocalCopy(workspaceID, document.id).then(() =>
+            setSessionNonce((value) => value + 1)
+          )
+        }}
         onMarkdownChange={setMarkdownOverride}
         onPresence={setPresence}
         onAccessUnavailable={() => {
@@ -221,6 +226,7 @@ function CollaborativeMarkdownBody({
   access,
   focusNodeID,
   onAccess,
+  onReloaded,
   onMarkdownChange,
   onPresence,
   onAccessUnavailable,
@@ -232,6 +238,7 @@ function CollaborativeMarkdownBody({
   access: CollabAccess | null
   focusNodeID?: string
   onAccess: (access: CollabAccess) => void
+  onReloaded: () => void
   onMarkdownChange: (markdown: string) => void
   onPresence: (users: PresenceUser[]) => void
   onAccessUnavailable: () => void
@@ -317,6 +324,20 @@ function CollaborativeMarkdownBody({
     })
     setIsSuggestionsOpen(true)
   }
+  // Our own comment changes are told to the others in the room.
+  const fromRemoteComments = useRef(false)
+  useEffect(() => {
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === 'updated' &&
+        event.action.type === 'invalidate' &&
+        event.query.queryKey[0] === 'document-comments' &&
+        event.query.queryKey[2] === documentID &&
+        !fromRemoteComments.current
+      )
+        sessionRef.current?.session.signalCommentsChanged()
+    })
+  }, [queryClient, documentID])
   const startCommentRef = useRef(startComment)
   useEffect(() => {
     startCommentRef.current = startComment
@@ -386,10 +407,15 @@ function CollaborativeMarkdownBody({
         toast.error(message, { id: 'suggest-refused' }),
       onSuggestionCards: setCards,
       onCommentPositions: setCommentPositions,
-      onCommentsChanged: () =>
+      onCommentsChanged: () => {
+        // A change that came from someone else must not be announced again.
+        fromRemoteComments.current = true
         void queryClient.invalidateQueries({
           queryKey: ['document-comments', workspaceID, documentID],
-        }),
+        })
+        fromRemoteComments.current = false
+      },
+      onReloaded,
       onCommentRequest: () => startCommentRef.current(),
       onCommentClick: (id) => {
         setFocusedCommentID(id)

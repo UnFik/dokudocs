@@ -2,8 +2,8 @@ import { act } from 'react'
 import type { DocumentItem, ProjectItem } from '@/types/dokudocs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { renderHook } from 'vitest-browser-react'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { useCommentStore } from '@/stores/comment-store'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
 import { useDocEditor } from '../hooks/use-doc-editor'
 
@@ -67,7 +67,9 @@ describe('Editor Mode Switching & Store Mutation Persistence', () => {
   it('immediately mutates useDokudocsStore when setContent is invoked in useDocEditor', async () => {
     const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'))
 
-    expect(result.current.content).toBe('# Initial Content\n\nThis is initial text.')
+    expect(result.current.content).toBe(
+      '# Initial Content\n\nThis is initial text.'
+    )
 
     act(() => {
       result.current.setContent('# Updated Content\n\nBrand new line.')
@@ -94,7 +96,8 @@ describe('Editor Mode Switching & Store Mutation Persistence', () => {
       useEditorPreferenceStore.getState().setViewMode('test-user', 'preview')
     })
 
-    const currentPref = useEditorPreferenceStore.getState().preferencesByUser['test-user']
+    const currentPref =
+      useEditorPreferenceStore.getState().preferencesByUser['test-user']
     expect(currentPref?.viewMode).toBe('preview')
 
     const storeDoc = useDokudocsStore
@@ -130,14 +133,16 @@ describe('Editor Mode Switching & Store Mutation Persistence', () => {
       useEditorPreferenceStore.getState().setPreviewMode('test-user', 'view')
     })
 
-    const prefView = useEditorPreferenceStore.getState().preferencesByUser['test-user']
+    const prefView =
+      useEditorPreferenceStore.getState().preferencesByUser['test-user']
     expect(prefView?.previewMode).toBe('view')
 
     act(() => {
       useEditorPreferenceStore.getState().setPreviewMode('test-user', 'edit')
     })
 
-    const prefEdit = useEditorPreferenceStore.getState().preferencesByUser['test-user']
+    const prefEdit =
+      useEditorPreferenceStore.getState().preferencesByUser['test-user']
     expect(prefEdit?.previewMode).toBe('edit')
 
     const latestDoc = useDokudocsStore
@@ -163,4 +168,3 @@ describe('Editor Mode Switching & Store Mutation Persistence', () => {
     expect(updatedDoc?.categories).toEqual(['Documentation'])
   })
 })
-

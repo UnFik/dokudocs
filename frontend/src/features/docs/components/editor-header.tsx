@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import type { PresenceUser } from '../lib/collaboration-socket'
+import type { PresenceUser } from '../lib/collab-session'
 import { DocTypeBadge } from './doc-type-badge'
 import { PresenceAvatars } from './presence-avatars'
 import { ProjectDocsHoverCard } from './project-docs-hover-card'

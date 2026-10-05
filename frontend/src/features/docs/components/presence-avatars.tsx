@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { authorColor } from '../lib/author-color'
-import type { PresenceUser } from '../lib/collaboration-socket'
+import type { PresenceUser } from '../lib/collab-session'
 
 const maxVisible = 4
 
