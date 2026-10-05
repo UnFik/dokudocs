@@ -4,6 +4,7 @@ import * as Y from 'yjs'
 import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror'
 import type { Authorized, BackendApi } from './backend-api'
 import { toMarkdown } from './markdown'
+import { permissions } from './permissions'
 import { parseRoom } from './room'
 import { documentBodySchema } from './schema'
 
@@ -133,6 +134,7 @@ export async function createCollabServer(options: CollabOptions): Promise<Collab
     extensions: [
       health(),
       authentication(options.backend),
+      permissions(fragmentName),
       signals(),
       persistence(options.backend),
       ...(options.redisURL ? [redis(options.redisURL)] : []),
