@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { DeleteNodeRequiredError } from '../prepareBodyTransaction'
 import {
   addColumnAfter,
   addColumnBefore,
@@ -115,29 +114,19 @@ describe('table commands', () => {
     ])
   })
 
-  it('deleting a row goes through DeleteNode', () => {
+  it('deletes a row', () => {
     const g = grid([['a'], ['b']])
     const state = stateFor(g.b.nodes, g.cells[1]![0]!)
-    let error: unknown
-    try {
-      run(state, deleteRow)
-    } catch (e) {
-      error = e
-    }
-    expect(error).toBeInstanceOf(DeleteNodeRequiredError)
-    const rowID = g.b.nodes.find((n) => n.nodeID === g.cells[1]![0])!.parentID
-    expect((error as DeleteNodeRequiredError).nodeID).toBe(rowID)
+    expect(shape(run(state, deleteRow).state)).toEqual([['a|none']])
   })
 
-  it('deleting the only row removes the whole table through DeleteNode', () => {
+  it('deleting the only row removes the whole table', () => {
     const g = grid([['a']])
     const state = stateFor(g.b.nodes, g.cells[0]![0]!)
-    expect(() => run(state, deleteRow)).toThrow(DeleteNodeRequiredError)
-    try {
-      run(state, deleteTable)
-    } catch (e) {
-      expect((e as DeleteNodeRequiredError).nodeID).toBe(g.table)
-    }
+    const hasTable = (result: ReturnType<typeof stateFor>) =>
+      bodyOf(result.doc).some((node) => node.type === 'table')
+    expect(hasTable(run(state, deleteRow).state)).toBe(false)
+    expect(hasTable(run(state, deleteTable).state)).toBe(false)
   })
 
   it('sets the alignment of the whole column', () => {
