@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { createdDocumentID, documentPayload } from "../../helpers/markdown-document";
 
 const apiURL = process.env.API_URL ?? "http://localhost:8080";
 const MIN_TARGET = 44;
@@ -50,7 +51,7 @@ async function prepareDocument(page: Page) {
   expect(workspace.status()).toBe(201);
   const workspaceID = ((await workspace.json()) as { data: { id: string } }).data.id;
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootID = randomUUID();
   const node = (
     nodeID: string,
@@ -77,19 +78,15 @@ async function prepareDocument(page: Page) {
       title: `A11y doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID: rootID,
-        nodes: [
+      ...documentPayload([
           node(rootID, null, 1, "document"),
           ...blocks,
           node(randomUUID(), rootID, 4, "paragraph"),
-        ],
-      },
+        ]),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}?workspaceId=${workspaceID}`);
   await expect(page.getByRole("status").first()).toContainText("Synced");

@@ -1,6 +1,7 @@
 import { inDocumentOrder } from "../../helpers/document-order";
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 // Issue #29: the floating selection toolbar, driven by real clicks, writes
 // bold and link marks that the server body keeps.
@@ -31,7 +32,7 @@ test("@live @smoke: floating selection toolbar applies bold and a link", async (
     (await (await workspaceResponse).json()) as { data: { id: string } }
   ).data.id;
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const accessCookie = (await page.context().cookies()).find(
@@ -62,19 +63,15 @@ test("@live @smoke: floating selection toolbar applies bold and a link", async (
       title: `Toolbar doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           node(rootNodeID, null, "document"),
           node(paragraphNodeID, rootNodeID, "paragraph"),
           node(randomUUID(), paragraphNodeID, "run", "alpha beta gamma"),
-        ],
-      },
+        ]),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}`);
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
@@ -103,10 +100,7 @@ test("@live @smoke: floating selection toolbar applies bold and a link", async (
   };
 
   const readRuns = async () => {
-    const response = await page.request.get(
-      `${apiURL}/api/v1/documents/${documentID}/body`,
-      { headers },
-    );
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, headers) } }) };
     const nodes = ((await response.json()).data.nodes ?? []) as {
       nodeID: string;
       parentID: string | null;

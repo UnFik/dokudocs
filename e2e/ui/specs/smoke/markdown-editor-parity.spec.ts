@@ -1,6 +1,7 @@
 import { inDocumentOrder } from "../../helpers/document-order";
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 // Gate G7 (#36): two clients edit tables through the toolbar, converge, and the
 // server projection matches. A second case covers inline marks, nested lists and
@@ -35,7 +36,7 @@ test("@live @smoke: table edits converge across two clients and persist", async 
     (await (await workspaceResponse).json()) as { data: { id: string } }
   ).data.id;
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const accessCookie = (await page.context().cookies()).find(
@@ -66,19 +67,15 @@ test("@live @smoke: table edits converge across two clients and persist", async 
       title: `G7 doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           node(rootNodeID, null, "document"),
           node(paragraphNodeID, rootNodeID, "paragraph"),
           node(randomUUID(), paragraphNodeID, "run", "Start"),
-        ],
-      },
+        ]),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}`);
   const documentURL = page.url();
@@ -119,10 +116,7 @@ test("@live @smoke: table edits converge across two clients and persist", async 
   // The server projection holds the same table.
   await expect
     .poll(async () => {
-      const response = await page.request.get(
-        `${apiURL}/api/v1/documents/${documentID}/body`,
-        { headers },
-      );
+      const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, headers) } }) };
       const nodes = inDocumentOrder(
         ((await response.json()).data.nodes ?? []) as {
           nodeID: string;
@@ -205,16 +199,11 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
       title: `G7 marks doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           node(rootNodeID, null, "document"),
           node(paragraphNodeID, rootNodeID, "paragraph"),
           node(randomUUID(), paragraphNodeID, "run", "Start"),
-        ],
-      },
+        ]),
     },
   });
   expect(created.status()).toBe(201);
@@ -287,10 +276,7 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
   await expect(secondEditor.locator("p").first()).toContainText("by B");
 
   const readBody = async () => {
-    const response = await page.request.get(
-      `${apiURL}/api/v1/documents/${documentID}/body`,
-      { headers },
-    );
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, headers) } }) };
     return inDocumentOrder(
       ((await response.json()).data.nodes ?? []) as {
         nodeID: string;

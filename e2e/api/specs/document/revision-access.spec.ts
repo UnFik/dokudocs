@@ -47,8 +47,6 @@ test("document revisions enforce current read and edit access", async ({
   });
 
   const createMarkdown = async (title: string, isDraft = false) => {
-    const documentID = randomUUID();
-    const rootNodeID = randomUUID();
     const response = await ownerRequest.post("/api/v1/documents", {
       headers: { "Idempotency-Key": randomUUID() },
       data: {
@@ -56,26 +54,26 @@ test("document revisions enforce current read and edit access", async ({
         type: "markdown",
         visibility: "private",
         isDraft,
-        initialBody: {
-          documentID,
-          bodySchemaVersion: 1,
-          rootNodeID,
-          nodes: [
+        content: title,
+        contentJSON: {
+          type: "doc",
+          content: [
             {
-              nodeID: rootNodeID,
-              parentID: null,
-              siblingOrder: 0,
               type: "document",
-              content: "",
-              attributes: {},
-            },
-            {
-              nodeID: randomUUID(),
-              parentID: rootNodeID,
-              siblingOrder: 1,
-              type: "paragraph",
-              content: title,
-              attributes: {},
+              attrs: { nodeID: randomUUID(), bodyAttributes: "{}", bodyContent: "" },
+              content: [
+                {
+                  type: "paragraph",
+                  attrs: { nodeID: randomUUID(), bodyAttributes: "{}", bodyContent: "" },
+                  content: [
+                    {
+                      type: "run",
+                      attrs: { nodeID: randomUUID(), bodyAttributes: "{}", bodyContent: "" },
+                      content: [{ type: "text", text: title }],
+                    },
+                  ],
+                },
+              ],
             },
           ],
         },

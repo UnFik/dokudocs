@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the document that the owner accepts or rejects", async ({
   page,
@@ -8,7 +9,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
   test.setTimeout(90_000);
   const suffix = randomUUID();
   const workspaceName = `Suggestion workspace ${suffix}`;
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const runNodeID = randomUUID();
@@ -50,10 +51,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     "X-Workspace-Id": workspaceID,
   };
   const canonicalRuns = async () => {
-    const response = await page.request.get(
-      `${apiURL}/api/v1/documents/${documentID}/body`,
-      { headers: ownerHeaders },
-    );
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, ownerHeaders) } }) };
     const data = (await response.json()) as {
       data: { nodes: { type: string; content: string }[] };
     };
@@ -67,11 +65,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
       title: `Suggestion document ${suffix}`,
       type: "markdown",
       visibility: "private",
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           {
             nodeID: rootNodeID,
             parentID: null,
@@ -96,11 +90,11 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
             content: "Original phrase",
             attributes: {},
           },
-        ],
-      },
+        ]),
     },
   });
   expect(createResponse.status()).toBe(201);
+  documentID = await createdDocumentID(createResponse);
   const legacyProposal = await page.request.post(
     `${apiURL}/api/v1/documents/${documentID}/suggestions`,
     { headers: ownerHeaders, data: {} },
