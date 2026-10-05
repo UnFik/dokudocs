@@ -1,0 +1,23 @@
+{
+  "name": "dokudocs-collab",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hocuspocus/extension-redis": "^4.7.0",
+    "@hocuspocus/provider": "^4.7.0",
+    "@hocuspocus/server": "^4.7.0",
+    "yjs": "^13.6.31"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
