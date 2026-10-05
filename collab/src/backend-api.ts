@@ -11,6 +11,8 @@ export type StoredDocument = {
   state: Uint8Array
   /** The document as ProseMirror JSON. */
   content: unknown
+  /** The same document as Markdown, for previews, search and exports. */
+  markdown: string
 }
 
 export type LoadedDocument = {

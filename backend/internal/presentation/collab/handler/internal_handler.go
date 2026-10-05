@@ -39,7 +39,8 @@ type StateStore interface {
 	// LoadDocument returns the state and the JSON content; either may be nil. A
 	// document made from JSON alone has no state yet, and the service builds one.
 	LoadDocument(ctx context.Context, workspaceID, documentID uuid.UUID) ([]byte, json.RawMessage, error)
-	StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage) error
+	// markdown is the same document as text, kept for previews, search and exports.
+	StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string) error
 }
 
 type InternalHandler struct {
@@ -149,8 +150,9 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		State   string          `json:"state"`
-		Content json.RawMessage `json:"content"`
+		State    string          `json:"state"`
+		Content  json.RawMessage `json:"content"`
+		Markdown string          `json:"markdown"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, maxStateBytes*2)).Decode(&request); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
@@ -166,7 +168,7 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "content must be a JSON object", http.StatusBadRequest)
 		return
 	}
-	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content); err != nil {
+	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content, request.Markdown); err != nil {
 		if errors.Is(err, ErrDocumentNotFound) {
 			http.NotFound(w, r)
 			return

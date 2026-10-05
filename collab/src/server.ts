@@ -3,6 +3,7 @@ import { Server, type Extension } from '@hocuspocus/server'
 import * as Y from 'yjs'
 import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror'
 import type { Authorized, BackendApi } from './backend-api'
+import { toMarkdown } from './markdown'
 import { parseRoom } from './room'
 import { documentBodySchema } from './schema'
 
@@ -103,10 +104,12 @@ function persistence(backend: BackendApi): Extension<CollabContext> {
     async onStoreDocument({ document, documentName }) {
       const room = parseRoom(documentName)
       if (!room) return
+      const content = yDocToProsemirrorJSON(document, fragmentName)
       await backend.storeState({
         ...room,
         state: Y.encodeStateAsUpdate(document),
-        content: yDocToProsemirrorJSON(document, fragmentName),
+        content,
+        markdown: toMarkdown(content),
       })
     },
   }
