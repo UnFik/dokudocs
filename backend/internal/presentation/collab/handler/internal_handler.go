@@ -1,0 +1,168 @@
+// Package handler holds the endpoints the collaboration service calls. They are
+// not for browsers: every request carries a shared secret.
+package handler
+
+import (
+	"context"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+
+	appauth "backend/internal/application/auth/dto"
+	"backend/internal/application/collaboration"
+
+	"github.com/google/uuid"
+)
+
+const secretHeader = "X-Collab-Secret"
+
+// maxStateBytes bounds one stored state. Larger documents are refused instead of
+// filling the database.
+const maxStateBytes = 64 << 20
+
+type TokenVerifier interface {
+	VerifyToken(string) (appauth.ResponseUser, error)
+}
+
+type AccessReader interface {
+	ReadRoomHead(ctx context.Context, workspaceID, documentID uuid.UUID, userIDs []uuid.UUID) (collaboration.RoomHead, error)
+}
+
+// StateStore keeps the Yjs state of a document and the JSON derived from it.
+type StateStore interface {
+	// LoadState returns nil when the document has no state yet.
+	LoadState(ctx context.Context, documentID uuid.UUID) ([]byte, error)
+	StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage) error
+}
+
+type InternalHandler struct {
+	verifier TokenVerifier
+	access   AccessReader
+	store    StateStore
+	secret   string
+}
+
+func NewInternalHandler(verifier TokenVerifier, access AccessReader, store StateStore, secret string) *InternalHandler {
+	return &InternalHandler{verifier: verifier, access: access, store: store, secret: secret}
+}
+
+func (h *InternalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.secret == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get(secretHeader)), []byte(h.secret)) != 1 {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	switch {
+	case r.Method == http.MethodPost && r.URL.Path == "/internal/collab/authorize":
+		h.authorize(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/internal/collab/state":
+		h.loadState(w, r)
+	case r.Method == http.MethodPut && r.URL.Path == "/internal/collab/state":
+		h.storeState(w, r)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (h *InternalHandler) authorize(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Token       string `json:"token"`
+		WorkspaceID string `json:"workspaceID"`
+		DocumentID  string `json:"documentID"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&request); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	workspaceID, err1 := uuid.Parse(request.WorkspaceID)
+	documentID, err2 := uuid.Parse(request.DocumentID)
+	if err1 != nil || err2 != nil {
+		http.Error(w, "invalid ids", http.StatusBadRequest)
+		return
+	}
+	user, err := h.verifier.VerifyToken(request.Token)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	userID, err := uuid.Parse(user.ID)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	head, err := h.access.ReadRoomHead(r.Context(), workspaceID, documentID, []uuid.UUID{userID})
+	if err != nil {
+		http.Error(w, "access lookup failed", http.StatusServiceUnavailable)
+		return
+	}
+	access := head.Access[userID] // the zero value, no access, for someone outside the workspace
+	writeJSON(w, http.StatusOK, map[string]any{
+		"userID":     userID.String(),
+		"canRead":    access.CanRead,
+		"canEdit":    access.CanEdit,
+		"canSuggest": access.CanSuggest,
+	})
+}
+
+func ids(r *http.Request) (uuid.UUID, uuid.UUID, bool) {
+	workspaceID, err1 := uuid.Parse(r.URL.Query().Get("workspaceID"))
+	documentID, err2 := uuid.Parse(r.URL.Query().Get("documentID"))
+	return workspaceID, documentID, err1 == nil && err2 == nil
+}
+
+func (h *InternalHandler) loadState(w http.ResponseWriter, r *http.Request) {
+	_, documentID, ok := ids(r)
+	if !ok {
+		http.Error(w, "invalid ids", http.StatusBadRequest)
+		return
+	}
+	state, err := h.store.LoadState(r.Context(), documentID)
+	if err != nil {
+		http.Error(w, "load failed", http.StatusServiceUnavailable)
+		return
+	}
+	if len(state) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	_, _ = w.Write(state)
+}
+
+func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
+	workspaceID, documentID, ok := ids(r)
+	if !ok {
+		http.Error(w, "invalid ids", http.StatusBadRequest)
+		return
+	}
+	var request struct {
+		State   string          `json:"state"`
+		Content json.RawMessage `json:"content"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, maxStateBytes*2)).Decode(&request); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	state, err := base64.StdEncoding.DecodeString(request.State)
+	if err != nil || len(state) == 0 || len(state) > maxStateBytes {
+		http.Error(w, "invalid state", http.StatusBadRequest)
+		return
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(request.Content, &object); err != nil || object == nil {
+		http.Error(w, "content must be a JSON object", http.StatusBadRequest)
+		return
+	}
+	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content); err != nil {
+		http.Error(w, "store failed", http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}

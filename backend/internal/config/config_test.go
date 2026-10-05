@@ -92,3 +92,16 @@ func TestLoadConfigIdleConnsNeverExceedOpenConns(t *testing.T) {
 		t.Fatalf("idle = %d, want clamped to open = 8", cfg.DBMaxIdleConns)
 	}
 }
+
+func TestLoadConfigReadsTheCollaborationServiceSecret(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	if cfg, err := LoadConfig(); err != nil || cfg.CollabServiceSecret != "" {
+		t.Fatalf("without the variable = (%q, %v), want the endpoints off (empty secret)", cfg.CollabServiceSecret, err)
+	}
+	t.Setenv("COLLAB_SERVICE_SECRET", "shared")
+	cfg, err := LoadConfig()
+	if err != nil || cfg.CollabServiceSecret != "shared" {
+		t.Fatalf("with the variable = (%q, %v), want shared", cfg.CollabServiceSecret, err)
+	}
+}
