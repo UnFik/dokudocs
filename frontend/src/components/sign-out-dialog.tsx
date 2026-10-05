@@ -48,7 +48,10 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
     }
     setBusy(true)
     try {
-      const { unsynced: left } = await flushLocalEditsForLogout({ userID })
+      const { unsynced: left } = await flushLocalEditsForLogout({
+        userID,
+        token: () => auth.accessToken,
+      })
       if (left.length > 0) {
         setUnsynced({ documents: left, checkFailed: false })
         return

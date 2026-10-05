@@ -17,6 +17,7 @@ import {
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
 import { decodeBase64, encodeBase64 } from '../lib/collab-encoding'
 import {
   clearLocalCopy,
@@ -243,6 +244,12 @@ function CollaborativeMarkdownBody({
   onPresence: (users: PresenceUser[]) => void
   onAccessUnavailable: () => void
 }) {
+  const { name: profileName } = useCurrentProfile()
+  const profileNameRef = useRef(profileName)
+  useEffect(() => {
+    profileNameRef.current = profileName
+    sessionRef.current?.session.setUserName(profileName)
+  }, [profileName])
   const [suggestionPreview, setSuggestionPreview] = useState<
     'suggestions' | 'accepted' | 'rejected'
   >('suggestions')
@@ -396,6 +403,7 @@ function CollaborativeMarkdownBody({
       documentID,
       workspaceID,
       userID,
+      userName: profileNameRef.current,
       token: () => useAuthStore.getState().auth.accessToken,
       focusNodeID,
       readOnly:
@@ -486,6 +494,7 @@ function CollaborativeMarkdownBody({
           return
         }
         sessionRef.current = session
+        session.session.setUserName(profileNameRef.current)
         setSessionReady(true)
         setCards(session.editor.getSuggestionCards())
         onMarkdownChange(documentBodyToMarkdown(session.editor.getBody()))
@@ -720,6 +729,16 @@ function SuggestionPanel({
       listDocumentSuggestions(workspaceID, documentID, signal),
     enabled: true,
     retry: false,
+    // The server learns of a new suggestion when it next stores the document.
+    refetchInterval: (query) =>
+      cards.some(
+        (card) =>
+          !query.state.data?.some(
+            (discussion) => discussion.suggestionId === card.id
+          )
+      )
+        ? 1500
+        : false,
   })
   return (
     <>

@@ -121,11 +121,13 @@ export function openCollabSession(input: {
     },
   })
   const awareness = provider.awareness
-  awareness?.setLocalStateField('user', {
-    userID: input.userID,
-    name: input.userName ?? 'Someone',
-    color: authorColor(input.userID),
-  })
+  const announce = (userName: string | undefined) =>
+    awareness?.setLocalStateField('user', {
+      userID: input.userID,
+      name: userName || 'Someone',
+      color: authorColor(input.userID),
+    })
+  announce(input.userName)
   const publishPresence = () => {
     if (!awareness) return
     const cursors: RemoteCursor[] = []
@@ -158,11 +160,14 @@ export function openCollabSession(input: {
     input.onPresence([...seen.values()])
   }
   awareness?.on('change', publishPresence)
+  publishPresence()
 
   return {
     ydoc,
     provider,
     awareness,
+    /** The name the others see next to this person's cursor and in the people list. */
+    setUserName: announce,
     /** Tells the others in the room that the comments changed. */
     signalCommentsChanged() {
       provider.sendStateless(JSON.stringify({ type: 'comments_changed' }))
