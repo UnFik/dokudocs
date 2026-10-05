@@ -7,7 +7,6 @@ import (
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/config"
 	"backend/internal/infrastructure/api"
-	"backend/internal/infrastructure/collaboration/redisfanout"
 	"backend/internal/infrastructure/logger"
 	"backend/internal/infrastructure/openai"
 	"backend/internal/infrastructure/postgres"
@@ -39,18 +38,6 @@ func main() {
 	if cfg.OpenAIAPIKey != "" {
 		c.RAGAnswerModel = openai.NewAnswerModel(cfg.OpenAIAPIKey, cfg.RAGAnswerModel)
 		c.RAGEmbeddingModel = openai.NewEmbeddingModel(cfg.OpenAIAPIKey, cfg.RAGEmbeddingModel)
-	}
-	if cfg.RedisURL != "" {
-		broker, err := redisfanout.New(cfg.RedisURL)
-		if err != nil {
-			log.Fatalf("create collaboration Redis broker: %v", err)
-		}
-		c.CollaborationBroker = broker
-		presence, err := redisfanout.NewPresenceStore(cfg.RedisURL, redisfanout.DefaultPresenceTTL)
-		if err != nil {
-			log.Fatalf("create collaboration presence store: %v", err)
-		}
-		c.CollaborationPresence = presence
 	}
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()

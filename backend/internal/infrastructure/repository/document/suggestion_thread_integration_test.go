@@ -21,7 +21,7 @@ func TestSuggestionThreadRepliesAndResolve(t *testing.T) {
 		t.Fatalf("open test database: %v", err)
 	}
 	defer db.Close()
-	workspaceID, documentID, ownerID, _, runID, repo := seedRunDocument(t, ctx, db)
+	workspaceID, documentID, ownerID, _, _, repo := seedRunDocument(t, ctx, db)
 	addMember := func(level string) uuid.UUID {
 		id := insertAccessTestUser(t, ctx, db)
 		t.Cleanup(func() { _, _ = db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id) })
@@ -94,7 +94,7 @@ func TestSuggestionThreadRepliesAndResolve(t *testing.T) {
 		t.Fatalf("after resolve = %+v, want pending, resolved by the proposer", items[0])
 	}
 	var content string
-	if err := db.QueryRowContext(ctx, `SELECT content FROM document_nodes WHERE document_id = $1 AND node_id = $2`, documentID, runID).Scan(&content); err != nil || content != "plain" {
+	if err := db.QueryRowContext(ctx, `SELECT content FROM documents WHERE id = $1`, documentID).Scan(&content); err != nil || content != "plain\n" {
 		t.Fatalf("body after resolve = %q, %v; resolve must not touch the text", content, err)
 	}
 	if err := repo.SetSuggestionResolved(ctx, workspaceID, documentID, suggestionID, ownerID, true); err != nil {

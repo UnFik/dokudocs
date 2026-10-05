@@ -40,7 +40,7 @@ type StateStore interface {
 	// document made from JSON alone has no state yet, and the service builds one.
 	LoadDocument(ctx context.Context, workspaceID, documentID uuid.UUID) ([]byte, json.RawMessage, error)
 	// markdown is the same document as text, kept for previews, search and exports.
-	StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string) error
+	StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion) error
 }
 
 type InternalHandler struct {
@@ -150,9 +150,13 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		State    string          `json:"state"`
-		Content  json.RawMessage `json:"content"`
-		Markdown string          `json:"markdown"`
+		State       string          `json:"state"`
+		Content     json.RawMessage `json:"content"`
+		Markdown    string          `json:"markdown"`
+		Suggestions []struct {
+			ID     string `json:"id"`
+			Author string `json:"author"`
+		} `json:"suggestions"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, maxStateBytes*2)).Decode(&request); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
@@ -168,7 +172,15 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "content must be a JSON object", http.StatusBadRequest)
 		return
 	}
-	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content, request.Markdown); err != nil {
+	suggestions := make([]collaboration.Suggestion, 0, len(request.Suggestions))
+	for _, item := range request.Suggestions {
+		id, err1 := uuid.Parse(item.ID)
+		author, err2 := uuid.Parse(item.Author)
+		if err1 == nil && err2 == nil {
+			suggestions = append(suggestions, collaboration.Suggestion{ID: id, Author: author})
+		}
+	}
+	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content, request.Markdown, suggestions); err != nil {
 		if errors.Is(err, ErrDocumentNotFound) {
 			http.NotFound(w, r)
 			return

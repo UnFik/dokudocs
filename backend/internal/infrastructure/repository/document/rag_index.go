@@ -8,11 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"unicode"
 
-	"backend/internal/domain/documentbody"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
@@ -26,7 +24,6 @@ const maxRAGChunkRunes = 3000
 type RAGIndexResult struct {
 	DocumentID       uuid.UUID
 	BodyVersion      int64
-	BodyEpoch        int64
 	ChunkCount       int
 	SkippedNodeCount int
 	CoverageStatus   string
@@ -50,20 +47,16 @@ func (r *Repository) RebuildRAGIndex(ctx context.Context, documentID uuid.UUID) 
 		if !locked {
 			return nil
 		}
-		var rootID uuid.UUID
+		var contentJSON []byte
 		var title, projectName string
 		var projectIDText sql.NullString
-		var bodyVersion, bodyEpoch int64
+		var bodyVersion int64
 		if err := tx.QueryRowContext(ctx, `
-			SELECT d.root_node_id, d.title, COALESCE(p.name, ''), d.body_version, d.body_epoch, d.project_id::text
+			SELECT d.content_json, d.title, COALESCE(p.name, ''), d.body_version, d.project_id::text
 			FROM documents d
 			LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
-			WHERE d.id = $1 AND d.type = 'markdown' AND d.deleted_at IS NULL
-		`, documentID).Scan(&rootID, &title, &projectName, &bodyVersion, &bodyEpoch, &projectIDText); err != nil {
-			return err
-		}
-		body, err := loadDocumentBody(ctx, tx, documentID, rootID)
-		if err != nil {
+			WHERE d.id = $1 AND d.type = 'markdown' AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
+		`, documentID).Scan(&contentJSON, &title, &projectName, &bodyVersion, &projectIDText); err != nil {
 			return err
 		}
 		var projectID *uuid.UUID
@@ -78,7 +71,7 @@ func (r *Repository) RebuildRAGIndex(ctx context.Context, documentID uuid.UUID) 
 		if _, err := tx.ExecContext(ctx, `DELETE FROM rag_chunks WHERE document_id = $1`, documentID); err != nil {
 			return err
 		}
-		chunks, skipped := renderRAGBody(body)
+		chunks, skipped := renderRAGJSON(contentJSON)
 		for chunkCount, chunk := range chunks {
 			if _, err := tx.ExecContext(ctx, `
 			INSERT INTO rag_chunks (document_id, node_id, ordinal, body_version, source_fingerprint, text, title, project_name, breadcrumb)
@@ -93,18 +86,18 @@ func (r *Repository) RebuildRAGIndex(ctx context.Context, documentID uuid.UUID) 
 			coverage = "partial"
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO rag_document_indexes (document_id, indexed_body_version, indexed_body_epoch, source_fingerprint, indexed_title, indexed_project_id, indexed_project_name, renderer_version, coverage_status, skipped_node_count)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO rag_document_indexes (document_id, indexed_body_version, source_fingerprint, indexed_title, indexed_project_id, indexed_project_name, renderer_version, coverage_status, skipped_node_count)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			ON CONFLICT (document_id) DO UPDATE SET indexed_body_version = EXCLUDED.indexed_body_version,
-			 indexed_body_epoch = EXCLUDED.indexed_body_epoch, source_fingerprint = EXCLUDED.source_fingerprint,
+			 source_fingerprint = EXCLUDED.source_fingerprint,
 			 indexed_title = EXCLUDED.indexed_title, indexed_project_id = EXCLUDED.indexed_project_id,
 			 indexed_project_name = EXCLUDED.indexed_project_name,
 			 renderer_version = EXCLUDED.renderer_version, coverage_status = EXCLUDED.coverage_status,
 			 skipped_node_count = EXCLUDED.skipped_node_count, indexed_at = NOW()
-		`, documentID, bodyVersion, bodyEpoch, fingerprint, title, projectID, projectName, ragRendererVersion, coverage, skipped); err != nil {
+		`, documentID, bodyVersion, fingerprint, title, projectID, projectName, ragRendererVersion, coverage, skipped); err != nil {
 			return err
 		}
-		result = RAGIndexResult{DocumentID: documentID, BodyVersion: bodyVersion, BodyEpoch: bodyEpoch, ChunkCount: chunkCount, SkippedNodeCount: skipped, CoverageStatus: coverage}
+		result = RAGIndexResult{DocumentID: documentID, BodyVersion: bodyVersion, ChunkCount: chunkCount, SkippedNodeCount: skipped, CoverageStatus: coverage}
 		return nil
 	})
 	return result, err
@@ -121,11 +114,10 @@ func (r *Repository) RebuildStaleRAGIndexes(ctx context.Context, limit int) (int
 		FROM documents d
 		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 		LEFT JOIN rag_document_indexes ri ON ri.document_id = d.id
-		WHERE d.type = 'markdown' AND d.deleted_at IS NULL AND d.root_node_id IS NOT NULL
+		WHERE d.type = 'markdown' AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
 		  AND (
 			ri.document_id IS NULL
 			OR ri.indexed_body_version <> d.body_version
-			OR ri.indexed_body_epoch <> d.body_epoch
 			OR ri.indexed_title <> d.title
 			OR ri.indexed_project_id IS DISTINCT FROM d.project_id
 			OR ri.indexed_project_name <> COALESCE(p.name, '')
@@ -175,28 +167,79 @@ type renderedRAGChunk struct {
 	breadcrumb string
 }
 
-func renderRAGBody(body documentbody.Body) ([]renderedRAGChunk, int) {
-	children := make(map[uuid.UUID][]documentbody.Node, len(body.Nodes))
-	for _, node := range body.Nodes {
-		if node.ParentID != nil {
-			children[*node.ParentID] = append(children[*node.ParentID], node)
-		}
-	}
-	for parentID := range children {
-		sort.Slice(children[parentID], func(i, j int) bool {
-			return children[parentID][i].SiblingOrder < children[parentID][j].SiblingOrder
-		})
-	}
-	ordered := make([]documentbody.Node, 0, len(body.Nodes))
-	var order func(uuid.UUID)
-	order = func(parentID uuid.UUID) {
-		for _, child := range children[parentID] {
-			ordered = append(ordered, child)
-			order(child.NodeID)
-		}
-	}
-	order(body.RootNodeID)
+type ragNode struct {
+	Type    string         `json:"type"`
+	Attrs   map[string]any `json:"attrs"`
+	Content []ragNode      `json:"content"`
+	Text    string         `json:"text"`
+	Marks   []struct {
+		Type string `json:"type"`
+	} `json:"marks"`
+}
 
+var ragNodeNamespace = uuid.MustParse("6f6f0f0e-6f0e-4f0e-8f0e-6f0e6f0e6f0e")
+
+// ragNodeID is the block's node ID as a UUID; editors that wrote a different ID shape still get a stable one.
+func ragNodeID(node ragNode) uuid.UUID {
+	raw, _ := node.Attrs["nodeID"].(string)
+	if id, err := uuid.Parse(raw); err == nil {
+		return id
+	}
+	return uuid.NewSHA1(ragNodeNamespace, []byte(raw))
+}
+
+func (n ragNode) bodyAttributes() struct{ Level int } {
+	var attributes struct {
+		Level int `json:"level"`
+	}
+	raw, _ := n.Attrs["bodyAttributes"].(string)
+	_ = json.Unmarshal([]byte(raw), &attributes)
+	return struct{ Level int }{attributes.Level}
+}
+
+// inlineText is the text of a block's inline content; suggested-only text is left out.
+func (n ragNode) inlineText(skipped *int) string {
+	var builder strings.Builder
+	var walk func(ragNode)
+	walk = func(node ragNode) {
+		switch node.Type {
+		case "text":
+			for _, mark := range node.Marks {
+				if mark.Type == "suggestion_insert" {
+					return
+				}
+			}
+			builder.WriteString(node.Text)
+		case "image":
+			var attributes struct {
+				Alt string `json:"alt"`
+			}
+			raw, _ := node.Attrs["bodyAttributes"].(string)
+			if json.Unmarshal([]byte(raw), &attributes) == nil {
+				builder.WriteString(attributes.Alt)
+			}
+		case "line_break":
+			builder.WriteByte('\n')
+		case "opaque_inline":
+			*skipped++
+		default:
+			for _, child := range node.Content {
+				walk(child)
+			}
+		}
+	}
+	for _, child := range n.Content {
+		walk(child)
+	}
+	return builder.String()
+}
+
+// renderRAGJSON turns the document JSON into bounded text chunks, each under the headings above it.
+func renderRAGJSON(contentJSON []byte) ([]renderedRAGChunk, int) {
+	var root ragNode
+	if json.Unmarshal(contentJSON, &root) != nil {
+		return nil, 0
+	}
 	chunks := make([]renderedRAGChunk, 0)
 	skipped := 0
 	type heading struct {
@@ -204,67 +247,46 @@ func renderRAGBody(body documentbody.Body) ([]renderedRAGChunk, int) {
 		text  string
 	}
 	var headings []heading
-	for _, node := range ordered {
-		if node.Type == "opaque" {
-			skipped++
-			continue
-		}
+	var visit func(ragNode)
+	visit = func(node ragNode) {
 		var text string
 		switch node.Type {
-		case "paragraph", "atx-heading", "setext-heading", "table.cell":
-			var builder strings.Builder
-			builder.WriteString(node.Content)
-			var renderInline func(uuid.UUID)
-			renderInline = func(parentID uuid.UUID) {
-				for _, child := range children[parentID] {
-					switch child.Type {
-					case "run", "math":
-						builder.WriteString(child.Content)
-					case "image":
-						var attributes struct {
-							Alt string `json:"alt"`
-						}
-						if json.Unmarshal(child.Attributes, &attributes) == nil {
-							builder.WriteString(attributes.Alt)
-						}
-					case "line-break":
-						builder.WriteByte('\n')
-					case "opaque-inline":
-						skipped++
-					default:
-						renderInline(child.NodeID)
-					}
-				}
+		case "opaque":
+			skipped++
+			return
+		case "paragraph", "atx_heading", "setext_heading", "table_cell":
+			text = node.inlineText(&skipped)
+		case "code_block", "html_block", "link_reference_definition", "math_block", "frontmatter", "diagram":
+			text = node.inlineText(&skipped)
+		default:
+			for _, child := range node.Content {
+				visit(child)
 			}
-			renderInline(node.NodeID)
-			text = builder.String()
-		case "code-block", "html-block", "link-reference-definition", "math-block", "frontmatter", "diagram":
-			text = node.Content
+			return
 		}
-		if text = strings.TrimSpace(text); text != "" {
-			if node.Type == "atx-heading" || node.Type == "setext-heading" {
-				var attributes struct {
-					Level int `json:"level"`
-				}
-				_ = json.Unmarshal(node.Attributes, &attributes)
-				if attributes.Level < 1 || attributes.Level > 6 {
-					attributes.Level = 1
-				}
-				for len(headings) > 0 && headings[len(headings)-1].level >= attributes.Level {
-					headings = headings[:len(headings)-1]
-				}
-				headings = append(headings, heading{level: attributes.Level, text: text})
+		if text = strings.TrimSpace(text); text == "" {
+			return
+		}
+		if node.Type == "atx_heading" || node.Type == "setext_heading" {
+			level := node.bodyAttributes().Level
+			if level < 1 || level > 6 {
+				level = 1
 			}
-			breadcrumbParts := make([]string, len(headings))
-			for i, current := range headings {
-				breadcrumbParts[i] = current.text
+			for len(headings) > 0 && headings[len(headings)-1].level >= level {
+				headings = headings[:len(headings)-1]
 			}
-			breadcrumb := strings.Join(breadcrumbParts, " > ")
-			for _, part := range splitRAGText(text, maxRAGChunkRunes) {
-				chunks = append(chunks, renderedRAGChunk{nodeID: node.NodeID, text: part, breadcrumb: breadcrumb})
-			}
+			headings = append(headings, heading{level: level, text: text})
+		}
+		parts := make([]string, len(headings))
+		for i, current := range headings {
+			parts[i] = current.text
+		}
+		breadcrumb := strings.Join(parts, " > ")
+		for _, part := range splitRAGText(text, maxRAGChunkRunes) {
+			chunks = append(chunks, renderedRAGChunk{nodeID: ragNodeID(node), text: part, breadcrumb: breadcrumb})
 		}
 	}
+	visit(root)
 	return chunks, skipped
 }
 

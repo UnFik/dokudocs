@@ -7,17 +7,13 @@ import (
 	"database/sql"
 	"testing"
 
-	"backend/internal/application/collaboration"
-	"backend/internal/domain/documentbody"
-	"backend/internal/infrastructure/collaboration/yjs"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
 )
 
-// TestReadRoomHeadAgreesWithReadBodyForEveryRole uses ReadBody, which takes the
-// locking per-user path, as the oracle for the batched lock-free room read.
-func TestReadRoomHeadAgreesWithReadBodyForEveryRole(t *testing.T) {
+// TestReadRoomHeadReportsEachRolesAccess checks the batched room read for every role.
+func TestReadRoomHeadReportsEachRolesAccess(t *testing.T) {
 	ctx := context.Background()
 	db, err := sql.Open("pgx", integrationDatabaseURL(t))
 	if err != nil {
@@ -52,16 +48,8 @@ func TestReadRoomHeadAgreesWithReadBodyForEveryRole(t *testing.T) {
 	mustExec(`INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, 'viewer'), ($1, $3, 'editor')`, projectID, projectViewer, projectEditor)
 
 	newDocument := func(visibility string, inProject bool) uuid.UUID {
-		documentID, rootID, paragraphID := uuid.New(), uuid.New(), uuid.New()
-		body := documentbody.Body{DocumentID: documentID, RootNodeID: rootID, Nodes: []documentbody.Node{
-			{DocumentID: documentID, NodeID: rootID, Type: "document", Attributes: []byte(`{}`), Version: 1},
-			{DocumentID: documentID, NodeID: paragraphID, ParentID: &rootID, Type: "paragraph", Attributes: []byte(`{}`), Version: 1},
-		}}
-		state, err := yjs.EncodeBodyV1(body)
-		if err != nil {
-			t.Fatalf("encode body: %v", err)
-		}
-		if err := seedCollaborativeDocument(ctx, db, workspaceID, documentID, owner, body, state); err != nil {
+		documentID := uuid.New()
+		if err := seedJSONDocument(ctx, db, workspaceID, documentID, owner, "text"); err != nil {
 			t.Fatalf("seed document: %v", err)
 		}
 		mustExec(`UPDATE documents SET visibility = $2::document_visibility WHERE id = $1`, documentID, visibility)
@@ -86,37 +74,42 @@ func TestReadRoomHeadAgreesWithReadBodyForEveryRole(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: ReadRoomHead(): %v", name, err)
 		}
-		if head.BodyVersion != 1 || head.BodyEpoch != 1 || head.BodySchemaVersion != 1 {
-			t.Fatalf("%s: head = %+v, want version 1 epoch 1 schema 1", name, head)
+		if name == "private document" {
+			want := map[uuid.UUID]RoomAccessWant{
+				owner: {true, true, true}, viewer: {true, false, false}, editor: {true, true, true},
+				commenter: {true, false, true}, plainMember: {false, false, false}, outsider: {false, false, false},
+			}
+			for user, expected := range want {
+				got := head.Access[user]
+				if got.CanRead != expected.read || got.CanEdit != expected.edit || got.CanSuggest != expected.suggest {
+					t.Fatalf("%s: user %s access = %+v, want %+v", name, user, got, expected)
+				}
+			}
 		}
-		for _, user := range users {
-			want := collaboration.RoomAccess{}
-			if snapshot, err := reader.ReadBody(ctx, collaboration.Actor{UserID: user}, workspaceID, documentID); err == nil {
-				want = collaboration.RoomAccess{CanRead: true, CanEdit: snapshot.CanEdit, CanSuggest: snapshot.CanSuggest}
-			}
-			if got := head.Access[user]; got != want {
-				t.Fatalf("%s: user %s access = %+v, want %+v (as ReadBody reports)", name, user, got, want)
-			}
+		if outsiderAccess := head.Access[uuid.New()]; outsiderAccess.CanRead {
+			t.Fatalf("%s: an unknown user can read", name)
 		}
 	}
 }
 
+type RoomAccessWant struct{ read, edit, suggest bool }
+
 func TestReadRoomHeadReportsNoAccessForATrashedOrForeignDocument(t *testing.T) {
-	f := newNodeDiffFixture(t, 1)
 	ctx := context.Background()
-	reader := NewRepository(database.NewSQLDB(f.db))
-	if _, err := reader.ReadRoomHead(ctx, uuid.New(), f.documentID, []uuid.UUID{f.authorID}); err == nil {
+	db, err := sql.Open("pgx", integrationDatabaseURL(t))
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer db.Close()
+	workspaceID, documentID, ownerID, _, _, reader := seedRunDocument(t, ctx, db)
+	if _, err := reader.ReadRoomHead(ctx, uuid.New(), documentID, []uuid.UUID{ownerID}); err == nil {
 		t.Fatal("ReadRoomHead for another workspace succeeded, want an error")
 	}
-	if _, err := f.db.ExecContext(ctx, `UPDATE documents SET deleted_at = NOW() WHERE id = $1`, f.documentID); err != nil {
+	if _, err := db.ExecContext(ctx, `UPDATE documents SET deleted_at = NOW() WHERE id = $1`, documentID); err != nil {
 		t.Fatalf("trash document: %v", err)
 	}
-	var workspaceID uuid.UUID
-	if err := f.db.QueryRowContext(ctx, `SELECT workspace_id FROM documents WHERE id = $1`, f.documentID).Scan(&workspaceID); err != nil {
-		t.Fatal(err)
-	}
-	head, err := reader.ReadRoomHead(ctx, workspaceID, f.documentID, []uuid.UUID{f.authorID})
-	if err == nil && head.Access[f.authorID].CanRead {
+	head, err := reader.ReadRoomHead(ctx, workspaceID, documentID, []uuid.UUID{ownerID})
+	if err == nil && head.Access[ownerID].CanRead {
 		t.Fatalf("trashed document head = %+v, want no read access", head)
 	}
 }

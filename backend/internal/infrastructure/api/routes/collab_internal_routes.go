@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	appauth "backend/internal/application/auth/usecase"
-	appcollab "backend/internal/application/collaboration"
 	"backend/internal/config"
 	docrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/infrastructure/runtime/container"
@@ -17,7 +16,7 @@ import (
 func addCollabInternalRoutes(mux *http.ServeMux, c *container.Container, cfg config.Config) {
 	handler := collabhandler.NewInternalHandler(
 		appauth.NewUseCase(c.DB, cfg.JWTSecret, cfg.AccessTokenTTL),
-		appcollab.NewBodyReadUseCase(docrepo.NewRepository(c.DB)),
+		docrepo.NewRepository(c.DB),
 		docrepo.NewCollabStateStore(c.DB),
 		cfg.CollabServiceSecret,
 	)
