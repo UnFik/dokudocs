@@ -42,6 +42,7 @@ export class HttpBackend implements BackendApi {
     const response = await this.request('PUT', `/internal/collab/document?${query}`, {
       state: toBase64(document.state),
       content: document.content,
+      markdown: document.markdown,
     })
     if (response.status !== 204) throw new Error(`store failed: ${response.status}`)
   }

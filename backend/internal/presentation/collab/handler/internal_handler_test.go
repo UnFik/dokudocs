@@ -46,6 +46,7 @@ type storedState struct {
 	workspaceID, documentID uuid.UUID
 	state                   []byte
 	content                 json.RawMessage
+	markdown                string
 }
 
 type fakeStore struct {
@@ -62,8 +63,8 @@ func (f *fakeStore) LoadDocument(_ context.Context, _, documentID uuid.UUID) ([]
 	return f.states[documentID], f.contents[documentID], nil
 }
 
-func (f *fakeStore) StoreState(_ context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage) error {
-	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content})
+func (f *fakeStore) StoreState(_ context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string) error {
+	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content, markdown})
 	f.states[documentID] = state
 	f.contents[documentID] = content
 	return nil
@@ -154,12 +155,13 @@ func TestDocumentRoundTrip(t *testing.T) {
 	state := []byte{1, 2, 3, 250}
 	put := do(h, http.MethodPut, target, map[string]any{
 		"state":   base64.StdEncoding.EncodeToString(state),
-		"content": map[string]any{"type": "doc"},
+		"content":  map[string]any{"type": "doc"},
+		"markdown": "hello\n",
 	}, true)
 	if put.Code != http.StatusNoContent {
 		t.Fatalf("store = %d %s, want 204", put.Code, put.Body.String())
 	}
-	if len(store.stored) != 1 || !bytes.Equal(store.stored[0].state, state) || string(store.stored[0].content) != `{"type":"doc"}` {
+	if len(store.stored) != 1 || !bytes.Equal(store.stored[0].state, state) || string(store.stored[0].content) != `{"type":"doc"}` || store.stored[0].markdown != "hello\n" {
 		t.Fatalf("stored = %+v, want the state and the content", store.stored)
 	}
 

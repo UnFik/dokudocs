@@ -44,14 +44,14 @@ func (s *CollabStateStore) LoadDocument(ctx context.Context, workspaceID, docume
 	return state, content, err
 }
 
-// StoreState replaces the state and the JSON in one transaction. A document that
+// StoreState replaces the state, the JSON and the Markdown derived from it in one transaction. A document that
 // is not in the workspace is refused before anything is written.
-func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage) error {
+func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string) error {
 	return s.db.WithTransaction(ctx, func(tx database.Queryer) error {
 		result, err := tx.ExecContext(ctx, `
-			UPDATE documents SET content_json = $3, updated_at = NOW()
+			UPDATE documents SET content_json = $3, content = $4, updated_at = NOW()
 			WHERE id = $1 AND workspace_id = $2
-		`, documentID, workspaceID, []byte(content))
+		`, documentID, workspaceID, []byte(content), markdown)
 		if err != nil {
 			return err
 		}

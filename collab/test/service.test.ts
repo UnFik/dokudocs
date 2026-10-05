@@ -109,6 +109,7 @@ describe('collaboration service', () => {
     const stored = backend.stores.at(-1)!
     expect(JSON.stringify(stored.content)).toContain('start more')
     expect(stored.content).toEqual(yDocToProsemirrorJSON(client.doc, 'body'))
+    expect(stored.markdown).toBe('start more\n')
     client.provider.destroy()
   })
 
