@@ -134,8 +134,9 @@ func TestAuthorizeReturnsWhatTheUserMayDo(t *testing.T) {
 	if code != http.StatusOK || out["canRead"] != false || out["canEdit"] != false {
 		t.Fatalf("a user with no access = %d %v, want 200 with canRead false", code, out)
 	}
-	if code, _ = ask("tok-unknown"); code != http.StatusUnauthorized {
-		t.Fatalf("an unknown token = %d, want 401", code)
+	// 401 is reserved for a wrong service secret; a token that is not valid is 403.
+	if code, _ = ask("tok-unknown"); code != http.StatusForbidden {
+		t.Fatalf("an unknown token = %d, want 403", code)
 	}
 }
 

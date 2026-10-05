@@ -86,14 +86,15 @@ func (h *InternalHandler) authorize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid ids", http.StatusBadRequest)
 		return
 	}
+	// 401 is for a wrong service secret; a token that is not valid is 403.
 	user, err := h.verifier.VerifyToken(request.Token)
 	if err != nil {
-		http.Error(w, "invalid token", http.StatusUnauthorized)
+		http.Error(w, "invalid token", http.StatusForbidden)
 		return
 	}
 	userID, err := uuid.Parse(user.ID)
 	if err != nil {
-		http.Error(w, "invalid token", http.StatusUnauthorized)
+		http.Error(w, "invalid token", http.StatusForbidden)
 		return
 	}
 	head, err := h.access.ReadRoomHead(r.Context(), workspaceID, documentID, []uuid.UUID{userID})

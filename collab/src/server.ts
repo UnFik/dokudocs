@@ -1,3 +1,4 @@
+import { Redis } from '@hocuspocus/extension-redis'
 import { Server, type Extension } from '@hocuspocus/server'
 import * as Y from 'yjs'
 import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror'
@@ -18,6 +19,8 @@ export type CollabOptions = {
   /** How long after the last change the state is stored, and the longest it may wait. */
   debounceMs?: number
   maxDebounceMs?: number
+  /** When set, instances share rooms through this Redis. */
+  redisURL?: string | null
 }
 
 function authentication(backend: BackendApi): Extension<CollabContext> {
@@ -32,6 +35,21 @@ function authentication(backend: BackendApi): Extension<CollabContext> {
       // write is checked per message.
       connectionConfig.readOnly = !access.canEdit && !access.canSuggest
       return { userID: access.userID, access, ...room }
+    },
+  }
+}
+
+/** A plain HTTP answer for load balancers; everything else is left to Hocuspocus. */
+function health(): Extension {
+  return {
+    extensionName: 'health',
+    async onRequest({ request, response }) {
+      if (request.url !== '/health') return
+      response.writeHead(200, { 'content-type': 'text/plain' })
+      response.end('ok')
+      // Hocuspocus stops here when a hook throws a falsy value.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw null
     },
   }
 }
@@ -64,13 +82,27 @@ function persistence(backend: BackendApi): Extension<CollabContext> {
   }
 }
 
+function redis(url: string): Extension {
+  const parsed = new URL(url)
+  return new Redis({
+    host: parsed.hostname,
+    port: Number(parsed.port || 6379),
+    options: { password: parsed.password || undefined, db: Number(parsed.pathname.slice(1) || 0) },
+  })
+}
+
 export async function createCollabServer(options: CollabOptions): Promise<CollabServer> {
   const server = new Server<CollabContext>({
     port: options.port,
     quiet: true,
     debounce: options.debounceMs ?? 2000,
     maxDebounce: options.maxDebounceMs ?? 10000,
-    extensions: [authentication(options.backend), persistence(options.backend)],
+    extensions: [
+      health(),
+      authentication(options.backend),
+      persistence(options.backend),
+      ...(options.redisURL ? [redis(options.redisURL)] : []),
+    ],
   })
   await server.listen()
   return { stop: () => server.destroy() }
