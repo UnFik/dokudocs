@@ -108,13 +108,19 @@ function inspect(root: JSONNode): { canonical: string; found: Found[]; problem: 
       attributes = JSON.stringify(parsed)
     }
     const children: unknown[] = []
-    for (const child of (node.content ?? []).map(visit)) {
+    // A run only carries text: typing inside it splits it in two, which is not a change to the document.
+    const items = (node.content ?? []).flatMap((child) => {
+      const seen = visit(child)
+      return child.type === 'run' ? ((seen as { run: unknown[] }).run ?? []) : [seen]
+    })
+    for (const child of items) {
       if (child === null) continue
       // Text split by a suggestion mark is the same text once the marks are set aside.
       const last = children.at(-1)
       if (isText(child) && isText(last) && JSON.stringify(last[1]) === JSON.stringify(child[1])) last[0] += child[0]
       else children.push(child)
     }
+    if (node.type === 'run') return { run: children }
     return [node.type, node.attrs?.nodeID, attributes, node.attrs?.bodyContent, children]
   }
   return { canonical: JSON.stringify(visit(root)), found, problem }

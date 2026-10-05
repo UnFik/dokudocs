@@ -233,13 +233,25 @@ export async function storedNodes(
     } catch {
       // Attributes the editor wrote are always JSON; anything else reads as none.
     }
-    const own = node.content ?? [];
+    // Text only proposed by a suggestion is not part of the stored document yet.
+    const own = (node.content ?? []).filter(
+      (child) =>
+        !(child.marks ?? []).some((mark) => mark.type === "suggestion_insert"),
+    );
     const textual = own.length > 0 && own.every((child) => child.type === "text");
     if (type === "run" || (textual && type !== "run")) {
       const content = own.map((child) => child.text ?? "").join("");
-      const marks = (own[0]?.marks ?? []) as { type: string }[];
-      for (const mark of marks)
+      const marks = (own[0]?.marks ?? []) as {
+        type: string;
+        attrs?: { href?: string; title?: string | null };
+      }[];
+      for (const mark of marks) {
         if (inverseMark[mark.type]) attributes[inverseMark[mark.type]!] = true;
+        if (mark.type === "link" && mark.attrs?.href) {
+          attributes.href = mark.attrs.href;
+          if (mark.attrs.title) attributes.linkTitle = mark.attrs.title;
+        }
+      }
       nodes.push({ nodeID, parentID, siblingOrder: order, type, content, attributes });
       return;
     }

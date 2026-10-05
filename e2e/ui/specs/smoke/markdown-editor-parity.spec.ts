@@ -168,7 +168,7 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
     (await (await workspaceResponse).json()) as { data: { id: string } }
   ).data.id;
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const accessCookie = (await page.context().cookies()).find(
@@ -207,6 +207,7 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}`);
   const documentURL = page.url();

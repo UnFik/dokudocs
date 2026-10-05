@@ -72,3 +72,10 @@ describe('a suggester’s change', () => {
     expect(validateSuggesterChange(base(), after, ME)).toMatchObject({ ok: false })
   })
 })
+
+describe('a suggester typing inside a run', () => {
+  it('may split the run in two', () => {
+    const after = doc(paragraph('p', run('r', text('hel')), run('r2', text('lo'), text(' x', [insertMark()]))))
+    expect(validateSuggesterChange(base(), after, ME)).toEqual({ ok: true })
+  })
+})

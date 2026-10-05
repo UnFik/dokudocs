@@ -1,4 +1,5 @@
 import { openDocumentsOf } from './collab-registry'
+import { openCollabSession } from './collab-session'
 
 export type UnsyncedDocument = {
   documentID: string
@@ -8,6 +9,8 @@ export type UnsyncedDocument = {
 
 type FlushOptions = {
   userID: string
+  /** Opens documents this tab no longer has open, to send what they still hold. */
+  token?: () => string
   timeoutMs?: number
 }
 
@@ -35,8 +38,47 @@ export async function flushLocalEditsForLogout(options: FlushOptions) {
       count: document.unsyncedChanges(),
       workspaceID: document.workspaceID,
     }))
+  unsynced.push(...(await flushClosedCopies(options, open, timeoutMs)))
   if (unsynced.length === 0) await clearLocalCopies()
   return { unsynced }
+}
+
+/** A copy kept for a document that is not open any more may hold edits the server never got. */
+async function flushClosedCopies(
+  options: FlushOptions,
+  open: ReturnType<typeof openDocumentsOf>,
+  timeoutMs: number
+) {
+  if (!options.token) return []
+  const openIDs = new Set(open.map((document) => document.documentID))
+  const databases = await indexedDB.databases()
+  const left: UnsyncedDocument[] = []
+  for (const { name } of databases) {
+    const room = name?.startsWith(localCopyPrefix)
+      ? name.slice(localCopyPrefix.length).split('.')
+      : []
+    const [workspaceID, documentID] = room
+    if (room.length !== 2 || !workspaceID || !documentID) continue
+    if (openIDs.has(documentID)) continue
+    const session = openCollabSession({
+      workspaceID,
+      documentID,
+      userID: options.userID,
+      token: options.token,
+    })
+    try {
+      await session.loaded
+      if (!(await session.drained(timeoutMs)))
+        left.push({
+          documentID,
+          count: session.unsyncedChanges(),
+          workspaceID,
+        })
+    } finally {
+      session.destroy()
+    }
+  }
+  return left
 }
 
 export async function discardLocalEdits(userID: string) {
