@@ -110,6 +110,7 @@ describe('collaboration service', () => {
     expect(JSON.stringify(stored.content)).toContain('start more')
     expect(stored.content).toEqual(yDocToProsemirrorJSON(client.doc, 'body'))
     expect(stored.markdown).toBe('start more\n')
+    expect(stored.suggestions).toEqual([])
     client.provider.destroy()
   })
 

@@ -27,11 +27,14 @@ type Config struct {
 	// CollabServiceSecret is shared with the collaboration service; the internal
 	// endpoints it calls are off while it is empty.
 	CollabServiceSecret string
-	AccessTokenTTL      time.Duration
-	ReadTimeout         time.Duration
-	WriteTimeout        time.Duration
-	IdleTimeout         time.Duration
-	ShutdownTimeout     time.Duration
+	// CollabServiceURL is where the API reaches the collaboration service to reload a
+	// room; empty skips those calls.
+	CollabServiceURL string
+	AccessTokenTTL   time.Duration
+	ReadTimeout      time.Duration
+	WriteTimeout     time.Duration
+	IdleTimeout      time.Duration
+	ShutdownTimeout  time.Duration
 }
 
 func LoadConfig() (Config, error) {
@@ -61,6 +64,7 @@ func LoadConfig() (Config, error) {
 		PublicAppURL:        env.GetString("PUBLIC_APP_URL", "http://localhost:5173"),
 		JWTSecret:           env.GetString("JWT_SECRET", ""),
 		CollabServiceSecret: env.GetString("COLLAB_SERVICE_SECRET", ""),
+		CollabServiceURL:    env.GetString("COLLAB_SERVICE_URL", ""),
 		AccessTokenTTL:      env.GetDuration("ACCESS_TOKEN_TTL", 24*time.Hour),
 		ReadTimeout:         env.GetDuration("READ_TIMEOUT", 5*time.Second),
 		WriteTimeout:        env.GetDuration("WRITE_TIMEOUT", 10*time.Second),

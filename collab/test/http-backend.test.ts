@@ -65,7 +65,7 @@ describe('HttpBackend against the Go contract', () => {
   })
 
   it('stores a document and loads it back', async () => {
-    await backend.storeState({ workspaceID: 'ws-1', documentID: 'doc-1', state: new Uint8Array([1, 2, 3]), content: { type: 'doc' }, markdown: 'text\n' })
+    await backend.storeState({ workspaceID: 'ws-1', documentID: 'doc-1', state: new Uint8Array([1, 2, 3]), content: { type: 'doc' }, markdown: 'text\n', suggestions: [] })
     const loaded = await backend.loadDocument('ws-1', 'doc-1')
     expect(Array.from(loaded.state!)).toEqual([1, 2, 3])
     expect(loaded.content).toEqual({ type: 'doc' })
