@@ -140,3 +140,16 @@ Order: B1 can start now, in parallel with P0, on the current stack. B2 waits for
 - Following a user and the live connection indicator come from Hocuspocus awareness and provider status, so they are built in P3, not in B4.
 - The "+" trigger, contents panel and document meta line are independent of the engine and survive the migration unchanged.
 
+### Checked against a running Outline (1.9.1, local, 2026-10-05)
+
+Everything above was first read from source. A local Outline was then driven with a browser (login by magic link from Mailpit, a scratch document, deleted afterwards). Confirmed, and where the source reading was wrong or incomplete:
+
+- Confirmed: title as the first line; meta line under it ("You updated … ago", plus "1 task" when the document has a task, plus a Comment link); the **+** button on the empty line the caret is in (not on every line); a trailing empty paragraph with the **+**; the contents panel on the left of the text, opened with the icon beside the star, indented by heading level, current heading in blue; margin labels "H1", "H2" and an anchor widget on headings; code blocks with line numbers.
+- The block menu (from **+** or `/`) is grouped with separators and shows shortcuts: H1 to H4 on Ctrl+Shift+1 to 4, task, bulleted and ordered lists on Ctrl+Shift+7 to 9, quote on Ctrl+], code block on Ctrl+Shift+C, divider on Ctrl+_. Beyond the earlier list it has about 45 embed types (Airtable, Figma, GitHub Gist, Google Docs, Loom, Miro, YouTube and others) and a generic Embed.
+- The floating toolbar on a selection: H1, H2, H3, quote, toggle block, task, bulleted and ordered lists, bold, italic, strikethrough, highlight, code, link, comment.
+- Typing: `# `, `## `, `- `, `1. `, `> `, `[ ] `, ```` ```js ````, `**bold**`, `_italic_`, `` `code` `` convert; `==highlight==` converts; Ctrl+U underlines. `~~strike~~` did **not** convert when typed (strikethrough is by toolbar or shortcut). Backspace right after `- ` removed the list again.
+- `:` opens an emoji menu with names; `@` opens a menu of people, documents and collections; Ctrl+F opens find.
+- Pasting the PRD fixture produced 1 h1, 4 h2, 4 h3, 3 tables, 5 ordered lists, 3 bulleted lists with no error: the behaviour #104 gives us. No paste menu appeared for plain Markdown text.
+- The document menu also has: Duplicate, Move, Comments, History, **Insights** (Ctrl+Shift+I), **Show editing stats** (Ctrl+Shift+G), open in split view, **Present** (Ctrl+Alt+P), Export, Copy, **Search in document** (Ctrl+/), and **Heading numbering**. Add these to tier B3 and B4.
+- Not confirmed: Up arrow at the start of the body did not move focus to the title in the one try made. Treat `UpArrowAtStart` as unverified.
+
