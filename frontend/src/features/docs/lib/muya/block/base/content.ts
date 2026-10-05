@@ -1,6 +1,4 @@
 import diff from 'fast-diff'
-import TreeNode from './treeNode'
-import { ScrollPage } from '../scrollPage'
 import { BACK_HASH, BRACKET_HASH, EVENT_KEYS, isFirefox } from '../../config'
 import type { IHighlight } from '../../inlineRenderer/types'
 import type { Muya } from '../../muya'
@@ -18,8 +16,10 @@ import {
   isKeyboardEvent,
   isMouseEvent,
 } from '../../utils'
+import { ScrollPage } from '../scrollPage'
 import type { TBlockPath } from '../types'
 import type Parent from './parent'
+import TreeNode from './treeNode'
 
 // import logger from './utils/logger'
 

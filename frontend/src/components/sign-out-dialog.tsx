@@ -1,16 +1,15 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from '@tanstack/react-router'
+import { useAuthStore } from '@/stores/auth-store'
+import { getLocalUserScope } from '@/lib/local-user-data'
+import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
   discardLocalEdits,
   exportUnsyncedDocuments,
   flushLocalEditsForLogout,
   type UnsyncedDocument,
 } from '@/features/docs/lib/collaboration-logout'
-import { getLocalUserScope } from '@/lib/local-user-data'
-import { useAuthStore } from '@/stores/auth-store'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
-import { ConfirmDialog } from '@/components/confirm-dialog'
-import { Button } from '@/components/ui/button'
 
 interface SignOutDialogProps {
   open: boolean
@@ -49,12 +48,7 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
     }
     setBusy(true)
     try {
-      const documents = useDokudocsStore.getState().documents
-      const { unsynced: left } = await flushLocalEditsForLogout({
-        userID,
-        token: () => auth.accessToken,
-        workspaceOf: (id) => documents.find((doc) => doc.id === id)?.orgId,
-      })
+      const { unsynced: left } = await flushLocalEditsForLogout({ userID })
       if (left.length > 0) {
         setUnsynced({ documents: left, checkFailed: false })
         return
@@ -74,7 +68,9 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
       if (userID) await discardLocalEdits(userID)
       finishSignOut()
     } catch {
-      setExportMessage('Local data could not be cleared. You are still signed in.')
+      setExportMessage(
+        'Local data could not be cleared. You are still signed in.'
+      )
     } finally {
       setBusy(false)
     }
@@ -108,7 +104,8 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
     onOpenChange(next)
   }
 
-  const edits = unsynced?.documents.reduce((sum, doc) => sum + doc.count, 0) ?? 0
+  const edits =
+    unsynced?.documents.reduce((sum, doc) => sum + doc.count, 0) ?? 0
   const canExport =
     unsynced !== null &&
     !unsynced.checkFailed &&

@@ -9,7 +9,6 @@ import type {
   SortOrder,
   WorkspaceItem,
 } from '@/types/dokudocs'
-import type { DocumentBodyNode } from '@/features/docs/lib/documentBody'
 import { apiFetch } from './api-client'
 
 const postgresUUIDSchema = z
@@ -74,45 +73,6 @@ const documentSchema = z.object({
   thumbnailPreviewDark: z.string().optional().default(''),
 })
 
-const markdownBodySchema = z.object({
-  bodyVersion: z.number().int().positive(),
-  bodyEpoch: z.number().int().positive(),
-  compatEpoch: z.number().int().positive().optional(),
-  bodySchemaVersion: z.number().int().positive(),
-  canEdit: z.boolean().default(false),
-  canSuggest: z.boolean().optional(),
-  rootNodeID: z.string().uuid(),
-  nodes: z.array(
-    z.object({
-      nodeID: z.string().uuid(),
-      parentID: z.string().uuid().nullable(),
-      siblingOrder: z.number().finite(),
-      type: z.string().min(1),
-      content: z.string(),
-      attributes: z.record(z.string(), z.unknown()),
-      version: z.number().int().positive(),
-    })
-  ),
-  encodedState: z.string().min(1),
-})
-
-const revisionNodeSchema = z.object({
-  nodeID: z.string().uuid(),
-  parentID: z.string().uuid().nullable(),
-  siblingOrder: z.number().finite(),
-  type: z.string().min(1),
-  content: z.string(),
-  attributes: z.record(z.string(), z.unknown()),
-  version: z.number().int().positive(),
-})
-
-const publicMarkdownBodySchema = z.object({
-  bodyVersion: z.number().int().positive(),
-  bodySchemaVersion: z.number().int().positive(),
-  rootNodeID: z.string().uuid(),
-  nodes: z.array(revisionNodeSchema),
-})
-
 const documentRevisionSchema = z.object({
   id: z.string().uuid(),
   documentId: z.string().uuid(),
@@ -123,15 +83,6 @@ const documentRevisionSchema = z.object({
   title: z.string().optional().default(''),
   content: z.string(),
   isNamed: z.boolean(),
-  astSnapshot: z
-    .object({
-      documentID: z.string().uuid(),
-      rootNodeID: z.string().uuid(),
-      nodes: z.array(revisionNodeSchema),
-    })
-    .optional(),
-  bodyVersion: z.number().int().positive().optional(),
-  bodySchemaVersion: z.number().int().positive().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
@@ -140,27 +91,8 @@ const documentRestoreResultSchema = z.object({
   documentId: z.string().uuid(),
   revisionId: z.string().uuid(),
   sourceRevisionId: z.string().uuid(),
-  bodyVersion: z.number().int().positive(),
-  bodyEpoch: z.number().int().positive(),
 })
 
-const deleteNodeResultSchema = z.object({
-  documentID: z.string().uuid(),
-  commandID: z.string().uuid(),
-  nodeID: z.string().uuid().optional(),
-  nodeIDs: z.array(z.string().uuid()).optional(),
-  bodyEpoch: z.number().int().positive(),
-  bodyVersion: z.number().int().positive(),
-  changed: z.boolean(),
-})
-
-const moveNodeResultSchema = z.object({
-  documentID: z.string().uuid(),
-  commandID: z.string().uuid(),
-  bodyEpoch: z.number().int().positive(),
-  bodyVersion: z.number().int().positive(),
-  changed: z.boolean(),
-})
 const suggestionReplySchema = z.object({
   replyId: z.guid(),
   suggestionId: z.guid(),
@@ -286,13 +218,6 @@ type CreateDocumentFields = {
   projectId?: string | null
 }
 
-export type CreateMarkdownBodyInput = {
-  documentID: string
-  bodySchemaVersion: 1
-  rootNodeID: string
-  nodes: DocumentBodyNode[]
-}
-
 export type CreateDocumentInput =
   | (CreateDocumentFields & {
       type: Exclude<DocType, 'markdown'>
@@ -300,17 +225,11 @@ export type CreateDocumentInput =
     })
   | (CreateDocumentFields & {
       type: 'markdown'
-      initialBody: CreateMarkdownBodyInput
-      content?: never
+      /** The Markdown text, kept for previews and search. */
+      content?: string
+      /** The document as the editor reads it (ProseMirror JSON). */
+      contentJSON?: unknown
     })
-
-export type InitializeMarkdownBodyInput = {
-  baseBodyVersion: number
-  bodySchemaVersion: number
-  sourceFingerprint: string
-  rootNodeID: string
-  nodes: DocumentBodyNode[]
-}
 
 export type UpdateDocumentMetadataInput = {
   title?: string
@@ -321,27 +240,7 @@ export type UpdateDocumentMetadataInput = {
   projectId?: string | null
 }
 
-export type MarkdownBodySnapshot = z.infer<typeof markdownBodySchema>
-export type PublicMarkdownBody = z.infer<typeof publicMarkdownBodySchema>
 export type DocumentRestoreResult = z.infer<typeof documentRestoreResultSchema>
-export type DeleteMarkdownNodeInput = {
-  commandID: string
-  bodyEpoch: number
-  bodySchemaVersion: number
-  nodeID: string
-  /** Two or more subtree roots deleted atomically; sent instead of nodeID. */
-  nodeIDs?: string[]
-}
-export type DeleteMarkdownNodeResult = z.infer<typeof deleteNodeResultSchema>
-export type MoveMarkdownNodeInput = {
-  commandID: string
-  bodyEpoch: number
-  bodySchemaVersion: number
-  nodeID: string
-  targetParentID: string
-  beforeNodeID: string | null
-}
-export type MoveMarkdownNodeResult = z.infer<typeof moveNodeResultSchema>
 export type DocumentSuggestion = z.infer<typeof documentSuggestionSchema>
 export type SuggestionReply = z.infer<typeof suggestionReplySchema>
 export type CommentAnchor = z.infer<typeof commentAnchorSchema>
@@ -510,85 +409,6 @@ export async function createDocumentShareToken(
     })
   )
   return result.shareToken
-}
-
-export async function initializeMarkdownBody(
-  workspaceId: string,
-  documentId: string,
-  input: InitializeMarkdownBodyInput
-): Promise<void> {
-  await apiFetch<void>(`/api/v1/documents/${documentId}/body/initialize`, {
-    method: 'POST',
-    headers: workspaceHeaders(workspaceId),
-    body: JSON.stringify(input),
-  })
-}
-
-export async function getMarkdownBody(
-  workspaceId: string,
-  documentId: string,
-  signal?: AbortSignal
-): Promise<MarkdownBodySnapshot> {
-  return markdownBodySchema.parse(
-    await apiFetch<unknown>(`/api/v1/documents/${documentId}/body`, {
-      headers: workspaceHeaders(workspaceId),
-      signal,
-    })
-  )
-}
-
-export async function getPublicMarkdownBody(
-  shareToken: string,
-  signal?: AbortSignal
-): Promise<PublicMarkdownBody> {
-  return publicMarkdownBodySchema.parse(
-    await apiFetch<unknown>(
-      `/api/v1/public/documents/${encodeURIComponent(shareToken)}/body`,
-      { authenticated: false, signal }
-    )
-  )
-}
-
-export async function deleteMarkdownNode(
-  workspaceId: string,
-  documentId: string,
-  input: DeleteMarkdownNodeInput
-): Promise<DeleteMarkdownNodeResult> {
-  return deleteNodeResultSchema.parse(
-    await apiFetch<unknown>(`/api/v1/documents/${documentId}/body/delete`, {
-      method: 'POST',
-      headers: workspaceHeaders(workspaceId),
-      body: JSON.stringify(
-        input.nodeIDs && input.nodeIDs.length > 1
-          ? {
-              commandID: input.commandID,
-              bodyEpoch: input.bodyEpoch,
-              bodySchemaVersion: input.bodySchemaVersion,
-              nodeIDs: input.nodeIDs,
-            }
-          : {
-              commandID: input.commandID,
-              bodyEpoch: input.bodyEpoch,
-              bodySchemaVersion: input.bodySchemaVersion,
-              nodeID: input.nodeID,
-            }
-      ),
-    })
-  )
-}
-
-export async function moveMarkdownNode(
-  workspaceId: string,
-  documentId: string,
-  input: MoveMarkdownNodeInput
-): Promise<MoveMarkdownNodeResult> {
-  return moveNodeResultSchema.parse(
-    await apiFetch<unknown>(`/api/v1/documents/${documentId}/body/move`, {
-      method: 'POST',
-      headers: workspaceHeaders(workspaceId),
-      body: JSON.stringify(input),
-    })
-  )
 }
 
 export async function listDocumentSuggestions(

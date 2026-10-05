@@ -1,6 +1,4 @@
 /* eslint-disable no-fallthrough */
-import Content from './content'
-import { ScrollPage } from '../scrollPage'
 import {
   CLASS_NAMES,
   FORMAT_MARKER_MAP,
@@ -37,6 +35,8 @@ import logger from '../../utils/logger'
 import type AtxHeading from '../commonMark/atxHeading'
 import type BulletList from '../commonMark/bulletList'
 import type SetextHeading from '../commonMark/setextHeading'
+import { ScrollPage } from '../scrollPage'
+import Content from './content'
 import type Parent from './parent'
 import type TreeNode from './treeNode'
 

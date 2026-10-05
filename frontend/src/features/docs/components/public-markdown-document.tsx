@@ -1,11 +1,10 @@
-import './markdown-body.css'
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
-import { getPublicDocument, getPublicMarkdownBody } from '@/lib/domain-api'
+import { getPublicDocument } from '@/lib/domain-api'
 import { rememberOpenedPublicLink } from '@/lib/public-link-session'
-import { documentBodyToMarkdown } from '../lib/muya/state/documentBodyToMarkdown'
+import './markdown-body.css'
 
 marked.setOptions({ gfm: true, breaks: true })
 
@@ -19,31 +18,19 @@ export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
     },
     retry: false,
   })
-  const bodyQuery = useQuery({
-    queryKey: ['public-markdown-body', shareToken],
-    queryFn: ({ signal }) => getPublicMarkdownBody(shareToken, signal),
-    enabled: documentQuery.data?.type === 'markdown',
-    retry: false,
-  })
-  const markdown = useMemo(
-    () => (bodyQuery.data ? documentBodyToMarkdown(bodyQuery.data.nodes) : ''),
-    [bodyQuery.data]
-  )
+  const markdown = documentQuery.data?.content ?? ''
   const html = useMemo(
     () => DOMPurify.sanitize(marked.parse(markdown) as string),
     [markdown]
   )
 
-  if (
-    documentQuery.isPending ||
-    (documentQuery.data?.type === 'markdown' && bodyQuery.isPending)
-  )
+  if (documentQuery.isPending)
     return (
       <p role='status' className='p-6'>
         Loading shared document…
       </p>
     )
-  if (documentQuery.error || !documentQuery.data || bodyQuery.error)
+  if (documentQuery.error || !documentQuery.data)
     return (
       <p role='alert' className='p-6'>
         This shared document is unavailable.

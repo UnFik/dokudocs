@@ -7,7 +7,6 @@ import { PublicMarkdownDocument } from './public-markdown-document'
 
 const shareToken = 'valid-public-link-token'
 const documentID = 'b1f973dd-b554-4540-95c0-4697726ad6e1'
-const nodeID = 'd2bd52f1-e274-4119-af61-737b0e8c80a9'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -24,7 +23,7 @@ it('keeps a successfully opened public link available to RAG for this tab sessio
         projectId: null,
         title: 'Shared Markdown',
         type: 'markdown',
-        content: '',
+        content: 'Shared source text',
         authorId: documentID,
         author: {
           id: documentID,
@@ -38,32 +37,6 @@ it('keeps a successfully opened public link available to RAG for this tab sessio
         categories: [],
         createdAt: '2026-10-01T00:00:00.000Z',
         updatedAt: '2026-10-01T00:00:00.000Z',
-      })
-    if (path.endsWith(`/public/documents/${shareToken}/body`))
-      return jsonResponse({
-        bodyVersion: 1,
-        bodySchemaVersion: 1,
-        rootNodeID: documentID,
-        nodes: [
-          {
-            nodeID: documentID,
-            parentID: null,
-            siblingOrder: 0,
-            type: 'document',
-            content: '',
-            attributes: {},
-            version: 1,
-          },
-          {
-            nodeID,
-            parentID: documentID,
-            siblingOrder: 0,
-            type: 'paragraph',
-            content: 'Shared source text',
-            attributes: {},
-            version: 1,
-          },
-        ],
       })
     throw new Error(`Unexpected request: ${path}`)
   })

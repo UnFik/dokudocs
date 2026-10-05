@@ -1,3 +1,4 @@
+import { registerOpenDocument } from './collab-registry'
 import {
   openCollabSession,
   type CollabAccess,
@@ -5,6 +6,7 @@ import {
   type PresenceUser,
 } from './collab-session'
 import type { DocumentBodyNode } from './documentBody'
+import { documentBodyToMarkdown } from './muya/state/documentBodyToMarkdown'
 import { blockEditing } from './prosemirror/blocks'
 import {
   createDocumentBodyEditor,
@@ -59,6 +61,7 @@ export async function mountCollaborativeDocumentBody(
     onSuggestionCards?: (cards: SuggestionCard[]) => void
     onSuggestionClick?: (id: string) => void
     onCommentsChanged?: () => void
+    onReloaded?: () => void
     onCommentPositions?: (positions: Record<string, number | null>) => void
     onCommentClick?: (id: string) => void
     onCommentRequest?: () => void
@@ -93,6 +96,7 @@ export async function mountCollaborativeDocumentBody(
     onPresence: input.onPresence,
     onCursors: (cursors) => showCursors?.(cursors),
     onCommentsChanged: input.onCommentsChanged,
+    onReloaded: input.onReloaded,
   })
   let editorDestroyed = false
   let destroyEditor = () => {}
@@ -138,20 +142,34 @@ export async function mountCollaborativeDocumentBody(
         target?.scrollIntoView?.({ block: 'center' })
       })
     }
+    let destroyed = false
+    const unregister = registerOpenDocument({
+      userID: input.userID,
+      documentID: input.documentID,
+      workspaceID: input.workspaceID,
+      unsyncedChanges: session.unsyncedChanges,
+      drained: session.drained,
+      markdown: () => documentBodyToMarkdown(editor.getBody()),
+      destroy: () => api.destroy(),
+    })
     destroyEditor = () => {
       if (editorDestroyed) return
       editorDestroyed = true
       editor.destroy()
     }
-    return {
+    const api = {
       document: session.ydoc,
       editor,
       session,
       destroy() {
+        if (destroyed) return
+        destroyed = true
+        unregister()
         destroyEditor()
         session.destroy()
       },
     }
+    return api
   } catch (error) {
     destroyEditor()
     session.destroy()

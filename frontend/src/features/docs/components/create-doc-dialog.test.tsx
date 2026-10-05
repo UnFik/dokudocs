@@ -115,7 +115,8 @@ describe('CreateDocDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
-  it('creates Markdown through the API as a canonical initial AST', async () => {
+  it('creates Markdown through the API with the editor document as its content', async () => {
+    const createdID = crypto.randomUUID()
     const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input)).pathname
       if (path === '/api/v1/workspaces') {
@@ -136,7 +137,7 @@ describe('CreateDocDialog', () => {
         return Promise.resolve(
           jsonResponse(
             {
-              id: request.initialBody.documentID,
+              id: createdID,
               workspaceId,
               title: request.title,
               type: 'markdown',
@@ -183,17 +184,14 @@ describe('CreateDocDialog', () => {
     expect(payload).toMatchObject({
       title: 'Markdown draft',
       type: 'markdown',
-      initialBody: {
-        bodySchemaVersion: 1,
-        nodes: expect.arrayContaining([
-          expect.objectContaining({ type: 'atx-heading' }),
-        ]),
-      },
+      content: expect.stringContaining('#'),
+      contentJSON: { type: 'doc' },
     })
-    expect(payload).not.toHaveProperty('content')
+    expect(JSON.stringify(payload.contentJSON)).toContain('atx_heading')
+    expect(payload).not.toHaveProperty('initialBody')
     expect(navigate).toHaveBeenCalledWith({
       to: '/docs/$docId',
-      params: { docId: payload.initialBody.documentID },
+      params: { docId: createdID },
     })
   })
 })

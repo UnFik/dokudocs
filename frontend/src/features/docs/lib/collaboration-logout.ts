@@ -1,11 +1,4 @@
-import * as Y from 'yjs'
-import { getMarkdownBody } from '@/lib/domain-api'
-import {
-  CollaborativeDocumentProvider,
-  activeProviderFor,
-} from './collaboration-provider'
-import { recoverPendingMarkdown } from './collaboration-recovery'
-import { IndexedDBCollaborationStore } from './collaboration-store'
+import { openDocumentsOf } from './collab-registry'
 
 export type UnsyncedDocument = {
   documentID: string
@@ -15,109 +8,80 @@ export type UnsyncedDocument = {
 
 type FlushOptions = {
   userID: string
-  token: () => string
-  workspaceOf: (documentID: string) => string | undefined
   timeoutMs?: number
 }
 
 const defaultFlushTimeoutMs = 15_000
+const localCopyPrefix = 'dokudocs:'
 
 /**
- * ADR 0007: before logout, send pending edits to the server, then clear the
- * account's local document data. Edits that cannot be sent are left in place
- * and returned so the caller can ask the user what to do with them.
+ * ADR 0007: before logout, wait for the open documents to reach the server,
+ * then clear this device's copies. A document that does not get there is left
+ * in place and returned so the caller can ask the user what to do with it.
  */
 export async function flushLocalEditsForLogout(options: FlushOptions) {
-  const store = new IndexedDBCollaborationStore()
-  const pending = await store.listPendingDocuments(options.userID)
   const timeoutMs = options.timeoutMs ?? defaultFlushTimeoutMs
+  const open = openDocumentsOf(options.userID)
   const outcomes = await Promise.all(
-    pending.map(async ({ documentID, count }) => ({
-      documentID,
-      count,
-      workspaceID: options.workspaceOf(documentID),
-      flushed: await flushDocument(options, store, documentID, timeoutMs),
+    open.map(async (document) => ({
+      document,
+      drained: await document.drained(timeoutMs),
     }))
   )
-  const unsynced = outcomes
-    .filter((outcome) => !outcome.flushed)
-    .map(({ documentID, count, workspaceID }) => ({
-      documentID,
-      count,
-      workspaceID,
+  const unsynced: UnsyncedDocument[] = outcomes
+    .filter((outcome) => !outcome.drained)
+    .map(({ document }) => ({
+      documentID: document.documentID,
+      count: document.unsyncedChanges(),
+      workspaceID: document.workspaceID,
     }))
-  if (unsynced.length === 0) await clearLocalData(options.userID, store)
+  if (unsynced.length === 0) await clearLocalCopies()
   return { unsynced }
 }
 
 export async function discardLocalEdits(userID: string) {
-  await clearLocalData(userID, new IndexedDBCollaborationStore())
+  // Open editors would write their copy again after the clear.
+  for (const document of openDocumentsOf(userID)) document.destroy()
+  await clearLocalCopies()
 }
 
-async function clearLocalData(
-  userID: string,
-  store: IndexedDBCollaborationStore
-) {
-  // Open editors would write their snapshot again after the clear.
-  const open = (await store.listAllDocuments(userID)).flatMap((documentID) => {
-    const provider = activeProviderFor({ userID, documentID })
-    return provider ? [provider] : []
-  })
-  for (const provider of open) provider.stop()
-  await Promise.all(open.map((provider) => provider.settled()))
-  await store.clearUser(userID)
-}
-
-async function flushDocument(
-  options: FlushOptions,
-  store: IndexedDBCollaborationStore,
-  documentID: string,
-  timeoutMs: number
-) {
-  const scope = { userID: options.userID, documentID }
-  const open = activeProviderFor(scope)
-  if (open) return open.whenDrained(timeoutMs)
-  const workspaceID = options.workspaceOf(documentID)
-  if (!workspaceID || (typeof navigator !== 'undefined' && !navigator.onLine))
-    return false
-  const { snapshot } = await store.load(scope)
-  if (!snapshot) return false
-  const document = new Y.Doc()
-  const provider = new CollaborativeDocumentProvider({
-    documentID,
-    workspaceID,
-    userID: options.userID,
-    token: options.token,
-    document,
-    bodyVersion: snapshot.bodyVersion,
-    bodyEpoch: snapshot.bodyEpoch,
-    bodySchemaVersion: snapshot.bodySchemaVersion,
-    canEdit: snapshot.canEdit,
-    store,
-  })
+async function clearLocalCopies() {
+  const databases = await indexedDB.databases()
+  await Promise.all(
+    databases
+      .map((database) => database.name)
+      .filter((name): name is string => !!name?.startsWith(localCopyPrefix))
+      .map(
+        (name) =>
+          new Promise<void>((resolve) => {
+            const request = indexedDB.deleteDatabase(name)
+            request.onsuccess =
+              request.onerror =
+              request.onblocked =
+                () => resolve()
+          })
+      )
+  )
   try {
-    await provider.start()
-    return await provider.whenDrained(timeoutMs)
-  } finally {
-    provider.stop()
-    await provider.settled()
-    document.destroy()
+    for (const key of Object.keys(window.localStorage))
+      if (key.startsWith(localCopyPrefix)) window.localStorage.removeItem(key)
+  } catch {
+    // The access cache is only a convenience.
   }
 }
 
-/** Downloads each unsynced document as Markdown after confirming read access. */
+/** Downloads each unsynced document, still open in this tab, as Markdown. */
 export async function exportUnsyncedDocuments(
   userID: string,
   documents: UnsyncedDocument[]
 ) {
+  const open = openDocumentsOf(userID)
   let exported = 0
-  for (const { documentID, workspaceID } of documents) {
-    if (!workspaceID) continue
-    await getMarkdownBody(workspaceID, documentID)
-    const markdown = await recoverPendingMarkdown({ userID, documentID })
-    if (markdown === null) continue
+  for (const { documentID } of documents) {
+    const document = open.find((item) => item.documentID === documentID)
+    if (!document) continue
     const url = URL.createObjectURL(
-      new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+      new Blob([document.markdown()], { type: 'text/markdown;charset=utf-8' })
     )
     const link = window.document.createElement('a')
     link.href = url

@@ -213,7 +213,12 @@ export function useDocEditor(docId: string) {
       setContent(newContent)
       updateDocument(docId, { content: newContent })
       triggerAutoSave({
-        ...(latestStateRef.current ?? { title, content, projectId, categories }),
+        ...(latestStateRef.current ?? {
+          title,
+          content,
+          projectId,
+          categories,
+        }),
         content: newContent,
       })
     },
@@ -235,7 +240,12 @@ export function useDocEditor(docId: string) {
       setTitle(newTitle)
       updateDocument(docId, { title: newTitle.trim() || 'Untitled Document' })
       triggerAutoSave({
-        ...(latestStateRef.current ?? { title, content, projectId, categories }),
+        ...(latestStateRef.current ?? {
+          title,
+          content,
+          projectId,
+          categories,
+        }),
         title: newTitle,
       })
     },
@@ -262,7 +272,12 @@ export function useDocEditor(docId: string) {
         isDraft: !newProjectId,
       })
       triggerAutoSave({
-        ...(latestStateRef.current ?? { title, content, projectId, categories }),
+        ...(latestStateRef.current ?? {
+          title,
+          content,
+          projectId,
+          categories,
+        }),
         projectId: newProjectId,
       })
     },
@@ -288,11 +303,25 @@ export function useDocEditor(docId: string) {
         category: newCategories[0] ?? null,
       })
       triggerAutoSave({
-        ...(latestStateRef.current ?? { title, content, projectId, categories }),
+        ...(latestStateRef.current ?? {
+          title,
+          content,
+          projectId,
+          categories,
+        }),
         categories: newCategories,
       })
     },
-    [docId, scope, updateDocument, title, content, projectId, categories, triggerAutoSave]
+    [
+      docId,
+      scope,
+      updateDocument,
+      title,
+      content,
+      projectId,
+      categories,
+      triggerAutoSave,
+    ]
   )
 
   const handleSetCategory = useCallback(
@@ -305,11 +334,25 @@ export function useDocEditor(docId: string) {
         category: newCategory,
       })
       triggerAutoSave({
-        ...(latestStateRef.current ?? { title, content, projectId, categories }),
+        ...(latestStateRef.current ?? {
+          title,
+          content,
+          projectId,
+          categories,
+        }),
         categories: nextCategories,
       })
     },
-    [docId, scope, updateDocument, title, content, projectId, categories, triggerAutoSave]
+    [
+      docId,
+      scope,
+      updateDocument,
+      title,
+      content,
+      projectId,
+      categories,
+      triggerAutoSave,
+    ]
   )
 
   return {

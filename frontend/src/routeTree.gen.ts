@@ -39,7 +39,6 @@ import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_a
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects/$projectId'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
-import { Route as AuthenticatedDevMarkdownBackfillRouteImport } from './routes/_authenticated/dev/markdown-backfill'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -203,12 +202,6 @@ const AuthenticatedErrorsErrorRoute =
     path: '/errors/$error',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedDevMarkdownBackfillRoute =
-  AuthenticatedDevMarkdownBackfillRouteImport.update({
-    id: '/dev/markdown-backfill',
-    path: '/dev/markdown-backfill',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -226,7 +219,6 @@ export interface FileRoutesByFullPath {
   '/account': typeof AuthenticatedAccountRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/docs/$docId': typeof DocsDocIdRoute
-  '/dev/markdown-backfill': typeof AuthenticatedDevMarkdownBackfillRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -257,7 +249,6 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/docs/$docId': typeof DocsDocIdRoute
   '/': typeof AuthenticatedIndexRoute
-  '/dev/markdown-backfill': typeof AuthenticatedDevMarkdownBackfillRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -291,7 +282,6 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/docs/$docId': typeof DocsDocIdRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/_authenticated/dev/markdown-backfill': typeof AuthenticatedDevMarkdownBackfillRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
@@ -325,7 +315,6 @@ export interface FileRouteTypes {
     | '/account'
     | '/auth/callback'
     | '/docs/$docId'
-    | '/dev/markdown-backfill'
     | '/errors/$error'
     | '/projects/$projectId'
     | '/settings/account'
@@ -356,7 +345,6 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/docs/$docId'
     | '/'
-    | '/dev/markdown-backfill'
     | '/errors/$error'
     | '/projects/$projectId'
     | '/settings/account'
@@ -389,7 +377,6 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/docs/$docId'
     | '/_authenticated/'
-    | '/_authenticated/dev/markdown-backfill'
     | '/_authenticated/errors/$error'
     | '/_authenticated/projects/$projectId'
     | '/_authenticated/settings/account'
@@ -635,13 +622,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedErrorsErrorRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/dev/markdown-backfill': {
-      id: '/_authenticated/dev/markdown-backfill'
-      path: '/dev/markdown-backfill'
-      fullPath: '/dev/markdown-backfill'
-      preLoaderRoute: typeof AuthenticatedDevMarkdownBackfillRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
   }
 }
 
@@ -672,7 +652,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRouteRoute: typeof AuthenticatedSettingsRouteRouteWithChildren
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
-  AuthenticatedDevMarkdownBackfillRoute: typeof AuthenticatedDevMarkdownBackfillRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedProjectsProjectIdRoute: typeof AuthenticatedProjectsProjectIdRoute
   AuthenticatedAssistantIndexRoute: typeof AuthenticatedAssistantIndexRoute
@@ -687,7 +666,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRouteRoute: AuthenticatedSettingsRouteRouteWithChildren,
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
-  AuthenticatedDevMarkdownBackfillRoute: AuthenticatedDevMarkdownBackfillRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedProjectsProjectIdRoute: AuthenticatedProjectsProjectIdRoute,
   AuthenticatedAssistantIndexRoute: AuthenticatedAssistantIndexRoute,
