@@ -105,3 +105,15 @@ func TestLoadConfigReadsTheCollaborationServiceSecret(t *testing.T) {
 		t.Fatalf("with the variable = (%q, %v), want shared", cfg.CollabServiceSecret, err)
 	}
 }
+
+func TestLoadConfigReadsTheCollaborationServiceURL(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	if cfg, err := LoadConfig(); err != nil || cfg.CollabServiceURL != "" {
+		t.Fatalf("without the variable = (%q, %v), want empty (no reload calls)", cfg.CollabServiceURL, err)
+	}
+	t.Setenv("COLLAB_SERVICE_URL", "http://collab:1234")
+	if cfg, err := LoadConfig(); err != nil || cfg.CollabServiceURL != "http://collab:1234" {
+		t.Fatalf("with the variable = (%q, %v), want the URL", cfg.CollabServiceURL, err)
+	}
+}

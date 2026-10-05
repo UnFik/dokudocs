@@ -6,6 +6,7 @@ import type { Authorized, BackendApi } from './backend-api'
 import { toMarkdown } from './markdown'
 import { permissions } from './permissions'
 import { parseRoom } from './room'
+import { suggestionsIn } from './suggestions'
 import { documentBodySchema } from './schema'
 
 // The editor binds its document to this fragment.
@@ -23,6 +24,8 @@ export type CollabOptions = {
   maxDebounceMs?: number
   /** When set, instances share rooms through this Redis. */
   redisURL?: string | null
+  /** The secret the API sends to reload a room; without one the endpoint refuses everyone. */
+  serviceSecret?: string | null
 }
 
 /** What the provider shows as the reason a connection was refused. */
@@ -71,14 +74,35 @@ function signals(): Extension<CollabContext> {
   }
 }
 
-/** A plain HTTP answer for load balancers; everything else is left to Hocuspocus. */
-function health(): Extension {
+/** Rooms the API asked to drop: what they hold is stale and must not be stored. */
+const droppedRooms = new Set<string>()
+
+/** Plain HTTP endpoints: a health answer for load balancers and the API's room reload. */
+function http(secret: string | null): Extension {
   return {
-    extensionName: 'health',
-    async onRequest({ request, response }) {
-      if (request.url !== '/health') return
-      response.writeHead(200, { 'content-type': 'text/plain' })
-      response.end('ok')
+    extensionName: 'http',
+    async onRequest({ request, response, instance }) {
+      const url = new URL(request.url ?? '/', 'http://collab')
+      if (url.pathname === '/health') {
+        response.writeHead(200, { 'content-type': 'text/plain' })
+        response.end('ok')
+      } else if (url.pathname === '/internal/reload' && request.method === 'POST') {
+        const sent = request.headers['x-collab-secret']
+        if (!secret || sent !== secret) {
+          response.writeHead(401).end()
+        } else {
+          const name = url.searchParams.get('room') ?? ''
+          const open = instance.documents.get(name)
+          if (open) {
+            droppedRooms.add(name)
+            open.broadcastStateless(JSON.stringify({ type: 'reloaded' }))
+            instance.closeConnections(name)
+          }
+          response.writeHead(204).end()
+        }
+      } else {
+        return
+      }
       // Hocuspocus stops here when a hook throws a falsy value.
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw null
@@ -102,15 +126,19 @@ function persistence(backend: BackendApi): Extension<CollabContext> {
         seed.destroy()
       }
     },
+    async afterUnloadDocument({ documentName }) {
+      droppedRooms.delete(documentName)
+    },
     async onStoreDocument({ document, documentName }) {
       const room = parseRoom(documentName)
-      if (!room) return
+      if (!room || droppedRooms.has(documentName)) return
       const content = yDocToProsemirrorJSON(document, fragmentName)
       await backend.storeState({
         ...room,
         state: Y.encodeStateAsUpdate(document),
         content,
         markdown: toMarkdown(content),
+        suggestions: suggestionsIn(content),
       })
     },
   }
@@ -132,7 +160,7 @@ export async function createCollabServer(options: CollabOptions): Promise<Collab
     debounce: options.debounceMs ?? 2000,
     maxDebounce: options.maxDebounceMs ?? 10000,
     extensions: [
-      health(),
+      http(options.serviceSecret ?? null),
       authentication(options.backend),
       permissions(fragmentName),
       signals(),

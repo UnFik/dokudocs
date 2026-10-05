@@ -6,6 +6,7 @@ import (
 	appchat "backend/internal/application/rag/usecase"
 	appws "backend/internal/application/workspace/usecase"
 	"backend/internal/config"
+	"backend/internal/infrastructure/collabclient"
 	docrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/infrastructure/runtime/container"
 	dochandler "backend/internal/presentation/document/handler"
@@ -22,7 +23,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
 	docUseCase := appdoc.NewUseCase(c.DB)
 	docHandler := dochandler.NewHandler(docUseCase, c.Validator)
 	bodyRepository := docrepo.NewRepository(c.DB)
-	revisionHandler := dochandler.NewRevisionHandler(appdoc.NewDocumentRevisionUseCase(bodyRepository))
+	revisionHandler := dochandler.NewRevisionHandler(appdoc.NewDocumentRevisionUseCase(bodyRepository).WithRoomReloader(collabclient.New(cfg.CollabServiceURL, cfg.CollabServiceSecret)))
 	suggestionService := appdoc.NewSuggestionUseCase(bodyRepository)
 	suggestionHandler := dochandler.NewSuggestionHandler(suggestionService)
 	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel))

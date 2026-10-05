@@ -7,6 +7,7 @@ const server = await createCollabServer({
   backend: new HttpBackend(config.backendURL, config.secret),
   port: config.port,
   redisURL: config.redisURL,
+  serviceSecret: config.secret,
   debounceMs: config.debounceMs,
   maxDebounceMs: config.maxDebounceMs,
 })

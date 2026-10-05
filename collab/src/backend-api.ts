@@ -13,6 +13,8 @@ export type StoredDocument = {
   content: unknown
   /** The same document as Markdown, for previews, search and exports. */
   markdown: string
+  /** The suggestions the document carries, for the discussion index. */
+  suggestions: { id: string; author: string }[]
 }
 
 export type LoadedDocument = {
