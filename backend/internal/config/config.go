@@ -11,7 +11,6 @@ import (
 type Config struct {
 	Addr               string
 	DatabaseURL        string
-	RedisURL           string
 	DBMaxOpenConns     int
 	DBMaxIdleConns     int
 	DBConnMaxLifetime  time.Duration
@@ -50,7 +49,6 @@ func LoadConfig() (Config, error) {
 	cfg := Config{
 		Addr:                env.GetString("APP_ADDR", ":8080"),
 		DatabaseURL:         env.GetString("DATABASE_URL", ""),
-		RedisURL:            env.GetString("REDIS_URL", ""),
 		DBMaxOpenConns:      env.GetInt("DB_MAX_OPEN_CONNS", 10),
 		DBMaxIdleConns:      env.GetInt("DB_MAX_IDLE_CONNS", 10),
 		DBConnMaxLifetime:   env.GetDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),

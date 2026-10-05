@@ -935,350 +935,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/documents/{id}/body": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Returns the canonical AST and matching Yjs state for a Markdown document.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Document"
-                ],
-                "summary": "Get Markdown body",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID (UUID)",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Document ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/internal_presentation_document_handler.bodySnapshotResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/documents/{id}/body/delete": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Atomically deletes one block subtree (nodeID) or several (nodeIDs) in a single body epoch.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Document"
-                ],
-                "summary": "Delete Markdown blocks",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID (UUID)",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Document ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Delete command",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_presentation_document_handler.deleteNodeRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/backend_internal_application_collaboration.DeleteNodeResult"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/documents/{id}/body/initialize": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Atomically stores the AST and initial Yjs state for an uninitialized Markdown document.",
-                "consumes": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Document"
-                ],
-                "summary": "Initialize Markdown body",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID (UUID)",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Document ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Parsed body and source fingerprint",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_presentation_document_handler.bodyInitializationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
-        "/documents/{id}/body/move": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Applies one idempotent structural move and returns the resulting body epoch/version.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Document"
-                ],
-                "summary": "Move a Markdown block",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID (UUID)",
-                        "name": "X-Workspace-Id",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Document ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Move command",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_presentation_document_handler.moveNodeRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/backend_internal_application_collaboration.MoveNodeResult"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
         "/documents/{id}/duplicate": {
             "post": {
                 "security": [
@@ -3572,59 +3228,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/public/documents/{shareToken}/body": {
-            "get": {
-                "description": "Returns a shared document's canonical AST without exposing its CRDT state.",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Document"
-                ],
-                "summary": "Get public Markdown body",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Document Share Token",
-                        "name": "shareToken",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/internal_presentation_document_handler.publicBodySnapshotResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
-                        }
-                    }
-                }
-            }
-        },
         "/trash": {
             "get": {
                 "security": [
@@ -4660,56 +4263,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "backend_internal_application_collaboration.DeleteNodeResult": {
-            "type": "object",
-            "properties": {
-                "bodyEpoch": {
-                    "type": "integer"
-                },
-                "bodyVersion": {
-                    "type": "integer"
-                },
-                "changed": {
-                    "type": "boolean"
-                },
-                "commandID": {
-                    "type": "string"
-                },
-                "documentID": {
-                    "type": "string"
-                },
-                "nodeID": {
-                    "type": "string"
-                },
-                "nodeIDs": {
-                    "description": "NodeIDs is set instead of NodeID for a batch delete.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "backend_internal_application_collaboration.MoveNodeResult": {
-            "type": "object",
-            "properties": {
-                "bodyEpoch": {
-                    "type": "integer"
-                },
-                "bodyVersion": {
-                    "type": "integer"
-                },
-                "changed": {
-                    "type": "boolean"
-                },
-                "commandID": {
-                    "type": "string"
-                },
-                "documentID": {
-                    "type": "string"
-                }
-            }
-        },
         "backend_internal_domain_model.Document": {
             "type": "object",
             "properties": {
@@ -4731,6 +4284,13 @@ const docTemplate = `{
                 },
                 "content": {
                     "type": "string"
+                },
+                "contentJSON": {
+                    "description": "ContentJSON is the editor document as ProseMirror JSON; only the single-document read fills it.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 },
                 "createdAt": {
                     "type": "string"
@@ -4832,9 +4392,6 @@ const docTemplate = `{
         "backend_internal_domain_model.DocumentRestoreResult": {
             "type": "object",
             "properties": {
-                "bodyEpoch": {
-                    "type": "integer"
-                },
                 "bodyVersion": {
                     "type": "integer"
                 },
@@ -4852,23 +4409,20 @@ const docTemplate = `{
         "backend_internal_domain_model.DocumentRevision": {
             "type": "object",
             "properties": {
-                "astSnapshot": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
                 "authorId": {
                     "type": "string"
-                },
-                "bodySchemaVersion": {
-                    "type": "integer"
                 },
                 "bodyVersion": {
                     "type": "integer"
                 },
                 "content": {
                     "type": "string"
+                },
+                "contentJSON": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 },
                 "createdAt": {
                     "type": "string"
@@ -5296,8 +4850,11 @@ const docTemplate = `{
                 "content": {
                     "type": "string"
                 },
-                "initialBody": {
-                    "$ref": "#/definitions/backend_internal_presentation_document_presenter.CreateMarkdownBodyRequest"
+                "contentJSON": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 },
                 "isDraft": {
                     "type": "boolean"
@@ -5318,52 +4875,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "visibility": {
-                    "type": "string"
-                }
-            }
-        },
-        "backend_internal_presentation_document_presenter.CreateMarkdownBodyNode": {
-            "type": "object",
-            "properties": {
-                "attributes": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "content": {
-                    "type": "string"
-                },
-                "nodeID": {
-                    "type": "string"
-                },
-                "parentID": {
-                    "type": "string"
-                },
-                "siblingOrder": {
-                    "type": "number"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "backend_internal_presentation_document_presenter.CreateMarkdownBodyRequest": {
-            "type": "object",
-            "properties": {
-                "bodySchemaVersion": {
-                    "type": "integer"
-                },
-                "documentID": {
-                    "type": "string"
-                },
-                "nodes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/backend_internal_presentation_document_presenter.CreateMarkdownBodyNode"
-                    }
-                },
-                "rootNodeID": {
                     "type": "string"
                 }
             }
@@ -5620,190 +5131,10 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_presentation_document_handler.bodyInitializationNode": {
-            "type": "object",
-            "properties": {
-                "attributes": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "content": {
-                    "type": "string"
-                },
-                "nodeID": {
-                    "type": "string"
-                },
-                "parentID": {
-                    "type": "string"
-                },
-                "siblingOrder": {
-                    "type": "number"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_presentation_document_handler.bodyInitializationRequest": {
-            "type": "object",
-            "properties": {
-                "baseBodyVersion": {
-                    "type": "integer"
-                },
-                "bodySchemaVersion": {
-                    "type": "integer"
-                },
-                "nodes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_presentation_document_handler.bodyInitializationNode"
-                    }
-                },
-                "rootNodeID": {
-                    "type": "string"
-                },
-                "sourceFingerprint": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_presentation_document_handler.bodyNodeResponse": {
-            "type": "object",
-            "properties": {
-                "attributes": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "content": {
-                    "type": "string"
-                },
-                "nodeID": {
-                    "type": "string"
-                },
-                "parentID": {
-                    "type": "string"
-                },
-                "siblingOrder": {
-                    "type": "number"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_presentation_document_handler.bodySnapshotResponse": {
-            "type": "object",
-            "properties": {
-                "bodyEpoch": {
-                    "type": "integer"
-                },
-                "bodySchemaVersion": {
-                    "type": "integer"
-                },
-                "bodyVersion": {
-                    "type": "integer"
-                },
-                "canEdit": {
-                    "type": "boolean"
-                },
-                "canSuggest": {
-                    "type": "boolean"
-                },
-                "encodedState": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
-                },
-                "nodes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_presentation_document_handler.bodyNodeResponse"
-                    }
-                },
-                "rootNodeID": {
-                    "type": "string"
-                }
-            }
-        },
         "internal_presentation_document_handler.createNamedRevisionRequest": {
             "type": "object",
             "properties": {
                 "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_presentation_document_handler.deleteNodeRequest": {
-            "type": "object",
-            "properties": {
-                "bodyEpoch": {
-                    "type": "integer"
-                },
-                "bodySchemaVersion": {
-                    "type": "integer"
-                },
-                "commandID": {
-                    "type": "string"
-                },
-                "nodeID": {
-                    "type": "string"
-                },
-                "nodeIDs": {
-                    "description": "NodeIDs deletes several blocks atomically; send it instead of nodeID.",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "internal_presentation_document_handler.moveNodeRequest": {
-            "type": "object",
-            "properties": {
-                "beforeNodeID": {
-                    "type": "string"
-                },
-                "bodyEpoch": {
-                    "type": "integer"
-                },
-                "bodySchemaVersion": {
-                    "type": "integer"
-                },
-                "commandID": {
-                    "type": "string"
-                },
-                "nodeID": {
-                    "type": "string"
-                },
-                "targetParentID": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_presentation_document_handler.publicBodySnapshotResponse": {
-            "type": "object",
-            "properties": {
-                "bodySchemaVersion": {
-                    "type": "integer"
-                },
-                "bodyVersion": {
-                    "type": "integer"
-                },
-                "nodes": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/internal_presentation_document_handler.bodyNodeResponse"
-                    }
-                },
-                "rootNodeID": {
                     "type": "string"
                 }
             }
