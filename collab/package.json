@@ -4,7 +4,7 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "start": "tsx src/main.ts",
+    "start": "tsx --import ./single-copy.mjs src/main.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

@@ -50,7 +50,7 @@ test-e2e-with-backend:
 		done; \
 		if [ "$$ready" -ne 1 ]; then cat "$$tmpdir/backend.log"; exit 1; fi; \
 		(cd collab && [ -d node_modules ] || npm ci); \
-		(cd collab && COLLAB_BACKEND_URL="$$api_url" COLLAB_SERVICE_SECRET="$$collab_secret" COLLAB_PORT="$$collab_port" COLLAB_DEBOUNCE_MS=300 COLLAB_MAX_DEBOUNCE_MS=1500 ./node_modules/.bin/tsx src/main.ts >"$$tmpdir/collab.log" 2>&1 & echo $$! >"$$tmpdir/collab.pid"); \
+		(cd collab && COLLAB_BACKEND_URL="$$api_url" COLLAB_SERVICE_SECRET="$$collab_secret" COLLAB_PORT="$$collab_port" COLLAB_DEBOUNCE_MS=300 COLLAB_MAX_DEBOUNCE_MS=1500 ./node_modules/.bin/tsx --import ./single-copy.mjs src/main.ts >"$$tmpdir/collab.log" 2>&1 & echo $$! >"$$tmpdir/collab.pid"); \
 		collab_pid=$$(cat "$$tmpdir/collab.pid"); \
 		ready=0; \
 		for attempt in $$(seq 1 60); do \
