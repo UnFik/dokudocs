@@ -14,6 +14,8 @@ var (
 	ErrInvalidBodyRead       = errors.New("invalid document body read")
 	ErrInvalidBodySnapshot   = errors.New("invalid document body snapshot")
 	ErrInvalidPublicBodyRead = errors.New("invalid public document body read")
+	// ErrCollabDocumentNotFound means the document does not exist in that workspace.
+	ErrCollabDocumentNotFound = errors.New("collaboration document not found")
 )
 
 type BodySnapshot struct {

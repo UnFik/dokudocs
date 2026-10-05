@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 
+	"backend/internal/application/collaboration"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
 )
 
-// ErrCollabDocumentNotFound means the document does not exist in that workspace.
-var ErrCollabDocumentNotFound = errors.New("collaboration document not found")
+// ErrCollabDocumentNotFound is the application's error for a document that is not in the workspace.
+var ErrCollabDocumentNotFound = collaboration.ErrCollabDocumentNotFound
 
 // CollabStateStore keeps what the collaboration service sends: the Yjs state of a
 // document and the JSON derived from it, written together.
@@ -24,14 +25,23 @@ func NewCollabStateStore(db database.DB) *CollabStateStore {
 	return &CollabStateStore{db: db}
 }
 
-// LoadState returns nil, nil for a document that has no state yet.
-func (s *CollabStateStore) LoadState(ctx context.Context, documentID uuid.UUID) ([]byte, error) {
-	var state []byte
-	err := s.db.QueryRowContext(ctx, `SELECT encoded_state FROM document_collab_states WHERE document_id = $1`, documentID).Scan(&state)
+// LoadDocument returns the state and the JSON content. Either is nil when the
+// document has none; a document outside the workspace is not found.
+func (s *CollabStateStore) LoadDocument(ctx context.Context, workspaceID, documentID uuid.UUID) ([]byte, json.RawMessage, error) {
+	var content []byte
+	err := s.db.QueryRowContext(ctx, `SELECT content_json FROM documents WHERE id = $1 AND workspace_id = $2`, documentID, workspaceID).Scan(&content)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, nil, ErrCollabDocumentNotFound
 	}
-	return state, err
+	if err != nil {
+		return nil, nil, err
+	}
+	var state []byte
+	err = s.db.QueryRowContext(ctx, `SELECT encoded_state FROM document_collab_states WHERE document_id = $1`, documentID).Scan(&state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, content, nil
+	}
+	return state, content, err
 }
 
 // StoreState replaces the state and the JSON in one transaction. A document that
