@@ -3,18 +3,9 @@ package repository
 import (
 	"context"
 
-	"backend/internal/domain/documentbody"
 	"backend/internal/domain/model"
 	"github.com/google/uuid"
 )
-
-type MarkdownDocumentCreate struct {
-	Document          model.Document
-	Categories        []string
-	RequestID         uuid.UUID
-	Body              documentbody.Body
-	BodySchemaVersion int
-}
 
 type DocumentFilter struct {
 	ProjectID *uuid.UUID
@@ -31,7 +22,6 @@ type DocumentRepository interface {
 	GetByShareToken(ctx context.Context, token string) (model.Document, error)
 	Create(ctx context.Context, doc model.Document, categoryNames []string) (model.Document, error)
 	CreateIdempotent(ctx context.Context, doc model.Document, categoryNames []string, requestID uuid.UUID) (model.Document, error)
-	CreateMarkdownIdempotent(ctx context.Context, input MarkdownDocumentCreate) (model.Document, error)
 	DuplicateAuthorized(ctx context.Context, docID, workspaceID, actorID, requestID uuid.UUID) (model.Document, error)
 	UpdateAuthorized(ctx context.Context, doc model.Document, categoryNames []string, actorID uuid.UUID) error
 	UpdateThumbnails(ctx context.Context, id, workspaceID, actorID uuid.UUID, thumb, thumbDark, thumbPreview, thumbPreviewDark string) error

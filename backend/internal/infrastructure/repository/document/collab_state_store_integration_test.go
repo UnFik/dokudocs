@@ -50,11 +50,11 @@ func TestCollabStateStoreKeepsStateAndContentTogether(t *testing.T) {
 	}
 
 	first := []byte{1, 2, 3}
-	if err := store.StoreState(ctx, workspaceID, documentID, first, json.RawMessage(`{"type":"doc","content":[]}`), ""); err != nil {
+	if err := store.StoreState(ctx, workspaceID, documentID, first, json.RawMessage(`{"type":"doc","content":[]}`), "", nil); err != nil {
 		t.Fatalf("StoreState() = %v", err)
 	}
 	second := []byte{4, 5, 6, 7}
-	if err := store.StoreState(ctx, workspaceID, documentID, second, json.RawMessage(`{"type":"doc","content":[{"type":"paragraph"}]}`), "second text\n"); err != nil {
+	if err := store.StoreState(ctx, workspaceID, documentID, second, json.RawMessage(`{"type":"doc","content":[{"type":"paragraph"}]}`), "second text\n", nil); err != nil {
 		t.Fatalf("StoreState() the second time = %v", err)
 	}
 	state, loaded, err := store.LoadDocument(ctx, workspaceID, documentID)
@@ -78,7 +78,7 @@ func TestCollabStateStoreKeepsStateAndContentTogether(t *testing.T) {
 	}
 
 	// A document in another workspace is refused and nothing is written.
-	if err := store.StoreState(ctx, otherWorkspaceID, documentID, []byte{9}, json.RawMessage(`{"type":"doc"}`), ""); err == nil {
+	if err := store.StoreState(ctx, otherWorkspaceID, documentID, []byte{9}, json.RawMessage(`{"type":"doc"}`), "", nil); err == nil {
 		t.Fatal("StoreState() with the wrong workspace succeeded, want an error")
 	}
 	if state, _, _ := store.LoadDocument(ctx, workspaceID, documentID); !bytes.Equal(state, second) {

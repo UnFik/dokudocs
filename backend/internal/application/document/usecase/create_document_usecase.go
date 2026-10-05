@@ -1,17 +1,17 @@
 package usecase
 
 import (
-	"backend/internal/domain/documentbody"
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
 
-	"backend/internal/application/collaboration"
 	"backend/internal/application/document/dto"
-	"backend/internal/domain/contract/repository"
 	"backend/internal/domain/model"
-
-	"github.com/google/uuid"
 )
+
+// ErrInvalidContentJSON means contentJSON is not a JSON object, or the document is not Markdown.
+var ErrInvalidContentJSON = errors.New("contentJSON must be a JSON object on a Markdown document")
 
 func (u *useCase) CreateDocument(ctx context.Context, input dto.CreateDocumentInput) (data model.Document, err error) {
 	if _, err = u.checkWorkspaceMembership(ctx, input.WorkspaceID, input.UserID); err != nil {
@@ -38,7 +38,6 @@ func (u *useCase) CreateDocument(ctx context.Context, input dto.CreateDocumentIn
 	}
 
 	doc := model.Document{
-		ID:          input.DocumentID,
 		WorkspaceID: input.WorkspaceID,
 		ProjectID:   input.ProjectID,
 		Title:       title,
@@ -50,20 +49,13 @@ func (u *useCase) CreateDocument(ctx context.Context, input dto.CreateDocumentIn
 		Visibility:  visibility,
 	}
 
-	if input.InitialBody != nil {
-		if docType != "markdown" || input.DocumentID == uuid.Nil || input.Content != "" ||
-			input.InitialBody.DocumentID != input.DocumentID || input.BodySchemaVersion < 1 {
-			return data, collaboration.ErrInvalidBodyInitialization
+	if len(input.ContentJSON) > 0 {
+		var object map[string]json.RawMessage
+		if docType != "markdown" || json.Unmarshal(input.ContentJSON, &object) != nil || object == nil {
+			return data, ErrInvalidContentJSON
 		}
-		if err := documentbody.CheckCollaborativeSize(*input.InitialBody); err != nil {
-			return data, err
-		}
-		return u.docRepo.CreateMarkdownIdempotent(ctx, repository.MarkdownDocumentCreate{
-			Document: doc, Categories: input.Categories, RequestID: input.RequestID,
-			Body: *input.InitialBody, BodySchemaVersion: input.BodySchemaVersion,
-		})
+		doc.ContentJSON = input.ContentJSON
 	}
-	doc.ID = uuid.Nil
 	data, err = u.docRepo.CreateIdempotent(ctx, doc, input.Categories, input.RequestID)
 	if err != nil {
 		return data, err

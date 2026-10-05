@@ -24,11 +24,10 @@ func (r *Repository) HasStaleReadableRAGIndex(ctx context.Context, workspaceID, 
 			FROM documents d
 			LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 			LEFT JOIN rag_document_indexes ri ON ri.document_id = d.id
-			WHERE d.workspace_id = $1 AND d.type = 'markdown' AND d.deleted_at IS NULL
+			WHERE d.workspace_id = $1 AND d.type = 'markdown' AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
 			  AND (
 				ri.document_id IS NULL
 				OR ri.indexed_body_version <> d.body_version
-				OR ri.indexed_body_epoch <> d.body_epoch
 				OR ri.indexed_title <> d.title
 				OR ri.indexed_project_id IS DISTINCT FROM d.project_id
 				OR ri.indexed_project_name <> COALESCE(p.name, '')
@@ -108,7 +107,7 @@ func (r *Repository) searchRAGChunks(ctx context.Context, workspaceID, actorID u
 			LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 			LEFT JOIN rag_embeddings e ON e.chunk_id = c.chunk_id AND e.provider = $8 AND e.model = $9 AND e.dimensions = 1536
 			WHERE d.workspace_id = $1 AND d.type = 'markdown' AND d.deleted_at IS NULL
-			  AND ri.indexed_body_version = d.body_version AND ri.indexed_body_epoch = d.body_epoch
+			  AND ri.indexed_body_version = d.body_version
 			  AND ri.source_fingerprint = c.source_fingerprint AND ri.indexed_title = d.title
 			  AND ri.indexed_project_id IS NOT DISTINCT FROM d.project_id
 			  AND ri.indexed_project_name = COALESCE(p.name, '') AND ri.renderer_version = 2

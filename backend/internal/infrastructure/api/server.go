@@ -21,7 +21,7 @@ func Routes(c *container.Container, cfg config.Config) http.Handler {
 }
 
 func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Container) error {
-	handler, shutdownCollaboration := routes.InitRoutesWithShutdown(c, cfg)
+	handler := routes.InitRoutes(c, cfg)
 	handler = middleware.Logger(c.Logger)(handler)
 	handler = middleware.Recover(c.Logger)(handler)
 	handler = middleware.CORS(cfg.AllowedOrigin)(handler)
@@ -59,5 +59,5 @@ func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Containe
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	return errors.Join(serveErr, server.Shutdown(shutdownCtx), shutdownCollaboration(shutdownCtx))
+	return errors.Join(serveErr, server.Shutdown(shutdownCtx))
 }

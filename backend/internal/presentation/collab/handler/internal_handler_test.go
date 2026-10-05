@@ -47,6 +47,7 @@ type storedState struct {
 	state                   []byte
 	content                 json.RawMessage
 	markdown                string
+	suggestions             []collaboration.Suggestion
 }
 
 type fakeStore struct {
@@ -63,18 +64,19 @@ func (f *fakeStore) LoadDocument(_ context.Context, _, documentID uuid.UUID) ([]
 	return f.states[documentID], f.contents[documentID], nil
 }
 
-func (f *fakeStore) StoreState(_ context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string) error {
-	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content, markdown})
+func (f *fakeStore) StoreState(_ context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion) error {
+	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content, markdown, suggestions})
 	f.states[documentID] = state
 	f.contents[documentID] = content
 	return nil
 }
 
 var (
-	workspaceID = uuid.MustParse("11111111-1111-4111-8111-111111111111")
-	documentID  = uuid.MustParse("22222222-2222-4222-8222-222222222222")
-	editorID    = uuid.MustParse("33333333-3333-4333-8333-333333333333")
-	strangerID  = uuid.MustParse("44444444-4444-4444-8444-444444444444")
+	workspaceID  = uuid.MustParse("11111111-1111-4111-8111-111111111111")
+	documentID   = uuid.MustParse("22222222-2222-4222-8222-222222222222")
+	editorID     = uuid.MustParse("33333333-3333-4333-8333-333333333333")
+	suggestionID = uuid.MustParse("55555555-5555-4555-8555-555555555555")
+	strangerID   = uuid.MustParse("44444444-4444-4444-8444-444444444444")
 )
 
 func newHandler(t *testing.T) (*InternalHandler, *fakeStore) {
@@ -154,14 +156,16 @@ func TestDocumentRoundTrip(t *testing.T) {
 
 	state := []byte{1, 2, 3, 250}
 	put := do(h, http.MethodPut, target, map[string]any{
-		"state":   base64.StdEncoding.EncodeToString(state),
-		"content":  map[string]any{"type": "doc"},
-		"markdown": "hello\n",
+		"state":       base64.StdEncoding.EncodeToString(state),
+		"content":     map[string]any{"type": "doc"},
+		"markdown":    "hello\n",
+		"suggestions": []map[string]string{{"id": suggestionID.String(), "author": editorID.String()}, {"id": "nope", "author": "x"}},
 	}, true)
 	if put.Code != http.StatusNoContent {
 		t.Fatalf("store = %d %s, want 204", put.Code, put.Body.String())
 	}
-	if len(store.stored) != 1 || !bytes.Equal(store.stored[0].state, state) || string(store.stored[0].content) != `{"type":"doc"}` || store.stored[0].markdown != "hello\n" {
+	if len(store.stored) != 1 || !bytes.Equal(store.stored[0].state, state) || string(store.stored[0].content) != `{"type":"doc"}` || store.stored[0].markdown != "hello\n" ||
+		len(store.stored[0].suggestions) != 1 || store.stored[0].suggestions[0] != (collaboration.Suggestion{ID: suggestionID, Author: editorID}) {
 		t.Fatalf("stored = %+v, want the state and the content", store.stored)
 	}
 

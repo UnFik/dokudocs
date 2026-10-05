@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"backend/internal/application/collaboration"
 	"backend/internal/infrastructure/database"
@@ -44,27 +45,64 @@ func (s *CollabStateStore) LoadDocument(ctx context.Context, workspaceID, docume
 	return state, content, err
 }
 
-// StoreState replaces the state, the JSON and the Markdown derived from it in one transaction. A document that
-// is not in the workspace is refused before anything is written.
-func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string) error {
+// StoreState replaces the state, the JSON, the Markdown derived from it and the
+// suggestion index in one transaction. A document that is not in the workspace
+// is refused before anything is written.
+func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion) error {
 	return s.db.WithTransaction(ctx, func(tx database.Queryer) error {
-		result, err := tx.ExecContext(ctx, `
-			UPDATE documents SET content_json = $3, content = $4, updated_at = NOW()
+		var authorID uuid.UUID
+		var bodyVersion int64
+		err := tx.QueryRowContext(ctx, `
+			UPDATE documents SET content_json = $3, content = $4, body_version = body_version + 1, updated_at = NOW()
 			WHERE id = $1 AND workspace_id = $2
-		`, documentID, workspaceID, []byte(content), markdown)
+			RETURNING author_id, body_version
+		`, documentID, workspaceID, string(content), markdown).Scan(&authorID, &bodyVersion)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrCollabDocumentNotFound
+		}
 		if err != nil {
 			return err
 		}
-		if affected, err := result.RowsAffected(); err != nil {
-			return err
-		} else if affected == 0 {
-			return ErrCollabDocumentNotFound
-		}
-		_, err = tx.ExecContext(ctx, `
+		if _, err = tx.ExecContext(ctx, `
 			INSERT INTO document_collab_states (document_id, encoded_state)
 			VALUES ($1, $2)
 			ON CONFLICT (document_id) DO UPDATE SET encoded_state = EXCLUDED.encoded_state, updated_at = NOW()
-		`, documentID, state)
-		return err
+		`, documentID, state); err != nil {
+			return err
+		}
+		if err := reconcileSuggestions(ctx, tx, documentID, suggestions); err != nil {
+			return err
+		}
+		return storeAutoRevision(ctx, tx, documentID, authorID, markdown, content, bodyVersion, 0)
 	})
+}
+
+// reconcileSuggestions makes the index match the suggestions in the document:
+// new ones are pending, ones that left are closed, ones that came back are
+// pending again. An author who is not a user gets no row.
+func reconcileSuggestions(ctx context.Context, tx database.Queryer, documentID uuid.UUID, suggestions []collaboration.Suggestion) error {
+	ids := make([]string, 0, len(suggestions))
+	authors := make([]string, 0, len(suggestions))
+	for _, suggestion := range suggestions {
+		ids = append(ids, suggestion.ID.String())
+		authors = append(authors, suggestion.Author.String())
+	}
+	idArray, authorArray := "{"+strings.Join(ids, ",")+"}", "{"+strings.Join(authors, ",")+"}"
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO document_suggestions (document_id, suggestion_id, proposer_id)
+		SELECT $1, s.id, s.author
+		FROM unnest($2::uuid[], $3::uuid[]) AS s(id, author)
+		WHERE EXISTS (SELECT 1 FROM users u WHERE u.id = s.author)
+		ON CONFLICT (document_id, suggestion_id) DO UPDATE
+		SET status = 'pending', decider_id = NULL, decided_at = NULL
+		WHERE document_suggestions.status = 'closed'
+	`, documentID, idArray, authorArray); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `
+		UPDATE document_suggestions
+		SET status = 'closed', decider_id = proposer_id, decided_at = NOW()
+		WHERE document_id = $1 AND status = 'pending' AND suggestion_id <> ALL($2::uuid[])
+	`, documentID, idArray)
+	return err
 }
