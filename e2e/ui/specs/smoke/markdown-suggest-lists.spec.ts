@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quote paragraph the owner accepts or rejects", async ({
   page,
@@ -8,7 +9,7 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
   test.setTimeout(120_000);
   const suffix = randomUUID();
   const workspaceName = `Suggestion workspace ${suffix}`;
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const runNodeID = randomUUID();
@@ -56,10 +57,7 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     "X-Workspace-Id": workspaceID,
   };
   const canonicalRuns = async () => {
-    const response = await page.request.get(
-      `${apiURL}/api/v1/documents/${documentID}/body`,
-      { headers: ownerHeaders },
-    );
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, ownerHeaders) } }) };
     const data = (await response.json()) as {
       data: {
         nodes: {
@@ -88,11 +86,7 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
       title: `Suggestion document ${suffix}`,
       type: "markdown",
       visibility: "private",
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           {
             nodeID: rootNodeID,
             parentID: null,
@@ -181,11 +175,11 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
             content: "Tail",
             attributes: {},
           },
-        ],
-      },
+        ]),
     },
   });
   expect(createResponse.status()).toBe(201);
+  documentID = await createdDocumentID(createResponse);
 
   const registerResponse = await page.request.post(
     `${apiURL}/api/v1/auth/register`,

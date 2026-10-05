@@ -1,6 +1,7 @@
 import { inDocumentOrder } from "../../helpers/document-order";
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 type BodyNode = {
   nodeID: string;
@@ -56,7 +57,7 @@ test("@live @smoke: slash Heading 2 and Ctrl+Alt shortcuts convert blocks, rende
   ).data.id;
   const headers = { Authorization: `Bearer ${token}`, "X-Workspace-Id": workspaceID };
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootID = randomUUID();
   const emptyID = randomUUID();
   const plainID = randomUUID();
@@ -73,20 +74,16 @@ test("@live @smoke: slash Heading 2 and Ctrl+Alt shortcuts convert blocks, rende
       title: `Heading doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID: rootID,
-        nodes: [
+      ...documentPayload([
           node(rootID, null, 0, "document"),
           node(emptyID, rootID, 1, "paragraph"),
           node(plainID, rootID, 2, "paragraph"),
           node(randomUUID(), plainID, 0, "run", "Plain text"),
-        ],
-      },
+        ]),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}`);
   const documentURL = page.url();
@@ -105,9 +102,7 @@ test("@live @smoke: slash Heading 2 and Ctrl+Alt shortcuts convert blocks, rende
   await expect(secondPage.getByRole("status")).toContainText("Synced");
 
   const serverNodes = async () => {
-    const response = await page.request.get(`${apiURL}/api/v1/documents/${documentID}/body`, {
-      headers,
-    });
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, headers) } }) };
     return inDocumentOrder(((await response.json()).data.nodes ?? []) as BodyNode[]);
   };
   const expectNoRejection = async (p: Page) => {

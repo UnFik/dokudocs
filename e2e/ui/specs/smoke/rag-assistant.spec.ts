@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { test, expect } from '@playwright/test'
+import { createdDocumentID, documentPayload } from '../../helpers/markdown-document'
 
 // Needs a backend started with OPENAI_API_KEY (embedding and answer models), a
 // disposable PostgreSQL, and the seeded admin user. Without a key the API answers
@@ -54,19 +55,15 @@ test('@live @rag: /assistant answers from an indexed Markdown block with a click
       type: 'markdown',
       visibility: 'workspace',
       isDraft: false,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           { nodeID: rootNodeID, parentID: null, siblingOrder: 0, type: 'document', content: '', attributes: {} },
           { nodeID: paragraphNodeID, parentID: rootNodeID, siblingOrder: 0, type: 'paragraph', content: '', attributes: {} },
           { nodeID: runNodeID, parentID: paragraphNodeID, siblingOrder: 0, type: 'run', content: sentence, attributes: {} },
-        ],
-      },
+        ]),
     },
   })
   expect(created.status()).toBe(201)
+  documentID = await createdDocumentID(created);
 
   // The index worker polls every 10 seconds; wait until the API reports a
   // cited answer so the browser steps below do not race the indexer.

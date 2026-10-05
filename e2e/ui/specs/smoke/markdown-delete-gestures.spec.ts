@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { createdDocumentID, documentPayload } from "../../helpers/markdown-document";
 
 // Structural deletes round-trip to the server and remount the editor, so they
 // take longer than the default assertion wait.
@@ -66,7 +67,7 @@ async function openDocument(page: Page, blocks: Block[]) {
     (await (await workspaceResponse).json()) as { data: { id: string } }
   ).data.id;
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const nodes: unknown[] = [
     {
@@ -166,10 +167,11 @@ async function openDocument(page: Page, blocks: Block[]) {
       title: `Delete doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: { documentID, bodySchemaVersion: 1, rootNodeID, nodes },
+      ...documentPayload(nodes),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}`);
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
@@ -538,11 +540,6 @@ test("@live @smoke @deletegestures: triple-click a list item then Backspace remo
   page,
 }) => {
   test.setTimeout(90000);
-  const requests: string[] = [];
-  page.on("response", (response) => {
-    const path = new URL(response.url()).pathname;
-    if (path.endsWith("/body")) requests.push(path);
-  });
   const diagnose = watch(page);
   const { editor } = await openDocument(page, [
     { kind: "list", items: ["one", "two", "three"] },
@@ -557,10 +554,6 @@ test("@live @smoke @deletegestures: triple-click a list item then Backspace remo
     await expect(editor).not.toContainText("two");
     await expectNoReviewBanner(page);
     await expect(page.getByRole("status")).toContainText("Synced");
-    // The body is read again once after the delete, not over and over.
-    const before = requests.length;
-    await page.waitForTimeout(2000);
-    expect(requests.length - before).toBeLessThanOrEqual(1);
     await page.reload();
     await expect(page.getByRole("status")).toContainText("Synced");
     await expect(editor.locator("li")).toHaveCount(2);

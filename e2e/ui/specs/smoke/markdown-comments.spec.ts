@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 test("@live @smoke @comments: a commenter's comment reaches the owner at once, is replied to, resolved, and survives the text it was about", async ({
   page,
@@ -8,7 +9,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
   test.setTimeout(150_000);
   const suffix = randomUUID();
   const workspaceName = `Suggestion workspace ${suffix}`;
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const runNodeID = randomUUID();
@@ -50,10 +51,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     "X-Workspace-Id": workspaceID,
   };
   const canonicalRuns = async () => {
-    const response = await page.request.get(
-      `${apiURL}/api/v1/documents/${documentID}/body`,
-      { headers: ownerHeaders },
-    );
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, ownerHeaders) } }) };
     const data = (await response.json()) as {
       data: {
         nodes: {
@@ -82,11 +80,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
       title: `Suggestion document ${suffix}`,
       type: "markdown",
       visibility: "private",
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           {
             nodeID: rootNodeID,
             parentID: null,
@@ -111,11 +105,11 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
             content: "Original phrase",
             attributes: {},
           },
-        ],
-      },
+        ]),
     },
   });
   expect(createResponse.status()).toBe(201);
+  documentID = await createdDocumentID(createResponse);
 
   const registerResponse = await page.request.post(
     `${apiURL}/api/v1/auth/register`,
