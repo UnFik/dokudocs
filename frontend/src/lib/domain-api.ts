@@ -55,6 +55,15 @@ const documentSchema = z.object({
     email: z.string(),
     avatar: z.string().optional().default(''),
   }),
+  updatedBy: z
+    .object({
+      id: z.string().min(1),
+      name: z.string(),
+      email: z.string(),
+      avatar: z.string().optional().default(''),
+    })
+    .nullable()
+    .optional(),
   tags: z.array(z.string()).optional().default([]),
   isDraft: z.boolean(),
   visibility: z.enum(['workspace', 'private', 'public_link', 'inherit']),
@@ -271,6 +280,7 @@ function toDocument(value: unknown): DocumentItem {
     workspaceId: doc.workspaceId,
     orgId: doc.workspaceId,
     author: doc.author,
+    updatedBy: doc.updatedBy,
     isStarred: doc.isStarred,
     starredAt: doc.starredAt,
     isShared: doc.isShared,

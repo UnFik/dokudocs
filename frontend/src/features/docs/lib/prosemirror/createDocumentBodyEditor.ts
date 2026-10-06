@@ -47,6 +47,7 @@ import {
   type CaretHint,
 } from './deleteTargets'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
+import { headingMarginPlugin } from './headingMargin'
 import {
   emptyInlineState,
   readInlineState,
@@ -60,11 +61,10 @@ import {
 import { joinParagraphs } from './joinParagraphs'
 import { blockMarkdownRules } from './markdownBlockRules'
 import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
-import { headingMarginPlugin } from './headingMargin'
-import { smartTextRules } from './smartText'
 import { nodeSuggestionOf } from './nodeSuggestion'
 import { prepareBodyTransaction } from './prepareBodyTransaction'
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
+import { smartTextRules } from './smartText'
 import { suggestionBlocksPlugin } from './suggestionBlocks'
 import { suggestionCards, type SuggestionCard } from './suggestionCards'
 import {
@@ -125,6 +125,8 @@ export function createDocumentBodyEditor(
     smartText?: () => boolean
     /** The person asked for a link to a heading (its node ID). */
     onHeadingLink?: (nodeID: string) => void
+    /** Arrow up from the very start of the text: the title is the line above. */
+    onNavigateToTitle?: () => void
     plugins?: Plugin[]
     nodeViews?: EditorProps['nodeViews']
     onEditorReady?: (view: EditorView) => void
@@ -1014,6 +1016,25 @@ export function createDocumentBodyEditor(
         event.preventDefault()
         return true
       }
+      if (
+        event.key === 'ArrowUp' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        options.onNavigateToTitle &&
+        editorView.state.selection.empty &&
+        state.doc.textBetween(
+          0,
+          editorView.state.selection.from,
+          '\n',
+          '\ufffc'
+        ) === ''
+      ) {
+        event.preventDefault()
+        options.onNavigateToTitle()
+        return true
+      }
       // Right after a Markdown rule changed the line, Backspace gives the typed text back.
       if (
         event.key === 'Backspace' &&
@@ -1118,11 +1139,7 @@ export function createDocumentBodyEditor(
           })
         )
       )
-    view.dispatch(
-      state.tr.setSelection(
-        Selection.atEnd(state.doc)
-      )
-    )
+    view.dispatch(state.tr.setSelection(Selection.atEnd(state.doc)))
     view.focus()
   })
   mount.append(pageEnd)
@@ -1236,6 +1253,11 @@ export function createDocumentBodyEditor(
     insertBlock: (kind: InsertableBlock) =>
       canEdit() && insertBlockCommand(kind)(state, view.dispatch),
     focus: () => view.focus(),
+    /** Puts the caret at the very start of the text and focuses the editor. */
+    focusStart: () => {
+      view.dispatch(state.tr.setSelection(Selection.atStart(state.doc)))
+      view.focus()
+    },
     focusBlock: focusBlockAt,
     selectAll: selectAllContent,
     undo: () => canEdit() && undoYjs(state),
