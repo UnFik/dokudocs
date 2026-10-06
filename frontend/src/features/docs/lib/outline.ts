@@ -21,10 +21,12 @@ export function outlineOf(nodes: DocumentBodyNode[]): OutlineItem[] {
   const visit = (parentID: string | null) => {
     for (const node of sorted(parentID)) {
       if (headingTypes.has(node.type)) {
-        const text = sorted(node.nodeID)
-          .map((child) => child.content)
-          .join('')
-          .trim()
+        // Text typed straight into a heading is its own content until it is split into runs.
+        const text = (
+          sorted(node.nodeID)
+            .map((child) => child.content)
+            .join('') || node.content
+        ).trim()
         const level = Number(node.attributes.level)
         if (text)
           items.push({
