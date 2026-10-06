@@ -20,6 +20,7 @@ import {
   deleteDocumentCommentReply,
   listProjects,
   listRAGConversations,
+  listWorkspaceMembers,
   listWorkspaces,
   askRAGQuestion,
 } from './domain-api'
@@ -308,6 +309,34 @@ describe('Dokudocs domain API adapter', () => {
       '/api/v1/public/documents/opaque%20token'
     )
     expect(new Headers(init.headers).has('Authorization')).toBe(false)
+  })
+
+  it('lists the people of a workspace', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse([
+        {
+          workspaceId,
+          userId: '00000000-0000-0000-0000-000000000001',
+          email: 'rina@example.com',
+          fullName: 'Rina Putri',
+          avatarUrl: '',
+          role: 'member',
+          joinedAt: '2026-10-01T00:00:00Z',
+        },
+      ])
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(listWorkspaceMembers(workspaceId)).resolves.toEqual([
+      {
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'Rina Putri',
+        email: 'rina@example.com',
+      },
+    ])
+    expect(new URL(fetch.mock.calls[0][0]).pathname).toBe(
+      `/api/v1/workspaces/${workspaceId}/members`
+    )
   })
 
   it('loads workspaces from the backend and rejects malformed rows', async () => {

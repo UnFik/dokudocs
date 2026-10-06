@@ -65,6 +65,8 @@ export const definitions: Record<string, NodeDefinition> = {
   image: { group: 'inline', tag: 'span', atom: true },
   math: { content: 'text*', group: 'inline', tag: 'span' },
   'line-break': { group: 'inline', tag: 'br', atom: true },
+  // A person, page or project, by id; its label is what showed when it was made.
+  mention: { group: 'inline', tag: 'span', atom: true },
   'opaque-inline': {
     group: 'inline',
     tag: 'span',
@@ -110,6 +112,7 @@ export const emptyContentTypes = new Set([
   'footnote',
   'image',
   'line-break',
+  'mention',
 ])
 export const requiredContentTypes = new Set(['run', 'math', 'opaque-inline'])
 export const markNames = [
@@ -222,6 +225,46 @@ function nodeDOM(
     ]
   if (bodyType === 'image')
     return ['span', { ...idAttrs, contenteditable: 'false' }, '[image]']
+  if (bodyType === 'mention') {
+    let label = ''
+    let kind = 'person'
+    try {
+      const parsed = JSON.parse(String(node.attrs.bodyAttributes ?? '{}')) as {
+        label?: unknown
+        kind?: unknown
+      }
+      if (typeof parsed.label === 'string') label = parsed.label
+      if (typeof parsed.kind === 'string') kind = parsed.kind
+    } catch {
+      // Attributes the editor wrote are always JSON; anything else shows an empty chip.
+    }
+    let id = ''
+    try {
+      id = String(
+        (JSON.parse(String(node.attrs.bodyAttributes ?? '{}')) as { id?: unknown }).id ?? ''
+      )
+    } catch {
+      // The chip then has no link.
+    }
+    // A page or project is a link; a person is just named.
+    const href =
+      kind === 'document' && /^[0-9a-f-]{36}$/i.test(id)
+        ? `/docs/${id}`
+        : kind === 'project' && /^[0-9a-f-]{36}$/i.test(id)
+          ? `/projects/${id}`
+          : null
+    return [
+      href ? 'a' : 'span',
+      {
+        ...idAttrs,
+        class: 'dd-mention',
+        'data-mention-kind': kind,
+        contenteditable: 'false',
+        ...(href ? { href } : {}),
+      },
+      kind === 'person' ? `@${label}` : label,
+    ]
+  }
   if (bodyType === 'line-break') return ['br', idAttrs]
   if (bodyType === 'code-block') return ['pre', idAttrs, ['code', 0]]
   return [definition.tag, idAttrs, ...(definition.content ? [0] : [])]

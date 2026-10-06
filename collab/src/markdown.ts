@@ -63,6 +63,12 @@ function inline(nodes: JSONNode[] = []): string {
           return `$${plainText(node)}$`
         case 'opaque_inline':
           return String(node.attrs?.bodyContent ?? '')
+        case 'mention': {
+          const { kind, id, label } = attributesOf(node)
+          if (kind === 'document') return `[${String(label)}](/docs/${String(id)})`
+          if (kind === 'project') return `[${String(label)}](/projects/${String(id)})`
+          return `@${String(label ?? '')}`
+        }
         default:
           return plainText(node)
       }

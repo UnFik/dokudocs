@@ -312,6 +312,8 @@ function inlineText(
         return { type: 'run', content: node.content, attributes }
       case 'image':
         return { type: 'image', attributes }
+      case 'mention':
+        return { type: 'mention', attributes }
       case 'math':
         return { type: 'math', content: node.content, attributes }
       case 'line-break':

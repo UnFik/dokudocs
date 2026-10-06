@@ -12,6 +12,8 @@ import {
   restoreDocumentRevision,
   updateDocumentMetadata,
   listDocumentComments,
+  listProjects,
+  listWorkspaceMembers,
   type CommentAnchor,
   type CommentThread,
 } from '@/lib/domain-api'
@@ -511,6 +513,49 @@ function CollaborativeMarkdownBody({
       userName: profileNameRef.current,
       smartText: () => smartTextRef.current,
       maxCharacters,
+      mentionSource: async (query) => {
+        const needle = query.trim().toLowerCase()
+        const matches = (name: string) =>
+          !needle || name.toLowerCase().includes(needle)
+        const [members, projects] = await Promise.all([
+          listWorkspaceMembers(workspaceID).catch(() => []),
+          listProjects(workspaceID).catch(() => []),
+        ])
+        const pages = useDokudocsStore
+          .getState()
+          .documents.filter(
+            (item) =>
+              item.workspaceId === workspaceID &&
+              !item.deletedAt &&
+              item.id !== documentID
+          )
+        return [
+          ...members
+            .filter((person) => matches(person.name))
+            .map((person) => ({
+              kind: 'person' as const,
+              id: person.id,
+              label: person.name,
+              hint: 'Person',
+            })),
+          ...pages
+            .filter((page) => matches(page.title))
+            .map((page) => ({
+              kind: 'document' as const,
+              id: page.id,
+              label: page.title,
+              hint: 'Page',
+            })),
+          ...projects
+            .filter((project) => matches(project.name))
+            .map((project) => ({
+              kind: 'project' as const,
+              id: project.id,
+              label: project.name,
+              hint: 'Project',
+            })),
+        ]
+      },
       resolveLinkTitle: async (href) => {
         const id = /^\/docs\/([0-9a-f-]{36})/i.exec(href)?.[1]
         return (
