@@ -31,6 +31,7 @@ import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
 } from '../lib/muya/state/documentBodyToMarkdown'
+import { activeHeadingID, outlineOf, type OutlineItem } from '../lib/outline'
 import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
 import { EditorNotice } from '../lib/prosemirror/editorNotice'
 import {
@@ -52,6 +53,7 @@ import {
   type EditorMode,
 } from './editor-mode-tabs'
 import './markdown-body.css'
+import { OutlinePanel } from './outline-panel'
 import { SuggestionCardList } from './suggestion-card-list'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
@@ -301,6 +303,40 @@ function CollaborativeMarkdownBody({
   )
   const setSmartText = useEditorPreferenceStore((state) => state.setSmartText)
   const titleRef = useRef<HTMLInputElement>(null)
+  const showOutline = useEditorPreferenceStore(
+    (state) => state.preferencesByUser[userID || 'guest']?.showOutline ?? false
+  )
+  const setShowOutline = useEditorPreferenceStore(
+    (state) => state.setShowOutline
+  )
+  const [outline, setOutline] = useState<OutlineItem[]>([])
+  const [activeHeading, setActiveHeading] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  // The heading being read follows the scroll position of the page.
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container || !showOutline) return
+    const update = () => {
+      const top = container.getBoundingClientRect().top
+      const positions = outline.flatMap((item) => {
+        const heading = container.querySelector<HTMLElement>(
+          `[data-node-id="${item.nodeID}"]`
+        )
+        return heading
+          ? [
+              {
+                nodeID: item.nodeID,
+                top: heading.getBoundingClientRect().top - top,
+              },
+            ]
+          : []
+      })
+      setActiveHeading(activeHeadingID(positions, 80))
+    }
+    update()
+    container.addEventListener('scroll', update, { passive: true })
+    return () => container.removeEventListener('scroll', update)
+  }, [outline, showOutline])
   const smartTextRef = useRef(smartText)
   useEffect(() => {
     smartTextRef.current = smartText
@@ -515,6 +551,7 @@ function CollaborativeMarkdownBody({
         applyEditorMode()
       },
       onBodyChange: (nodes: DocumentBodyNode[]) => {
+        setOutline(outlineOf(nodes))
         try {
           onMarkdownChange(documentBodyToMarkdown(nodes))
         } catch (cause) {
@@ -544,6 +581,7 @@ function CollaborativeMarkdownBody({
         setSessionReady(true)
         setCards(session.editor.getSuggestionCards())
         onMarkdownChange(documentBodyToMarkdown(session.editor.getBody()))
+        setOutline(outlineOf(session.editor.getBody()))
         applyEditorMode()
       })
       .catch((cause) => {
@@ -619,6 +657,15 @@ function CollaborativeMarkdownBody({
             size='sm'
             variant='ghost'
             className='h-11 md:h-8'
+            aria-pressed={showOutline}
+            onClick={() => setShowOutline(userID, !showOutline)}
+          >
+            Contents
+          </Button>
+          <Button
+            size='sm'
+            variant='ghost'
+            className='h-11 md:h-8'
             aria-pressed={smartText}
             title='Curly quotes, arrows and an ellipsis as you type'
             onClick={() => setSmartText(userID, !smartText)}
@@ -652,7 +699,21 @@ function CollaborativeMarkdownBody({
         </p>
       ) : null}
       <div className='flex min-h-0 flex-1 flex-col md:flex-row'>
+        {showOutline ? (
+          <OutlinePanel
+            items={outline}
+            activeID={activeHeading}
+            onSelect={(nodeID) => {
+              const editor = sessionRef.current?.editor
+              editor?.focusBlock(nodeID, 'start')
+              scrollRef.current
+                ?.querySelector(`[data-node-id="${nodeID}"]`)
+                ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+            }}
+          />
+        ) : null}
         <div
+          ref={scrollRef}
           className='markdown-body min-h-0 min-w-0 flex-1 overflow-auto p-6'
           data-suggestion-preview={suggestionPreview}
         >
