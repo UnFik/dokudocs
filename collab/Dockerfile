@@ -6,9 +6,11 @@ COPY collab/package.json collab/package-lock.json ./
 RUN npm ci --omit=dev && npm i --no-save tsx
 COPY collab/tsconfig.json ./
 COPY collab/src ./src
-COPY collab/single-copy.mjs collab/single-copy-hooks.mjs ./
+COPY collab/tsconfig.run.json ./
 COPY frontend/src/features/docs/lib/prosemirror/documentSchema.ts /app/frontend/src/features/docs/lib/prosemirror/documentSchema.ts
 COPY frontend/src/features/docs/lib/author-color.ts /app/frontend/src/features/docs/lib/author-color.ts
+# Without a package.json there, Node reads those two files as CommonJS and loads a second copy of prosemirror-model.
+RUN echo '{"type":"module"}' > /app/frontend/package.json
 ENV NODE_ENV=production
 EXPOSE 1234
-CMD ["npx", "tsx", "--import", "./single-copy.mjs", "src/main.ts"]
+CMD ["npx", "tsx", "--tsconfig", "tsconfig.run.json", "src/main.ts"]
