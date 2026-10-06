@@ -60,6 +60,28 @@ function toStateBody(
   switch (node.type) {
     case 'block-quote':
       return { name: 'block-quote', children: childStates() }
+    case 'notice': {
+      const variant = requiredChoice(node.attributes, 'variant', [
+        'info',
+        'success',
+        'warning',
+        'tip',
+      ])
+      return {
+        name: 'fence-container',
+        meta: { marker: ':::', label: variant },
+        children: childStates(),
+      }
+    }
+    case 'toggle':
+      return {
+        name: 'fence-container',
+        meta: { marker: '+++', label: '' },
+        children: childStates(),
+      }
+    case 'page-break':
+      noChildren(node, descendants)
+      return { name: 'html-block', text: '<div class="page-break"></div>' }
     case 'list-item':
       return { name: 'list-item', children: childStates() }
     case 'task-list-item':

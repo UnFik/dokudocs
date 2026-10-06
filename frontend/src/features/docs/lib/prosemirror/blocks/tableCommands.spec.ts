@@ -48,7 +48,7 @@ function shape(state: ReturnType<typeof stateFor>) {
 }
 
 describe('table commands', () => {
-  it('inserts a table after the current block (no node is removed) and selects the first cell', () => {
+  it('inserts a table in place of the empty line and selects the first cell', () => {
     const b = bodyBuilder()
     const root = b.add(null, 'document')
     const intro = b.add(root, 'paragraph')
@@ -63,7 +63,7 @@ describe('table commands', () => {
     expect(rows).toHaveLength(2)
     expect(cells).toHaveLength(6)
     expect(cells.every((c) => c.attributes.align === 'none')).toBe(true)
-    expect(body.filter((n) => n.type === 'paragraph')).toHaveLength(2)
+    expect(body.filter((n) => n.type === 'paragraph')).toHaveLength(1)
     expect(new Set(body.map((n) => n.nodeID)).size).toBe(body.length)
     expect(result.state.selection.$from.parent.type.name).toBe('table_cell')
   })

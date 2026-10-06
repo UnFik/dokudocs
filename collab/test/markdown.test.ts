@@ -71,6 +71,19 @@ describe('Markdown derived from the document JSON', () => {
     )
   })
 
+  it('writes a notice, a toggle and a page break', () => {
+    const notice = { type: 'notice', attrs: attrs({ variant: 'tip' }), content: [paragraph(run(text('Remember')))] }
+    const toggle = {
+      type: 'toggle',
+      attrs: attrs(),
+      content: [{ type: 'atx_heading', attrs: attrs({ level: 2 }), content: [run(text('More'))] }, paragraph(run(text('Inside')))],
+    }
+    const pageBreak = { type: 'page_break', attrs: attrs() }
+    expect(toMarkdown(doc(notice, toggle, pageBreak))).toBe(
+      ':::tip\nRemember\n:::\n\n+++\n## More\n\nInside\n+++\n\n<div class="page-break"></div>\n'
+    )
+  })
+
   it('is empty for a document with no blocks', () => {
     expect(toMarkdown(doc())).toBe('')
   })

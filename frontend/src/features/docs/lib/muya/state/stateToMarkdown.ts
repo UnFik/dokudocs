@@ -17,6 +17,7 @@ import {
   isAnyListState,
   type IAtxHeadingState,
   type IBlockQuoteState,
+  type IFenceContainerState,
   type IBulletListState,
   type ICodeBlockState,
   type IDiagramState,
@@ -219,6 +220,11 @@ export default class ExportMarkdown {
       case 'block-quote':
         this._insertLineBreak(result, indent, state.sourceGap)
         result.push(this._serializeBlockquote(state, indent))
+        break
+
+      case 'fence-container':
+        this._insertLineBreak(result, indent, state.sourceGap)
+        result.push(this._serializeFenceContainer(state, indent))
         break
 
       case 'table':
@@ -485,6 +491,18 @@ export default class ExportMarkdown {
     result.push(`${indent}\`\`\`\n`)
 
     return result.join('')
+  }
+
+  private _serializeFenceContainer(
+    state: IFenceContainerState,
+    indent: string
+  ) {
+    const { marker, label } = state.meta
+    return [
+      `${indent}${marker}${label}\n`,
+      this._convertStatesToMarkdown(state.children, indent),
+      `${indent}${marker}\n`,
+    ].join('')
   }
 
   private _serializeBlockquote(state: IBlockQuoteState, indent: string) {

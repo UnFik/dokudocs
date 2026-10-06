@@ -133,6 +133,12 @@ function block(node: JSONNode): string {
       return (node.content ?? [])
         .map((item) => listItem(item, attributesOf(item).checked ? '- [x] ' : '- [ ] '))
         .join('\n')
+    case 'notice':
+      return `:::${String(attributes.variant ?? 'info')}\n${blocks(node.content, '\n\n')}\n:::`
+    case 'toggle':
+      return `+++\n${blocks(node.content, '\n\n')}\n+++`
+    case 'page_break':
+      return '<div class="page-break"></div>'
     case 'table':
       return table(node)
     case 'footnote':

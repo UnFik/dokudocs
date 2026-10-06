@@ -3,7 +3,12 @@ import { EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
 import { documentBodySchema } from './documentBody'
-import { mountTestEditor, paragraphsBody, pressKey, runStart } from './editorTestKit'
+import {
+  mountTestEditor,
+  paragraphsBody,
+  pressKey,
+  runStart,
+} from './editorTestKit'
 import { inlineMarkdownRules } from './markdownInputRules'
 import { documentOf, paragraph, run } from './suggestionTestKit'
 
@@ -11,7 +16,9 @@ function select(harness: ReturnType<typeof mountTestEditor>, text: string) {
   const { view } = harness.editor
   const from = runStart(view.state.doc, text)
   view.dispatch(
-    view.state.tr.setSelection(TextSelection.create(view.state.doc, from, from + text.length))
+    view.state.tr.setSelection(
+      TextSelection.create(view.state.doc, from, from + text.length)
+    )
   )
 }
 
@@ -27,7 +34,10 @@ describe('underline and highlight in the editor', () => {
       expect(attributesOfRun(harness)).toMatchObject({ underline: true })
       select(harness, 'words')
       harness.editor.toggleMark('highlight')
-      expect(attributesOfRun(harness)).toMatchObject({ underline: true, highlight: true })
+      expect(attributesOfRun(harness)).toMatchObject({
+        underline: true,
+        highlight: true,
+      })
       select(harness, 'words')
       harness.editor.toggleMark('underline')
       expect(attributesOfRun(harness).underline).toBeUndefined()
@@ -72,24 +82,34 @@ describe('==text== typed in a line', () => {
       documentOf(paragraph('p1', [run('r1', ['x'])])).firstChild!,
     ])
     const view = new EditorView(document.createElement('div'), {
-      state: EditorState.create({ doc, plugins: [inputRules({ rules: inlineMarkdownRules })] }),
+      state: EditorState.create({
+        doc,
+        plugins: [inputRules({ rules: inlineMarkdownRules })],
+      }),
     })
     views.push(view)
     let at = 0
     view.state.doc.descendants((node, pos) => {
       if (node.isText) at = pos + node.nodeSize
     })
-    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at)))
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, at))
+    )
     for (const character of ' ==key==') {
       const { from, to } = view.state.selection
       const handled = view.someProp('handleTextInput', (handler) =>
-        handler(view, from, to, character, () => view.state.tr.insertText(character, from, to))
+        handler(view, from, to, character, () =>
+          view.state.tr.insertText(character, from, to)
+        )
       )
       if (!handled) view.dispatch(view.state.tr.insertText(character, from, to))
     }
     const marked: string[] = []
     view.state.doc.descendants((node) => {
-      if (node.isText && node.marks.some((mark) => mark.type.name === 'highlight'))
+      if (
+        node.isText &&
+        node.marks.some((mark) => mark.type.name === 'highlight')
+      )
         marked.push(node.text!)
     })
     expect(marked).toEqual(['key'])

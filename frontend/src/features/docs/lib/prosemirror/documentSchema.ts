@@ -43,6 +43,11 @@ export const definitions: Record<string, NodeDefinition> = {
     group: 'task_list_item',
     tag: 'li',
   },
+  // A colored box around blocks; `variant` (info, success, warning, tip) is in its attributes.
+  notice: { content: 'block+', group: 'block', tag: 'div' },
+  // Blocks that can be folded: the first one is the title that stays visible.
+  toggle: { content: 'block+', group: 'block', tag: 'div' },
+  'page-break': { group: 'block', tag: 'hr', atom: true },
   table: { content: 'table_row+', group: 'block', tag: 'table' },
   'table.row': { content: 'table_cell+', group: 'table_row', tag: 'tr' },
   'table.cell': { content: 'inline*', group: 'table_cell', tag: 'td' },
@@ -91,6 +96,9 @@ export const bodyContentTypes = new Set([
 ])
 export const emptyContentTypes = new Set([
   'document',
+  'notice',
+  'toggle',
+  'page-break',
   'block-quote',
   'order-list',
   'bullet-list',
@@ -161,6 +169,20 @@ function headingTag(bodyAttributes: unknown) {
   return `h${level}`
 }
 
+const noticeVariants = new Set(['info', 'success', 'warning', 'tip'])
+
+function noticeVariant(bodyAttributes: unknown) {
+  try {
+    const value = (
+      JSON.parse(String(bodyAttributes ?? '{}')) as { variant?: unknown }
+    ).variant
+    if (typeof value === 'string' && noticeVariants.has(value)) return value
+  } catch {
+    // Attributes the editor wrote are always JSON; anything else reads as info.
+  }
+  return 'info'
+}
+
 function nodeDOM(
   bodyType: string,
   definition: NodeDefinition,
@@ -172,6 +194,21 @@ function nodeDOM(
   }
   if (bodyType === 'atx-heading' || bodyType === 'setext-heading')
     return [headingTag(node.attrs.bodyAttributes), idAttrs, 0]
+  if (bodyType === 'notice') {
+    const variant = noticeVariant(node.attrs.bodyAttributes)
+    return [
+      'div',
+      {
+        ...idAttrs,
+        class: `dd-notice dd-notice-${variant}`,
+        'data-variant': variant,
+        role: 'note',
+      },
+      0,
+    ]
+  }
+  if (bodyType === 'page-break')
+    return ['hr', { ...idAttrs, class: 'dd-page-break' }]
   if (bodyType === 'thematic-break')
     return [
       definition.tag,

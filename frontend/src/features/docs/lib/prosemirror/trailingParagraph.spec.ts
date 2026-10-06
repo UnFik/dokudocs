@@ -19,7 +19,10 @@ function endingWithCode(): DocumentBodyNode[] {
 type Harness = ReturnType<typeof mountTestEditor>
 const types = (harness: Harness) => {
   const body = harness.editor.view.state.doc.child(0)
-  return Array.from({ length: body.childCount }, (_, i) => body.child(i).type.name)
+  return Array.from(
+    { length: body.childCount },
+    (_, i) => body.child(i).type.name
+  )
 }
 const strip = (harness: Harness) =>
   harness.host.querySelector<HTMLElement>('.dd-page-end')!

@@ -331,3 +331,70 @@
     min-height: 44px;
   }
 }
+
+/* Notices: a box with a colored left edge; the variant picks the color. */
+.dd-notice {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 4px;
+  background: var(--card);
+}
+.dd-notice-info {
+  border-left-color: #0369a1;
+}
+.dd-notice-success {
+  border-left-color: #15803d;
+}
+.dd-notice-warning {
+  border-left-color: #b45309;
+}
+.dd-notice-tip {
+  border-left-color: #7c3aed;
+}
+
+/* Toggles: the first block is the title; the button folds the rest. */
+.dd-toggle {
+  position: relative;
+  margin: 8px 0;
+  padding-left: 28px;
+}
+.dd-toggle-button {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.dd-toggle-button::before {
+  content: '▾' / '';
+}
+.dd-toggle-folded .dd-toggle-button::before {
+  content: '▸' / '';
+}
+.dd-toggle-folded > .dd-toggle-body > :not(:first-child) {
+  display: none;
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .dd-toggle-button {
+    width: 44px;
+    height: 44px;
+    top: -8px;
+  }
+  .dd-toggle {
+    padding-left: 44px;
+  }
+}
+
+/* A page break shows as a dashed rule in the editor and starts a new page in print. */
+.dd-page-break {
+  border: 0;
+  border-top: 1px dashed var(--border);
+  margin: 20px 0;
+  break-after: page;
+}

@@ -6,6 +6,7 @@ import { clipboardPlugin } from './clipboard'
 import { mediaNodeViews } from './mediaNodeViews'
 import { plusButtonPlugin } from './plusButton'
 import { goToNextCell, goToPreviousCell } from './tableCommands'
+import { toggleView } from './toggleNodeView'
 import { openImageForm, toolbarPlugin } from './toolbar'
 
 function tableKeysPlugin() {
@@ -40,10 +41,13 @@ export function blockEditing() {
       blockHandlePlugin(),
       toolbarPlugin(),
     ],
-    nodeViews: mediaNodeViews({
-      onImageEdit: (request) =>
-        holder.view && openImageForm(holder.view, request),
-    }),
+    nodeViews: {
+      ...mediaNodeViews({
+        onImageEdit: (request) =>
+          holder.view && openImageForm(holder.view, request),
+      }),
+      toggle: toggleView,
+    },
     attach(view: EditorView) {
       holder.view = view
     },
