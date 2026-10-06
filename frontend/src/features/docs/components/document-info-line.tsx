@@ -19,7 +19,7 @@ export function DocumentInfoLine({
   const when = formatDistance(new Date(updatedAt), now, { addSuffix: true })
   const who = updatedBy ? `Updated by ${updatedBy}` : `Created by ${author}`
   return (
-    <p className='flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground'>
+    <p className='flex flex-wrap items-center justify-center gap-x-3 text-center text-xs text-muted-foreground'>
       <span>{`${who} ${when}`}</span>
       {isDraft ? <span>Draft</span> : null}
       {tasks.total > 0 ? (
