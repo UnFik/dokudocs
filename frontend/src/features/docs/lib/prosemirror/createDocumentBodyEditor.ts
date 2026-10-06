@@ -60,6 +60,7 @@ import {
 import { joinParagraphs } from './joinParagraphs'
 import { blockMarkdownRules } from './markdownBlockRules'
 import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
+import { headingMarginPlugin } from './headingMargin'
 import { smartTextRules } from './smartText'
 import { nodeSuggestionOf } from './nodeSuggestion'
 import { prepareBodyTransaction } from './prepareBodyTransaction'
@@ -122,6 +123,8 @@ export function createDocumentBodyEditor(
     readOnly?: boolean
     /** Whether typographic replacements (curly quotes, arrows, ellipsis) apply as the person types. */
     smartText?: () => boolean
+    /** The person asked for a link to a heading (its node ID). */
+    onHeadingLink?: (nodeID: string) => void
     plugins?: Plugin[]
     nodeViews?: EditorProps['nodeViews']
     onEditorReady?: (view: EditorView) => void
@@ -240,6 +243,7 @@ export function createDocumentBodyEditor(
       yUndoPlugin(),
       remoteCursorPlugin,
       suggestionFocusPlugin,
+      headingMarginPlugin((nodeID) => options.onHeadingLink?.(nodeID)),
       suggestionBlocksPlugin,
       commentsPlugin,
       // Block plugins (slash menu, drag handle) run before the keymaps below so
