@@ -48,6 +48,7 @@ type storedState struct {
 	content                 json.RawMessage
 	markdown                string
 	suggestions             []collaboration.Suggestion
+	updatedBy               *uuid.UUID
 }
 
 type fakeStore struct {
@@ -64,8 +65,9 @@ func (f *fakeStore) LoadDocument(_ context.Context, _, documentID uuid.UUID) ([]
 	return f.states[documentID], f.contents[documentID], nil
 }
 
-func (f *fakeStore) StoreState(_ context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion) error {
-	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content, markdown, suggestions})
+func (f *fakeStore) StoreState(_ context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion, options ...collaboration.StoreOption) error {
+	applied := collaboration.ApplyStoreOptions(options)
+	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content, markdown, suggestions, applied.UpdatedBy})
 	f.states[documentID] = state
 	f.contents[documentID] = content
 	return nil
@@ -159,6 +161,7 @@ func TestDocumentRoundTrip(t *testing.T) {
 		"state":       base64.StdEncoding.EncodeToString(state),
 		"content":     map[string]any{"type": "doc"},
 		"markdown":    "hello\n",
+		"updatedBy":   editorID.String(),
 		"suggestions": []map[string]string{{"id": suggestionID.String(), "author": editorID.String()}, {"id": "nope", "author": "x"}},
 	}, true)
 	if put.Code != http.StatusNoContent {
@@ -167,6 +170,10 @@ func TestDocumentRoundTrip(t *testing.T) {
 	if len(store.stored) != 1 || !bytes.Equal(store.stored[0].state, state) || string(store.stored[0].content) != `{"type":"doc"}` || store.stored[0].markdown != "hello\n" ||
 		len(store.stored[0].suggestions) != 1 || store.stored[0].suggestions[0] != (collaboration.Suggestion{ID: suggestionID, Author: editorID}) {
 		t.Fatalf("stored = %+v, want the state and the content", store.stored)
+	}
+
+	if store.stored[0].updatedBy == nil || *store.stored[0].updatedBy != editorID {
+		t.Fatalf("updatedBy = %v, want %s", store.stored[0].updatedBy, editorID)
 	}
 
 	got := do(h, http.MethodGet, target, nil, true)

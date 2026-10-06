@@ -40,7 +40,7 @@ type StateStore interface {
 	// document made from JSON alone has no state yet, and the service builds one.
 	LoadDocument(ctx context.Context, workspaceID, documentID uuid.UUID) ([]byte, json.RawMessage, error)
 	// markdown is the same document as text, kept for previews, search and exports.
-	StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion) error
+	StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion, options ...collaboration.StoreOption) error
 }
 
 type InternalHandler struct {
@@ -153,6 +153,7 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 		State       string          `json:"state"`
 		Content     json.RawMessage `json:"content"`
 		Markdown    string          `json:"markdown"`
+		UpdatedBy   string          `json:"updatedBy"`
 		Suggestions []struct {
 			ID     string `json:"id"`
 			Author string `json:"author"`
@@ -180,7 +181,11 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 			suggestions = append(suggestions, collaboration.Suggestion{ID: id, Author: author})
 		}
 	}
-	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content, request.Markdown, suggestions); err != nil {
+	var options []collaboration.StoreOption
+	if editor, err := uuid.Parse(request.UpdatedBy); err == nil {
+		options = append(options, collaboration.WithUpdatedBy(editor))
+	}
+	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content, request.Markdown, suggestions, options...); err != nil {
 		if errors.Is(err, ErrDocumentNotFound) {
 			http.NotFound(w, r)
 			return
