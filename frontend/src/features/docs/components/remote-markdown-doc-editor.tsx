@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
 import {
   createNamedDocumentRevision,
@@ -510,6 +511,13 @@ function CollaborativeMarkdownBody({
       userName: profileNameRef.current,
       smartText: () => smartTextRef.current,
       maxCharacters,
+      resolveLinkTitle: async (href) => {
+        const id = /^\/docs\/([0-9a-f-]{36})/i.exec(href)?.[1]
+        return (
+          useDokudocsStore.getState().documents.find((item) => item.id === id)
+            ?.title ?? null
+        )
+      },
       onNavigateToTitle: () => titleRef.current?.focus(),
       onHeadingLink: (nodeID) => {
         const link = `${window.location.origin}${window.location.pathname}#node-${nodeID}`

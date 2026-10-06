@@ -48,6 +48,7 @@ import {
 } from './deleteTargets'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
 import { findReplacePlugin } from './findReplace'
+import { linkFeaturesPlugin } from './linkFeatures'
 import { headingMarginPlugin } from './headingMargin'
 import {
   emptyInlineState,
@@ -126,6 +127,8 @@ export function createDocumentBodyEditor(
     smartText?: () => boolean
     /** The person asked for a link to a heading (its node ID). */
     onHeadingLink?: (nodeID: string) => void
+    /** The title of the page a link to this app goes to, shown when the link is hovered. */
+    resolveLinkTitle?: (href: string) => Promise<string | null>
     /** The most characters the page may hold; text past it is refused, deleting still works. */
     maxCharacters?: number
     /** Arrow up from the very start of the text: the title is the line above. */
@@ -303,6 +306,10 @@ export function createDocumentBodyEditor(
       ),
       // Replacing is an edit, so Suggest mode only finds.
       findReplacePlugin(() => !suggestMode),
+      linkFeaturesPlugin({
+        enabled: () => canEdit() && !suggestMode,
+        resolveTitle: options.resolveLinkTitle,
+      }),
       suggestionBlocksPlugin,
       commentsPlugin,
       // Block plugins (slash menu, drag handle) run before the keymaps below so
