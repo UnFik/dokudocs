@@ -94,6 +94,7 @@ export function openCollabSession(input: {
     document: ydoc,
     token: input.token,
     onStatus: ({ status: next }) => {
+      connected = next === 'connected'
       if (next === 'connected') setStatus('ready')
       else if (next === 'connecting') setStatus('connecting')
       else setStatus('offline')
@@ -119,6 +120,16 @@ export function openCollabSession(input: {
       else if (message.type === 'comments_changed') input.onCommentsChanged?.()
       else if (message.type === 'reloaded') input.onReloaded?.()
     },
+  })
+  // A change made while the connection is down is not on the server until the
+  // connection is back and the provider has had it acknowledged.
+  let wroteOffline = false
+  let connected = false
+  ydoc.on('update', (_update: Uint8Array, origin: unknown) => {
+    if (origin !== provider && !connected) wroteOffline = true
+  })
+  provider.on('unsyncedChanges', ({ number }: { number: number }) => {
+    if (number === 0 && connected) wroteOffline = false
   })
   const awareness = provider.awareness
   const announce = (userName: string | undefined) =>
@@ -172,21 +183,22 @@ export function openCollabSession(input: {
     signalCommentsChanged() {
       provider.sendStateless(JSON.stringify({ type: 'comments_changed' }))
     },
-    unsyncedChanges: () => provider.unsyncedChanges,
+    unsyncedChanges: () =>
+      Math.max(provider.unsyncedChanges, wroteOffline ? 1 : 0),
     /** Resolves true once the server has every change made here, false at the timeout. */
     drained(timeoutMs: number) {
-      if (provider.unsyncedChanges === 0) return Promise.resolve(true)
+      const settled = () => provider.unsyncedChanges === 0 && !wroteOffline
+      if (settled()) return Promise.resolve(true)
       return new Promise<boolean>((resolve) => {
         const finish = (value: boolean) => {
           clearTimeout(timer)
-          provider.off('unsyncedChanges', onChange)
+          clearInterval(poll)
           resolve(value)
         }
-        const onChange = ({ number }: { number: number }) => {
-          if (number === 0) finish(true)
-        }
         const timer = setTimeout(() => finish(false), timeoutMs)
-        provider.on('unsyncedChanges', onChange)
+        const poll = setInterval(() => {
+          if (settled()) finish(true)
+        }, 50)
       })
     },
     /** Shares the local selection, or clears it when the editor loses focus. */
