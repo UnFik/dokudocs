@@ -17,6 +17,7 @@ import {
   listWorkspaceMembers,
   type CommentAnchor,
   type CommentThread,
+  listDocumentBacklinks,
 } from '@/lib/domain-api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
@@ -309,6 +310,11 @@ function CollaborativeMarkdownBody({
   )
   const setSmartText = useEditorPreferenceStore((state) => state.setSmartText)
   const titleRef = useRef<HTMLInputElement>(null)
+  const backlinksQuery = useQuery({
+    queryKey: ['document-backlinks', workspaceID, documentID],
+    queryFn: () => listDocumentBacklinks(workspaceID, documentID),
+    staleTime: 30_000,
+  })
   const showOutline = useEditorPreferenceStore(
     (state) => state.preferencesByUser[userID || 'guest']?.showOutline ?? false
   )
@@ -805,6 +811,7 @@ function CollaborativeMarkdownBody({
       <div className='flex min-h-0 flex-1 flex-col md:flex-row'>
         {showOutline ? (
           <OutlinePanel
+            backlinks={backlinksQuery.data}
             items={outline}
             activeID={activeHeading}
             onSelect={(nodeID) => {

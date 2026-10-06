@@ -754,3 +754,13 @@ export async function updateDocumentMetadata(
     })
   )
 }
+
+export async function listDocumentBacklinks(
+  workspaceId: string,
+  documentId: string
+): Promise<{ id: string; title: string }[]> {
+  return apiFetch<{ id: string; title: string }[]>(
+    `/api/v1/documents/${documentId}/backlinks`,
+    { headers: workspaceHeaders(workspaceId) }
+  )
+}

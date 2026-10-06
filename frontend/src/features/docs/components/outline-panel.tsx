@@ -5,10 +5,12 @@ export function OutlinePanel({
   items,
   activeID,
   onSelect,
+  backlinks = [],
 }: {
   items: OutlineItem[]
   activeID: string | null
   onSelect: (nodeID: string) => void
+  backlinks?: { id: string; title: string }[]
 }) {
   return (
     <nav
@@ -41,6 +43,25 @@ export function OutlinePanel({
           ))}
         </ul>
       )}
+      {backlinks.length > 0 ? (
+        <section className='mt-4 border-t pt-3'>
+          <h2 className='mb-1 px-2 text-xs font-medium text-muted-foreground'>
+            Referenced by
+          </h2>
+          <ul className='space-y-1'>
+            {backlinks.map((link) => (
+              <li key={link.id}>
+                <a
+                  href={`/docs/${link.id}`}
+                  className='block truncate rounded px-2 py-1 text-muted-foreground hover:bg-secondary'
+                >
+                  {link.title || 'Untitled'}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </nav>
   )
 }

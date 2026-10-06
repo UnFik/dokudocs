@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { openMarkdownDocument } from "../../helpers/markdown-document";
+import { randomUUID } from "node:crypto";
+import { documentJSON, openMarkdownDocument } from "../../helpers/markdown-document";
 
 // A 1x1 PNG.
 const png = Buffer.from(
@@ -67,3 +68,48 @@ test("@live @smoke @embeds: a known address pasted into an empty line becomes a 
   await page.reload();
   await expect(page.locator(".ProseMirror .dd-embed iframe")).toHaveCount(1);
 });
+
+test("@live @smoke @backlinks: a page that links here is listed under Referenced by", async ({
+  page,
+}) => {
+  const { documentURL } = await openMarkdownDocument(page, ["target"]);
+  const targetID = new URL(documentURL).pathname.split("/").pop()!;
+  const token = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "thisisjustarandomstring",
+  )!.value;
+  const apiURL = process.env.API_URL ?? "http://localhost:8080";
+  const headers = { Authorization: `Bearer ${token}` };
+  const target = await page.request.get(`${apiURL}/api/v1/documents/${targetID}`, {
+    headers: { ...headers, "X-Workspace-Id": await workspaceOf(page, apiURL, headers, targetID) },
+  });
+  expect(target.ok()).toBe(true);
+  const workspaceID = ((await target.json()) as { data: { workspaceId: string } }).data.workspaceId;
+  const created = await page.request.post(`${apiURL}/api/v1/documents`, {
+    headers: { ...headers, "X-Workspace-Id": workspaceID, "Idempotency-Key": randomUUID() },
+    data: {
+      title: "Points at target",
+      type: "markdown",
+      isDraft: false,
+      content: `see /docs/${targetID}`,
+      contentJSON: documentJSON([`see /docs/${targetID}`]),
+    },
+  });
+  expect(created.status()).toBe(201);
+
+  await page.reload();
+  await page.getByRole("button", { name: "Contents" }).click();
+  await expect(
+    page.getByRole("navigation", { name: "Contents" }).getByRole("link", { name: "Points at target" }),
+  ).toBeVisible();
+});
+
+async function workspaceOf(
+  page: import("@playwright/test").Page,
+  apiURL: string,
+  headers: Record<string, string>,
+  _documentID: string,
+) {
+  const workspaces = await page.request.get(`${apiURL}/api/v1/workspaces`, { headers });
+  const list = ((await workspaces.json()) as { data: { id: string }[] }).data;
+  return list[list.length - 1]!.id;
+}

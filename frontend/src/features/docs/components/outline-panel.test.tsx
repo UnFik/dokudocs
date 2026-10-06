@@ -40,4 +40,19 @@ describe('OutlinePanel', () => {
       .element(screen.getByText('Headings you add will show up here.'))
       .toBeInTheDocument()
   })
+
+  it('lists the pages that refer to this one, each a link to it', async () => {
+    const screen = await render(
+      <OutlinePanel
+        items={items}
+        activeID={null}
+        onSelect={() => {}}
+        backlinks={[{ id: '11111111-1111-1111-1111-111111111111', title: 'Launch plan' }]}
+      />
+    )
+    await expect
+      .element(screen.getByRole('link', { name: 'Launch plan' }))
+      .toHaveAttribute('href', '/docs/11111111-1111-1111-1111-111111111111')
+    await expect.element(screen.getByText('Referenced by')).toBeInTheDocument()
+  })
 })

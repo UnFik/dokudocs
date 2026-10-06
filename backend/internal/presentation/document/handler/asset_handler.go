@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
 
 	"backend/internal/application/asset"
+	docrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/presentation/response"
 
 	"github.com/google/uuid"
@@ -128,4 +130,34 @@ func (h *AssetHandler) serve(w http.ResponseWriter, found asset.Asset, body io.R
 		header.Set("Content-Disposition", attachment(found.FileName))
 	}
 	_, _ = io.Copy(w, body)
+}
+
+// BacklinkSource finds the pages that name a page.
+type BacklinkSource interface {
+	Backlinks(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]docrepo.Backlink, error)
+}
+
+type BacklinkHandler struct{ source BacklinkSource }
+
+func NewBacklinkHandler(source BacklinkSource) *BacklinkHandler {
+	return &BacklinkHandler{source: source}
+}
+
+func (h *BacklinkHandler) List(w http.ResponseWriter, r *http.Request) {
+	userID, workspaceID, err := getUserAndWorkspace(r)
+	if err != nil {
+		writeDocumentError(w, err)
+		return
+	}
+	documentID, err := parsePathUUID(r, "id")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid document id")
+		return
+	}
+	links, err := h.source.Backlinks(r.Context(), workspaceID, documentID, userID)
+	if err != nil {
+		writeDocumentError(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, links)
 }
