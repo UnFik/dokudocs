@@ -50,6 +50,8 @@ export const definitions: Record<string, NodeDefinition> = {
   'page-break': { group: 'block', tag: 'hr', atom: true },
   // An uploaded file shown as a block: video, PDF or a download card. Its attributes hold src, fileName, contentType.
   attachment: { group: 'block', tag: 'div', atom: true },
+  // A page of a known provider shown in a frame; attributes hold url and provider.
+  embed: { group: 'block', tag: 'div', atom: true },
   table: { content: 'table_row+', group: 'block', tag: 'table' },
   'table.row': { content: 'table_cell+', group: 'table_row', tag: 'tr' },
   'table.cell': { content: 'inline*', group: 'table_cell', tag: 'td' },
@@ -104,6 +106,7 @@ export const emptyContentTypes = new Set([
   'toggle',
   'page-break',
   'attachment',
+  'embed',
   'block-quote',
   'order-list',
   'bullet-list',
@@ -213,6 +216,8 @@ function nodeDOM(
       0,
     ]
   }
+  if (bodyType === 'embed')
+    return ['div', { ...idAttrs, class: 'dd-embed', contenteditable: 'false' }, '[embed]']
   if (bodyType === 'attachment')
     return ['div', { ...idAttrs, class: 'dd-attachment', contenteditable: 'false' }, '[file]']
   if (bodyType === 'page-break')

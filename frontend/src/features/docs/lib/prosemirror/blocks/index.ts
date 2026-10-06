@@ -5,6 +5,7 @@ import { blockMenuPlugin } from './blockMenu'
 import { clipboardPlugin } from './clipboard'
 import { mediaNodeViews } from './mediaNodeViews'
 import { plusButtonPlugin } from './plusButton'
+import { embedView } from './embedBlock'
 import { goToNextCell, goToPreviousCell } from './tableCommands'
 import { toggleView } from './toggleNodeView'
 import { uploadsPlugin, type UploadsOptions } from './uploads'
@@ -64,6 +65,7 @@ export function blockEditing(
           holder.view && openImageForm(holder.view, request),
       }),
       toggle: toggleView,
+      embed: embedView,
     },
     attach(view: EditorView) {
       holder.view = view

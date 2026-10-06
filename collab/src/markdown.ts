@@ -143,6 +143,8 @@ function block(node: JSONNode): string {
       return `:::${String(attributes.variant ?? 'info')}\n${blocks(node.content, '\n\n')}\n:::`
     case 'toggle':
       return `+++\n${blocks(node.content, '\n\n')}\n+++`
+    case 'embed':
+      return `<${String(attributes.url ?? '')}>`
     case 'attachment':
       return `[${String(attributes.fileName ?? 'file')}](${String(attributes.src ?? '')})`
     case 'page_break':

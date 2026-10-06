@@ -79,6 +79,12 @@ function toStateBody(
         meta: { marker: '+++', label: '' },
         children: childStates(),
       }
+    case 'embed':
+      noChildren(node, descendants)
+      return {
+        name: 'paragraph',
+        text: `<${requiredString(node.attributes, 'url')}>`,
+      }
     case 'attachment':
       noChildren(node, descendants)
       return {

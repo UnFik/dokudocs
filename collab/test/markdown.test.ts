@@ -105,6 +105,11 @@ describe('Markdown derived from the document JSON', () => {
     expect(toMarkdown(doc(file))).toBe('[spec.pdf](/api/v1/documents/d/assets/a)\n')
   })
 
+  it('writes an embed as the address it shows', () => {
+    const embed = { type: 'embed', attrs: attrs({ url: 'https://youtu.be/dQw4w9WgXcQ', provider: 'youtube' }) }
+    expect(toMarkdown(doc(embed))).toBe('<https://youtu.be/dQw4w9WgXcQ>\n')
+  })
+
   it('is empty for a document with no blocks', () => {
     expect(toMarkdown(doc())).toBe('')
   })

@@ -601,3 +601,13 @@ a.dd-mention {
 .dd-image img {
   max-width: 100%;
 }
+
+.dd-embed {
+  margin: 0.5rem 0;
+}
+.dd-embed iframe {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+}
