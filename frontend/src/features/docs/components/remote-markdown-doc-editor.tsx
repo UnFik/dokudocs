@@ -704,6 +704,7 @@ function CollaborativeMarkdownBody({
             items={outline}
             activeID={activeHeading}
             onSelect={(nodeID) => {
+              setActiveHeading(nodeID)
               const editor = sessionRef.current?.editor
               editor?.focusBlock(nodeID, 'start')
               scrollRef.current
