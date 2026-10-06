@@ -90,12 +90,12 @@ export function SuggestionCardList({
         </p>
       ) : null}
       {empty ? (
-        <p className='px-4 pb-2 text-xs text-muted-foreground'>
+        <p className='px-4 py-6 text-center text-xs text-muted-foreground'>
           {commentsLoading
             ? 'Loading comments...'
             : resolvedCount
               ? 'Every comment is resolved.'
-              : 'No suggestions or comments yet. In Suggest mode, what you type becomes a suggestion. Select text and choose Comment to start a discussion.'}
+              : 'No suggestions or comments yet. In Suggest mode, what you type becomes a suggestion. Select text and use the comment icon to start a discussion.'}
         </p>
       ) : (
         <ul aria-label='Suggestions and comments' className='px-4 pb-2'>
