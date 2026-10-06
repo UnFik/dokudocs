@@ -263,13 +263,17 @@
   }
 }
 
-/* Room in the margin for the + button. */
+/* Room in the margin for the + button. On a phone there is no margin to spare, so the button sits at the right end of the empty line instead. */
 .dd-host > .ProseMirror {
   margin-left: 36px;
 }
-@media (max-width: 640px), (pointer: coarse) {
+@media (max-width: 640px) {
   .dd-host > .ProseMirror {
-    margin-left: 48px;
+    margin-left: 0;
+  }
+  .dd-plus {
+    left: auto !important;
+    right: 0;
   }
 }
 
