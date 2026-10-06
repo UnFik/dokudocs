@@ -177,3 +177,28 @@ describe('collaboration service', () => {
   })
 })
 
+
+describe('who last changed a document', () => {
+  it('stores the user whose edit it was', async () => {
+    const backend = new FakeBackend()
+    backend.grant('tok-a', 'user-a')
+    backend.grant('tok-b', 'user-b')
+    const port = await freePort()
+    const server = await createCollabServer({ backend, port, debounceMs: 20, maxDebounceMs: 100 })
+    const a = connect(port, room, 'tok-a')
+    const b = connect(port, room, 'tok-b')
+    await Promise.all([a.synced, b.synced])
+
+    a.doc.getText('scratch').insert(0, 'from a')
+    await waitFor(() => backend.stores.length > 0)
+    expect(backend.stores.at(-1)!.updatedBy).toBe('user-a')
+
+    const before = backend.stores.length
+    b.doc.getText('scratch').insert(0, 'from b ')
+    await waitFor(() => backend.stores.length > before)
+    expect(backend.stores.at(-1)!.updatedBy).toBe('user-b')
+    a.provider.destroy()
+    b.provider.destroy()
+    await server.stop()
+  })
+})

@@ -92,6 +92,9 @@ function signals(): Extension<CollabContext> {
 /** Rooms the API asked to drop: what they hold is stale and must not be stored. */
 const droppedRooms = new Set<string>()
 
+/** The user who made the latest change in each open room. */
+const lastEditors = new Map<string, string>()
+
 /** Plain HTTP endpoints: a health answer for load balancers and the API's room reload. */
 function http(secret: string | null, metrics: Metrics): Extension {
   return {
@@ -142,8 +145,13 @@ function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabCon
         Y.applyUpdate(document, seedFromJSON(content))
       }
     },
+    async onChange({ documentName, context }) {
+      const userID = (context as CollabContext | undefined)?.userID
+      if (userID) lastEditors.set(documentName, userID)
+    },
     async afterUnloadDocument({ documentName }) {
       droppedRooms.delete(documentName)
+      lastEditors.delete(documentName)
     },
     async onStoreDocument({ document, documentName }) {
       const room = parseRoom(documentName)
@@ -155,6 +163,7 @@ function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabCon
           state: Y.encodeStateAsUpdate(document),
           content,
           markdown: toMarkdown(content),
+        updatedBy: lastEditors.get(documentName) ?? null,
           suggestions: suggestionsIn(content),
         })
       } catch (error) {

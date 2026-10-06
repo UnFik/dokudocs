@@ -43,6 +43,7 @@ export class HttpBackend implements BackendApi {
       state: toBase64(document.state),
       content: document.content,
       markdown: document.markdown,
+      updatedBy: document.updatedBy,
       suggestions: document.suggestions,
     })
     if (response.status !== 204) throw new Error(`store failed: ${response.status}`)
