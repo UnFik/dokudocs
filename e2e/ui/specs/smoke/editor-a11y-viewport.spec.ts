@@ -215,7 +215,12 @@ for (const viewport of viewports) {
       expect(bar!.x + bar!.width).toBeLessThanOrEqual(viewport.width);
       await expectNoHorizontalOverflow(page);
 
-      // Slash menu in the empty last paragraph.
+      // Slash menu in the empty last paragraph. On a phone the wrapped
+      // selection toolbar is tall, so close it first.
+      await page.keyboard.press("Escape");
+      await editor.focus();
+      await page.keyboard.press("ArrowRight");
+      await expect(selectionToolbar).toBeHidden();
       await placeCaret(editor, editor.locator("p").last());
       await page.keyboard.press("/");
       const combobox = page.getByRole("combobox", { name: "Insert block" });

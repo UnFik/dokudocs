@@ -611,3 +611,18 @@ a.dd-mention {
   border: 1px solid var(--border, #e5e5e5);
   border-radius: 6px;
 }
+
+.dd-block-selected {
+  background: color-mix(in srgb, var(--signal, #2563eb) 12%, transparent);
+  outline: 2px solid var(--signal, #2563eb);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.ProseMirror-selectednode.dd-attachment,
+.ProseMirror-selectednode.dd-embed,
+.ProseMirror-selectednode.dd-page-break {
+  outline: 2px solid var(--signal, #2563eb);
+  outline-offset: 2px;
+  border-radius: 4px;
+}

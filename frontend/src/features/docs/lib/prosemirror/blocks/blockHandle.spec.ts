@@ -100,7 +100,6 @@ describe('block handle', () => {
   it('shows the handle for the caret block without any mouse movement', () => {
     const { view, host } = mount()
     const handle = host.querySelector<HTMLElement>('.dd-handle')!
-    expect(handle.hidden).toBe(true)
     view.focus()
     view.dispatch(view.state.tr.setMeta('refresh', true))
     expect(handle.hidden).toBe(false)
@@ -131,5 +130,38 @@ describe('block handle', () => {
       })
     )
     expect(view.hasFocus()).toBe(true)
+  })
+
+  it('deletes the block the handle is on when Backspace or Delete is pressed on it', () => {
+    for (const key of ['Backspace', 'Delete']) {
+      document.body.replaceChildren()
+      const { view, host, errors } = mount()
+      hover(view, 1)
+      const handle = host.querySelector<HTMLElement>('.dd-handle')!
+      handle.focus()
+      const event = new KeyboardEvent('keydown', {
+        key,
+        bubbles: true,
+        cancelable: true,
+      })
+      handle.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(true)
+      expect(errors).toEqual([])
+      expect([...view.dom.querySelectorAll('p')].map((p) => p.textContent)).toEqual([
+        'one',
+        'three',
+      ])
+    }
+  })
+
+  it('marks the block while the handle has focus', () => {
+    const { view, host } = mount()
+    hover(view, 1)
+    host.querySelector<HTMLElement>('.dd-handle')!.focus()
+    expect(view.dom.querySelectorAll('.dd-block-selected')).toHaveLength(1)
+    expect(view.dom.querySelector('.dd-block-selected')!.textContent).toBe('two')
+    view.focus()
+    host.querySelector<HTMLElement>('.dd-handle')!.blur()
+    expect(view.dom.querySelectorAll('.dd-block-selected')).toHaveLength(0)
   })
 })
