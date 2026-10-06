@@ -467,3 +467,32 @@
   margin-right: 0.15em;
   color: var(--muted-foreground);
 }
+
+/* A marker in the right margin of a line that has an open comment. */
+.ProseMirror p {
+  position: relative;
+}
+.dd-comment-gutter {
+  position: absolute;
+  right: -36px;
+  top: 0;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, #f59e0b 35%, transparent);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.dd-comment-gutter::before {
+  content: '●' / '';
+  font-size: 10px;
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .dd-comment-gutter {
+    right: 0;
+    width: 44px;
+    height: 44px;
+    opacity: 0.6;
+  }
+}
