@@ -26,7 +26,7 @@ export const DocumentTitleRow = forwardRef<
     <input
       ref={ref}
       aria-label='Document title'
-      className='mb-1 w-full border-0 bg-transparent p-0 text-3xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground read-only:cursor-default'
+      className='mb-1 w-full border-0 bg-transparent p-0 text-center text-3xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground read-only:cursor-default'
       value={value}
       readOnly={readOnly}
       placeholder='Untitled'
