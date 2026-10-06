@@ -29,6 +29,10 @@ export type CollabOptions = {
   serviceSecret?: string | null
   /** Open connections at once; one more is refused as busy. */
   maxConnections?: number
+  /** The largest message accepted from a client; a larger one closes its connection. */
+  maxPayloadBytes?: number
+  /** Messages one connection may send in a second. */
+  maxMessagesPerSecond?: number
 }
 
 /** What the provider shows as the reason a connection was refused. */
@@ -178,9 +182,10 @@ export async function createCollabServer(options: CollabOptions): Promise<Collab
     quiet: true,
     debounce: options.debounceMs ?? 2000,
     maxDebounce: options.maxDebounceMs ?? 10000,
+    websocketOptions: { maxPayload: options.maxPayloadBytes ?? 16 * 1024 * 1024 },
     extensions: [
       http(options.serviceSecret ?? null, metrics),
-      instrumentation(metrics),
+      instrumentation(metrics, options.maxMessagesPerSecond ?? 500),
       authentication(options.backend, metrics, options.maxConnections ?? 1000),
       permissions(fragmentName),
       signals(),
