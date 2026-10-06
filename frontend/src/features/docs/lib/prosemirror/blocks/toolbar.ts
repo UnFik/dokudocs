@@ -1,19 +1,11 @@
-import { Plugin } from 'prosemirror-state'
+import { Plugin, PluginKey, type EditorState } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import type { Command } from './insertBlock'
-import {
-  insertDiagram,
-  insertInlineMath,
-  insertMathBlock,
-  isSafeImageSource,
-  insertImage,
-  updateImage,
-} from './mediaCommands'
+import { isSafeImageSource, insertImage, updateImage } from './mediaCommands'
 import {
   addColumnAfter,
   addRowAfter,
   deleteRow,
-  insertTable,
   setColumnAlign,
 } from './tableCommands'
 
@@ -44,8 +36,8 @@ const item = (
   run: viaCommand(command),
 })
 
+/** Tools for the table the caret is in; inserting things is the block menu's job. */
 export const defaultToolbarItems: ToolbarItem[] = [
-  item('table', 'Insert table', 'table', insertTable(3, 3)),
   item('add-row', 'Add table row below', '+row', addRowAfter),
   item('add-column', 'Add table column after', '+col', addColumnAfter),
   item('delete-row', 'Delete table row', '-row', deleteRow),
@@ -57,24 +49,23 @@ export const defaultToolbarItems: ToolbarItem[] = [
     setColumnAlign('center')
   ),
   item('align-right', 'Align column right', 'right', setColumnAlign('right')),
-  {
-    id: 'image',
-    label: 'Insert image',
-    text: 'image',
-    run: (view) => {
-      openImageForm(view)
-      return true
-    },
-  },
-  item('math-inline', 'Insert inline math', '$x$', insertInlineMath),
-  item('math-block', 'Insert math block', '$$', insertMathBlock),
-  item(
-    'mermaid',
-    'Insert Mermaid diagram',
-    'mermaid',
-    insertDiagram('mermaid')
-  ),
 ]
+
+const imageFormKey = new PluginKey<number>('imageForm')
+
+/** Block menu command: opens the form for an image by address. */
+export const requestImageForm: Command = (state, dispatch) => {
+  if (!imageFormKey.get(state)) return false
+  dispatch?.(state.tr.setMeta(imageFormKey, true))
+  return true
+}
+
+function inTable(state: EditorState) {
+  const { $from } = state.selection
+  for (let depth = $from.depth; depth > 0; depth--)
+    if ($from.node(depth).type.name === 'table_cell') return true
+  return false
+}
 
 /** Image form for inserting a new image or editing the one at `position`. */
 export function openImageForm(
@@ -143,7 +134,12 @@ export function openImageForm(
 }
 
 export function toolbarPlugin(items: ToolbarItem[] = defaultToolbarItems) {
-  return new Plugin({
+  return new Plugin<number>({
+    key: imageFormKey,
+    state: {
+      init: () => 0,
+      apply: (tr, count) => (tr.getMeta(imageFormKey) ? count + 1 : count),
+    },
     view(view) {
       const host = view.dom.parentElement ?? document.body
       const bar = document.createElement('div')
@@ -162,7 +158,7 @@ export function toolbarPlugin(items: ToolbarItem[] = defaultToolbarItems) {
         button.addEventListener('click', () => {
           if (button.getAttribute('aria-disabled') === 'true') return
           if (entry.run(view)) {
-            if (entry.id !== 'image') view.focus()
+            view.focus()
           }
         })
         bar.append(button)
@@ -189,7 +185,13 @@ export function toolbarPlugin(items: ToolbarItem[] = defaultToolbarItems) {
       })
       host.insertBefore(bar, view.dom)
 
-      const refresh = () => {
+      const refresh = (_view?: EditorView, previous?: EditorState) => {
+        bar.hidden = !(view.editable && inTable(view.state))
+        if (
+          previous &&
+          imageFormKey.getState(view.state) !== imageFormKey.getState(previous)
+        )
+          openImageForm(view)
         items.forEach((entry, index) => {
           const enabled =
             view.editable && (!entry.command || entry.command(view.state))
@@ -197,7 +199,7 @@ export function toolbarPlugin(items: ToolbarItem[] = defaultToolbarItems) {
         })
       }
       refresh()
-      return { update: refresh, destroy: () => bar.remove() }
+      return { update: (v: EditorView, prev: EditorState) => refresh(v, prev), destroy: () => bar.remove() }
     },
   })
 }
