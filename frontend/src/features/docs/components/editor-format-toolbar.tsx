@@ -148,7 +148,7 @@ export function SelectionToolbar({
         ),
       }}
     >
-      <div className='flex items-center gap-0.5'>
+      <div className='flex flex-wrap items-center gap-0.5'>
         {markButtons.map(({ mark, label, shortcut, icon: Icon }) => (
           <Button
             key={mark}

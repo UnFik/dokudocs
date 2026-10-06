@@ -155,7 +155,8 @@ function nodeSpec(bodyType: string, definition: NodeDefinition): NodeSpec {
     attrs: bodyAttributes,
     ...(definition.atom && {
       atom: true,
-      selectable: false,
+      // Files, embeds and page breaks are chosen by clicking them, then deleted.
+      selectable: ['attachment', 'embed', 'page-break'].includes(bodyType),
       draggable: false,
       isolating: true,
     }),

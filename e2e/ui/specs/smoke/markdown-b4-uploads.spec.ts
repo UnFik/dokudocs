@@ -182,3 +182,31 @@ test("@live @smoke @comments: selecting text offers an Add comment icon that ope
   // The Review panel no longer carries its own Comment button.
   await expect(page.getByRole("complementary", { name: "Review" }).getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
 });
+
+test("@live @smoke @blockdelete: a block chosen with its handle is deleted with Backspace, and a file block by clicking it", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["keep one", "remove me", "keep two"]);
+  await editor.locator("p").filter({ hasText: "remove me" }).click();
+  const handle = page.locator(".dd-handle:not([hidden])");
+  await handle.click();
+  await expect(editor.locator(".dd-block-selected")).toHaveText("remove me");
+  await page.keyboard.press("Backspace");
+  await expect(editor).not.toContainText("remove me");
+  await expect(editor.locator("p")).toHaveCount(2);
+
+  // A file block is chosen by clicking it.
+  await editor.locator("p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await chooseFile(page, { name: "gone.zip", mimeType: "application/zip", buffer: Buffer.from("PK\x03\x04") });
+  const card = editor.locator(".dd-attachment-card");
+  await expect(card).toContainText("gone.zip");
+  await card.locator("span").click();
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-attachment-card")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("Synced");
+  await page.reload();
+  await expect(page.locator(".ProseMirror")).not.toContainText("remove me");
+  await expect(page.locator(".ProseMirror .dd-attachment-card")).toHaveCount(0);
+});
