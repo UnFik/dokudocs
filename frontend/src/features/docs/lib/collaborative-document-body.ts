@@ -51,6 +51,7 @@ export async function mountCollaborativeDocumentBody(
     readOnly?: boolean
     smartText?: () => boolean
     onHeadingLink?: (nodeID: string) => void
+    onNavigateToTitle?: () => void
     onStatus?: (status: CollabStatus) => void
     onAccess?: (access: CollabAccess) => void
     onPresence?: (users: PresenceUser[]) => void
@@ -118,6 +119,7 @@ export async function mountCollaborativeDocumentBody(
       readOnly: forceReadOnly || !access.canEdit,
       smartText: input.smartText,
       onHeadingLink: input.onHeadingLink,
+      onNavigateToTitle: input.onNavigateToTitle,
       plugins: blocks.plugins,
       nodeViews: blocks.nodeViews,
       onEditorReady: blocks.attach,

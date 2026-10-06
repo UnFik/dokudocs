@@ -26,6 +26,7 @@ import {
   type PresenceUser,
 } from '../lib/collab-session'
 import { mountCollaborativeDocumentBody } from '../lib/collaborative-document-body'
+import { countTasks } from '../lib/count-tasks'
 import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
@@ -40,6 +41,8 @@ import {
 import { type SuggestionCard } from '../lib/prosemirror/suggestionCards'
 import { shouldSelectDocumentBody } from '../lib/select-all-scope'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
+import { DocumentInfoLine } from './document-info-line'
+import { DocumentTitleRow } from './document-title-row'
 import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
 import { EditorHeader } from './editor-header'
 import {
@@ -179,6 +182,16 @@ export function RemoteMarkdownDocEditor({
         offline={offline}
         access={access}
         focusNodeID={focusNodeID}
+        title={document.title}
+        titleReadOnly={offline || !access?.canEdit || accessUnavailable}
+        onTitleChange={(title) => titleMutation.mutate(title)}
+        meta={{
+          updatedAt: document.updatedAt,
+          updatedBy: document.updatedBy?.name ?? null,
+          author: document.author.name,
+          isDraft: Boolean(document.isDraft),
+        }}
+        markdown={markdown}
         onAccess={setAccess}
         onReloaded={() => {
           void clearLocalCopy(workspaceID, document.id).then(() =>
@@ -226,6 +239,11 @@ function CollaborativeMarkdownBody({
   offline,
   access,
   focusNodeID,
+  title,
+  titleReadOnly,
+  onTitleChange,
+  meta,
+  markdown,
   onAccess,
   onReloaded,
   onMarkdownChange,
@@ -238,6 +256,16 @@ function CollaborativeMarkdownBody({
   offline: boolean
   access: CollabAccess | null
   focusNodeID?: string
+  title: string
+  titleReadOnly: boolean
+  onTitleChange: (title: string) => void
+  meta: {
+    updatedAt: string
+    updatedBy: string | null
+    author: string
+    isDraft: boolean
+  }
+  markdown: string
   onAccess: (access: CollabAccess) => void
   onReloaded: () => void
   onMarkdownChange: (markdown: string) => void
@@ -272,6 +300,7 @@ function CollaborativeMarkdownBody({
     (state) => state.preferencesByUser[userID || 'guest']?.smartText ?? false
   )
   const setSmartText = useEditorPreferenceStore((state) => state.setSmartText)
+  const titleRef = useRef<HTMLInputElement>(null)
   const smartTextRef = useRef(smartText)
   useEffect(() => {
     smartTextRef.current = smartText
@@ -413,6 +442,7 @@ function CollaborativeMarkdownBody({
       userID,
       userName: profileNameRef.current,
       smartText: () => smartTextRef.current,
+      onNavigateToTitle: () => titleRef.current?.focus(),
       onHeadingLink: (nodeID) => {
         const link = `${window.location.origin}${window.location.pathname}#node-${nodeID}`
         void navigator.clipboard
@@ -626,6 +656,22 @@ function CollaborativeMarkdownBody({
           className='markdown-body min-h-0 min-w-0 flex-1 overflow-auto p-6'
           data-suggestion-preview={suggestionPreview}
         >
+          <DocumentTitleRow
+            ref={titleRef}
+            title={title}
+            readOnly={titleReadOnly}
+            onCommit={onTitleChange}
+            onEnterBody={() => sessionRef.current?.editor.focusStart()}
+          />
+          <div className='mb-6'>
+            <DocumentInfoLine
+              updatedAt={meta.updatedAt}
+              updatedBy={meta.updatedBy}
+              author={meta.author}
+              isDraft={meta.isDraft}
+              tasks={countTasks(markdown)}
+            />
+          </div>
           <div ref={mountRef} />
         </div>
         {(mode === 'edit' && canEdit) || mode === 'suggest' ? (
