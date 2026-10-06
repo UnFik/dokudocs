@@ -1,4 +1,4 @@
-import { inputRules } from 'prosemirror-inputrules'
+import { inputRules, undoInputRule } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
 import {
   AllSelection,
@@ -58,7 +58,7 @@ import {
   type InlineState,
 } from './inlineMarks'
 import { joinParagraphs } from './joinParagraphs'
-import { blockMarkdownRules, hiddenNodesPlugin } from './markdownBlockRules'
+import { blockMarkdownRules } from './markdownBlockRules'
 import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
 import { nodeSuggestionOf } from './nodeSuggestion'
 import { prepareBodyTransaction } from './prepareBodyTransaction'
@@ -242,17 +242,11 @@ export function createDocumentBodyEditor(
       // Block plugins (slash menu, drag handle) run before the keymaps below so
       // they can claim Enter and arrow keys while a menu is open.
       ...(options.plugins ?? []),
-      hiddenNodesPlugin,
       markRuleResetPlugin,
       inputRules({
         rules: [
           headingInputRule,
-          ...blockMarkdownRules({
-            // The new block is already in the document; the line it replaced
-            // is deleted once this edit has been dispatched, and typing goes on.
-            replaced: (originalNodeID) =>
-              queueMicrotask(() => deleteReplacedLine(originalNodeID)),
-          }),
+          ...blockMarkdownRules(),
           ...inlineMarkdownRules,
         ],
       }),
@@ -512,12 +506,6 @@ export function createDocumentBodyEditor(
     if (caret) focusBlockAt(caret.nodeID, caret.edge)
     return true
   }
-
-  // A line a Markdown rule replaced with a block after it. The caret is already
-  // in the new block and typing is not paused while the old line is deleted, so
-  // no caret is put back afterwards: it would jump over what was typed since.
-  const deleteReplacedLine = (originalNodeID: string) =>
-    queueDeleteNode([originalNodeID], { hint: null })
 
   // The editor reads the browser's selection after a selectionchange event, so a
   // key pressed right after the caret moved (End, an arrow, a click) can find the
@@ -1014,6 +1002,18 @@ export function createDocumentBodyEditor(
         !event.shiftKey &&
         (event.key === 'Backspace' || event.key === 'Delete') &&
         deleteWord(event.key === 'Delete')
+      ) {
+        event.preventDefault()
+        return true
+      }
+      // Right after a Markdown rule changed the line, Backspace gives the typed text back.
+      if (
+        event.key === 'Backspace' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        undoInputRule(editorView.state, (tr) => editorView.dispatch(tr))
       ) {
         event.preventDefault()
         return true

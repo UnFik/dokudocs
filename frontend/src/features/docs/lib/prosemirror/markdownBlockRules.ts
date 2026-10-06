@@ -1,66 +1,16 @@
 import { InputRule } from 'prosemirror-inputrules'
 import type { Node as ProseMirrorNode } from 'prosemirror-model'
-import {
-  Plugin,
-  PluginKey,
-  Selection,
-  type Transaction,
-} from 'prosemirror-state'
-import { Decoration, DecorationSet } from 'prosemirror-view'
+import { Selection, type Transaction } from 'prosemirror-state'
 import { createNode } from './blocks/insertBlock'
 import { documentBodySchema } from './documentBody'
 import { nodeSuggestionOf } from './nodeSuggestion'
 
 // Typing "- ", "1. ", "> ", "[ ] ", "```" or "---" at the start of a line turns
-// it into a list, a quote, a task list, a code block or a separator. A line
-// cannot be moved into a new parent, so the new block is built after it, with the
-// rest of the line's text copied in, and the old line is deleted behind the
-// scenes. Until that is done the old line is hidden, and typing is not paused.
+// it into a list, a quote, a task list, a code block or a separator: the line is
+// replaced by the new block, with the rest of its text carried in. It is one
+// edit, so Backspace right after it can undo it.
 
 const nodes = documentBodySchema.nodes
-
-export type BlockRuleHost = {
-  /**
-   * The line `originalNodeID` was replaced by a new block after it; remove it.
-   * Called after the edit that built the block has been dispatched.
-   */
-  replaced: (originalNodeID: string) => void
-}
-
-export const hiddenNodes = new PluginKey<ReadonlySet<string>>('hiddenNodes')
-
-/** Hides lines that were replaced and are waiting to be deleted. */
-export const hiddenNodesPlugin = new Plugin<ReadonlySet<string>>({
-  key: hiddenNodes,
-  state: {
-    init: () => new Set<string>(),
-    apply(transaction, value) {
-      const hide = transaction.getMeta(hiddenNodes) as string | undefined
-      return hide ? new Set([...value, hide]) : value
-    },
-  },
-  props: {
-    decorations(state) {
-      const hidden = hiddenNodes.getState(state)
-      if (!hidden?.size) return null
-      const decorations: Decoration[] = []
-      state.doc.descendants((node, pos) => {
-        if (
-          typeof node.attrs.nodeID === 'string' &&
-          hidden.has(node.attrs.nodeID)
-        )
-          decorations.push(
-            Decoration.node(pos, pos + node.nodeSize, {
-              style: 'display: none',
-              'aria-hidden': 'true',
-            })
-          )
-        return !node.isTextblock
-      })
-      return DecorationSet.create(state.doc, decorations)
-    },
-  },
-})
 
 /**
  * The line's text after the prefix, as new runs. `offset` is how far into the
@@ -98,7 +48,7 @@ type Build = (
   match: RegExpMatchArray
 ) => ProseMirrorNode[]
 
-function blockRule(find: RegExp, build: Build, host: BlockRuleHost) {
+function blockRule(find: RegExp, build: Build) {
   return new InputRule(find, (state, match, start, end) => {
     const $start = state.doc.resolve(start)
     // The caret is in a run once a line has one, and in the paragraph itself on
@@ -119,12 +69,14 @@ function blockRule(find: RegExp, build: Build, host: BlockRuleHost) {
       return null
     const runs = remainingRuns(paragraph, end - $start.start(depth))
     const blocks = build(runs, match)
-    const after = $start.after(depth)
-    const tr: Transaction = state.tr.insert(after, blocks)
-    const selection = Selection.findFrom(tr.doc.resolve(after), 1, true)
+    const from = $start.before(depth)
+    const tr: Transaction = state.tr.replaceWith(
+      from,
+      $start.after(depth),
+      blocks
+    )
+    const selection = Selection.findFrom(tr.doc.resolve(from), 1, true)
     if (selection) tr.setSelection(selection)
-    tr.setMeta(hiddenNodes, paragraph.attrs.nodeID)
-    host.replaced(paragraph.attrs.nodeID as string)
     return tr
   })
 }
@@ -138,7 +90,7 @@ const list = (
 ) =>
   createNode(type, attributes, [createNode(item, itemAttributes, [line(runs)])])
 
-export function blockMarkdownRules(host: BlockRuleHost) {
+export function blockMarkdownRules() {
   return [
     // "- ", "* " and "+ ": a bulleted list.
     blockRule(
@@ -151,8 +103,7 @@ export function blockMarkdownRules(host: BlockRuleHost) {
           {},
           runs
         ),
-      ],
-      host
+      ]
     ),
     // "1. " and "1) ": a numbered list that starts at that number.
     blockRule(
@@ -165,8 +116,7 @@ export function blockMarkdownRules(host: BlockRuleHost) {
           {},
           runs
         ),
-      ],
-      host
+      ]
     ),
     // "[ ] " and "[x] ": a task list.
     blockRule(
@@ -179,14 +129,12 @@ export function blockMarkdownRules(host: BlockRuleHost) {
           { checked: match[1]!.toLowerCase() === 'x' },
           runs
         ),
-      ],
-      host
+      ]
     ),
     // "> ": a quote.
     blockRule(
       /^>\s$/,
-      (runs) => [createNode('block_quote', {}, [line(runs)])],
-      host
+      (runs) => [createNode('block_quote', {}, [line(runs)])]
     ),
     // "```" or "```lang" and a space: a code block; the rest of the line is its text.
     blockRule(
@@ -197,8 +145,7 @@ export function blockMarkdownRules(host: BlockRuleHost) {
           { type: 'fenced', lang: match[1] ?? '' },
           runs.map((item) => item.textContent).join('')
         ),
-      ],
-      host
+      ]
     ),
     // "---": a separator, with a new line after it for what comes next.
     blockRule(
@@ -210,8 +157,7 @@ export function blockMarkdownRules(host: BlockRuleHost) {
           bodyContent: '---',
         }),
         line(runs),
-      ],
-      host
+      ]
     ),
     // "# " to "###### ": a heading, for a line the in-place heading rule cannot
     // take because the marker is all there is in its run.
@@ -219,8 +165,7 @@ export function blockMarkdownRules(host: BlockRuleHost) {
       /^(#{1,6})\s$/,
       (runs, match) => [
         createNode('atx_heading', { level: match[1]!.length }, runs),
-      ],
-      host
+      ]
     ),
   ]
 }
