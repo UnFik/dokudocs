@@ -846,7 +846,13 @@ function CollaborativeMarkdownBody({
               Review
             </Button>
           ) : null}
-          <span role='status' className='text-xs text-muted-foreground'>
+          {/* "Synced" is the normal state and the header already says Saved: keep it for screen readers, show the rest. */}
+          <span
+            role='status'
+            className={
+              status === 'ready' ? 'sr-only' : 'text-xs text-muted-foreground'
+            }
+          >
             {status === 'ready'
               ? 'Synced'
               : status === 'offline'
