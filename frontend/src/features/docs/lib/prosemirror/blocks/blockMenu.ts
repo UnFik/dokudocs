@@ -254,9 +254,36 @@ function isBlankParagraph(paragraph: ProseMirrorNode) {
   return blank
 }
 
+/** The blank paragraph the caret is in, or null: where a block can be added. */
+export function blankParagraphAtCaret(view: EditorView) {
+  const { selection } = view.state
+  const { $from } = selection
+  const parent =
+    $from.parent.type === documentBodySchema.nodes.run
+      ? $from.node($from.depth - 1)
+      : $from.parent
+  if (
+    !selection.empty ||
+    parent.type !== documentBodySchema.nodes.paragraph ||
+    !isBlankParagraph(parent)
+  )
+    return null
+  return parent
+}
+
+/** Asks the block menu plugin of this editor to open (the + button does). */
+export const openBlockMenuEvent = 'dd-open-block-menu'
+
 /** Opens the "/" block menu in an empty paragraph without writing the slash. */
 export function blockMenuPlugin() {
   let menu: BlockMenu | null = null
+  const open = (view: EditorView) => {
+    if (menu || !view.editable || !blankParagraphAtCaret(view)) return false
+    menu = new BlockMenu(view, () => {
+      menu = null
+    })
+    return true
+  }
   return new Plugin({
     props: {
       handleKeyDown(view, event) {
@@ -265,34 +292,23 @@ export function blockMenuPlugin() {
           event.isComposing ||
           event.altKey ||
           event.ctrlKey ||
-          event.metaKey ||
-          menu ||
-          !view.editable
+          event.metaKey
         )
           return false
-        const { selection } = view.state
-        const { $from } = selection
-        const parent =
-          $from.parent.type === documentBodySchema.nodes.run
-            ? $from.node($from.depth - 1)
-            : $from.parent
-        if (
-          !selection.empty ||
-          parent.type !== documentBodySchema.nodes.paragraph ||
-          !isBlankParagraph(parent)
-        )
-          return false
+        if (!open(view)) return false
         event.preventDefault()
-        menu = new BlockMenu(view, () => {
-          menu = null
-        })
         return true
       },
     },
-    view: () => ({
-      destroy() {
-        menu?.close(false)
-      },
-    }),
+    view: (view) => {
+      const onOpen = () => open(view)
+      view.dom.addEventListener(openBlockMenuEvent, onOpen)
+      return {
+        destroy() {
+          view.dom.removeEventListener(openBlockMenuEvent, onOpen)
+          menu?.close(false)
+        },
+      }
+    },
   })
 }

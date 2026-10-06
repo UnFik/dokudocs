@@ -238,3 +238,37 @@
     opacity: 1;
   }
 }
+
+.dd-plus {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  font: 16px/1 var(--font-mono, ui-monospace, monospace);
+  cursor: pointer;
+}
+.dd-plus:hover,
+.dd-plus:focus-visible {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .dd-plus {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Room in the margin for the + button. */
+.dd-host > .ProseMirror {
+  margin-left: 36px;
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .dd-host > .ProseMirror {
+    margin-left: 48px;
+  }
+}

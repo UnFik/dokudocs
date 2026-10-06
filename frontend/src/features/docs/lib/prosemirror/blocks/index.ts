@@ -4,6 +4,7 @@ import { blockHandlePlugin } from './blockHandle'
 import { blockMenuPlugin } from './blockMenu'
 import { clipboardPlugin } from './clipboard'
 import { mediaNodeViews } from './mediaNodeViews'
+import { plusButtonPlugin } from './plusButton'
 import { goToNextCell, goToPreviousCell } from './tableCommands'
 import { openImageForm, toolbarPlugin } from './toolbar'
 
@@ -35,6 +36,7 @@ export function blockEditing() {
       tableKeysPlugin(),
       clipboardPlugin(),
       blockMenuPlugin(),
+      plusButtonPlugin(),
       blockHandlePlugin(),
       toolbarPlugin(),
     ],
