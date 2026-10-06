@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model'
-import { Plugin } from 'prosemirror-state'
+import { Plugin, TextSelection } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import { documentBodySchema } from '../documentBody'
 import { blockMenuMeta, type BlockMenuMeta } from '../trackBlockInsert'
@@ -312,16 +312,38 @@ function isBlankParagraph(paragraph: ProseMirrorNode) {
   return blank
 }
 
+/**
+ * Where the caret is, as the browser has it now. A key pressed right after a
+ * click can find the editor's own selection one step behind.
+ */
+function caretIn(view: EditorView) {
+  const { selection } = view.state
+  try {
+    const range = window.getSelection()
+    if (
+      range &&
+      range.isCollapsed &&
+      range.anchorNode &&
+      view.dom.contains(range.anchorNode)
+    )
+      return view.state.doc.resolve(
+        view.posAtDOM(range.anchorNode, range.anchorOffset)
+      )
+  } catch {
+    // Fall back to the editor's selection.
+  }
+  return selection.empty ? selection.$from : null
+}
+
 /** The blank paragraph the caret is in, or null: where a block can be added. */
 export function blankParagraphAtCaret(view: EditorView) {
-  const { selection } = view.state
-  const { $from } = selection
+  const $from = caretIn(view)
+  if (!$from) return null
   const parent =
     $from.parent.type === documentBodySchema.nodes.run
       ? $from.node($from.depth - 1)
       : $from.parent
   if (
-    !selection.empty ||
     parent.type !== documentBodySchema.nodes.paragraph ||
     !isBlankParagraph(parent)
   )
@@ -337,6 +359,10 @@ export function blockMenuPlugin() {
   let menu: BlockMenu | null = null
   const open = (view: EditorView) => {
     if (menu || !view.editable || !blankParagraphAtCaret(view)) return false
+    // The menu inserts where the editor's selection is: bring it up to date.
+    const caret = caretIn(view)
+    if (caret && caret.pos !== view.state.selection.from)
+      view.dispatch(view.state.tr.setSelection(TextSelection.near(caret)))
     menu = new BlockMenu(view, () => {
       menu = null
     })

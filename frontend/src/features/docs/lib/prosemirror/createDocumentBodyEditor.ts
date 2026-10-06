@@ -357,8 +357,12 @@ export function createDocumentBodyEditor(
       )
     return true
   }
+  // A key pressed right after the selection changed can find the editor's
+  // selection one step behind, so formatting reads the browser's.
   const runInline = (command: Command) => {
-    if (canEdit()) command(state, (tr) => viewHolder.current?.dispatch(tr))
+    const view = viewHolder.current
+    if (canEdit() && view)
+      command(stateAtDomSelection(view), (tr) => view.dispatch(tr))
     return true
   }
   const runBlock = (command: Command) => {

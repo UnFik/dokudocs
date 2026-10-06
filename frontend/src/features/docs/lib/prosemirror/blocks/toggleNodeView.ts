@@ -38,6 +38,11 @@ export const toggleView: NodeViewConstructor = (node) => {
   return {
     dom,
     contentDOM: body,
+    // Folding changes only this view's own attributes: the editor must not read that as an edit.
+    ignoreMutation: (mutation) =>
+      mutation.type === 'attributes' ||
+      (mutation.target !== body && !body.contains(mutation.target)),
+    stopEvent: (event) => event.target === button,
     update(next) {
       if (next.type !== node.type) return false
       identity(next)
