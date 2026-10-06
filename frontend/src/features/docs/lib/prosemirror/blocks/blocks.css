@@ -292,7 +292,7 @@
 .ProseMirror h6 {
   position: relative;
 }
-:is(h1, h2, h3, h4, h5, h6)[data-heading-level]::before {
+:is(h1, h2, h3, h4, h5, h6)[data-heading-level]::after {
   content: attr(data-heading-level) / '';
   position: absolute;
   left: -34px;
@@ -304,7 +304,7 @@
   user-select: none;
   opacity: 0;
 }
-:is(h1, h2, h3, h4, h5, h6)[data-heading-level]:hover::before {
+:is(h1, h2, h3, h4, h5, h6)[data-heading-level]:hover::after {
   opacity: 1;
 }
 .dd-heading-anchor::before {
@@ -397,4 +397,73 @@
   border-top: 1px dashed var(--border);
   margin: 20px 0;
   break-after: page;
+}
+
+/* Find and replace: the panel in a corner of the page, and the marks on matches. */
+.dd-find {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+  font-size: 13px;
+}
+.dd-find input {
+  min-width: 0;
+  width: 150px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--foreground);
+}
+.dd-find button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+}
+.dd-find button:hover,
+.dd-find button:focus-visible {
+  background: var(--secondary);
+}
+.dd-find-count {
+  min-width: 56px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .dd-find button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .dd-find input {
+    min-height: 44px;
+  }
+}
+.dd-find-match {
+  background: color-mix(in srgb, #f59e0b 30%, transparent);
+  border-radius: 2px;
+}
+.dd-find-active {
+  background: color-mix(in srgb, #f59e0b 65%, transparent);
+  outline: 1px solid #b45309;
+}
+
+/* Numbered headings: 1, 1.1, 1.2 ... drawn before the text from data-heading-number. */
+:is(h1, h2, h3, h4, h5, h6)[data-heading-number]::before {
+  content: attr(data-heading-number) ' ' / '';
+  margin-right: 0.15em;
+  color: var(--muted-foreground);
 }

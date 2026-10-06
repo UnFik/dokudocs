@@ -47,6 +47,7 @@ import {
   type CaretHint,
 } from './deleteTargets'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
+import { findReplacePlugin } from './findReplace'
 import { headingMarginPlugin } from './headingMargin'
 import {
   emptyInlineState,
@@ -253,6 +254,8 @@ export function createDocumentBodyEditor(
       return after <= limit || after <= current.doc.textContent.length
     },
   })
+  // Numbering headings is only a reading aid drawn by CSS from a decoration; it is not text.
+  let numberHeadings = false
   let state = EditorState.create({
     doc: yXmlFragmentToProseMirrorRootNode(fragment, documentBodySchema),
     plugins: [
@@ -261,7 +264,12 @@ export function createDocumentBodyEditor(
       remoteCursorPlugin,
       characterLimit,
       suggestionFocusPlugin,
-      headingMarginPlugin((nodeID) => options.onHeadingLink?.(nodeID)),
+      headingMarginPlugin(
+        (nodeID) => options.onHeadingLink?.(nodeID),
+        () => numberHeadings
+      ),
+      // Replacing is an edit, so Suggest mode only finds.
+      findReplacePlugin(() => !suggestMode),
       suggestionBlocksPlugin,
       commentsPlugin,
       // Block plugins (slash menu, drag handle) run before the keymaps below so
@@ -1274,6 +1282,10 @@ export function createDocumentBodyEditor(
     insertBlock: (kind: InsertableBlock) =>
       canEdit() && insertBlockCommand(kind)(state, view.dispatch),
     focus: () => view.focus(),
+    setNumberHeadings: (next: boolean) => {
+      numberHeadings = next
+      view.dispatch(view.state.tr.setMeta('numberHeadings', next))
+    },
     /** Puts the caret at the very start of the text and focuses the editor. */
     focusStart: () => {
       view.dispatch(state.tr.setSelection(Selection.atStart(state.doc)))
