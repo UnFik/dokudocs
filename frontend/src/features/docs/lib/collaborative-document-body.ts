@@ -50,6 +50,7 @@ export async function mountCollaborativeDocumentBody(
     url?: string
     readOnly?: boolean
     smartText?: () => boolean
+    onHeadingLink?: (nodeID: string) => void
     onStatus?: (status: CollabStatus) => void
     onAccess?: (access: CollabAccess) => void
     onPresence?: (users: PresenceUser[]) => void
@@ -116,6 +117,7 @@ export async function mountCollaborativeDocumentBody(
     const editor = createDocumentBodyEditor(mount, session.ydoc, {
       readOnly: forceReadOnly || !access.canEdit,
       smartText: input.smartText,
+      onHeadingLink: input.onHeadingLink,
       plugins: blocks.plugins,
       nodeViews: blocks.nodeViews,
       onEditorReady: blocks.attach,
@@ -136,11 +138,15 @@ export async function mountCollaborativeDocumentBody(
     })
     showCursors = (cursors) => editor.setRemoteCursors(cursors)
     setReadOnly = (readOnly) => editor.setReadOnly(readOnly)
-    if (input.focusNodeID) {
+    const hashTarget = window.location.hash.startsWith('#node-')
+      ? window.location.hash.slice('#node-'.length)
+      : undefined
+    const focusNodeID = input.focusNodeID ?? hashTarget
+    if (focusNodeID) {
       requestAnimationFrame(() => {
         const target = Array.from(
           mount.querySelectorAll<HTMLElement>('[data-node-id]')
-        ).find((node) => node.dataset.nodeId === input.focusNodeID)
+        ).find((node) => node.dataset.nodeId === focusNodeID)
         target?.scrollIntoView?.({ block: 'center' })
       })
     }

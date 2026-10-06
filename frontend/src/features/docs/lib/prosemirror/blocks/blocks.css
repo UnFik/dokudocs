@@ -278,3 +278,52 @@
   min-height: 96px;
   cursor: text;
 }
+
+/* Heading level in the margin, and the link button after the heading. */
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  position: relative;
+}
+:is(h1, h2, h3, h4, h5, h6)[data-heading-level]::before {
+  content: attr(data-heading-level) / '';
+  position: absolute;
+  left: -34px;
+  top: 0.35em;
+  width: 28px;
+  text-align: right;
+  font: 11px/1 var(--font-mono, ui-monospace, monospace);
+  color: var(--muted-foreground);
+  user-select: none;
+  opacity: 0;
+}
+:is(h1, h2, h3, h4, h5, h6)[data-heading-level]:hover::before {
+  opacity: 1;
+}
+.dd-heading-anchor::before {
+  content: '#' / '';
+}
+.dd-heading-anchor {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  cursor: pointer;
+  opacity: 0;
+}
+:is(h1, h2, h3, h4, h5, h6):hover > .dd-heading-anchor,
+.dd-heading-anchor:focus-visible {
+  opacity: 1;
+}
+@media (pointer: coarse) {
+  .dd-heading-anchor {
+    opacity: 1;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

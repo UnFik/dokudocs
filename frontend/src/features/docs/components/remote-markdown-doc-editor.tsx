@@ -413,6 +413,13 @@ function CollaborativeMarkdownBody({
       userID,
       userName: profileNameRef.current,
       smartText: () => smartTextRef.current,
+      onHeadingLink: (nodeID) => {
+        const link = `${window.location.origin}${window.location.pathname}#node-${nodeID}`
+        void navigator.clipboard
+          .writeText(link)
+          .then(() => toast.success('Link to heading copied'))
+          .catch(() => toast.error('Could not copy the link'))
+      },
       token: () => useAuthStore.getState().auth.accessToken,
       focusNodeID,
       readOnly:
