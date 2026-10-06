@@ -51,6 +51,7 @@ export async function mountCollaborativeDocumentBody(
     readOnly?: boolean
     smartText?: () => boolean
     maxCharacters?: number
+    resolveLinkTitle?: (href: string) => Promise<string | null>
     onHeadingLink?: (nodeID: string) => void
     onNavigateToTitle?: () => void
     onStatus?: (status: CollabStatus) => void
@@ -120,6 +121,7 @@ export async function mountCollaborativeDocumentBody(
       readOnly: forceReadOnly || !access.canEdit,
       smartText: input.smartText,
       maxCharacters: input.maxCharacters,
+      resolveLinkTitle: input.resolveLinkTitle,
       onHeadingLink: input.onHeadingLink,
       onNavigateToTitle: input.onNavigateToTitle,
       plugins: blocks.plugins,

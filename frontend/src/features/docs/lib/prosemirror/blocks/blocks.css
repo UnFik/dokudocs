@@ -496,3 +496,55 @@
     opacity: 0.6;
   }
 }
+
+/* The card under a hovered link, and the small menu after pasting one. */
+.dd-link-card,
+.dd-paste-menu {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: min(420px, calc(100% - 16px));
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+  font-size: 13px;
+}
+.dd-link-title {
+  font-weight: 600;
+}
+.dd-link-title:empty {
+  display: none;
+}
+.dd-link-address {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.dd-link-card a,
+.dd-link-card button,
+.dd-paste-menu button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+@media (pointer: coarse) {
+  .dd-link-card a,
+  .dd-link-card button,
+  .dd-paste-menu button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

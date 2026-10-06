@@ -13,7 +13,11 @@ function editorWith(...texts: string[]) {
   const { view } = mounted.editor
   const comment = (text: string, from: number, to: number) => {
     const start = runStart(view.state.doc, text)
-    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, start + from, start + to)))
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, start + from, start + to)
+      )
+    )
     const draft = mounted.editor.getCommentDraft()
     if (!draft.ok) throw new Error('no draft')
     return draft.anchor
@@ -21,8 +25,9 @@ function editorWith(...texts: string[]) {
   return { ...mounted, comment, clicked }
 }
 
-const markers = (host: HTMLElement) =>
-  [...host.querySelectorAll<HTMLButtonElement>('.dd-comment-gutter')]
+const markers = (host: HTMLElement) => [
+  ...host.querySelectorAll<HTMLButtonElement>('.dd-comment-gutter'),
+]
 
 // A line that has an open comment shows it in the margin, as Outline does.
 describe('comment indicator in the margin', () => {
@@ -64,7 +69,9 @@ describe('comment indicator in the margin', () => {
     try {
       const anchor = editor.comment('only line', 0, 4)
       editor.editor.setComments([{ id: 't9', anchor, resolved: false }])
-      markers(editor.host)[0]!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      markers(editor.host)[0]!.dispatchEvent(
+        new MouseEvent('click', { bubbles: true })
+      )
       expect(editor.clicked).toEqual(['t9'])
       expect(editor.host.querySelector('p')?.textContent).toBe('only line')
     } finally {
