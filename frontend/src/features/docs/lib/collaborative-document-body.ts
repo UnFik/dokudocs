@@ -49,6 +49,7 @@ export async function mountCollaborativeDocumentBody(
     focusNodeID?: string
     url?: string
     readOnly?: boolean
+    smartText?: () => boolean
     onStatus?: (status: CollabStatus) => void
     onAccess?: (access: CollabAccess) => void
     onPresence?: (users: PresenceUser[]) => void
@@ -114,6 +115,7 @@ export async function mountCollaborativeDocumentBody(
     const blocks = blockEditing()
     const editor = createDocumentBodyEditor(mount, session.ydoc, {
       readOnly: forceReadOnly || !access.canEdit,
+      smartText: input.smartText,
       plugins: blocks.plugins,
       nodeViews: blocks.nodeViews,
       onEditorReady: blocks.attach,

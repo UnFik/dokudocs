@@ -60,6 +60,7 @@ import {
 import { joinParagraphs } from './joinParagraphs'
 import { blockMarkdownRules } from './markdownBlockRules'
 import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
+import { smartTextRules } from './smartText'
 import { nodeSuggestionOf } from './nodeSuggestion'
 import { prepareBodyTransaction } from './prepareBodyTransaction'
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
@@ -119,6 +120,8 @@ export function createDocumentBodyEditor(
   ydoc: Y.Doc,
   options: {
     readOnly?: boolean
+    /** Whether typographic replacements (curly quotes, arrows, ellipsis) apply as the person types. */
+    smartText?: () => boolean
     plugins?: Plugin[]
     nodeViews?: EditorProps['nodeViews']
     onEditorReady?: (view: EditorView) => void
@@ -248,6 +251,7 @@ export function createDocumentBodyEditor(
           headingInputRule,
           ...blockMarkdownRules(),
           ...inlineMarkdownRules,
+          ...smartTextRules(options.smartText ?? (() => false)),
         ],
       }),
       keymap({

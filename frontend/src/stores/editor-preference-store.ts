@@ -11,6 +11,8 @@ export interface UserEditorPreference {
   isLiveRenderActive: boolean
   syncScroll: boolean
   showOutline?: boolean
+  /** Curly quotes, arrows and an ellipsis as the person types. */
+  smartText?: boolean
   previewMode?: MarkdownPreviewMode
 }
 
@@ -44,6 +46,7 @@ interface EditorPreferenceState {
     userId: string | null | undefined,
     previewMode: MarkdownPreviewMode
   ) => void
+  setSmartText: (userId: string | null | undefined, smartText: boolean) => void
 }
 
 export const useEditorPreferenceStore = create<EditorPreferenceState>()(
@@ -115,6 +118,19 @@ export const useEditorPreferenceStore = create<EditorPreferenceState>()(
                 ...current,
                 syncScroll,
               },
+            },
+          }
+        })
+      },
+
+      setSmartText: (userId, smartText) => {
+        const key = userId || 'guest'
+        set((state) => {
+          const current = state.preferencesByUser[key] ?? DEFAULT_PREFERENCE
+          return {
+            preferencesByUser: {
+              ...state.preferencesByUser,
+              [key]: { ...current, smartText },
             },
           }
         })
