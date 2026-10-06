@@ -37,11 +37,13 @@ export function log(event: string, fields: Record<string, unknown> = {}) {
 export function instrumentation(metrics: Metrics): Extension {
   return {
     extensionName: 'instrumentation',
-    async connected() {
+    async connected({ documentName }) {
       metrics.connections++
+      log('connected', { room: documentName, connections: metrics.connections })
     },
-    async onDisconnect() {
+    async onDisconnect({ documentName }) {
       metrics.connections = Math.max(0, metrics.connections - 1)
+      log('disconnected', { room: documentName, connections: metrics.connections })
     },
     async onLoadDocument() {
       metrics.rooms++
@@ -49,8 +51,9 @@ export function instrumentation(metrics: Metrics): Extension {
     async afterUnloadDocument() {
       metrics.rooms = Math.max(0, metrics.rooms - 1)
     },
-    async afterStoreDocument() {
+    async afterStoreDocument({ documentName }) {
       metrics.stores++
+      log('stored', { room: documentName })
     },
   }
 }

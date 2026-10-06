@@ -1,14 +1,14 @@
 import { Redis } from '@hocuspocus/extension-redis'
 import { Server, type Extension } from '@hocuspocus/server'
 import * as Y from 'yjs'
-import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror'
+import { yDocToProsemirrorJSON } from 'y-prosemirror'
 import type { Authorized, BackendApi } from './backend-api'
 import { toMarkdown } from './markdown'
 import { instrumentation, log, Metrics } from './operations'
 import { permissions } from './permissions'
 import { parseRoom } from './room'
+import { seedFromJSON } from './seed'
 import { suggestionsIn } from './suggestions'
-import { documentBodySchema } from './schema'
 
 // The editor binds its document to this fragment.
 const fragmentName = 'body'
@@ -74,6 +74,11 @@ function signals(): Extension<CollabContext> {
       } catch {
         return
       }
+      if (message.type === 'ping') {
+        // Messages on a connection are handled in order: the answer shows the room has everything sent before it.
+        connection.sendStateless(JSON.stringify({ type: 'pong', id: (message as { id?: unknown }).id }))
+        return
+      }
       if (message.type !== 'comments_changed') return
       document.broadcastStateless(JSON.stringify({ type: 'comments_changed' }), (other) => other !== connection)
     },
@@ -130,9 +135,7 @@ function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabCon
         Y.applyUpdate(document, state)
       } else if (content) {
         // A document made from JSON alone (a seed, an import): build its state once.
-        const seed = prosemirrorJSONToYDoc(documentBodySchema, content, fragmentName)
-        Y.applyUpdate(document, Y.encodeStateAsUpdate(seed))
-        seed.destroy()
+        Y.applyUpdate(document, seedFromJSON(content))
       }
     },
     async afterUnloadDocument({ documentName }) {

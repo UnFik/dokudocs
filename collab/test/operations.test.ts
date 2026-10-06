@@ -61,3 +61,53 @@ describe('running the service', () => {
     stranger.provider.destroy()
   })
 })
+
+describe('a round trip to the room', () => {
+  it('answers a ping after everything the client sent before it', async () => {
+    const backend = new FakeBackend()
+    backend.grant('tok', 'user-a')
+    const port = await freePort()
+    const server = await createCollabServer({ backend, port })
+    const client = connect(port, room(doc(1)), 'tok')
+    await client.synced
+
+    client.doc.getText('scratch').insert(0, 'before the ping')
+    client.provider.sendStateless(JSON.stringify({ type: 'ping', id: 'p1' }))
+
+    await waitFor(() => client.statelessMessages.some((m: any) => m.type === 'pong' && m.id === 'p1'))
+    client.provider.destroy()
+    await server.stop()
+  })
+})
+
+describe('storing a room', () => {
+  it('never lets an older store overwrite a newer one', async () => {
+    const backend = new FakeBackend()
+    backend.grant('tok', 'user-a')
+    // The first store is slow, as one stuck in a queue would be.
+    let calls = 0
+    const stored = backend.storeState.bind(backend)
+    backend.storeState = async (document) => {
+      const mine = ++calls
+      await new Promise((resolve) => setTimeout(resolve, mine === 1 ? 300 : 0))
+      await stored(document)
+    }
+    const port = await freePort()
+    const server = await createCollabServer({ backend, port, debounceMs: 20, maxDebounceMs: 40 })
+    const client = connect(port, room(doc(1)), 'tok')
+    await client.synced
+
+    client.doc.getText('scratch').insert(0, 'first')
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    client.doc.getText('scratch').insert(5, ' second')
+    await waitFor(() => calls >= 2)
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    const final = backend.documents.get(doc(1))!
+    const text = new (await import('yjs')).Doc()
+    ;(await import('yjs')).applyUpdate(text, final.state!)
+    expect(text.getText('scratch').toString()).toBe('first second')
+    client.provider.destroy()
+    await server.stop()
+  })
+})
