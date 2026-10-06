@@ -48,15 +48,17 @@ func (s *CollabStateStore) LoadDocument(ctx context.Context, workspaceID, docume
 // StoreState replaces the state, the JSON, the Markdown derived from it and the
 // suggestion index in one transaction. A document that is not in the workspace
 // is refused before anything is written.
-func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion) error {
+func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion, options ...collaboration.StoreOption) error {
+	applied := collaboration.ApplyStoreOptions(options)
 	return s.db.WithTransaction(ctx, func(tx database.Queryer) error {
 		var authorID uuid.UUID
 		var bodyVersion int64
 		err := tx.QueryRowContext(ctx, `
-			UPDATE documents SET content_json = $3, content = $4, body_version = body_version + 1, updated_at = NOW()
+			UPDATE documents SET content_json = $3, content = $4, body_version = body_version + 1, updated_at = NOW(),
+			    updated_by = COALESCE($5, updated_by)
 			WHERE id = $1 AND workspace_id = $2
 			RETURNING author_id, body_version
-		`, documentID, workspaceID, string(content), markdown).Scan(&authorID, &bodyVersion)
+		`, documentID, workspaceID, string(content), markdown, applied.UpdatedBy).Scan(&authorID, &bodyVersion)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrCollabDocumentNotFound
 		}

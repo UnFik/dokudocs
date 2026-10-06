@@ -23,28 +23,30 @@ type Document struct {
 	Type        string     `json:"type"` // markdown, dbdiagram, mermaid
 	Content     string     `json:"content"`
 	// ContentJSON is the editor document as ProseMirror JSON; only the single-document read fills it.
-	ContentJSON          json.RawMessage `json:"contentJSON,omitempty"`
-	AuthorID             uuid.UUID       `json:"authorId"`
-	Author               UserAuthor      `json:"author"`
-	Tags                 []string        `json:"tags"`
-	IsDraft              bool            `json:"isDraft"`
-	Visibility           string          `json:"visibility"` // workspace, private, public_link, inherit
-	Thumbnail            string          `json:"thumbnail,omitempty"`
-	ThumbnailDark        string          `json:"thumbnailDark,omitempty"`
-	ThumbnailPreview     string          `json:"thumbnailPreview,omitempty"`
-	ThumbnailPreviewDark string          `json:"thumbnailPreviewDark,omitempty"`
-	IsStarred            bool            `json:"isStarred"`
-	StarredAt            *time.Time      `json:"starredAt,omitempty"`
-	IsShared             bool            `json:"isShared"`
-	ViewCount            int             `json:"viewCount"`
-	LastViewedAt         *time.Time      `json:"lastViewedAt,omitempty"`
-	Categories           []string        `json:"categories"`
-	Category             string          `json:"category,omitempty"` // Primary / first category
-	CreatedAt            time.Time       `json:"createdAt"`
-	UpdatedAt            time.Time       `json:"updatedAt"`
-	DeletedAt            *time.Time      `json:"deletedAt,omitempty"`
-	DeletedBy            *uuid.UUID      `json:"deletedBy,omitempty"`
-	DeletedByUser        *UserAuthor     `json:"deletedByUser,omitempty"`
+	ContentJSON json.RawMessage `json:"contentJSON,omitempty"`
+	AuthorID    uuid.UUID       `json:"authorId"`
+	Author      UserAuthor      `json:"author"`
+	// UpdatedBy is the person whose edit was stored last; nil before the first edit. Only the single-document read fills it.
+	UpdatedBy            *UserAuthor `json:"updatedBy,omitempty"`
+	Tags                 []string    `json:"tags"`
+	IsDraft              bool        `json:"isDraft"`
+	Visibility           string      `json:"visibility"` // workspace, private, public_link, inherit
+	Thumbnail            string      `json:"thumbnail,omitempty"`
+	ThumbnailDark        string      `json:"thumbnailDark,omitempty"`
+	ThumbnailPreview     string      `json:"thumbnailPreview,omitempty"`
+	ThumbnailPreviewDark string      `json:"thumbnailPreviewDark,omitempty"`
+	IsStarred            bool        `json:"isStarred"`
+	StarredAt            *time.Time  `json:"starredAt,omitempty"`
+	IsShared             bool        `json:"isShared"`
+	ViewCount            int         `json:"viewCount"`
+	LastViewedAt         *time.Time  `json:"lastViewedAt,omitempty"`
+	Categories           []string    `json:"categories"`
+	Category             string      `json:"category,omitempty"` // Primary / first category
+	CreatedAt            time.Time   `json:"createdAt"`
+	UpdatedAt            time.Time   `json:"updatedAt"`
+	DeletedAt            *time.Time  `json:"deletedAt,omitempty"`
+	DeletedBy            *uuid.UUID  `json:"deletedBy,omitempty"`
+	DeletedByUser        *UserAuthor `json:"deletedByUser,omitempty"`
 }
 
 type DocumentRevision struct {

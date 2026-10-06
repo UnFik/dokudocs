@@ -25,10 +25,12 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 		       (ds.document_id IS NOT NULL) AS is_starred, ds.starred_at,
 		       (da.document_id IS NOT NULL) AS is_shared,
 		       COALESCE(dv.view_count, 0) AS view_count, dv.last_viewed_at,
-		       d.created_at, d.updated_at
+		       d.created_at, d.updated_at,
+		       uu.id, uu.full_name, uu.email, COALESCE(uu.avatar_url, '')
 		FROM documents d
 		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 		JOIN users u ON u.id = d.author_id
+		LEFT JOIN users uu ON uu.id = d.updated_by
 		LEFT JOIN document_stars ds ON ds.document_id = d.id AND ds.user_id = $2
 		LEFT JOIN document_accesses da ON da.document_id = d.id AND da.user_id = $2
 		LEFT JOIN document_views dv ON dv.document_id = d.id AND dv.user_id = $2
@@ -37,6 +39,8 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 	var d model.Document
 	var tagsStr string
 	var contentJSON []byte
+	var editorID uuid.NullUUID
+	var editor model.UserAuthor
 	err := r.db.QueryRowContext(ctx, query, id, userID).Scan(
 		&d.ID, &d.WorkspaceID, &d.ProjectID, &d.ProjectName, &d.Title, &d.Type,
 		&d.Content, &contentJSON, &d.AuthorID, &d.Author.Name, &d.Author.Email, &d.Author.Avatar,
@@ -47,6 +51,7 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 		&d.IsShared,
 		&d.ViewCount, &d.LastViewedAt,
 		&d.CreatedAt, &d.UpdatedAt,
+		&editorID, &editor.Name, &editor.Email, &editor.Avatar,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, constant.ErrDocumentNotFound
@@ -56,6 +61,10 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 	}
 	if d.Type == "markdown" && len(contentJSON) > 0 {
 		d.ContentJSON = contentJSON
+	}
+	if editorID.Valid {
+		editor.ID = editorID.UUID
+		d.UpdatedBy = &editor
 	}
 	d.Author.ID = d.AuthorID
 	if tagsStr != "" {

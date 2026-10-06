@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"testing"
 
+	"backend/internal/application/collaboration"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
@@ -60,6 +61,21 @@ func TestCollabStateStoreKeepsStateAndContentTogether(t *testing.T) {
 	state, loaded, err := store.LoadDocument(ctx, workspaceID, documentID)
 	if err != nil || !bytes.Equal(state, second) || len(loaded) == 0 {
 		t.Fatalf("LoadDocument() = (%v, %s, %v), want the second state and content", state, loaded, err)
+	}
+	if _, err := sqlDB.ExecContext(ctx, `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, workspaceID, authorID); err != nil {
+		t.Fatalf("add workspace owner: %v", err)
+	}
+	editorID := insertAccessTestUser(t, ctx, sqlDB)
+	if err := store.StoreState(ctx, workspaceID, documentID, second, json.RawMessage(`{"type":"doc","content":[{"type":"paragraph"}]}`), "second text\n", nil, collaboration.WithUpdatedBy(editorID)); err != nil {
+		t.Fatalf("StoreState() with an editor = %v", err)
+	}
+	var updatedBy uuid.UUID
+	if err := sqlDB.QueryRowContext(ctx, `SELECT updated_by FROM documents WHERE id = $1`, documentID).Scan(&updatedBy); err != nil || updatedBy != editorID {
+		t.Fatalf("updated_by = %v (%v), want %s", updatedBy, err, editorID)
+	}
+	shown, err := NewRepository(db).GetByID(ctx, documentID, authorID)
+	if err != nil || shown.UpdatedBy == nil || shown.UpdatedBy.ID != editorID {
+		t.Fatalf("GetByID().UpdatedBy = %+v (%v), want the editor", shown.UpdatedBy, err)
 	}
 	var content string
 	if err := sqlDB.QueryRowContext(ctx, `SELECT content_json::text FROM documents WHERE id = $1`, documentID).Scan(&content); err != nil {

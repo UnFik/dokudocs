@@ -34,3 +34,23 @@ type Suggestion struct {
 	ID     uuid.UUID
 	Author uuid.UUID
 }
+
+// StoreOptions are the extras a store may carry beyond the state itself.
+type StoreOptions struct {
+	// UpdatedBy is the user whose edit the store is for, when it is known.
+	UpdatedBy *uuid.UUID
+}
+
+type StoreOption func(*StoreOptions)
+
+func WithUpdatedBy(id uuid.UUID) StoreOption {
+	return func(options *StoreOptions) { options.UpdatedBy = &id }
+}
+
+func ApplyStoreOptions(options []StoreOption) StoreOptions {
+	var applied StoreOptions
+	for _, option := range options {
+		option(&applied)
+	}
+	return applied
+}
