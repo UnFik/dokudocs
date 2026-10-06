@@ -18,6 +18,8 @@ describe('loadConfig', () => {
       debounceMs: 2000,
       maxDebounceMs: 10000,
       maxConnections: 1000,
+      maxPayloadBytes: 16 * 1024 * 1024,
+      maxMessagesPerSecond: 500,
     })
   })
 

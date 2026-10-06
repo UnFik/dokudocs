@@ -111,3 +111,59 @@ describe('storing a room', () => {
     await server.stop()
   })
 })
+
+describe('limits and timing', () => {
+  let server: CollabServer
+  afterEach(async () => {
+    await server.stop()
+  })
+
+  it('does not pass on a message larger than the limit', async () => {
+    const backend = new FakeBackend()
+    backend.grant('tok', 'user-a')
+    const port = await freePort()
+    server = await createCollabServer({ backend, port, maxPayloadBytes: 50_000 })
+    const big = connect(port, room(doc(1)), 'tok')
+    const other = connect(port, room(doc(1)), 'tok')
+    await Promise.all([big.synced, other.synced])
+
+    big.doc.getText('scratch').insert(0, 'x'.repeat(200_000))
+    other.doc.getText('scratch').insert(0, 'small')
+    await waitFor(() => big.doc.getText('scratch').toString().includes('small'))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    expect(other.doc.getText('scratch').toString()).toBe('small')
+    big.provider.destroy()
+    other.provider.destroy()
+  })
+
+  it('refuses a connection that sends too many messages in a second', async () => {
+    const backend = new FakeBackend()
+    backend.grant('tok', 'user-a')
+    const port = await freePort()
+    server = await createCollabServer({ backend, port, maxMessagesPerSecond: 5 })
+    const noisy = connect(port, room(doc(1)), 'tok')
+    await noisy.synced
+
+    for (let i = 0; i < 40; i++) noisy.doc.getText('scratch').insert(0, 'a')
+
+    await waitFor(async () => /^collab_refused_total\{reason="rate_limited"\} [1-9]/m.test(await metrics(port)))
+    noisy.provider.destroy()
+  })
+
+  it('times the messages it handles', async () => {
+    const backend = new FakeBackend()
+    backend.grant('tok', 'user-a')
+    const port = await freePort()
+    server = await createCollabServer({ backend, port })
+    const client = connect(port, room(doc(1)), 'tok')
+    await client.synced
+    client.doc.getText('scratch').insert(0, 'x')
+
+    await waitFor(async () => /^collab_message_seconds_count [1-9]/m.test(await metrics(port)))
+    const text = await metrics(port)
+    expect(text).toMatch(/^collab_message_seconds_bucket\{le="0.05"\} \d+$/m)
+    expect(text).toMatch(/^collab_message_seconds_bucket\{le="\+Inf"\} \d+$/m)
+    client.provider.destroy()
+  })
+})

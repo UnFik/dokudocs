@@ -7,6 +7,8 @@ export type Config = {
   debounceMs: number
   maxDebounceMs: number
   maxConnections: number
+  maxPayloadBytes: number
+  maxMessagesPerSecond: number
 }
 
 function whole(env: Record<string, string | undefined>, name: string, fallback: number, min: number): number {
@@ -30,5 +32,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     debounceMs: whole(env, 'COLLAB_DEBOUNCE_MS', 2000, 0),
     maxDebounceMs: whole(env, 'COLLAB_MAX_DEBOUNCE_MS', 10000, 0),
     maxConnections: whole(env, 'COLLAB_MAX_CONNECTIONS', 1000, 1),
+    maxPayloadBytes: whole(env, 'COLLAB_MAX_PAYLOAD_BYTES', 16 * 1024 * 1024, 1024),
+    maxMessagesPerSecond: whole(env, 'COLLAB_MAX_MESSAGES_PER_SECOND', 500, 1),
   }
 }
