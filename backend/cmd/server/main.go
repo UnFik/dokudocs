@@ -7,6 +7,7 @@ import (
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/config"
 	"backend/internal/infrastructure/api"
+	"backend/internal/infrastructure/api/routes"
 	"backend/internal/infrastructure/logger"
 	"backend/internal/infrastructure/openai"
 	"backend/internal/infrastructure/postgres"
@@ -42,6 +43,20 @@ func main() {
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()
 	go runRAGIndexWorker(workerCtx, documentrepo.NewRepository(db), c.RAGEmbeddingModel, log)
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-ticker.C:
+				if _, err := routes.SweepAssets(workerCtx, c, cfg, 24*time.Hour); err != nil {
+					log.Printf("sweep assets: %v", err)
+				}
+			}
+		}
+	}()
 	if err := api.RunHTTPServer(workerCtx, cfg, c); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
