@@ -90,8 +90,15 @@ test-e2e-with-backend:
 		(cd frontend && bun run build); \
 		(cd e2e && API_URL="$$api_url" API_PROXY_TARGET="$$api_url" COLLAB_PROXY_TARGET="$$collab_url" CI=1 bunx playwright test $$E2E_ARGS)
 
+# Includes the two-instance Redis test, with a throwaway Redis.
 test-collab:
-	cd collab && npm test
+	@set -eu; \
+		name="collab-redis-test-$$$$"; \
+		trap 'docker stop "$$name" >/dev/null 2>&1 || true' EXIT INT TERM; \
+		docker run -d --rm --name "$$name" -p 127.0.0.1::6379 redis:7-alpine >/dev/null; \
+		port=$$(docker port "$$name" 6379 | head -n 1 | sed 's/.*://'); \
+		sleep 2; \
+		cd collab && TEST_REDIS_URL="redis://127.0.0.1:$$port" npm test
 
 test-backend-unit:
 	cd backend && $(MAKE) test-unit
