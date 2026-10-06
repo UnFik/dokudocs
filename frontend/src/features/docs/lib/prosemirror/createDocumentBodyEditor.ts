@@ -218,20 +218,53 @@ export function createDocumentBodyEditor(
     props: {
       decorations: (editorState): DecorationSet => {
         const size = editorState.doc.content.size
-        return DecorationSet.create(
-          editorState.doc,
-          commentRanges
-            .filter((range) => range.to <= size)
-            .map((range) =>
-              Decoration.inline(range.from, range.to, {
-                class:
-                  range.id === focusedCommentID
-                    ? 'comment-mark comment-focus'
-                    : 'comment-mark',
-                'data-comment-id': range.id,
-              })
-            )
+        const ranges = commentRanges.filter((range) => range.to <= size)
+        // One marker in the margin for each line that has an open comment.
+        const lines = new Map<number, string[]>()
+        for (const range of ranges) {
+          const $from = editorState.doc.resolve(range.from)
+          for (let depth = $from.depth; depth > 0; depth--) {
+            if (!$from.node(depth).isTextblock) continue
+            const start = $from.start(depth)
+            lines.set(start, [...(lines.get(start) ?? []), range.id])
+            break
+          }
+        }
+        const gutter = [...lines].map(([start, ids]) =>
+          Decoration.widget(
+            start,
+            () => {
+              const marker = document.createElement('button')
+              marker.type = 'button'
+              marker.className = 'dd-comment-gutter'
+              marker.contentEditable = 'false'
+              marker.setAttribute(
+                'aria-label',
+                `${ids.length} ${ids.length === 1 ? 'comment' : 'comments'} on this line`
+              )
+              marker.addEventListener('mousedown', (event) =>
+                event.preventDefault()
+              )
+              marker.addEventListener('click', () =>
+                options.onCommentClick?.(ids[0]!)
+              )
+              return marker
+            },
+            { side: -1, key: `gutter-${start}-${ids.join(',')}` }
+          )
         )
+        return DecorationSet.create(editorState.doc, [
+          ...ranges.map((range) =>
+            Decoration.inline(range.from, range.to, {
+              class:
+                range.id === focusedCommentID
+                  ? 'comment-mark comment-focus'
+                  : 'comment-mark',
+              'data-comment-id': range.id,
+            })
+          ),
+          ...gutter,
+        ])
       },
     },
   })
