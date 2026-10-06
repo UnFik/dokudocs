@@ -280,6 +280,7 @@ export function createDocumentBodyEditor(
     },
   })
   let remoteCursors: RemoteCursor[] = []
+  let followedUser: string | null = null
   const remoteCursorPlugin = new Plugin({
     props: {
       decorations: (editorState) => remoteCursorDecorations(editorState),
@@ -525,6 +526,7 @@ export function createDocumentBodyEditor(
             // The name is drawn by CSS from data-name so it never becomes
             // document text: it must not be copied or break text assertions.
             caret.dataset.name = cursor.name || 'Collaborator'
+            caret.dataset.userId = cursor.userID
             return caret
           },
           { key: `cursor-${cursor.connectionID}-${head}-${color}`, side: 1 }
@@ -1359,6 +1361,15 @@ export function createDocumentBodyEditor(
     setRemoteCursors: (cursors: RemoteCursor[]) => {
       remoteCursors = cursors
       view.dispatch(view.state.tr.setMeta(remoteCursorPlugin, 'refresh'))
+      if (!followedUser) return
+      const target = [
+        ...view.dom.querySelectorAll<HTMLElement>('.remote-cursor'),
+      ].find((caret) => caret.dataset.userId === followedUser)
+      target?.scrollIntoView({ block: 'center' })
+    },
+    /** Keeps this collaborator's cursor in view as it moves; null stops. */
+    follow: (userID: string | null) => {
+      followedUser = userID
     },
     setSuggestMode: (next: boolean) => {
       if (suggestMode !== next) continueSuggestion = false

@@ -45,4 +45,23 @@ describe('PresenceAvatars', () => {
     await render(<PresenceAvatars users={[]} currentUserID='u1' />)
     expect(page.getByRole('list').elements()).toHaveLength(0)
   })
+
+  it('follows another person when their avatar is pressed, and stops on a second press', async () => {
+    const calls: (string | null)[] = []
+    const screen = await render(
+      <PresenceAvatars
+        users={users}
+        currentUserID='u1'
+        followedID='u2'
+        onFollow={(id) => calls.push(id)}
+      />
+    )
+    await expect
+      .element(screen.getByRole('button', { name: 'Stop following Bo Chen' }))
+      .toHaveAttribute('aria-pressed', 'true')
+    await screen.getByRole('button', { name: 'Stop following Bo Chen' }).click()
+    await screen.getByRole('button', { name: 'Follow Anonymous' }).click()
+    expect(calls).toEqual([null, 'u3'])
+    expect(screen.getByRole('button', { name: /Ada Lovelace/ }).elements()).toHaveLength(0)
+  })
 })

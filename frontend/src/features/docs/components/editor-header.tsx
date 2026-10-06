@@ -60,6 +60,8 @@ interface EditorHeaderProps {
   isStarred?: boolean
   onToggleStar?: () => void
   presenceUsers?: PresenceUser[]
+  followedUserID?: string | null
+  onFollowUser?: (userID: string | null) => void
   currentUserID?: string
 }
 
@@ -90,6 +92,8 @@ export function EditorHeader({
   isStarred,
   onToggleStar,
   presenceUsers,
+  followedUserID,
+  onFollowUser,
   currentUserID = '',
 }: EditorHeaderProps) {
   const navigate = useNavigate()
@@ -208,6 +212,8 @@ export function EditorHeader({
             <PresenceAvatars
               users={presenceUsers}
               currentUserID={currentUserID}
+              followedID={followedUserID}
+              onFollow={onFollowUser}
             />
           </div>
         ) : null}

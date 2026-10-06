@@ -16,9 +16,14 @@ function initials(name: string | undefined) {
 export function PresenceAvatars({
   users,
   currentUserID,
+  followedID = null,
+  onFollow,
 }: {
   users: PresenceUser[]
   currentUserID: string
+  followedID?: string | null
+  /** Called with a person's id to follow them, or null to stop. */
+  onFollow?: (userID: string | null) => void
 }) {
   if (!users.length) return null
   const visible = users.slice(0, maxVisible)
@@ -30,8 +35,7 @@ export function PresenceAvatars({
     >
       {visible.map((user) => {
         const label = `${user.name || 'Anonymous'}${user.userID === currentUserID ? ' (you)' : ''}`
-        return (
-          <li key={user.userID} aria-label={label} title={label}>
+        const avatar = (
             <Avatar
               className='size-6 border-2 ring-2 ring-background'
               style={{ borderColor: authorColor(user.userID) }}
@@ -43,6 +47,25 @@ export function PresenceAvatars({
                 {initials(user.name)}
               </AvatarFallback>
             </Avatar>
+        )
+        const followable = onFollow && user.userID !== currentUserID
+        const following = followedID === user.userID
+        const name = user.name || 'Anonymous'
+        return (
+          <li key={user.userID} aria-label={label} title={label}>
+            {followable ? (
+              <button
+                type='button'
+                aria-label={`${following ? 'Stop following' : 'Follow'} ${name}`}
+                aria-pressed={following}
+                className='rounded-full focus-visible:ring-2'
+                onClick={() => onFollow(following ? null : user.userID)}
+              >
+                {avatar}
+              </button>
+            ) : (
+              avatar
+            )}
           </li>
         )
       })}
