@@ -1,6 +1,35 @@
 DOCKER_COMPOSE ?= docker compose
 
-.PHONY: test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
+# Whole stack in Docker (docker-compose.yaml): db, redis, migrate, api, collab, frontend.
+# The app is at http://localhost:5173; the browser only talks to the frontend.
+up:
+	$(DOCKER_COMPOSE) up --build -d
+	@echo "Frontend http://localhost:5173  API http://localhost:8080  Collab http://localhost:1234 (health /health, metrics /metrics)"
+
+down:
+	$(DOCKER_COMPOSE) down
+
+restart: down up
+
+rebuild:
+	$(DOCKER_COMPOSE) build --no-cache
+	$(DOCKER_COMPOSE) up -d
+
+logs:
+	$(DOCKER_COMPOSE) logs -f --tail=100 $(SERVICE)
+
+ps:
+	$(DOCKER_COMPOSE) ps
+
+# Admin user and mock documents, inside the running api container.
+seed-docker:
+	$(DOCKER_COMPOSE) exec api go run ./cmd/seeder
+
+# Stops the stack and deletes its database volume.
+reset:
+	$(DOCKER_COMPOSE) down --volumes
+
+.PHONY: up down restart rebuild logs ps seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
 
 test-e2e: test-e2e-api
 
