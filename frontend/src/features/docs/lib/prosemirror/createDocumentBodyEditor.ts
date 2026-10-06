@@ -125,6 +125,8 @@ export function createDocumentBodyEditor(
     smartText?: () => boolean
     /** The person asked for a link to a heading (its node ID). */
     onHeadingLink?: (nodeID: string) => void
+    /** The most characters the page may hold; text past it is refused, deleting still works. */
+    maxCharacters?: number
     /** Arrow up from the very start of the text: the title is the line above. */
     onNavigateToTitle?: () => void
     plugins?: Plugin[]
@@ -238,12 +240,26 @@ export function createDocumentBodyEditor(
       decorations: (editorState) => remoteCursorDecorations(editorState),
     },
   })
+  const characterLimit = new Plugin({
+    filterTransaction: (transaction, current) => {
+      const limit = options.maxCharacters
+      if (
+        limit === undefined ||
+        !transaction.docChanged ||
+        transaction.getMeta(ySyncPluginKey)?.isChangeOrigin === true
+      )
+        return true
+      const after = transaction.doc.textContent.length
+      return after <= limit || after <= current.doc.textContent.length
+    },
+  })
   let state = EditorState.create({
     doc: yXmlFragmentToProseMirrorRootNode(fragment, documentBodySchema),
     plugins: [
       ySyncPlugin(fragment),
       yUndoPlugin(),
       remoteCursorPlugin,
+      characterLimit,
       suggestionFocusPlugin,
       headingMarginPlugin((nodeID) => options.onHeadingLink?.(nodeID)),
       suggestionBlocksPlugin,
