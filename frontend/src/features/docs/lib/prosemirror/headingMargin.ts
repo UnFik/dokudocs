@@ -20,11 +20,52 @@ function levelOf(bodyAttributes: unknown) {
  * to `onLink` so a link to it can be copied. Both are decorations with no text
  * of their own, so a heading's text stays what was typed.
  */
-export function headingMarginPlugin(onLink: (nodeID: string) => void) {
+/**
+ * Section numbers for a run of heading levels: 1, 1.1, 1.2, 1.2.1, 2 ... A level
+ * that starts below its parent (an h3 with no h2 above it) is numbered from the
+ * levels that do exist.
+ */
+export function headingNumbers(levels: number[]): string[] {
+  const counters = [0, 0, 0, 0, 0, 0]
+  return levels.map((level) => {
+    counters[level - 1]!++
+    for (let deeper = level; deeper < counters.length; deeper++)
+      counters[deeper] = 0
+    const parts = counters.slice(0, level)
+    while (parts.length > 1 && parts[0] === 0) parts.shift()
+    return parts.map((part) => part || 1).join('.')
+  })
+}
+
+export function headingMarginPlugin(
+  onLink: (nodeID: string) => void,
+  numbered: () => boolean = () => false
+) {
   return new Plugin({
     props: {
       decorations(state) {
         const decorations: Decoration[] = []
+        const headings: { level: number; pos: number; size: number }[] = []
+        state.doc.descendants((node, pos) => {
+          if (node.type.name === 'atx_heading')
+            headings.push({
+              level: levelOf(node.attrs.bodyAttributes),
+              pos,
+              size: node.nodeSize,
+            })
+          return node.type.name !== 'atx_heading'
+        })
+        const numbers = numbered()
+          ? headingNumbers(headings.map((heading) => heading.level))
+          : []
+        headings.forEach((heading, index) => {
+          if (numbers[index])
+            decorations.push(
+              Decoration.node(heading.pos, heading.pos + heading.size, {
+                'data-heading-number': numbers[index]!,
+              })
+            )
+        })
         state.doc.descendants((node, pos) => {
           if (node.type.name !== 'atx_heading') return true
           const nodeID = String(node.attrs.nodeID ?? '')

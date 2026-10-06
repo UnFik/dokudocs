@@ -357,6 +357,13 @@ function CollaborativeMarkdownBody({
     container.addEventListener('scroll', update, { passive: true })
     return () => container.removeEventListener('scroll', update)
   }, [outline, showOutline])
+  const numberHeadings = useEditorPreferenceStore(
+    (state) =>
+      state.preferencesByUser[userID || 'guest']?.numberHeadings ?? false
+  )
+  const setNumberHeadings = useEditorPreferenceStore(
+    (state) => state.setNumberHeadings
+  )
   const smartTextRef = useRef(smartText)
   useEffect(() => {
     smartTextRef.current = smartText
@@ -380,6 +387,10 @@ function CollaborativeMarkdownBody({
     anchor: CommentAnchor
   } | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
+  useEffect(() => {
+    if (sessionReady)
+      sessionRef.current?.editor.setNumberHeadings(numberHeadings)
+  }, [numberHeadings, sessionReady])
   const queryClient = useQueryClient()
   const commentsQuery = useQuery({
     queryKey: ['document-comments', workspaceID, documentID],
@@ -682,6 +693,15 @@ function CollaborativeMarkdownBody({
             onClick={() => setShowOutline(userID, !showOutline)}
           >
             Contents
+          </Button>
+          <Button
+            size='sm'
+            variant='ghost'
+            className='h-11 md:h-8'
+            aria-pressed={numberHeadings}
+            onClick={() => setNumberHeadings(userID, !numberHeadings)}
+          >
+            Number headings
           </Button>
           <Button
             size='sm'
