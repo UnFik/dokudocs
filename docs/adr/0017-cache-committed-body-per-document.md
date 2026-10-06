@@ -1,5 +1,7 @@
 # Cache the committed body and Yjs document per document
 
+> Superseded by [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md): the AST, epochs and structural commands no longer exist.
+
 A collaborative commit used to cost time linear in document size on every keystroke: reading the stored Yjs state and every node row, projecting the stored state again to prove rows and state agree, decoding the state, validating the whole body four times, rewriting the rolling auto revision, and compressing the state on write.
 
 Each server instance now keeps, per document, the Yjs state, the decoded Yjs document, and the node rows of its last successful commit. The entry is keyed by root node, `body_version`, `body_epoch`, schema version, and `document_collab_states.revision`. A database trigger bumps `revision` on every write to the state, so a commit from another instance or from another writer (DeleteNode, MoveNode, restore, suggestion acceptance, initialization) always changes the key. A commit reads the key under the document row lock that serializes writers. When the key matches, the commit skips the reads and the consistency projection and applies the update to the cached document. When it does not match, the commit takes the full read path, including the consistency check. With diff writes that check is what repairs a divergence between rows and state, so it must never be skipped without a matching key.

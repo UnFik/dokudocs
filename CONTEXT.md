@@ -25,24 +25,12 @@ Authorized users can edit the same Markdown document together, including while t
 _Avoid_: Live sync when referring only to local autosave
 
 **DocumentBody**:
-The canonical structured content of a Markdown document. Markdown is a way to import or export it.
-_Avoid_: Markdown text when referring to the canonical stored representation
+The content of a Markdown document: its Yjs state, with the ProseMirror JSON (`content_json`) and the Markdown text derived from it each time it is stored. Markdown is a way to import, export, search and preview it.
+_Avoid_: Markdown text when referring to the stored representation of record
 
 **DocumentNode**:
-A stable-identity block, container, or inline run within a DocumentBody.
+A block, container, or inline run within a DocumentBody, carrying a stable `nodeID` in the editor's schema.
 _Avoid_: Word node
-
-**OpaqueNode**:
-A DocumentNode for Markdown syntax the editor cannot safely interpret. Its source must be preserved, and users cannot edit, move, reorder, or delete it.
-_Avoid_: Editable raw block
-
-**MoveNode**:
-An operation that changes the parent or sibling position of an existing DocumentNode while preserving that node's identity. It must be valid against the current DocumentBody; a no-op does not change the document.
-_Avoid_: Direct shared-tree mutation
-
-**DeleteNode**:
-A structural command that deletes an existing DocumentNode, commits the AST/Yjs rebuild with a durable receipt, and starts a new BodyEpoch when the tree changes.
-_Avoid_: Deleting an existing node through an ordinary Yjs update
 
 **DocumentOwner**:
 A User holding a current owner grant for a Document, independent of who originally authored it.
@@ -51,14 +39,6 @@ _Avoid_: Author when referring to current ownership
 **EffectiveDocumentAccess**:
 The access a User has to a Document after workspace, project, document visibility, grants, draft status, and lifecycle are considered together.
 _Avoid_: Document grant when referring to the final access decision
-
-**NodePath**:
-The ordered chain of ancestors that locates a DocumentNode within a DocumentBody.
-_Avoid_: Canonical hierarchy
-
-**BodySchemaVersion**:
-The marker for the structural rules used to interpret a DocumentBody. A change based on incompatible rules needs review before it can be applied.
-_Avoid_: BodyEpoch, BodyVersion
 
 **CommentThread**:
 A conversation attached to a selected range in a document, with replies and a resolution state. Anyone who can read the document sees every thread; a User with comment or edit access may start one, reply, and resolve. The author may edit their own comment or reply; the author or an editor may delete one. It is not part of the DocumentBody, so a Suggestion or an accept never touches it.
@@ -73,35 +53,23 @@ A historical snapshot of a document. Named revisions are immutable; routine auto
 _Avoid_: Current document state when referring to a historical snapshot
 
 **CollaborativeSession**:
-A period when authorized Users work together on one Markdown document.
+A period when authorized Users work together on one Markdown document: a room in the collaboration service (`collab/`) and the editors connected to it, each keeping a local copy on its device.
 _Avoid_: WebSocket connection when referring to the whole editing session
 
-**PendingOfflineEdit**:
-A change made while disconnected that has not yet become part of the canonical DocumentBody. If it cannot safely be applied to the current body, it stays available for User review.
-_Avoid_: Synced edit when referring to a device-local change
-
-**BodyVersion**:
-The document's monotonically increasing identifier for each newly accepted state of its DocumentBody. Repeating the same accepted change does not represent a new version.
-_Avoid_: CRDT causal clock
-
-**BodyEpoch**:
-The boundary between generations of collaborative edits. Changes from an earlier generation may require User review before they can be applied.
-_Avoid_: BodyVersion, CRDT state vector
-
-**CompatibleEpoch**:
-The oldest BodyEpoch whose collaborative history still continues into the current one. A structural command that edits the stored state in place (DeleteNode, MoveNode) starts a new BodyEpoch but leaves the CompatibleEpoch alone, so an update from someone who can only suggest, made on an older epoch in that range, still merges. An editor's update does not, because it may aim at a block that is gone. A rebuild from scratch, such as restoring a revision, moves the CompatibleEpoch up to the new BodyEpoch, and older updates need review.
-_Avoid_: BodyEpoch when asking whether an old update can still merge
+**LocalCopy**:
+The device's own copy of a document (y-indexeddb). It lets the document open offline and keeps edits made while disconnected; the room merges them in when the connection returns. It is cleared at sign-out once the server has everything, and dropped when the server replaces the document (a restored revision).
+_Avoid_: Cache when referring to unsynced edits
 
 **Seamless Edit**:
-An edit a User makes with an ordinary gesture (typing, deleting a character, a word, a line, several lines, a separator, everything; undo and redo) that never shows an internal error, a pause, a lost caret, or a request to review. A structural command that the gesture needs runs behind the editor. The review path is for real conflicts, such as offline edits that collide, not for what a gesture produces by itself. A gesture the editor cannot perform does the closest sensible thing or nothing; it never shows machine text.
-_Avoid_: Showing `structural deletion requires a DeleteNode command`, `Local changes need review (update-rejected)`, or `Block deletion is queued` for a normal gesture
+An edit a User makes with an ordinary gesture (typing, deleting a character, a word, a line, several lines, a separator, everything; undo and redo) that never shows an internal error, a pause, a lost caret, or a request to review. Deleting and moving blocks are ordinary edits made by the editor, the only writer; there is no command to wait for. A gesture the editor cannot perform does the closest sensible thing or nothing; it never shows machine text.
+_Avoid_: Showing an internal error, a queued-command message, or a review prompt for a normal gesture
 
 **Accepted Edit**:
-A validated change that becomes part of the canonical DocumentBody.
+A change that has reached the room and is stored with the document.
 _Avoid_: Received update when referring to a durable change
 
 **Suggestion**:
-A proposed change to a DocumentBody that lives in the body itself, marked with its author, until an editor accepts or rejects it. It is not part of the canonical body, so search, chatbot evidence, revisions, and public links never include it. Everyone who can read the document sees every Suggestion; a User with comment access may make one, and only an editor or owner may accept or reject it. The author may withdraw their own.
+A proposed change to a DocumentBody that lives in the body itself, marked with its author, until an editor accepts or rejects it. It is not part of the derived Markdown, so search, chatbot evidence, revisions, and public links never include it. Everyone who can read the document sees every Suggestion; a User with comment access may make one, and only an editor or owner may accept or reject it. The author may withdraw their own.
 _Avoid_: Accepted Edit when referring to a pending proposal
 
 **Suggestion card**:
