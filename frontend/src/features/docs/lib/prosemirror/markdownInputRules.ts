@@ -63,6 +63,12 @@ const rules: MarkRule[] = [
     mark: marks.strike!,
     delimiter: 2,
   },
+  // Highlight: ==text==.
+  {
+    find: /(?<![=\\])==([^=\s](?:[^=]*[^=\s])?)==$/,
+    mark: marks.highlight!,
+    delimiter: 2,
+  },
   // Code: `text`.
   {
     find: /(?<![`\\])`([^`\s](?:[^`]*[^`\s])?)`$/,

@@ -29,6 +29,13 @@ describe('Markdown derived from the document JSON', () => {
     expect(toMarkdown(doc(body))).toBe('plain **bold** *it*`code` ~~gone~~ [site](https://example.com)\n')
   })
 
+  it('writes underline and highlight as inline HTML', () => {
+    const body = paragraph(
+      run(text('u', [{ type: 'underline' }]), text(' '), text('h', [{ type: 'highlight' }]), text(' '), text('both', [{ type: 'underline' }, { type: 'highlight' }]))
+    )
+    expect(toMarkdown(doc(body))).toBe('<u>u</u> <mark>h</mark> <mark><u>both</u></mark>\n')
+  })
+
   it('leaves out text that is only proposed by a suggestion', () => {
     const body = paragraph(run(text('kept'), text(' proposed', [{ type: 'suggestion_insert', attrs: { id: 'a', author: 'b' } }])))
     expect(toMarkdown(doc(body))).toBe('kept\n')

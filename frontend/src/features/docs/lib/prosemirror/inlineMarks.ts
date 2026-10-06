@@ -4,7 +4,13 @@ import type { Command, EditorState } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import { documentBodySchema } from './documentBody'
 
-export type InlineMarkName = 'strong' | 'em' | 'strike' | 'code'
+export type InlineMarkName =
+  | 'strong'
+  | 'em'
+  | 'strike'
+  | 'code'
+  | 'underline'
+  | 'highlight'
 
 export interface InlineState {
   hasSelection: boolean
@@ -13,12 +19,26 @@ export interface InlineState {
   rect: { top: number; bottom: number; left: number; right: number } | null
 }
 
-const inlineMarkNames: InlineMarkName[] = ['strong', 'em', 'strike', 'code']
+const inlineMarkNames: InlineMarkName[] = [
+  'strong',
+  'em',
+  'strike',
+  'code',
+  'underline',
+  'highlight',
+]
 const safeLinkProtocols = new Set(['http:', 'https:', 'mailto:', 'tel:'])
 
 export const emptyInlineState: InlineState = {
   hasSelection: false,
-  marks: { strong: false, em: false, strike: false, code: false },
+  marks: {
+    strong: false,
+    em: false,
+    strike: false,
+    code: false,
+    underline: false,
+    highlight: false,
+  },
   link: null,
   rect: null,
 }

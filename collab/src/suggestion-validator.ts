@@ -21,6 +21,8 @@ const formatKeys: Record<string, 'boolean' | 'string'> = {
   italic: 'boolean',
   strike: 'boolean',
   code: 'boolean',
+  underline: 'boolean',
+  highlight: 'boolean',
   href: 'string',
   linkTitle: 'string',
 }

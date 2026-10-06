@@ -6,7 +6,9 @@ import {
   Link2,
   Link2Off,
   Redo2,
+  Highlighter,
   Strikethrough,
+  Underline,
   Undo2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -79,6 +81,8 @@ const markButtons: {
     icon: Strikethrough,
   },
   { mark: 'code', label: 'Inline code', shortcut: 'Ctrl+E', icon: Code },
+  { mark: 'underline', label: 'Underline', shortcut: 'Ctrl+U', icon: Underline },
+  { mark: 'highlight', label: 'Highlight', shortcut: '==text==', icon: Highlighter },
 ]
 
 export function SelectionToolbar({
