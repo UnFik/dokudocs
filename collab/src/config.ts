@@ -6,6 +6,7 @@ export type Config = {
   redisURL: string | null
   debounceMs: number
   maxDebounceMs: number
+  maxConnections: number
 }
 
 function whole(env: Record<string, string | undefined>, name: string, fallback: number, min: number): number {
@@ -28,5 +29,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     redisURL: env.REDIS_URL || null,
     debounceMs: whole(env, 'COLLAB_DEBOUNCE_MS', 2000, 0),
     maxDebounceMs: whole(env, 'COLLAB_MAX_DEBOUNCE_MS', 10000, 0),
+    maxConnections: whole(env, 'COLLAB_MAX_CONNECTIONS', 1000, 1),
   }
 }

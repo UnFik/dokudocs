@@ -10,6 +10,7 @@ const server = await createCollabServer({
   serviceSecret: config.secret,
   debounceMs: config.debounceMs,
   maxDebounceMs: config.maxDebounceMs,
+  maxConnections: config.maxConnections,
 })
 console.log(`collaboration service listening on :${config.port}${config.redisURL ? ' (Redis)' : ''}`)
 

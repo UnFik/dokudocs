@@ -4,6 +4,7 @@ import * as Y from 'yjs'
 import { prosemirrorJSONToYDoc, yDocToProsemirrorJSON } from 'y-prosemirror'
 import type { Authorized, BackendApi } from './backend-api'
 import { toMarkdown } from './markdown'
+import { instrumentation, log, Metrics } from './operations'
 import { permissions } from './permissions'
 import { parseRoom } from './room'
 import { suggestionsIn } from './suggestions'
@@ -26,23 +27,28 @@ export type CollabOptions = {
   redisURL?: string | null
   /** The secret the API sends to reload a room; without one the endpoint refuses everyone. */
   serviceSecret?: string | null
+  /** Open connections at once; one more is refused as busy. */
+  maxConnections?: number
 }
 
 /** What the provider shows as the reason a connection was refused. */
-function refusal(reason: 'unauthorized' | 'forbidden') {
+function refusal(reason: 'unauthorized' | 'forbidden' | 'busy', metrics: Metrics) {
+  metrics.refuse(reason)
+  log('connection_refused', { reason })
   return Object.assign(new Error(reason), { reason })
 }
 
-function authentication(backend: BackendApi): Extension<CollabContext> {
+function authentication(backend: BackendApi, metrics: Metrics, maxConnections: number): Extension<CollabContext> {
   return {
     extensionName: 'authentication',
     async onAuthenticate({ token, documentName, connectionConfig }) {
+      if (metrics.connections >= maxConnections) throw refusal('busy', metrics)
       const room = parseRoom(documentName)
-      if (!room) throw refusal('forbidden')
+      if (!room) throw refusal('forbidden', metrics)
       const access = await backend.authorize(token, room.workspaceID, room.documentID)
       // A token that is not valid means signing in again; no access means asking for it.
-      if (!access) throw refusal('unauthorized')
-      if (!access.canRead) throw refusal('forbidden')
+      if (!access) throw refusal('unauthorized', metrics)
+      if (!access.canRead) throw refusal('forbidden', metrics)
       // A viewer only reads. Someone who can suggest still writes; what they may
       // write is checked per message.
       connectionConfig.readOnly = !access.canEdit && !access.canSuggest
@@ -78,7 +84,7 @@ function signals(): Extension<CollabContext> {
 const droppedRooms = new Set<string>()
 
 /** Plain HTTP endpoints: a health answer for load balancers and the API's room reload. */
-function http(secret: string | null): Extension {
+function http(secret: string | null, metrics: Metrics): Extension {
   return {
     extensionName: 'http',
     async onRequest({ request, response, instance }) {
@@ -86,6 +92,9 @@ function http(secret: string | null): Extension {
       if (url.pathname === '/health') {
         response.writeHead(200, { 'content-type': 'text/plain' })
         response.end('ok')
+      } else if (url.pathname === '/metrics') {
+        response.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' })
+        response.end(metrics.render())
       } else if (url.pathname === '/internal/reload' && request.method === 'POST') {
         const sent = request.headers['x-collab-secret']
         if (!secret || sent !== secret) {
@@ -110,7 +119,7 @@ function http(secret: string | null): Extension {
   }
 }
 
-function persistence(backend: BackendApi): Extension<CollabContext> {
+function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabContext> {
   return {
     extensionName: 'persistence',
     async onLoadDocument({ document, documentName }) {
@@ -133,13 +142,19 @@ function persistence(backend: BackendApi): Extension<CollabContext> {
       const room = parseRoom(documentName)
       if (!room || droppedRooms.has(documentName)) return
       const content = yDocToProsemirrorJSON(document, fragmentName)
-      await backend.storeState({
-        ...room,
-        state: Y.encodeStateAsUpdate(document),
-        content,
-        markdown: toMarkdown(content),
-        suggestions: suggestionsIn(content),
-      })
+      try {
+        await backend.storeState({
+          ...room,
+          state: Y.encodeStateAsUpdate(document),
+          content,
+          markdown: toMarkdown(content),
+          suggestions: suggestionsIn(content),
+        })
+      } catch (error) {
+        metrics.storeFailures++
+        log('store_failed', { room: documentName, error: String(error) })
+        throw error
+      }
     },
   }
 }
@@ -154,17 +169,19 @@ function redis(url: string): Extension {
 }
 
 export async function createCollabServer(options: CollabOptions): Promise<CollabServer> {
+  const metrics = new Metrics()
   const server = new Server<CollabContext>({
     port: options.port,
     quiet: true,
     debounce: options.debounceMs ?? 2000,
     maxDebounce: options.maxDebounceMs ?? 10000,
     extensions: [
-      http(options.serviceSecret ?? null),
-      authentication(options.backend),
+      http(options.serviceSecret ?? null, metrics),
+      instrumentation(metrics),
+      authentication(options.backend, metrics, options.maxConnections ?? 1000),
       permissions(fragmentName),
       signals(),
-      persistence(options.backend),
+      persistence(options.backend, metrics),
       ...(options.redisURL ? [redis(options.redisURL)] : []),
     ],
   })

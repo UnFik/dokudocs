@@ -17,6 +17,7 @@ describe('loadConfig', () => {
       redisURL: null,
       debounceMs: 2000,
       maxDebounceMs: 10000,
+      maxConnections: 1000,
     })
   })
 
