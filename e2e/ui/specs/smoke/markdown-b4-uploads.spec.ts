@@ -48,3 +48,22 @@ test("@live @smoke @uploads: an image and a file from the block menu show in pla
     .toBe(1);
   await expect(page.locator(".ProseMirror .dd-attachment-card")).toContainText("notes.zip");
 });
+
+test("@live @smoke @embeds: a known address pasted into an empty line becomes a framed embed", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", ""]);
+  await editor.locator("p").first().click();
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "https://youtu.be/dQw4w9WgXcQ");
+    document
+      .querySelector(".ProseMirror")!
+      .dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  const frame = editor.locator(".dd-embed iframe");
+  await expect(frame).toHaveAttribute("src", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ");
+  await expect(page.getByRole("status")).toContainText("Synced");
+  await page.reload();
+  await expect(page.locator(".ProseMirror .dd-embed iframe")).toHaveCount(1);
+});

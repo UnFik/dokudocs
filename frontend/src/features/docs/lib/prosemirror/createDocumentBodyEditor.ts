@@ -69,6 +69,7 @@ import { linkFeaturesPlugin } from './linkFeatures'
 import { blockMarkdownRules } from './markdownBlockRules'
 import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
 import { nodeSuggestionOf } from './nodeSuggestion'
+import { embedPlugin } from './blocks/embedBlock'
 import { prepareBodyTransaction } from './prepareBodyTransaction'
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
 import { smartTextRules } from './smartText'
@@ -319,6 +320,8 @@ export function createDocumentBodyEditor(
         search: (query) => options.mentionSource?.(query) ?? [],
       }),
       emojiMenuPlugin(() => canEdit() && !suggestMode),
+      // Before the link feature: a known address on an empty line is an embed, not a link.
+      embedPlugin(),
       linkFeaturesPlugin({
         enabled: () => canEdit() && !suggestMode,
         resolveTitle: options.resolveLinkTitle,
