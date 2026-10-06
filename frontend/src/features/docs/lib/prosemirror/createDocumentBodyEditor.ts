@@ -6,7 +6,7 @@ import {
   NodeSelection,
   Plugin,
   PluginKey,
-  type Selection,
+  Selection,
   TextSelection,
   type Command,
   type Transaction,
@@ -1084,6 +1084,40 @@ export function createDocumentBodyEditor(
     },
   })
   viewHolder.current = view
+  // Room to click below the last block, as on any page: it puts the caret on a
+  // line there, adding a paragraph first when the page ends in a block that has
+  // no text line (code block, table, list). Suggest mode only moves the caret.
+  const pageEnd = document.createElement('div')
+  pageEnd.className = 'dd-page-end'
+  pageEnd.setAttribute('aria-hidden', 'true')
+  pageEnd.addEventListener('click', () => {
+    if (!canEdit()) return
+    const body = state.doc.firstChild
+    const last = body?.lastChild
+    if (
+      body &&
+      last &&
+      !suggestMode &&
+      last.type !== documentBodySchema.nodes.paragraph
+    )
+      view.dispatch(
+        state.tr.insert(
+          body.content.size + 1,
+          documentBodySchema.nodes.paragraph!.create({
+            nodeID: crypto.randomUUID(),
+            bodyAttributes: '{}',
+            bodyContent: '',
+          })
+        )
+      )
+    view.dispatch(
+      state.tr.setSelection(
+        Selection.atEnd(state.doc)
+      )
+    )
+    view.focus()
+  })
+  mount.append(pageEnd)
   const ensureEmptyParagraph = () => {
     const body = state.doc.firstChild
     if (!canEdit() || suggestMode || body?.childCount !== 0) return
@@ -1261,6 +1295,7 @@ export function createDocumentBodyEditor(
       undoManager?.off('stack-item-added', publishHistory)
       undoManager?.off('stack-item-popped', publishHistory)
       undoManager?.off('stack-cleared', publishHistory)
+      pageEnd.remove()
       view.destroy()
     },
   }
