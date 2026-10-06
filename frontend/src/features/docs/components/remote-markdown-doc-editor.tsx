@@ -330,14 +330,16 @@ function CollaborativeMarkdownBody({
   )
   const setSmartText = useEditorPreferenceStore((state) => state.setSmartText)
   const titleRef = useRef<HTMLInputElement>(null)
-  const backlinksQuery = useQuery({
-    queryKey: ['document-backlinks', workspaceID, documentID],
-    queryFn: () => listDocumentBacklinks(workspaceID, documentID),
-    staleTime: 30_000,
-  })
   const showOutline = useEditorPreferenceStore(
     (state) => state.preferencesByUser[userID || 'guest']?.showOutline ?? false
   )
+  // Only asked for while the Contents panel that lists them is open.
+  const backlinksQuery = useQuery({
+    queryKey: ['document-backlinks', workspaceID, documentID],
+    queryFn: () => listDocumentBacklinks(workspaceID, documentID),
+    enabled: showOutline && !offline,
+    staleTime: 30_000,
+  })
   const setShowOutline = useEditorPreferenceStore(
     (state) => state.setShowOutline
   )
