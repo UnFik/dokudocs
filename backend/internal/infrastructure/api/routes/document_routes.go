@@ -61,6 +61,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
 	docGroup.Get("/{id}/revisions", revisionHandler.List)
 	docGroup.Post("/{id}/revisions", revisionHandler.CreateNamed)
 	docGroup.Post("/{id}/revisions/{revisionID}/restore", revisionHandler.Restore)
+	docGroup.Get("/{id}/backlinks", dochandler.NewBacklinkHandler(bodyRepository).List)
 	docGroup.Post("/{id}/assets", assetHandler.Upload)
 	docGroup.Get("/{id}/assets/{assetID}", assetHandler.Get)
 	docGroup.Get("/{id}", docHandler.Get)
