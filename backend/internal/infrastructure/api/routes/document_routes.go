@@ -1,16 +1,20 @@
 package routes
 
 import (
+	"backend/internal/application/asset"
 	appauth "backend/internal/application/auth/usecase"
 	appdoc "backend/internal/application/document/usecase"
 	appchat "backend/internal/application/rag/usecase"
 	appws "backend/internal/application/workspace/usecase"
 	"backend/internal/config"
+	"backend/internal/infrastructure/assetstore"
 	"backend/internal/infrastructure/collabclient"
 	docrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/infrastructure/runtime/container"
 	dochandler "backend/internal/presentation/document/handler"
 	"backend/internal/presentation/middleware"
+	"context"
+	"time"
 )
 
 func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
@@ -29,7 +33,10 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
 	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel))
 	commentHandler := dochandler.NewCommentHandler(appdoc.NewCommentUseCase(bodyRepository))
 
+	assetHandler := dochandler.NewAssetHandler(newAssetService(c, cfg), cfg.MaxUploadBytes)
+
 	// Public Shared Documents (No auth required)
+	f.Get("/public/documents/{shareToken}/assets/{assetID}", assetHandler.GetPublic)
 	f.Get("/public/documents/{shareToken}", docHandler.GetPublic)
 
 	// Documents group protected by auth and workspace middleware
@@ -54,6 +61,8 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
 	docGroup.Get("/{id}/revisions", revisionHandler.List)
 	docGroup.Post("/{id}/revisions", revisionHandler.CreateNamed)
 	docGroup.Post("/{id}/revisions/{revisionID}/restore", revisionHandler.Restore)
+	docGroup.Post("/{id}/assets", assetHandler.Upload)
+	docGroup.Get("/{id}/assets/{assetID}", assetHandler.Get)
 	docGroup.Get("/{id}", docHandler.Get)
 	docGroup.Put("/{id}", docHandler.Update)
 	docGroup.Put("/{id}/thumbnails", docHandler.UpdateThumbnails)
@@ -83,4 +92,13 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
 	privateChatGroup.Get("", ragChat.ListConversations)
 	privateChatGroup.Get("/{conversationID}", ragChat.GetConversation)
 	privateChatGroup.Delete("/{conversationID}", ragChat.DeleteConversation)
+}
+
+func newAssetService(c *container.Container, cfg config.Config) *asset.Service {
+	return asset.NewService(docrepo.NewAssetRepository(docrepo.NewRepository(c.DB)), assetstore.NewLocal(cfg.AssetDir), cfg.MaxUploadBytes)
+}
+
+// SweepAssets removes files no page or revision refers to any more.
+func SweepAssets(ctx context.Context, c *container.Container, cfg config.Config, olderThan time.Duration) (int, error) {
+	return newAssetService(c, cfg).Sweep(ctx, olderThan)
 }

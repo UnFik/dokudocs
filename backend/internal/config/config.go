@@ -29,11 +29,14 @@ type Config struct {
 	// CollabServiceURL is where the API reaches the collaboration service to reload a
 	// room; empty skips those calls.
 	CollabServiceURL string
-	AccessTokenTTL   time.Duration
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
-	IdleTimeout      time.Duration
-	ShutdownTimeout  time.Duration
+	// AssetDir is where uploaded files are kept; MaxUploadBytes is the most one may hold.
+	AssetDir        string
+	MaxUploadBytes  int64
+	AccessTokenTTL  time.Duration
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
+	IdleTimeout     time.Duration
+	ShutdownTimeout time.Duration
 }
 
 func LoadConfig() (Config, error) {
@@ -63,6 +66,8 @@ func LoadConfig() (Config, error) {
 		JWTSecret:           env.GetString("JWT_SECRET", ""),
 		CollabServiceSecret: env.GetString("COLLAB_SERVICE_SECRET", ""),
 		CollabServiceURL:    env.GetString("COLLAB_SERVICE_URL", ""),
+		AssetDir:            env.GetString("ASSET_DIR", "./data/assets"),
+		MaxUploadBytes:      int64(env.GetInt("MAX_UPLOAD_BYTES", 25<<20)),
 		AccessTokenTTL:      env.GetDuration("ACCESS_TOKEN_TTL", 24*time.Hour),
 		ReadTimeout:         env.GetDuration("READ_TIMEOUT", 5*time.Second),
 		WriteTimeout:        env.GetDuration("WRITE_TIMEOUT", 10*time.Second),
