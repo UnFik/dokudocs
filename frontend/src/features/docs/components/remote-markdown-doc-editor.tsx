@@ -63,6 +63,7 @@ import {
   type EditorMode,
 } from './editor-mode-tabs'
 import './markdown-body.css'
+import { MarkdownPreview } from './markdown-preview'
 import { OutlinePanel } from './outline-panel'
 import { PresentationMode } from './presentation-mode'
 import { SuggestionCardList } from './suggestion-card-list'
@@ -138,6 +139,7 @@ export function RemoteMarkdownDocEditor({
   const markdown = markdownOverride ?? document.content
   const [accessUnavailable, setAccessUnavailable] = useState(false)
   const [presence, setPresence] = useState<PresenceUser[]>([])
+  const [followedUser, setFollowedUser] = useState<string | null>(null)
   const restoreRevision = (revision: DocumentRevision) => {
     if (
       !window.confirm(
@@ -166,6 +168,8 @@ export function RemoteMarkdownDocEditor({
         lastSaved={new Date(document.updatedAt)}
         onTitleChange={(title) => titleMutation.mutate(title)}
         presenceUsers={presence}
+        followedUserID={followedUser}
+        onFollowUser={setFollowedUser}
         currentUserID={userID}
         titleReadOnly={offline || !access?.canEdit || accessUnavailable}
         onToggleHistory={
@@ -188,6 +192,7 @@ export function RemoteMarkdownDocEditor({
       />
 
       <CollaborativeMarkdownBody
+        followedUser={followedUser}
         key={`${document.id}:${sessionNonce}`}
         documentID={document.id}
         workspaceID={workspaceID}
@@ -248,6 +253,7 @@ export function RemoteMarkdownDocEditor({
 }
 
 function CollaborativeMarkdownBody({
+  followedUser,
   documentID,
   workspaceID,
   userID,
@@ -265,6 +271,7 @@ function CollaborativeMarkdownBody({
   onPresence,
   onAccessUnavailable,
 }: {
+  followedUser: string | null
   documentID: string
   workspaceID: string
   userID: string
@@ -291,6 +298,11 @@ function CollaborativeMarkdownBody({
 }) {
   const { name: profileName } = useCurrentProfile()
   const profileNameRef = useRef(profileName)
+  const followedRef = useRef(followedUser)
+  useEffect(() => {
+    followedRef.current = followedUser
+    sessionRef.current?.editor.follow(followedUser)
+  }, [followedUser])
   useEffect(() => {
     profileNameRef.current = profileName
     sessionRef.current?.session.setUserName(profileName)
@@ -331,6 +343,7 @@ function CollaborativeMarkdownBody({
   )
   const [statsOpen, setStatsOpen] = useState(false)
   const [presenting, setPresenting] = useState(false)
+  const [split, setSplit] = useState(false)
   const [insightsOpen, setInsightsOpen] = useState(false)
   const insightsHistory = useQuery({
     queryKey: ['document-revisions', workspaceID, documentID],
@@ -705,6 +718,7 @@ function CollaborativeMarkdownBody({
           return
         }
         sessionRef.current = session
+        session.editor.follow(followedRef.current)
         session.session.setUserName(profileNameRef.current)
         setSessionReady(true)
         setCards(session.editor.getSuggestionCards())
@@ -789,6 +803,15 @@ function CollaborativeMarkdownBody({
             onClick={() => setShowOutline(userID, !showOutline)}
           >
             Contents
+          </Button>
+          <Button
+            size='sm'
+            variant='ghost'
+            className='h-11 md:h-8'
+            aria-pressed={split}
+            onClick={() => setSplit(!split)}
+          >
+            Split view
           </Button>
           <Button
             size='sm'
@@ -911,6 +934,7 @@ function CollaborativeMarkdownBody({
           </div>
           <div ref={mountRef} />
         </div>
+        {split ? <MarkdownPreview markdown={markdown} /> : null}
         {(mode === 'edit' && canEdit) || mode === 'suggest' ? (
           <SelectionToolbar
             inline={inline}

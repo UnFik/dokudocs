@@ -136,3 +136,32 @@ test("@live @smoke @presentation: Ctrl+Alt+P shows the page as slides and Ctrl+S
   await page.keyboard.press("Control+Shift+i");
   await expect(page.getByRole("dialog", { name: "Insights" })).toContainText("Views");
 });
+
+test("@live @smoke @split: Split view shows the page as it reads beside the editor and follows edits", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["first"]);
+  await page.getByRole("button", { name: "Split view" }).click();
+  const preview = page.getByRole("complementary", { name: "Preview" });
+  await expect(preview).toContainText("first");
+  await editor.locator("p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" and more");
+  await expect(preview).toContainText("first and more");
+});
+
+test("@live @smoke @revisions: the version list steps through the changes from the version before", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["alpha"]);
+  await editor.locator("p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" beta");
+  await expect(page.getByRole("status")).toContainText("Synced");
+  await page.getByTitle("Version History").click();
+  await page.getByTitle("Create Named Milestone").click();
+  await page.getByPlaceholder(/Pre-release/).fill("after beta");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText(/Change 1 of/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next change" })).toBeVisible();
+});
