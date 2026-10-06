@@ -109,6 +109,8 @@ export const markNames = [
   ['italic', 'em'],
   ['strike', 'strike'],
   ['code', 'code'],
+  ['underline', 'underline'],
+  ['highlight', 'highlight'],
 ] as const
 export const bodyTypeByProseMirrorName = new Map(
   Object.keys(definitions).map((bodyType) => [
@@ -202,6 +204,9 @@ export const documentBodySchema = new Schema({
     em: { toDOM: () => ['em', 0] },
     strike: { toDOM: () => ['s', 0] },
     code: { toDOM: () => ['code', 0] },
+    // Not Markdown: exported as inline HTML, <u> and <mark>.
+    underline: { toDOM: () => ['u', 0] },
+    highlight: { toDOM: () => ['mark', 0] },
     link: {
       attrs: { href: {}, title: { default: null } },
       inclusive: false,

@@ -8,7 +8,14 @@ import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
 
 const selected: InlineState = {
   hasSelection: true,
-  marks: { strong: true, em: false, strike: false, code: false },
+  marks: {
+    strong: true,
+    em: false,
+    strike: false,
+    code: false,
+    underline: false,
+    highlight: false,
+  },
   link: null,
   rect: { top: 100, bottom: 120, left: 40, right: 140 },
 }
@@ -128,5 +135,20 @@ describe('SelectionToolbar', () => {
     const box = toolbar.getBoundingClientRect()
     expect(box.left).toBeGreaterThanOrEqual(0)
     expect(box.right).toBeLessThanOrEqual(window.innerWidth)
+  })
+})
+
+describe('SelectionToolbar underline and highlight', () => {
+  it('offers Underline and Highlight next to the other marks', async () => {
+    const onToggleMark = vi.fn()
+    const screen = await render(
+      <SelectionToolbar {...selectionProps({ onToggleMark })} />
+    )
+    await screen.getByRole('button', { name: /Underline/ }).click()
+    await screen.getByRole('button', { name: /Highlight/ }).click()
+    expect(onToggleMark.mock.calls.map(([name]) => name)).toEqual([
+      'underline',
+      'highlight',
+    ])
   })
 })

@@ -168,12 +168,23 @@ function serializeRuns(
       output.push(active[i]!.delimiter)
     for (let i = common; i < marks.length; i++) output.push(marks[i]!.delimiter)
 
-    output.push(runContent(node, insideLink))
+    output.push(wrapHtmlMarks(node, runContent(node, insideLink)))
     active = marks
   }
 
   for (let i = active.length - 1; i >= 0; i--) output.push(active[i]!.delimiter)
   return output.join('')
+}
+
+/** Underline and highlight have no Markdown syntax: they are written as inline HTML. */
+function wrapHtmlMarks(
+  node: Extract<InlineNode, { type: 'run' }>,
+  text: string
+) {
+  let wrapped = text
+  if (node.attributes.underline === true) wrapped = `<u>${wrapped}</u>`
+  if (node.attributes.highlight === true) wrapped = `<mark>${wrapped}</mark>`
+  return wrapped
 }
 
 function runContent(

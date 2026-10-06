@@ -79,3 +79,13 @@ describe('a suggester typing inside a run', () => {
     expect(validateSuggesterChange(base(), after, ME)).toEqual({ ok: true })
   })
 })
+
+describe('a suggester proposing underline or highlight', () => {
+  it('may propose them as a format suggestion', () => {
+    for (const key of ['underline', 'highlight']) {
+      const mark = { type: 'suggestion_format', attrs: { id: ID, author: ME, set: { [key]: true } } }
+      const after = doc(paragraph('p', run('r', text('hello', [mark]))))
+      expect(validateSuggesterChange(base(), after, ME)).toEqual({ ok: true })
+    }
+  })
+})

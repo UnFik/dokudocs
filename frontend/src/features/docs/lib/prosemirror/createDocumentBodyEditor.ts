@@ -289,6 +289,7 @@ export function createDocumentBodyEditor(
           i: () => runInlineMark('em'),
           e: () => runInlineMark('code'),
           'Shift-x': () => runInlineMark('strike'),
+          u: () => runInlineMark('underline'),
           'Alt-m': () => {
             options.onCommentRequest?.()
             return true

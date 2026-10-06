@@ -34,6 +34,9 @@ function wrapText(node: JSONNode): string {
     else if (mark.type === 'strong') value = `**${value}**`
     else if (mark.type === 'em') value = `*${value}*`
     else if (mark.type === 'strike') value = `~~${value}~~`
+    // No Markdown syntax: written as inline HTML.
+    else if (mark.type === 'underline') value = `<u>${value}</u>`
+    else if (mark.type === 'highlight') value = `<mark>${value}</mark>`
     else if (mark.type === 'link') {
       const title = mark.attrs?.title ? ` "${String(mark.attrs.title)}"` : ''
       value = `[${value}](${String(mark.attrs?.href ?? '')}${title})`
