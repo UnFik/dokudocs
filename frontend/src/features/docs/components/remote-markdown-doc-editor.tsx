@@ -27,6 +27,7 @@ import {
 } from '../lib/collab-session'
 import { mountCollaborativeDocumentBody } from '../lib/collaborative-document-body'
 import { countTasks } from '../lib/count-tasks'
+import { documentStats, maxCharacters, sizeState } from '../lib/document-stats'
 import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
@@ -43,6 +44,7 @@ import { type SuggestionCard } from '../lib/prosemirror/suggestionCards'
 import { shouldSelectDocumentBody } from '../lib/select-all-scope'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { DocumentInfoLine } from './document-info-line'
+import { DocumentStatsDialog } from './document-stats-dialog'
 import { DocumentTitleRow } from './document-title-row'
 import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
 import { EditorHeader } from './editor-header'
@@ -309,6 +311,24 @@ function CollaborativeMarkdownBody({
   const setShowOutline = useEditorPreferenceStore(
     (state) => state.setShowOutline
   )
+  const [statsOpen, setStatsOpen] = useState(false)
+  const stats = useMemo(() => documentStats(markdown), [markdown])
+  const size = sizeState(stats.characters, maxCharacters)
+  // Ctrl+Shift+G, as in Outline: what the page holds.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === 'g'
+      ) {
+        event.preventDefault()
+        setStatsOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const [outline, setOutline] = useState<OutlineItem[]>([])
   const [activeHeading, setActiveHeading] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -478,6 +498,7 @@ function CollaborativeMarkdownBody({
       userID,
       userName: profileNameRef.current,
       smartText: () => smartTextRef.current,
+      maxCharacters,
       onNavigateToTitle: () => titleRef.current?.focus(),
       onHeadingLink: (nodeID) => {
         const link = `${window.location.origin}${window.location.pathname}#node-${nodeID}`
@@ -698,6 +719,12 @@ function CollaborativeMarkdownBody({
           {error}
         </p>
       ) : null}
+      <DocumentStatsDialog
+        open={statsOpen}
+        stats={stats}
+        limit={maxCharacters}
+        onOpenChange={setStatsOpen}
+      />
       <div className='flex min-h-0 flex-1 flex-col md:flex-row'>
         {showOutline ? (
           <OutlinePanel
@@ -725,6 +752,16 @@ function CollaborativeMarkdownBody({
             onCommit={onTitleChange}
             onEnterBody={() => sessionRef.current?.editor.focusStart()}
           />
+          {size !== 'ok' ? (
+            <p
+              role={size === 'full' ? 'alert' : 'status'}
+              className='mb-2 text-xs text-destructive'
+            >
+              {size === 'full'
+                ? 'This page is full: no more text can be added. Delete some, or continue in a new page.'
+                : `This page is getting long: ${stats.characters.toLocaleString('en-US')} of ${maxCharacters.toLocaleString('en-US')} characters.`}
+            </p>
+          ) : null}
           <div className='mb-6'>
             <DocumentInfoLine
               updatedAt={meta.updatedAt}

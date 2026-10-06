@@ -50,6 +50,7 @@ export async function mountCollaborativeDocumentBody(
     url?: string
     readOnly?: boolean
     smartText?: () => boolean
+    maxCharacters?: number
     onHeadingLink?: (nodeID: string) => void
     onNavigateToTitle?: () => void
     onStatus?: (status: CollabStatus) => void
@@ -118,6 +119,7 @@ export async function mountCollaborativeDocumentBody(
     const editor = createDocumentBodyEditor(mount, session.ydoc, {
       readOnly: forceReadOnly || !access.canEdit,
       smartText: input.smartText,
+      maxCharacters: input.maxCharacters,
       onHeadingLink: input.onHeadingLink,
       onNavigateToTitle: input.onNavigateToTitle,
       plugins: blocks.plugins,
