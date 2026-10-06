@@ -3,7 +3,7 @@ import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
 import { documentBodySchema, documentBodyToProseMirror } from '../documentBody'
 import { prepareBodyTransaction } from '../prepareBodyTransaction'
-import { blockMenuPlugin, filterBlockItems } from './blockMenu'
+import { blockItems, blockMenuPlugin, filterBlockItems } from './blockMenu'
 import { bodyBuilder, bodyOf, stateFor } from './testSupport'
 
 const views: EditorView[] = []
@@ -44,6 +44,13 @@ function press(target: EventTarget, key: string) {
   target.dispatchEvent(event)
   return event
 }
+
+describe('heading level 4', () => {
+  it('is in the block menu, found by its level', () => {
+    expect(filterBlockItems('h4').map((item) => item.id)).toContain('heading-4')
+    expect(filterBlockItems('heading 4')[0]?.headingLevel).toBe(4)
+  })
+})
 
 describe('filterBlockItems', () => {
   it('matches labels and keywords, ignoring case', () => {
@@ -138,5 +145,61 @@ describe('block menu', () => {
     })
     view.dom.dispatchEvent(event)
     expect(mountEl.querySelector('[role="combobox"]')).toBeNull()
+  })
+})
+
+const blockItemsById = (id: string) =>
+  blockItems.find((item) => item.id === id)!
+
+describe('notice, toggle, page break and current date', () => {
+  function choose(id: string) {
+    const harness = mount()
+    const item = blockItemsById(id)
+    item.command(harness.view.state, (tr) => harness.view.dispatch(tr))
+    return bodyOf(harness.view.state.doc)
+  }
+
+  it.each(['info', 'success', 'warning', 'tip'])(
+    'offers a %s notice that takes the place of the empty line',
+    (variant) => {
+      const body = choose(`notice-${variant}`)
+      expect(body.map((n) => n.type)).toEqual([
+        'document',
+        'notice',
+        'paragraph',
+      ])
+      expect(body[1]!.attributes).toEqual({ variant })
+    }
+  )
+
+  it('offers a toggle with a title line and a line of content', () => {
+    const body = choose('toggle')
+    expect(body.map((n) => n.type)).toEqual([
+      'document',
+      'toggle',
+      'paragraph',
+      'paragraph',
+    ])
+  })
+
+  it('offers a toggle whose title is a heading', () => {
+    const body = choose('toggle-heading')
+    expect(body.map((n) => n.type)).toEqual([
+      'document',
+      'toggle',
+      'atx-heading',
+      'paragraph',
+    ])
+  })
+
+  it('offers a page break', () => {
+    const body = choose('page-break')
+    expect(body.map((n) => n.type)).toEqual(['document', 'page-break'])
+  })
+
+  it('writes today’s date as text', () => {
+    const body = choose('current-date')
+    const text = body.find((n) => n.type === 'paragraph')!.content
+    expect(text).toMatch(/\d{4}/)
   })
 })

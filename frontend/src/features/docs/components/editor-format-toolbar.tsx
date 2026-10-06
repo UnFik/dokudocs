@@ -81,8 +81,18 @@ const markButtons: {
     icon: Strikethrough,
   },
   { mark: 'code', label: 'Inline code', shortcut: 'Ctrl+E', icon: Code },
-  { mark: 'underline', label: 'Underline', shortcut: 'Ctrl+U', icon: Underline },
-  { mark: 'highlight', label: 'Highlight', shortcut: '==text==', icon: Highlighter },
+  {
+    mark: 'underline',
+    label: 'Underline',
+    shortcut: 'Ctrl+U',
+    icon: Underline,
+  },
+  {
+    mark: 'highlight',
+    label: 'Highlight',
+    shortcut: '==text==',
+    icon: Highlighter,
+  },
 ]
 
 export function SelectionToolbar({

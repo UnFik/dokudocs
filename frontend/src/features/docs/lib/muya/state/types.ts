@@ -66,6 +66,16 @@ export interface IBlockQuoteState {
   children: TState[]
 }
 
+/**
+ * Blocks between two marker lines: `:::info` ... `:::` (a notice) or `+++` ...
+ * `+++` (a toggle). Not part of CommonMark; written by the editor's own blocks.
+ */
+export interface IFenceContainerState {
+  name: 'fence-container'
+  meta: { marker: string; label: string }
+  children: TState[]
+}
+
 export interface IListItemState {
   name: 'list-item'
   children: TState[]
@@ -195,6 +205,7 @@ export type TLeafState =
 
 export type TContainerState =
   | IBlockQuoteState
+  | IFenceContainerState
   | IOrderListState
   | IBulletListState
   | ITableState

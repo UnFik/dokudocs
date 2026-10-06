@@ -22,7 +22,7 @@ const listItem = (type = 'list_item', attrs: Record<string, unknown> = {}) =>
   createNode(type, attrs, [paragraph()])
 
 export const blockItems: BlockItem[] = [
-  ...[1, 2, 3].map((level) => ({
+  ...[1, 2, 3, 4].map((level) => ({
     id: `heading-${level}`,
     label: `Heading ${level}`,
     hint: '#'.repeat(level),
@@ -113,6 +113,64 @@ export const blockItems: BlockItem[] = [
     command: insertDiagram('mermaid'),
   },
 ]
+
+const notice = (variant: string, label: string): BlockItem => ({
+  id: `notice-${variant}`,
+  label: `${label} notice`,
+  hint: ':::' + variant,
+  keywords: ['notice', 'callout', 'alert', 'box', variant],
+  command: insertBlock(createNode('notice', { variant }, [paragraph()])),
+})
+
+blockItems.push(
+  notice('info', 'Info'),
+  notice('success', 'Success'),
+  notice('warning', 'Warning'),
+  notice('tip', 'Tip'),
+  {
+    id: 'toggle',
+    label: 'Toggle',
+    hint: '+++',
+    keywords: ['toggle', 'fold', 'collapse', 'details', 'accordion'],
+    command: insertBlock(createNode('toggle', {}, [paragraph(), paragraph()])),
+  },
+  {
+    id: 'toggle-heading',
+    label: 'Toggle heading',
+    hint: '+++ #',
+    keywords: ['toggle', 'heading', 'fold', 'collapse', 'section'],
+    command: insertBlock(
+      createNode('toggle', {}, [
+        createNode('atx_heading', { level: 2 }),
+        paragraph(),
+      ])
+    ),
+  },
+  {
+    id: 'page-break',
+    label: 'Page break',
+    hint: '---',
+    keywords: ['page', 'break', 'print', 'pagebreak'],
+    command: insertBlock(createNode('page_break', {})),
+  },
+  {
+    id: 'current-date',
+    label: 'Current date',
+    hint: 'today',
+    keywords: ['date', 'today', 'now', 'time'],
+    command: (state, dispatch) => {
+      if (!state.selection.empty) return false
+      dispatch?.(
+        state.tr.insertText(
+          new Intl.DateTimeFormat(undefined, { dateStyle: 'long' }).format(
+            new Date()
+          )
+        )
+      )
+      return true
+    },
+  }
+)
 
 export function filterBlockItems(query: string): BlockItem[] {
   const needle = query.trim().toLowerCase()

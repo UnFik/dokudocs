@@ -93,79 +93,58 @@ const list = (
 export function blockMarkdownRules() {
   return [
     // "- ", "* " and "+ ": a bulleted list.
-    blockRule(
-      /^([-*+])\s$/,
-      (runs, match) => [
-        list(
-          'bullet_list',
-          { marker: match[1], loose: false },
-          'list_item',
-          {},
-          runs
-        ),
-      ]
-    ),
+    blockRule(/^([-*+])\s$/, (runs, match) => [
+      list(
+        'bullet_list',
+        { marker: match[1], loose: false },
+        'list_item',
+        {},
+        runs
+      ),
+    ]),
     // "1. " and "1) ": a numbered list that starts at that number.
-    blockRule(
-      /^(\d{1,9})([.)])\s$/,
-      (runs, match) => [
-        list(
-          'order_list',
-          { start: Number(match[1]), loose: false, delimiter: match[2] },
-          'list_item',
-          {},
-          runs
-        ),
-      ]
-    ),
+    blockRule(/^(\d{1,9})([.)])\s$/, (runs, match) => [
+      list(
+        'order_list',
+        { start: Number(match[1]), loose: false, delimiter: match[2] },
+        'list_item',
+        {},
+        runs
+      ),
+    ]),
     // "[ ] " and "[x] ": a task list.
-    blockRule(
-      /^\[([ xX]?)\]\s$/,
-      (runs, match) => [
-        list(
-          'task_list',
-          { marker: '-', loose: false },
-          'task_list_item',
-          { checked: match[1]!.toLowerCase() === 'x' },
-          runs
-        ),
-      ]
-    ),
+    blockRule(/^\[([ xX]?)\]\s$/, (runs, match) => [
+      list(
+        'task_list',
+        { marker: '-', loose: false },
+        'task_list_item',
+        { checked: match[1]!.toLowerCase() === 'x' },
+        runs
+      ),
+    ]),
     // "> ": a quote.
-    blockRule(
-      /^>\s$/,
-      (runs) => [createNode('block_quote', {}, [line(runs)])]
-    ),
+    blockRule(/^>\s$/, (runs) => [createNode('block_quote', {}, [line(runs)])]),
     // "```" or "```lang" and a space: a code block; the rest of the line is its text.
-    blockRule(
-      /^```([a-zA-Z0-9_+-]*)\s$/,
-      (runs, match) => [
-        createNode(
-          'code_block',
-          { type: 'fenced', lang: match[1] ?? '' },
-          runs.map((item) => item.textContent).join('')
-        ),
-      ]
-    ),
+    blockRule(/^```([a-zA-Z0-9_+-]*)\s$/, (runs, match) => [
+      createNode(
+        'code_block',
+        { type: 'fenced', lang: match[1] ?? '' },
+        runs.map((item) => item.textContent).join('')
+      ),
+    ]),
     // "---": a separator, with a new line after it for what comes next.
-    blockRule(
-      /^---$/,
-      (runs) => [
-        nodes.thematic_break!.create({
-          nodeID: null,
-          bodyAttributes: '{}',
-          bodyContent: '---',
-        }),
-        line(runs),
-      ]
-    ),
+    blockRule(/^---$/, (runs) => [
+      nodes.thematic_break!.create({
+        nodeID: null,
+        bodyAttributes: '{}',
+        bodyContent: '---',
+      }),
+      line(runs),
+    ]),
     // "# " to "###### ": a heading, for a line the in-place heading rule cannot
     // take because the marker is all there is in its run.
-    blockRule(
-      /^(#{1,6})\s$/,
-      (runs, match) => [
-        createNode('atx_heading', { level: match[1]!.length }, runs),
-      ]
-    ),
+    blockRule(/^(#{1,6})\s$/, (runs, match) => [
+      createNode('atx_heading', { level: match[1]!.length }, runs),
+    ]),
   ]
 }

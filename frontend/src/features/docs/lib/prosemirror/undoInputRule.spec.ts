@@ -45,24 +45,27 @@ describe('Backspace right after a Markdown rule', () => {
     ['- ', 'bullet-list'],
     ['1. ', 'order-list'],
     ['> ', 'block-quote'],
-  ])('undoes %s, leaving a paragraph with the typed text', async (typed, block) => {
-    const harness = mountTestEditor(paragraphsBody(typed.trim()))
-    try {
-      endOf(harness, typed.trim())
-      typeText(harness, ' ')
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      expect(types(harness)).toContain(block)
+  ])(
+    'undoes %s, leaving a paragraph with the typed text',
+    async (typed, block) => {
+      const harness = mountTestEditor(paragraphsBody(typed.trim()))
+      try {
+        endOf(harness, typed.trim())
+        typeText(harness, ' ')
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        expect(types(harness)).toContain(block)
 
-      pressKey(harness.editor.view.dom, 'Backspace')
-      await new Promise((resolve) => setTimeout(resolve, 20))
+        pressKey(harness.editor.view.dom, 'Backspace')
+        await new Promise((resolve) => setTimeout(resolve, 20))
 
-      expect(types(harness)).not.toContain(block)
-      expect(types(harness)).toContain('paragraph')
-      expect(harness.editor.view.state.doc.textContent).toBe(typed)
-    } finally {
-      harness.cleanup()
+        expect(types(harness)).not.toContain(block)
+        expect(types(harness)).toContain('paragraph')
+        expect(harness.editor.view.state.doc.textContent).toBe(typed)
+      } finally {
+        harness.cleanup()
+      }
     }
-  })
+  )
 
   it('does nothing special once something else was typed', async () => {
     const harness = mountTestEditor(paragraphsBody('#'))
