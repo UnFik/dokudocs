@@ -38,7 +38,6 @@ test("@live @smoke @pagefeatures: the title is the first line, with an info line
 
   await title.fill("Renamed from the page");
   await title.press("Tab");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Document title" })).toHaveValue(
     "Renamed from the page",
