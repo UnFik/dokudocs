@@ -6,6 +6,7 @@
   "scripts": {
     "start": "tsx --import ./single-copy.mjs src/main.ts",
     "test": "vitest run",
+    "test:load": "COLLAB_LOAD=1 vitest run test/load.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
