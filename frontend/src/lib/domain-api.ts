@@ -334,6 +334,33 @@ export async function createWorkspace(
   }
 }
 
+export type WorkspacePerson = { id: string; name: string; email: string }
+
+/** The people of a workspace, for naming one in a page. */
+export async function listWorkspaceMembers(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<WorkspacePerson[]> {
+  const rows = z
+    .array(
+      z.object({
+        userId: z.string().min(1),
+        email: z.string(),
+        fullName: z.string().optional().default(''),
+      })
+    )
+    .parse(
+      await apiFetch<unknown>(`/api/v1/workspaces/${workspaceId}/members`, {
+        signal,
+      })
+    )
+  return rows.map((row) => ({
+    id: row.userId,
+    name: row.fullName || row.email,
+    email: row.email,
+  }))
+}
+
 export async function listProjects(
   workspaceId: string,
   signal?: AbortSignal

@@ -8,6 +8,7 @@ import {
 import type { DocumentBodyNode } from './documentBody'
 import { documentBodyToMarkdown } from './muya/state/documentBodyToMarkdown'
 import { blockEditing } from './prosemirror/blocks'
+import type { MentionCandidate } from './prosemirror/blocks/triggerMenu'
 import {
   createDocumentBodyEditor,
   type EditorHistoryState,
@@ -52,6 +53,7 @@ export async function mountCollaborativeDocumentBody(
     smartText?: () => boolean
     maxCharacters?: number
     resolveLinkTitle?: (href: string) => Promise<string | null>
+    mentionSource?: (query: string) => Promise<MentionCandidate[]>
     onHeadingLink?: (nodeID: string) => void
     onNavigateToTitle?: () => void
     onStatus?: (status: CollabStatus) => void
@@ -122,6 +124,7 @@ export async function mountCollaborativeDocumentBody(
       smartText: input.smartText,
       maxCharacters: input.maxCharacters,
       resolveLinkTitle: input.resolveLinkTitle,
+      mentionSource: input.mentionSource,
       onHeadingLink: input.onHeadingLink,
       onNavigateToTitle: input.onNavigateToTitle,
       plugins: blocks.plugins,

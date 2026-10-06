@@ -65,6 +65,12 @@ function serializeNode(node: InlineNode, labels?: Labels): string {
       if (isMatchingAutolink(node, labels)) return sourceOf(node.attributes)!
       return formatLink(inner, node.attributes.href, node.attributes.linkTitle)
     }
+    case 'mention': {
+      const { kind, id, label } = node.attributes
+      if (kind === 'document') return `[${label}](/docs/${id})`
+      if (kind === 'project') return `[${label}](/projects/${id})`
+      return `@${label}`
+    }
     case 'image': {
       const source = matchingImageSource(node.attributes, labels)
       const image = source ?? formatImage(node.attributes)

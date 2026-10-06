@@ -40,6 +40,11 @@ import {
   toggleTaskChecked,
   type InsertableBlock,
 } from './blockCommands'
+import {
+  emojiMenuPlugin,
+  mentionMenuPlugin,
+  type MentionCandidate,
+} from './blocks/triggerMenu'
 import { decideSuggestion } from './decideSuggestion'
 import {
   caretAfterDelete,
@@ -48,7 +53,6 @@ import {
 } from './deleteTargets'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
 import { findReplacePlugin } from './findReplace'
-import { linkFeaturesPlugin } from './linkFeatures'
 import { headingMarginPlugin } from './headingMargin'
 import {
   emptyInlineState,
@@ -61,6 +65,7 @@ import {
   type InlineState,
 } from './inlineMarks'
 import { joinParagraphs } from './joinParagraphs'
+import { linkFeaturesPlugin } from './linkFeatures'
 import { blockMarkdownRules } from './markdownBlockRules'
 import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
 import { nodeSuggestionOf } from './nodeSuggestion'
@@ -127,6 +132,8 @@ export function createDocumentBodyEditor(
     smartText?: () => boolean
     /** The person asked for a link to a heading (its node ID). */
     onHeadingLink?: (nodeID: string) => void
+    /** What `@` offers: people, pages and projects matching what was typed. */
+    mentionSource?: (query: string) => Promise<MentionCandidate[]>
     /** The title of the page a link to this app goes to, shown when the link is hovered. */
     resolveLinkTitle?: (href: string) => Promise<string | null>
     /** The most characters the page may hold; text past it is refused, deleting still works. */
@@ -306,6 +313,12 @@ export function createDocumentBodyEditor(
       ),
       // Replacing is an edit, so Suggest mode only finds.
       findReplacePlugin(() => !suggestMode),
+      // Mentions and emoji are inserted content, so Suggest mode does not offer them.
+      mentionMenuPlugin({
+        enabled: () => canEdit() && !suggestMode && !!options.mentionSource,
+        search: (query) => options.mentionSource?.(query) ?? [],
+      }),
+      emojiMenuPlugin(() => canEdit() && !suggestMode),
       linkFeaturesPlugin({
         enabled: () => canEdit() && !suggestMode,
         resolveTitle: options.resolveLinkTitle,

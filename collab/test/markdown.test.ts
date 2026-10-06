@@ -71,6 +71,22 @@ describe('Markdown derived from the document JSON', () => {
     )
   })
 
+  it('writes a mention of a person, a page and a project', () => {
+    const mention = (kind: string, id: string, label: string) => ({
+      type: 'mention',
+      attrs: attrs({ kind, id, label }),
+    })
+    const body = paragraph(
+      run(text('See ')),
+      mention('person', 'u-1', 'Rina'),
+      run(text(', ')),
+      mention('document', 'd-1', 'Launch plan'),
+      run(text(' and ')),
+      mention('project', 'p-1', 'Apollo')
+    )
+    expect(toMarkdown(doc(body))).toBe('See @Rina, [Launch plan](/docs/d-1) and [Apollo](/projects/p-1)\n')
+  })
+
   it('writes a notice, a toggle and a page break', () => {
     const notice = { type: 'notice', attrs: attrs({ variant: 'tip' }), content: [paragraph(run(text('Remember')))] }
     const toggle = {

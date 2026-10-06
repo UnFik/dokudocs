@@ -548,3 +548,17 @@
     min-width: 44px;
   }
 }
+
+/* A mention is a chip; a page or project mention is also a link. */
+.dd-mention {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--secondary);
+  color: var(--foreground);
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.dd-mention {
+  text-decoration: underline;
+}
