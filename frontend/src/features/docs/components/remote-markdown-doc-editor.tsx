@@ -268,6 +268,14 @@ function CollaborativeMarkdownBody({
   const setPreviewMode = useEditorPreferenceStore(
     (state) => state.setPreviewMode
   )
+  const smartText = useEditorPreferenceStore(
+    (state) => state.preferencesByUser[userID || 'guest']?.smartText ?? false
+  )
+  const setSmartText = useEditorPreferenceStore((state) => state.setSmartText)
+  const smartTextRef = useRef(smartText)
+  useEffect(() => {
+    smartTextRef.current = smartText
+  })
   const [status, setStatus] = useState<CollabStatus>('connecting')
   const statusRef = useRef(status)
   const canEdit = access?.canEdit ?? false
@@ -404,6 +412,7 @@ function CollaborativeMarkdownBody({
       workspaceID,
       userID,
       userName: profileNameRef.current,
+      smartText: () => smartTextRef.current,
       token: () => useAuthStore.getState().auth.accessToken,
       focusNodeID,
       readOnly:
@@ -569,6 +578,16 @@ function CollaborativeMarkdownBody({
           />
         ) : null}
         <div className='ml-auto flex items-center gap-3'>
+          <Button
+            size='sm'
+            variant='ghost'
+            className='h-11 md:h-8'
+            aria-pressed={smartText}
+            title='Curly quotes, arrows and an ellipsis as you type'
+            onClick={() => setSmartText(userID, !smartText)}
+          >
+            Smart text
+          </Button>
           {showSuggestionPanel ? (
             <Button
               size='sm'
