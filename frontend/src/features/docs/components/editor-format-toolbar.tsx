@@ -5,6 +5,7 @@ import {
   Italic,
   Link2,
   Link2Off,
+  MessageSquarePlus,
   Redo2,
   Highlighter,
   Strikethrough,
@@ -101,6 +102,7 @@ export function SelectionToolbar({
   onSetLink,
   onRemoveLink,
   linkRequest,
+  onComment,
 }: {
   inline: InlineState
   onToggleMark: (mark: InlineMarkName) => void
@@ -108,6 +110,8 @@ export function SelectionToolbar({
   onRemoveLink: () => void
   /** Bumped by the editor when Ctrl+K asks for a link field. */
   linkRequest: number
+  /** Starts a comment on the selected text; omitted when the reader cannot comment. */
+  onComment?: () => void
 }) {
   const [linkOpen, setLinkOpen] = useState(false)
   const [href, setHref] = useState('')
@@ -189,6 +193,19 @@ export function SelectionToolbar({
         >
           <Link2 />
         </Button>
+        {onComment ? (
+          <Button
+            size='icon'
+            variant='ghost'
+            className='size-8 max-sm:size-11 pointer-coarse:size-11'
+            aria-label='Add comment'
+            title='Add comment (Ctrl+Alt+M)'
+            onMouseDown={keepSelection}
+            onClick={onComment}
+          >
+            <MessageSquarePlus />
+          </Button>
+        ) : null}
       </div>
       {linkOpen ? (
         <form

@@ -165,3 +165,20 @@ test("@live @smoke @revisions: the version list steps through the changes from t
   await expect(page.getByText(/Change 1 of/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Next change" })).toBeVisible();
 });
+
+test("@live @smoke @comments: selecting text offers an Add comment icon that opens a comment on it", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["comment on these words"]);
+  await editor.locator("p").first().click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Shift+End");
+  await page.getByRole("toolbar", { name: "Format selection" }).getByRole("button", { name: "Add comment" }).click();
+  const draft = page.locator("li[data-new-comment]");
+  await expect(draft).toContainText("comment on these words");
+  await draft.getByLabel("Comment", { exact: true }).fill("Why these words?");
+  await draft.getByRole("button", { name: "Comment", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Suggestions and comments" })).toContainText("Why these words?");
+  // The Review panel no longer carries its own Comment button.
+  await expect(page.getByRole("complementary", { name: "Review" }).getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
+});

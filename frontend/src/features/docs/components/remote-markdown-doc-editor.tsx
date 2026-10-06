@@ -941,6 +941,7 @@ function CollaborativeMarkdownBody({
           <SelectionToolbar
             inline={inline}
             linkRequest={linkRequest}
+            onComment={canEdit || canSuggest ? startComment : undefined}
             onToggleMark={(mark: InlineMarkName) => {
               sessionRef.current?.editor.toggleMark(mark)
               sessionRef.current?.editor.focus()
@@ -975,10 +976,8 @@ function CollaborativeMarkdownBody({
             commentPositions={commentPositions}
             focusedCommentID={focusedCommentID}
             newComment={commentDraft}
-            canComment={canEdit || canSuggest}
             commentsFailed={Boolean(commentsQuery.error)}
             commentsLoading={commentsQuery.isPending}
-            onStartComment={startComment}
             onNewCommentDone={() => setCommentDraft(null)}
             onSelectComment={(id) => {
               setFocusedCommentID(id)
@@ -1019,10 +1018,8 @@ function SuggestionPanel({
   commentPositions,
   focusedCommentID,
   newComment,
-  canComment,
   commentsFailed,
   commentsLoading,
-  onStartComment,
   onNewCommentDone,
   onSelectComment,
 }: {
@@ -1043,10 +1040,8 @@ function SuggestionPanel({
   commentPositions: Record<string, number | null>
   focusedCommentID: string | null
   newComment: { selectedText: string; anchor: CommentAnchor } | null
-  canComment: boolean
   commentsFailed: boolean
   commentsLoading: boolean
-  onStartComment: () => void
   onNewCommentDone: () => void
   onSelectComment: (id: string) => void
 }) {
@@ -1083,19 +1078,6 @@ function SuggestionPanel({
           aria-label='Review'
           className='max-h-[40vh] min-w-0 shrink-0 overflow-auto border-t bg-card md:max-h-none md:w-80 md:border-t-0 md:border-l'
         >
-          {canComment ? (
-            <div className='flex justify-end px-4 pt-3'>
-              <Button
-                size='sm'
-                variant='outline'
-                // Keep the text selected: a click would otherwise clear it.
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={onStartComment}
-              >
-                Comment
-              </Button>
-            </div>
-          ) : null}
           {cards.length ? (
             <div className='flex flex-wrap items-center justify-between gap-2 px-4 pt-3'>
               <div

@@ -152,3 +152,19 @@ describe('SelectionToolbar underline and highlight', () => {
     ])
   })
 })
+
+describe('SelectionToolbar comment', () => {
+  it('offers an Add comment icon that starts a comment on the selection', async () => {
+    const onComment = vi.fn()
+    const view = await render(
+      <SelectionToolbar {...selectionProps({ onComment })} />
+    )
+    await view.getByRole('button', { name: 'Add comment' }).click()
+    expect(onComment).toHaveBeenCalledOnce()
+  })
+
+  it('has no comment icon when commenting is not possible', async () => {
+    const view = await render(<SelectionToolbar {...selectionProps()} />)
+    expect(view.getByRole('button', { name: 'Add comment' }).elements()).toHaveLength(0)
+  })
+})
