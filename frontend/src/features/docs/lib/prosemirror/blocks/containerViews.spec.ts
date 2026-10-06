@@ -60,6 +60,16 @@ describe('toggle', () => {
     expect(toggle.classList.contains('dd-toggle-folded')).toBe(false)
   })
 
+  it('stays folded once the editor has seen the change', async () => {
+    const { host } = mount()
+    const button = host.querySelector<HTMLButtonElement>('.dd-toggle-button')!
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const toggle = host.querySelector<HTMLElement>('.dd-toggle')!
+    expect(toggle.classList.contains('dd-toggle-folded')).toBe(true)
+    expect(toggle.querySelector('.dd-toggle-button')?.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('keeps the title and the content as the editable text', () => {
     const { view } = mount()
     expect(view.state.doc.textContent).toBe('CarefulTitleInside')

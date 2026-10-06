@@ -116,3 +116,18 @@ describe('==text== typed in a line', () => {
     expect(view.state.doc.textContent).toBe('x key')
   })
 })
+
+describe('Ctrl+U with a real keyboard', () => {
+  it('underlines the selected text', async () => {
+    const { userEvent } = await import('vitest/browser')
+    const harness = mountTestEditor(paragraphsBody('words'))
+    try {
+      select(harness, 'words')
+      harness.editor.view.focus()
+      await userEvent.keyboard('{Control>}u{/Control}')
+      expect(attributesOfRun(harness)).toMatchObject({ underline: true })
+    } finally {
+      harness.cleanup()
+    }
+  })
+})
