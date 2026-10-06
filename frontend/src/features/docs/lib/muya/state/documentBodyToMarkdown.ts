@@ -79,6 +79,12 @@ function toStateBody(
         meta: { marker: '+++', label: '' },
         children: childStates(),
       }
+    case 'attachment':
+      noChildren(node, descendants)
+      return {
+        name: 'paragraph',
+        text: `[${requiredString(node.attributes, 'fileName')}](${requiredString(node.attributes, 'src')})`,
+      }
     case 'page-break':
       noChildren(node, descendants)
       return { name: 'html-block', text: '<div class="page-break"></div>' }

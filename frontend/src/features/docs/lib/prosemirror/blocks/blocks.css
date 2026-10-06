@@ -562,3 +562,42 @@
 a.dd-mention {
   text-decoration: underline;
 }
+
+.dd-attachment {
+  margin: 0.5rem 0;
+}
+.dd-attachment video,
+.dd-attachment iframe {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+}
+.dd-attachment iframe {
+  height: 32rem;
+}
+.dd-attachment-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 6px;
+}
+.dd-attachment-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dd-attachment-card button {
+  flex: none;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.dd-image img {
+  max-width: 100%;
+}

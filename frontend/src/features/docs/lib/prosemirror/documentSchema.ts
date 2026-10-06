@@ -48,6 +48,8 @@ export const definitions: Record<string, NodeDefinition> = {
   // Blocks that can be folded: the first one is the title that stays visible.
   toggle: { content: 'block+', group: 'block', tag: 'div' },
   'page-break': { group: 'block', tag: 'hr', atom: true },
+  // An uploaded file shown as a block: video, PDF or a download card. Its attributes hold src, fileName, contentType.
+  attachment: { group: 'block', tag: 'div', atom: true },
   table: { content: 'table_row+', group: 'block', tag: 'table' },
   'table.row': { content: 'table_cell+', group: 'table_row', tag: 'tr' },
   'table.cell': { content: 'inline*', group: 'table_cell', tag: 'td' },
@@ -101,6 +103,7 @@ export const emptyContentTypes = new Set([
   'notice',
   'toggle',
   'page-break',
+  'attachment',
   'block-quote',
   'order-list',
   'bullet-list',
@@ -210,6 +213,8 @@ function nodeDOM(
       0,
     ]
   }
+  if (bodyType === 'attachment')
+    return ['div', { ...idAttrs, class: 'dd-attachment', contenteditable: 'false' }, '[file]']
   if (bodyType === 'page-break')
     return ['hr', { ...idAttrs, class: 'dd-page-break' }]
   if (bodyType === 'thematic-break')

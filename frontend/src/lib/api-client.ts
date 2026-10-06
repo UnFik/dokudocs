@@ -71,3 +71,25 @@ export async function apiFetch<T = unknown>(
     data && typeof data === 'object' && 'data' in data ? data.data : data
   ) as T
 }
+
+/** A stored file read with the session; images and video cannot send the token themselves. */
+export async function apiBlob(endpoint: string): Promise<Blob> {
+  const url = new URL(endpoint, window.location.origin)
+  if (
+    url.origin !== window.location.origin ||
+    !url.pathname.startsWith('/api/')
+  ) {
+    throw new Error('API requests must use the same-origin /api/ path')
+  }
+  synchronizeSession()
+  const { accessToken } = useAuthStore.getState().auth
+  const headers = new Headers()
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+  const response = await fetch(url.href, {
+    headers,
+    credentials: 'same-origin',
+  })
+  if (!response.ok)
+    throw new ApiError(response.status, response.statusText || 'Request failed')
+  return response.blob()
+}

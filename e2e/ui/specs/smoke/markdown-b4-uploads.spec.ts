@@ -1,0 +1,50 @@
+import { expect, test } from "@playwright/test";
+import { openMarkdownDocument } from "../../helpers/markdown-document";
+
+// A 1x1 PNG.
+const png = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+async function chooseFile(
+  page: import("@playwright/test").Page,
+  file: { name: string; mimeType: string; buffer: Buffer },
+) {
+  await page.keyboard.press("/");
+  await page.getByRole("combobox", { name: "Insert block" }).fill("image");
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("option", { name: /Image or file/ }).click();
+  await (await chooser).setFiles(file);
+}
+
+test("@live @smoke @uploads: an image and a file from the block menu show in place and survive a reload", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", ""]);
+  await editor.locator("p").first().click();
+  await chooseFile(page, { name: "dot.png", mimeType: "image/png", buffer: png });
+  const image = editor.locator(".dd-image img");
+  await expect(image).toHaveCount(1);
+  await expect
+    .poll(() => image.evaluate((el: HTMLImageElement) => el.naturalWidth))
+    .toBe(1);
+
+  await editor.locator("p").last().click();
+  await chooseFile(page, {
+    name: "notes.zip",
+    mimeType: "application/zip",
+    buffer: Buffer.from("PK\x03\x04"),
+  });
+  await expect(editor.locator(".dd-attachment-card")).toContainText("notes.zip");
+
+  await expect(page.getByRole("status")).toContainText("Synced");
+  await page.reload();
+  await expect(page.locator(".ProseMirror .dd-image img")).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page.locator(".ProseMirror .dd-image img").evaluate((el: HTMLImageElement) => el.naturalWidth),
+    )
+    .toBe(1);
+  await expect(page.locator(".ProseMirror .dd-attachment-card")).toContainText("notes.zip");
+});
