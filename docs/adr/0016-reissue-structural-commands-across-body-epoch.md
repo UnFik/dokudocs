@@ -1,5 +1,7 @@
 # Re-issue pending structural commands across a BodyEpoch
 
+> Superseded by [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md): the AST, epochs and structural commands no longer exist.
+
 Supersedes the "never relabel or retarget" clause of [ADR 0014](0014-structural-moves-start-body-epoch.md) for a pending `DeleteNode` or `MoveNode`. [ADR 0012](0012-movenode-owns-existing-node-structure.md) and the receipt model of [ADR 0009](0009-durable-movenode-receipts.md) still hold.
 
 A pending command names nodes by stable ID, so its intent does not change when the epoch does. When the epoch moved on, the client first replays the command unchanged, with its original `commandID` and epoch. If the response to the original was lost, the server returns the existing receipt and nothing is duplicated. Only when the server rejects it as stale does the client look at the current body:
