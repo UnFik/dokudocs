@@ -146,6 +146,7 @@ async function typeOffline(session: Session, editor: ReturnType<Page["locator"]>
   await editor.click();
   await session.page.keyboard.press("Control+Home");
   await session.page.keyboard.type("PENDING ");
+  await expect(editor).toContainText("PENDING");
   await expect.poll(() => localCopyCount(session.page)).toBeGreaterThan(0);
 }
 

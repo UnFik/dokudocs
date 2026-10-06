@@ -88,6 +88,11 @@ export function openCollabSession(input: {
     status = next
     input.onStatus?.(next)
   }
+  // Declared before the provider: its first status event may arrive at once.
+  const pongs = new Map<string, () => void>()
+  let wroteOffline = false
+  let connected = false
+  let syncedOnce = false
   const provider = new HocuspocusProvider({
     url: input.url ?? collabURL(),
     name,
@@ -95,6 +100,7 @@ export function openCollabSession(input: {
     token: input.token,
     onStatus: ({ status: next }) => {
       connected = next === 'connected'
+      if (!connected) syncedOnce = false
       if (next === 'connected') setStatus('ready')
       else if (next === 'connecting') setStatus('connecting')
       else setStatus('offline')
@@ -104,7 +110,10 @@ export function openCollabSession(input: {
       input.onStatus?.(status)
       markSynced()
     },
-    onSynced: () => markSynced(),
+    onSynced: () => {
+      syncedOnce = true
+      markSynced()
+    },
     onStateless: ({ payload }) => {
       let message: { type?: string } & Partial<CollabAccess>
       try {
@@ -119,12 +128,12 @@ export function openCollabSession(input: {
         })
       else if (message.type === 'comments_changed') input.onCommentsChanged?.()
       else if (message.type === 'reloaded') input.onReloaded?.()
+      else if (message.type === 'pong')
+        pongs.get(String((message as { id?: unknown }).id))?.()
     },
   })
   // A change made while the connection is down is not on the server until the
   // connection is back and the provider has had it acknowledged.
-  let wroteOffline = false
-  let connected = false
   ydoc.on('update', (_update: Uint8Array, origin: unknown) => {
     if (origin !== provider && !connected) wroteOffline = true
   })
@@ -188,16 +197,33 @@ export function openCollabSession(input: {
     /** Resolves true once the server has every change made here, false at the timeout. */
     drained(timeoutMs: number) {
       const settled = () => provider.unsyncedChanges === 0 && !wroteOffline
-      if (settled()) return Promise.resolve(true)
+      // Once the provider says nothing is waiting, ask the room: it answers only after
+      // everything this connection sent before the question.
+      const askRoom = (left: number) =>
+        new Promise<boolean>((resolve) => {
+          const id = crypto.randomUUID()
+          const finish = (value: boolean) => {
+            clearTimeout(timer)
+            pongs.delete(id)
+            resolve(value)
+          }
+          const timer = setTimeout(() => finish(false), left)
+          pongs.set(id, () => finish(true))
+          provider.sendStateless(JSON.stringify({ type: 'ping', id }))
+        })
       return new Promise<boolean>((resolve) => {
-        const finish = (value: boolean) => {
-          clearTimeout(timer)
-          clearInterval(poll)
-          resolve(value)
-        }
-        const timer = setTimeout(() => finish(false), timeoutMs)
+        const started = Date.now()
         const poll = setInterval(() => {
-          if (settled()) finish(true)
+          if (Date.now() - started >= timeoutMs) {
+            clearInterval(poll)
+            resolve(false)
+          } else if (connected && syncedOnce && settled()) {
+            clearInterval(poll)
+            // The provider answers the room's first sync right after this point; let that go out before asking.
+            setTimeout(() => {
+              void askRoom(timeoutMs - (Date.now() - started)).then(resolve)
+            }, 200)
+          }
         }, 50)
       })
     },

@@ -36,6 +36,9 @@ export function permissions(fragmentName: string): Extension<CollabContext> {
         const before = yDocToProsemirrorJSON(copy, fragmentName)
         Y.applyUpdate(copy, incoming)
         const verdict = validateSuggesterChange(before, yDocToProsemirrorJSON(copy, fragmentName), context.userID)
+        if (!verdict.ok) {
+          if (process.env.COLLAB_DEBUG_REJECT) console.log('REJECT', JSON.stringify({ before, after: yDocToProsemirrorJSON(copy, fragmentName) }))
+        }
         if (!verdict.ok) throw Object.assign(new Error(verdict.reason), { reason: verdict.reason })
       } finally {
         copy.destroy()

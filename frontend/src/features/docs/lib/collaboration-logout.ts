@@ -38,7 +38,8 @@ export async function flushLocalEditsForLogout(options: FlushOptions) {
       count: document.unsyncedChanges(),
       workspaceID: document.workspaceID,
     }))
-  unsynced.push(...(await flushClosedCopies(options, open, timeoutMs)))
+  const closed = await flushClosedCopies(options, open, timeoutMs)
+  unsynced.push(...closed)
   if (unsynced.length === 0) await clearLocalCopies()
   return { unsynced }
 }
@@ -68,7 +69,8 @@ async function flushClosedCopies(
     })
     try {
       await session.loaded
-      if (!(await session.drained(timeoutMs)))
+      const drained = await session.drained(timeoutMs)
+      if (!drained)
         left.push({
           documentID,
           count: session.unsyncedChanges(),
