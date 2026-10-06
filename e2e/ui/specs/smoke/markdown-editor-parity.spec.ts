@@ -337,8 +337,7 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
   expect(lines).toEqual([
     "Start **bold** *slanted by B*",
     "- outer",
-    "- ", // the blank paragraph that holds the nested list's item
-    "  - inner tail",
+    "- - inner tail", // an item that holds only the nested list
   ]);
 
   await secondContext.close();
