@@ -7,7 +7,7 @@ test('@live: public share route renders the canonical Markdown AST read-only', a
 }) => {
   const suffix = `${Date.now()}`
   const title = `Shared Markdown ${suffix}`
-  const documentID = randomUUID()
+  let documentID = randomUUID()
   const rootNodeID = randomUUID()
   const paragraphNodeID = randomUUID()
   const runNodeID = randomUUID()
