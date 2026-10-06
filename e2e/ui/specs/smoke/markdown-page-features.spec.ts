@@ -26,8 +26,9 @@ test("@live @smoke @pagefeatures: the title is the first line, with an info line
   const { editor } = await openMarkdownDocument(page, ["first line", "[ ] not a task"]);
   const title = page.getByRole("textbox", { name: "Document title" });
   await expect(title).toHaveValue(/Input doc/);
-  await expect(page.getByText(/^(Created|Updated) by .+ ago$/)).toBeVisible();
-  await expect(page.getByText("Draft", { exact: true })).toBeVisible();
+  const info = page.locator("p", { hasText: /^(Created|Updated) by / });
+  await expect(info).toContainText(/ ago/);
+  await expect(info.getByText("Draft", { exact: true })).toBeVisible();
 
   await title.press("Enter");
   await expect(editor).toBeFocused();
@@ -49,10 +50,10 @@ test("@live @smoke @pagefeatures: Contents lists the headings and jumps to one",
 }) => {
   const { editor } = await openMarkdownDocument(page, ["", "body", ""]);
   await editor.locator("p").first().click();
-  await page.keyboard.type("# Alpha ");
+  await page.keyboard.type("# ");
   await page.keyboard.type("Alpha title");
   await editor.locator("p").last().click();
-  await page.keyboard.type("## Beta ");
+  await page.keyboard.type("## ");
   await page.keyboard.type("Beta title");
 
   await page.getByRole("button", { name: "Contents" }).click();

@@ -37,6 +37,17 @@ describe('outlineOf', () => {
     ])
   })
 
+  it('reads text a heading holds itself, before it is split into runs', () => {
+    order = 0
+    const nodes = [
+      node('root', null, 'document'),
+      node('h1', 'root', 'atx-heading', 'Typed title', { level: 1 }),
+    ]
+    expect(outlineOf(nodes)).toEqual([
+      { nodeID: 'h1', level: 1, text: 'Typed title' },
+    ])
+  })
+
   it('keeps an empty heading out of the list', () => {
     order = 0
     const nodes = [
