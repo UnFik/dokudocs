@@ -16,6 +16,7 @@ export interface UserAuthor {
 }
 
 export interface DocumentItem {
+  viewCount?: number
   id: string
   title: string
   type: DocType

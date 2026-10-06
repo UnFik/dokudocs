@@ -160,9 +160,12 @@ function toStateBody(
       return {
         name: 'atx-heading',
         meta: { level },
+        // Text typed straight into a heading sits in its own content, without the marker.
         text: descendants.length
           ? `${'#'.repeat(level)} ${text}`
-          : node.content || `${'#'.repeat(level)} `,
+          : /^#{1,6}(\s|$)/.test(node.content)
+            ? node.content
+            : `${'#'.repeat(level)} ${node.content}`,
       }
     }
     case 'setext-heading': {

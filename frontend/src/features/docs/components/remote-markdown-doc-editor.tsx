@@ -37,6 +37,8 @@ import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
 } from '../lib/muya/state/documentBodyToMarkdown'
+import { revisionInsights } from '../lib/insights'
+import { slidesOf } from '../lib/slides'
 import { activeHeadingID, outlineOf, type OutlineItem } from '../lib/outline'
 import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
 import { EditorNotice } from '../lib/prosemirror/editorNotice'
@@ -49,6 +51,7 @@ import { type SuggestionCard } from '../lib/prosemirror/suggestionCards'
 import { shouldSelectDocumentBody } from '../lib/select-all-scope'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { DocumentInfoLine } from './document-info-line'
+import { DocumentInsightsDialog } from './document-insights-dialog'
 import { DocumentStatsDialog } from './document-stats-dialog'
 import { DocumentTitleRow } from './document-title-row'
 import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
@@ -61,6 +64,7 @@ import {
 } from './editor-mode-tabs'
 import './markdown-body.css'
 import { OutlinePanel } from './outline-panel'
+import { PresentationMode } from './presentation-mode'
 import { SuggestionCardList } from './suggestion-card-list'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
@@ -199,6 +203,8 @@ export function RemoteMarkdownDocEditor({
           updatedBy: document.updatedBy?.name ?? null,
           author: document.author.name,
           isDraft: Boolean(document.isDraft),
+          createdAt: document.createdAt,
+          views: document.viewCount ?? 0,
         }}
         markdown={markdown}
         onAccess={setAccess}
@@ -273,6 +279,8 @@ function CollaborativeMarkdownBody({
     updatedBy: string | null
     author: string
     isDraft: boolean
+    createdAt: string
+    views: number
   }
   markdown: string
   onAccess: (access: CollabAccess) => void
@@ -322,6 +330,14 @@ function CollaborativeMarkdownBody({
     (state) => state.setShowOutline
   )
   const [statsOpen, setStatsOpen] = useState(false)
+  const [presenting, setPresenting] = useState(false)
+  const [insightsOpen, setInsightsOpen] = useState(false)
+  const insightsHistory = useQuery({
+    queryKey: ['document-revisions', workspaceID, documentID],
+    queryFn: ({ signal }) => listDocumentRevisions(workspaceID, documentID, signal),
+    enabled: insightsOpen && !offline,
+    retry: false,
+  })
   const stats = useMemo(() => documentStats(markdown), [markdown])
   const size = sizeState(stats.characters, maxCharacters)
   // Ctrl+Shift+G, as in Outline: what the page holds.
@@ -334,6 +350,23 @@ function CollaborativeMarkdownBody({
       ) {
         event.preventDefault()
         setStatsOpen(true)
+      }
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === 'i'
+      ) {
+        event.preventDefault()
+        setInsightsOpen(true)
+      }
+      // Ctrl+Alt+P, as in Outline: the page as slides.
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.altKey &&
+        event.code === 'KeyP'
+      ) {
+        event.preventDefault()
+        setPresenting(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -802,6 +835,27 @@ function CollaborativeMarkdownBody({
           {error}
         </p>
       ) : null}
+      {presenting ? (
+        <PresentationMode
+          slides={slidesOf(markdown)}
+          onClose={() => setPresenting(false)}
+        />
+      ) : null}
+      <DocumentInsightsDialog
+        open={insightsOpen}
+        onOpenChange={setInsightsOpen}
+        insights={{
+          views: meta.views,
+          createdBy: meta.author,
+          createdAt: meta.createdAt,
+          versions: insightsHistory.data
+            ? revisionInsights(insightsHistory.data).versions
+            : null,
+          contributors: insightsHistory.data
+            ? revisionInsights(insightsHistory.data).contributors
+            : null,
+        }}
+      />
       <DocumentStatsDialog
         open={statsOpen}
         stats={stats}

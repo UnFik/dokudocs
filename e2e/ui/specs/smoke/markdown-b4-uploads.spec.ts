@@ -113,3 +113,26 @@ async function workspaceOf(
   const list = ((await workspaces.json()) as { data: { id: string }[] }).data;
   return list[list.length - 1]!.id;
 }
+
+test("@live @smoke @presentation: Ctrl+Alt+P shows the page as slides and Ctrl+Shift+I shows insights", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", ""]);
+  await editor.locator("p").first().click();
+  await page.keyboard.type("# Opening");
+  await editor.locator("p").last().click();
+  await page.keyboard.type("## Closing");
+  await expect(page.getByRole("status")).toContainText("Synced");
+
+  await page.keyboard.press("Control+Alt+p");
+  const slides = page.getByRole("dialog", { name: "Presentation" });
+  await expect(slides).toContainText("Opening");
+  await expect(slides).toContainText("1 / 2");
+  await page.keyboard.press("ArrowRight");
+  await expect(slides).toContainText("Closing");
+  await page.keyboard.press("Escape");
+  await expect(slides).toBeHidden();
+
+  await page.keyboard.press("Control+Shift+i");
+  await expect(page.getByRole("dialog", { name: "Insights" })).toContainText("Views");
+});
