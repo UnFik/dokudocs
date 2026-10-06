@@ -26,7 +26,7 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 		       (da.document_id IS NOT NULL) AS is_shared,
 		       COALESCE(dv.view_count, 0) AS view_count, dv.last_viewed_at,
 		       d.created_at, d.updated_at,
-		       uu.id, uu.full_name, uu.email, COALESCE(uu.avatar_url, '')
+		       uu.id, COALESCE(uu.full_name, ''), COALESCE(uu.email, ''), COALESCE(uu.avatar_url, '')
 		FROM documents d
 		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 		JOIN users u ON u.id = d.author_id
