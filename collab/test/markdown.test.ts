@@ -100,6 +100,11 @@ describe('Markdown derived from the document JSON', () => {
     )
   })
 
+  it('writes an uploaded file as a link to it', () => {
+    const file = { type: 'attachment', attrs: attrs({ src: '/api/v1/documents/d/assets/a', fileName: 'spec.pdf', contentType: 'application/pdf' }) }
+    expect(toMarkdown(doc(file))).toBe('[spec.pdf](/api/v1/documents/d/assets/a)\n')
+  })
+
   it('is empty for a document with no blocks', () => {
     expect(toMarkdown(doc())).toBe('')
   })

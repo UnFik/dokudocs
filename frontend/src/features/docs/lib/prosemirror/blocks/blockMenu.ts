@@ -6,6 +6,7 @@ import { blockMenuMeta, type BlockMenuMeta } from '../trackBlockInsert'
 import { createNode, insertBlock, type Command } from './insertBlock'
 import { insertDiagram, insertMathBlock } from './mediaCommands'
 import { insertTable } from './tableCommands'
+import { requestFilePicker } from './uploads'
 
 export interface BlockItem {
   id: string
@@ -145,6 +146,13 @@ blockItems.push(
         paragraph(),
       ])
     ),
+  },
+  {
+    id: 'upload-file',
+    label: 'Image or file',
+    hint: 'upload',
+    keywords: ['image', 'picture', 'photo', 'video', 'file', 'pdf', 'upload', 'attachment'],
+    command: requestFilePicker,
   },
   {
     id: 'page-break',

@@ -8,6 +8,7 @@ import {
 import type { DocumentBodyNode } from './documentBody'
 import { documentBodyToMarkdown } from './muya/state/documentBodyToMarkdown'
 import { blockEditing } from './prosemirror/blocks'
+import type { UploadedFile } from './prosemirror/blocks/uploads'
 import type { MentionCandidate } from './prosemirror/blocks/triggerMenu'
 import {
   createDocumentBodyEditor,
@@ -54,6 +55,9 @@ export async function mountCollaborativeDocumentBody(
     maxCharacters?: number
     resolveLinkTitle?: (href: string) => Promise<string | null>
     mentionSource?: (query: string) => Promise<MentionCandidate[]>
+    upload?: (file: File) => Promise<UploadedFile>
+    resolveAsset?: (src: string) => Promise<string>
+    onUploadError?: (message: string) => void
     onHeadingLink?: (nodeID: string) => void
     onNavigateToTitle?: () => void
     onStatus?: (status: CollabStatus) => void
@@ -118,7 +122,11 @@ export async function mountCollaborativeDocumentBody(
       ])
     if (known) input.onAccess?.(known)
 
-    const blocks = blockEditing()
+    const blocks = blockEditing({
+      upload: input.upload,
+      resolveSource: input.resolveAsset,
+      onUploadError: input.onUploadError,
+    })
     const editor = createDocumentBodyEditor(mount, session.ydoc, {
       readOnly: forceReadOnly || !access.canEdit,
       smartText: input.smartText,

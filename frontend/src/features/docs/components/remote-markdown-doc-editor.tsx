@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
 import { toast } from 'sonner'
+import { assetObjectURL, uploadDocumentAsset } from '../lib/assets'
 import { useAuthStore } from '@/stores/auth-store'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
@@ -513,6 +514,9 @@ function CollaborativeMarkdownBody({
       userName: profileNameRef.current,
       smartText: () => smartTextRef.current,
       maxCharacters,
+      upload: (file) => uploadDocumentAsset(workspaceID, documentID, file),
+      resolveAsset: (src) => assetObjectURL(workspaceID, src),
+      onUploadError: (message) => toast.error(message),
       mentionSource: async (query) => {
         const needle = query.trim().toLowerCase()
         const matches = (name: string) =>

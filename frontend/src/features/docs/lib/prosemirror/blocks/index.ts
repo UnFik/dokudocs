@@ -7,6 +7,7 @@ import { mediaNodeViews } from './mediaNodeViews'
 import { plusButtonPlugin } from './plusButton'
 import { goToNextCell, goToPreviousCell } from './tableCommands'
 import { toggleView } from './toggleNodeView'
+import { uploadsPlugin, type UploadsOptions } from './uploads'
 import { openImageForm, toolbarPlugin } from './toolbar'
 
 function tableKeysPlugin() {
@@ -30,10 +31,25 @@ function tableKeysPlugin() {
 }
 
 /** Plugins and node views for the blocks, media, clipboard and toolbar work. */
-export function blockEditing() {
+export function blockEditing(
+  files: {
+    upload?: UploadsOptions['upload']
+    resolveSource?: (src: string) => Promise<string>
+    onUploadError?: (message: string) => void
+  } = {}
+) {
   const holder: { view?: EditorView } = {}
   return {
     plugins: [
+      ...(files.upload
+        ? [
+            uploadsPlugin({
+              upload: files.upload,
+              enabled: () => holder.view?.editable ?? false,
+              onError: files.onUploadError ?? (() => {}),
+            }),
+          ]
+        : []),
       tableKeysPlugin(),
       clipboardPlugin(),
       blockMenuPlugin(),
@@ -43,6 +59,7 @@ export function blockEditing() {
     ],
     nodeViews: {
       ...mediaNodeViews({
+        resolveSource: files.resolveSource,
         onImageEdit: (request) =>
           holder.view && openImageForm(holder.view, request),
       }),
