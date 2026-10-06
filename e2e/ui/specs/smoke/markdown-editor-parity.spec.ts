@@ -95,9 +95,13 @@ test("@live @smoke: table edits converge across two clients and persist", async 
   await expect(secondEditor).toBeVisible();
   await expect(secondPage.getByRole("status")).toContainText("Synced");
 
-  // Client one inserts a table from the toolbar and fills the first cells with Tab.
+  // Client one inserts a table from the block menu and fills the first cells with Tab.
   await page.getByText("Start", { exact: true }).click();
-  await page.getByRole("button", { name: "Insert table" }).click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("/");
+  await page.getByRole("combobox", { name: "Insert block" }).fill("table");
+  await page.getByRole("option", { name: /Table/ }).first().click();
   await page.keyboard.type("alpha");
   await page.keyboard.press("Tab");
   await page.keyboard.type("beta");

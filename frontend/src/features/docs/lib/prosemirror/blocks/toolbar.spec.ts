@@ -3,7 +3,8 @@ import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
 import { prepareBodyTransaction } from '../prepareBodyTransaction'
 import { bodyOf, bodyBuilder, stateFor } from './testSupport'
-import { openImageForm, toolbarPlugin } from './toolbar'
+import { filterBlockItems } from './blockMenu'
+import { openImageForm, requestImageForm, toolbarPlugin } from './toolbar'
 
 const views: EditorView[] = []
 afterEach(() => {
@@ -48,18 +49,43 @@ const key = (el: Element, k: string) =>
   )
 
 describe('toolbar', () => {
+  it('shows only while the caret is in a table, and only with table tools', () => {
+    const outside = mount().host.querySelector<HTMLElement>('[role="toolbar"]')!
+    expect(outside.hidden).toBe(true)
+    document.body.replaceChildren()
+    const inside = mount(true).host.querySelector<HTMLElement>('[role="toolbar"]')!
+    expect(inside.hidden).toBe(false)
+    expect(
+      [...inside.querySelectorAll<HTMLElement>('button')].map((b) => b.dataset.tool)
+    ).toEqual(['add-row', 'add-column', 'delete-row', 'align-left', 'align-center', 'align-right'])
+  })
+
+  it('leaves inserting things to the block menu, which offers image and inline math', () => {
+    const ids = (query: string) => filterBlockItems(query).map((i) => i.id)
+    expect(ids('image')).toContain('image-address')
+    expect(ids('inline')).toContain('inline-math')
+    expect(ids('table')).toContain('table')
+    expect(ids('mermaid')).toContain('mermaid')
+  })
+
+  it('opens the image form from the block menu command', () => {
+    const { view, host } = mount()
+    expect(requestImageForm(view.state, (tr) => view.dispatch(tr))).toBe(true)
+    expect(host.querySelector('form[aria-label="Image"]')).not.toBeNull()
+  })
+
   it('is a labelled toolbar of labelled buttons with one tab stop', () => {
-    const { host } = mount()
+    const { host } = mount(true)
     const bar = host.querySelector('[role="toolbar"]')!
     expect(bar.getAttribute('aria-label')).toBeTruthy()
     const buttons = [...bar.querySelectorAll('button')]
-    expect(buttons.length).toBeGreaterThan(5)
+    expect(buttons.length).toBeGreaterThan(3)
     expect(buttons.every((b) => b.getAttribute('aria-label'))).toBe(true)
     expect(buttons.filter((b) => b.tabIndex === 0)).toHaveLength(1)
   })
 
   it('moves focus with arrow keys, Home and End', () => {
-    const { host } = mount()
+    const { host } = mount(true)
     const buttons = [
       ...host.querySelectorAll<HTMLButtonElement>('[role="toolbar"] button'),
     ]
@@ -70,27 +96,6 @@ describe('toolbar', () => {
     expect(document.activeElement).toBe(buttons.at(-1))
     key(buttons.at(-1)!, 'ArrowRight')
     expect(document.activeElement).toBe(buttons[0])
-  })
-
-  it('enables table row actions only inside a table', () => {
-    const outside = mount().host
-    const addRow = outside.querySelector<HTMLButtonElement>(
-      '[data-tool="add-row"]'
-    )!
-    expect(addRow.getAttribute('aria-disabled')).toBe('true')
-    document.body.replaceChildren()
-    const inside = mount(true).host
-    expect(
-      inside
-        .querySelector('[data-tool="add-row"]')!
-        .getAttribute('aria-disabled')
-    ).toBe('false')
-  })
-
-  it('inserts a table when its button is activated', () => {
-    const { view, host } = mount()
-    host.querySelector<HTMLButtonElement>('[data-tool="table"]')!.click()
-    expect(bodyOf(view.state.doc).some((n) => n.type === 'table')).toBe(true)
   })
 
   it('inserts an image from the form and rejects an unsafe address', () => {

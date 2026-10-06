@@ -190,7 +190,6 @@ for (const viewport of viewports) {
       expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
 
       await expectNoHorizontalOverflow(page);
-      await expectTargets(page, ".dd-tb button", "insert and table toolbar");
       await expectTargets(page, '[role="group"][aria-label="History"] button', "undo and redo");
 
       // A tap is the only way to reveal the block handle on a touch screen.
@@ -233,26 +232,33 @@ for (const viewport of viewports) {
 test.describe("@live editor accessibility, keyboard only, 768px", () => {
   test.use({ viewport: { width: 768, height: 1024 } });
 
-  test("insert toolbar works with Tab, arrows, Enter and shows focus", async ({ page }) => {
+  test("table toolbar works with arrows, Enter and shows focus", async ({ page }) => {
     test.setTimeout(90000);
     const editor = await prepareDocument(page);
-    await placeCaret(editor, editor.locator("p").filter({ hasText: "Alpha block" }));
-
-    await page.keyboard.press("Shift+Tab");
+    await placeCaret(editor, editor.locator("p").last());
     const toolbar = page.getByRole("toolbar", { name: "Insert and table tools" });
-    await expect(toolbar.getByRole("button", { name: "Insert table" })).toBeFocused();
-    await expectFocusVisible(page);
-
-    await page.keyboard.press("ArrowRight");
-    await expect(toolbar.getByRole("button", { name: "Add table row below" })).toBeFocused();
-    await expectFocusVisible(page);
-    await page.keyboard.press("End");
-    await expect(toolbar.getByRole("button", { name: "Insert Mermaid diagram" })).toBeFocused();
-    await page.keyboard.press("Home");
-    await expect(toolbar.getByRole("button", { name: "Insert table" })).toBeFocused();
+    await expect(toolbar).toBeHidden();
 
     await page.keyboard.press("Enter");
+    await page.keyboard.press("/");
+    await page.getByRole("combobox", { name: "Insert block" }).fill("table");
+    await page.getByRole("option", { name: /Table/ }).first().click();
     await expect(editor.locator("table")).toHaveCount(1);
+    await expect(toolbar).toBeVisible();
+
+    const first = toolbar.getByRole("button", { name: "Add table row below" });
+    await first.focus();
+    await expectFocusVisible(page);
+    await page.keyboard.press("ArrowRight");
+    await expect(toolbar.getByRole("button", { name: "Add table column after" })).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(toolbar.getByRole("button", { name: "Align column right" })).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(first).toBeFocused();
+
+    const rows = await editor.locator("table tr").count();
+    await page.keyboard.press("Enter");
+    await expect(editor.locator("table tr")).toHaveCount(rows + 1);
     await expect(editor).toBeFocused();
   });
 

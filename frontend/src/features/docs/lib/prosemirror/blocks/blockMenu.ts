@@ -4,8 +4,9 @@ import type { EditorView } from 'prosemirror-view'
 import { documentBodySchema } from '../documentBody'
 import { blockMenuMeta, type BlockMenuMeta } from '../trackBlockInsert'
 import { createNode, insertBlock, type Command } from './insertBlock'
-import { insertDiagram, insertMathBlock } from './mediaCommands'
+import { insertDiagram, insertInlineMath, insertMathBlock } from './mediaCommands'
 import { insertTable } from './tableCommands'
+import { requestImageForm } from './toolbar'
 import { requestFilePicker } from './uploads'
 
 export interface BlockItem {
@@ -146,6 +147,20 @@ blockItems.push(
         paragraph(),
       ])
     ),
+  },
+  {
+    id: 'image-address',
+    label: 'Image from address',
+    hint: 'url',
+    keywords: ['image', 'picture', 'url', 'link', 'address'],
+    command: requestImageForm,
+  },
+  {
+    id: 'inline-math',
+    label: 'Inline math',
+    hint: '$x$',
+    keywords: ['inline', 'math', 'latex', 'formula'],
+    command: insertInlineMath,
   },
   {
     id: 'upload-file',
