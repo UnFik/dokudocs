@@ -192,8 +192,6 @@ Rules:
 
 Suggest mode on canvases; per-workspace catalog entries; refusing odd protocol pairings; technology versions on a System (Go 1.22) and the running release of a System (v3.4.1); environment properties; editing a linked document inside the canvas; links from Hosts.
 
-## Open for implementation
+## Implementation
 
-- Whether `collab/` loads the room schema by document type in one server or runs a second Hocuspocus extension path; to settle in the phase 1 spike.
-- Deterministic rebuild of the Y.Doc from `content_json` on restore (fixed client ID and insertion order), as done for Markdown.
-- Whether a hard element limit is also checked in `collab/` before applying an update, or only in the editor.
+Settled by the spike on `spike/architecture-collab-room` and specified in [the phase 1 technical specification](../specs/architecture-document-phase-1.md): how `collab/` tells room kinds apart (the API's `authorize` returns the document type), the deterministic rebuild (`seedArchitecture`), and the element limit (checked in the service, with a fast path for updates that cannot add an element).
