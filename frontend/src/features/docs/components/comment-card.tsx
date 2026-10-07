@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { ReplyReveal, ReviewCardHeader } from './review-card'
+import { CardIconButton, ReviewCardHeader, revealOnHover } from './review-card'
 
 /** Compact actions in the review rail: 12px text, 28px high, aligned to the text edge. */
 const action = 'h-7 px-2 text-xs'
@@ -194,7 +194,6 @@ export function CommentCard({
   const queryClient = useQueryClient()
   const resolved = Boolean(thread.resolvedAt)
   const [showReplies, setShowReplies] = useState(false)
-  const [replying, setReplying] = useState(false)
   const refresh = () =>
     queryClient.invalidateQueries({
       queryKey: ['document-comments', workspaceID, documentID],
@@ -205,10 +204,7 @@ export function CommentCard({
         replyID: crypto.randomUUID(),
         content,
       }),
-    onSuccess: async () => {
-      setReplying(false)
-      await refresh()
-    },
+    onSuccess: refresh,
     onError: (error) => toast.error(error.message),
   })
   const resolve = useMutation({
@@ -262,6 +258,7 @@ export function CommentCard({
     onError: (error) => toast.error(error.message),
   })
   const repliesShown = !resolved || showReplies
+  const isAuthor = canInteract && thread.authorId === userID
   const canChange = (authorID: string) =>
     canInteract && (authorID === userID || canDecide)
   const who = (id: string, name: string) =>
@@ -272,6 +269,16 @@ export function CommentCard({
       data-comment-thread-id={thread.id}
       data-focused={focused ? 'true' : undefined}
       className={`group mb-2 rounded-lg p-3 text-xs ${focused ? 'bg-secondary ring-1 ring-border' : 'bg-muted/50'}`}
+      // A click on the card itself shows the comment in the document and opens the reply box;
+      // its buttons and fields keep their own clicks.
+      onClick={(event) => {
+        if (
+          !(event.target as HTMLElement).closest(
+            'button,a,input,textarea,label,[role=dialog],[role=alertdialog]'
+          )
+        )
+          onSelect(thread.id)
+      }}
     >
       <ReviewCardHeader
         name={who(thread.authorId, thread.authorName)}
@@ -283,6 +290,25 @@ export function CommentCard({
         ]
           .filter(Boolean)
           .join(' · ')}
+        actions={
+          <>
+            {canInteract ? (
+              <CardIconButton
+                label={resolved ? 'Reopen comment' : 'Resolve comment'}
+                kind='accept'
+                disabled={resolve.isPending}
+                onClick={() => resolve.mutate(!resolved)}
+              />
+            ) : null}
+            {canChange(thread.authorId) ? (
+              <CardIconButton
+                label='Delete'
+                kind='delete'
+                onClick={() => setDeleting({ replyID: null })}
+              />
+            ) : null}
+          </>
+        }
       />
       {orphaned ? <Quote text={thread.selectedText} /> : null}
       {editing === 'thread' ? (
@@ -298,7 +324,21 @@ export function CommentCard({
         />
       ) : (
         <>
-          {orphaned ? (
+          {isAuthor ? (
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className='-mx-2 mt-1 h-auto min-h-9 w-[calc(100%_+_1rem)] cursor-text justify-start px-2 py-1.5 text-left text-xs font-normal whitespace-normal text-foreground hover:bg-background/70'
+              aria-label='Edit this comment'
+              title='Click to edit'
+              onClick={() => setEditing('thread')}
+            >
+              <span className='break-words whitespace-pre-wrap'>
+                {thread.content}
+              </span>
+            </Button>
+          ) : orphaned ? (
             // Nothing to show in the document, so this is plain text.
             <p className='mt-1 py-1.5 break-words whitespace-pre-wrap'>
               {thread.content}
@@ -317,28 +357,6 @@ export function CommentCard({
               </span>
             </Button>
           )}
-          {canChange(thread.authorId) ? (
-            <div className='-ml-2 flex gap-1'>
-              {thread.authorId === userID ? (
-                <Button
-                  size='sm'
-                  className={action}
-                  variant='ghost'
-                  onClick={() => setEditing('thread')}
-                >
-                  Edit
-                </Button>
-              ) : null}
-              <Button
-                size='sm'
-                className={action}
-                variant='ghost'
-                onClick={() => setDeleting({ replyID: null })}
-              >
-                Delete
-              </Button>
-            </div>
-          ) : null}
         </>
       )}
       {resolved && thread.replies.length ? (
@@ -393,7 +411,7 @@ export function CommentCard({
                     {item.content}
                   </p>
                   {canChange(item.authorId) ? (
-                    <div className='-ml-2 flex gap-1'>
+                    <div className={`-ml-2 flex gap-1 ${revealOnHover}`}>
                       {item.authorId === userID ? (
                         <Button
                           size='sm'
@@ -420,31 +438,15 @@ export function CommentCard({
           ))}
         </ul>
       ) : null}
-      {canInteract && !resolved ? (
-        <ReplyReveal open={replying} onOpen={() => setReplying(true)}>
-          <CommentForm
-            id={`comment-reply-${thread.id}`}
-            label='Reply'
-            submitLabel='Send reply'
-            autoFocus
-            pending={reply.isPending}
-            onSubmit={(content) => reply.mutate(content)}
-            onCancel={() => setReplying(false)}
-          />
-        </ReplyReveal>
-      ) : null}
-      {canInteract ? (
-        <div className='mt-2 -ml-2'>
-          <Button
-            size='sm'
-            className={action}
-            variant='ghost'
-            disabled={resolve.isPending}
-            onClick={() => resolve.mutate(!resolved)}
-          >
-            {resolved ? 'Reopen comment' : 'Resolve comment'}
-          </Button>
-        </div>
+      {canInteract && !resolved && focused ? (
+        <CommentForm
+          key={thread.replies.length}
+          id={`comment-reply-${thread.id}`}
+          label='Reply'
+          submitLabel='Send reply'
+          pending={reply.isPending}
+          onSubmit={(content) => reply.mutate(content)}
+        />
       ) : null}
       <ConfirmDialog
         open={deleting !== null}

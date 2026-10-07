@@ -38,7 +38,7 @@ async function renderCard() {
           userID={ME}
           canInteract
           orphaned={false}
-          focused={false}
+          focused
           workspaceID='workspace'
           documentID='document'
           onSelect={vi.fn()}
@@ -49,10 +49,9 @@ async function renderCard() {
 }
 
 describe('CommentCard layout', () => {
-  it('lines the comment, first action, reply box and resolve button up with the avatar', async () => {
+  it('lines the comment, its action and the reply box up with the avatar', async () => {
     const screen = await renderCard()
     await expect.element(screen.getByText('kayanya ganti deh')).toBeVisible()
-    await screen.getByRole('button', { name: 'Reply', exact: true }).click()
     const li = screen.container.querySelector('li')!
     const edge = li
       .querySelector('[data-slot="avatar"]')!
@@ -66,31 +65,24 @@ describe('CommentCard layout', () => {
       range.selectNodeContents(element!)
       return range.getBoundingClientRect().left
     }
-    // The text of the comment, the first action, the reply box and the resolve
-    // button all start where the avatar does.
-    const body = li.querySelector('button[aria-label^="Show in document"]')!
+    // The text of the comment, its action and the reply box all start where
+    // the avatar does.
+    const body = li.querySelector('button[aria-label="Edit this comment"]')!
     expect(textLeft(body.querySelector('span'))).toBeCloseTo(edge, 0)
     expect(left(li.querySelector('textarea'))).toBeCloseTo(edge, 0)
-    for (const name of ['Edit', 'Resolve comment']) {
-      const button = [...li.querySelectorAll('button')].find(
-        (b) => b.textContent === name
-      )!
-      expect(textLeft(button)).toBeCloseTo(edge, 0)
-    }
   })
 
   it('keeps every action the same compact height', async () => {
     const screen = await renderCard()
     await expect.element(screen.getByText('kayanya ganti deh')).toBeVisible()
-    await screen.getByRole('button', { name: 'Reply', exact: true }).click()
     const heights = [...screen.container.querySelectorAll('button')]
       .filter((b) =>
-        ['Edit', 'Delete', 'Send reply', 'Resolve comment'].includes(
+        ['Edit reply', 'Delete reply', 'Send reply'].includes(
           b.textContent ?? ''
         )
       )
       .map((b) => Math.round(b.getBoundingClientRect().height))
-    expect(heights.length).toBe(4)
+    expect(heights.length).toBe(3)
     expect(new Set(heights).size).toBe(1)
   })
 })

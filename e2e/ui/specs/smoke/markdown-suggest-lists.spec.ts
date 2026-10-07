@@ -225,7 +225,7 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     const ownerEditor = page.locator(".ProseMirror");
     await expect(ownerEditor).toContainText("Apples");
     await expect(page.getByRole("status")).toContainText("Synced");
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
     const ownerCards = page.getByRole("list", {
       name: "Suggestions and comments",
     });
@@ -284,8 +284,8 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await commenter.keyboard.type("/");
     const menu = commenter.getByRole("combobox", { name: "Insert block" });
     await expect(menu).toBeFocused();
-    await menu.fill("code");
-    await menu.press("Enter");
+    await commenter.keyboard.type("code");
+    await commenter.keyboard.press("Enter");
     await expect(ownerCards).toContainText("Add: code block");
     await ownerCards
       .getByRole("listitem")

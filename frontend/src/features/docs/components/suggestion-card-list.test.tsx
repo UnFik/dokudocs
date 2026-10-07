@@ -234,13 +234,15 @@ describe('SuggestionCardList with comments', () => {
       .toBeInTheDocument()
   })
 
-  it('says comments are loading while they load', async () => {
+  it('shows no empty message while comments load', async () => {
     const { getByText } = await renderWithComments({
       cards: [],
       commentsLoading: true,
     })
 
-    await expect.element(getByText('Loading comments...')).toBeInTheDocument()
+    await expect
+      .element(getByText('No suggestions or comments yet', { exact: false }))
+      .not.toBeInTheDocument()
   })
 
   it('says so when every comment is resolved, and renders no empty list', async () => {
@@ -322,7 +324,7 @@ describe('editing and deleting comments', () => {
     })
 
     await expect
-      .element(getByRole('button', { name: 'Edit', exact: true }))
+      .element(getByRole('button', { name: 'Edit this comment' }))
       .toBeInTheDocument()
     await expect
       .element(getByRole('button', { name: 'Delete', exact: true }))
@@ -349,7 +351,7 @@ describe('editing and deleting comments', () => {
       .element(getByRole('button', { name: 'Delete', exact: true }))
       .toBeInTheDocument()
     expect(
-      getByRole('button', { name: 'Edit', exact: true }).elements()
+      getByRole('button', { name: 'Edit this comment' }).elements()
     ).toHaveLength(0)
   })
 
@@ -373,7 +375,7 @@ describe('editing and deleting comments', () => {
       commentPositions: positions,
     })
     expect(
-      readOnly.getByRole('button', { name: 'Edit', exact: true }).elements()
+      readOnly.getByRole('button', { name: 'Edit this comment' }).elements()
     ).toHaveLength(0)
     expect(
       readOnly.getByRole('button', { name: 'Delete', exact: true }).elements()
@@ -387,7 +389,7 @@ describe('editing and deleting comments', () => {
       commentPositions: positions,
     })
 
-    await userEvent.click(getByRole('button', { name: 'Edit', exact: true }))
+    await userEvent.click(getByRole('button', { name: 'Edit this comment' }))
     await expect
       .element(getByLabelText('Edit comment'))
       .toHaveValue('my question')

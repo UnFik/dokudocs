@@ -1,9 +1,12 @@
-import { useState } from 'react'
 import '@/styles/index.css'
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { userEvent } from 'vitest/browser'
-import { ReplyReveal, ReviewCardHeader, SuggestionTitle } from './review-card'
+import {
+  CardIconButton,
+  ReviewCardHeader,
+  SuggestionTitle,
+} from './review-card'
 
 describe('ReviewCardHeader', () => {
   it('shows the name above the time, beside the avatar', async () => {
@@ -58,44 +61,30 @@ describe('SuggestionTitle', () => {
   })
 })
 
-function Harness() {
-  const [open, setOpen] = useState(false)
-  return (
-    <section className='group'>
-      <ReplyReveal open={open} onOpen={() => setOpen(true)}>
-        <textarea aria-label='Reply' />
-      </ReplyReveal>
-    </section>
-  )
-}
-
-describe('ReplyReveal', () => {
-  it('shows a Reply button first and the box only after it is pressed', async () => {
-    const screen = await render(<Harness />)
-    expect(screen.getByRole('textbox').elements()).toHaveLength(0)
-    await screen.getByRole('button', { name: 'Reply' }).click()
-    await expect.element(screen.getByRole('textbox')).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: 'Reply' }).elements()
-    ).toHaveLength(0)
-  })
-
-  it('keeps the button out of sight until the card is hovered or focused', async () => {
-    const screen = await render(<Harness />)
-    const button = screen.getByRole('button', { name: 'Reply' })
-    await expect.element(button).toHaveStyle({ opacity: '0' })
-    await userEvent.hover(screen.container.querySelector('section')!)
-    await expect.element(button).toHaveStyle({ opacity: '1' })
-  })
-
-  it('is there for the keyboard even while unseen', async () => {
-    const screen = await render(<Harness />)
-    await userEvent.tab()
+describe('CardIconButton', () => {
+  it('is named for its action and hidden until the card is hovered', async () => {
+    let clicks = 0
+    const screen = await render(
+      <section className='group' data-testid='card'>
+        <ReviewCardHeader
+          name='Fikri'
+          actions={
+            <CardIconButton
+              label='Accept'
+              kind='accept'
+              onClick={() => clicks++}
+            />
+          }
+        />
+      </section>
+    )
+    const button = screen.getByRole('button', { name: 'Accept' })
+    expect(getComputedStyle(button.element()).opacity).toBe('0')
+    await userEvent.hover(screen.getByTestId('card'))
     await expect
-      .element(screen.getByRole('button', { name: 'Reply' }))
-      .toHaveFocus()
-    await expect
-      .element(screen.getByRole('button', { name: 'Reply' }))
-      .toHaveStyle({ opacity: '1' })
+      .poll(() => getComputedStyle(button.element()).opacity)
+      .toBe('1')
+    await button.click()
+    expect(clicks).toBe(1)
   })
 })

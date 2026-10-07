@@ -11,7 +11,11 @@ import {
   type SuggestionCard,
 } from '../lib/prosemirror/suggestionCards'
 import { CommentCard, NewCommentCard } from './comment-card'
-import { ReviewCardHeader, SuggestionTitle } from './review-card'
+import {
+  CardIconButton,
+  ReviewCardHeader,
+  SuggestionTitle,
+} from './review-card'
 import { SuggestionThread } from './suggestion-thread'
 
 // The suggestions made in the document itself (ADR 0027), as cards: Add, Delete,
@@ -90,15 +94,15 @@ export function SuggestionCardList({
         </p>
       ) : null}
       {empty ? (
-        <p className='px-4 py-6 text-center text-xs text-muted-foreground'>
-          {commentsLoading
-            ? 'Loading comments...'
-            : resolvedCount
+        commentsLoading ? null : (
+          <p className='px-4 py-6 text-center text-xs text-muted-foreground'>
+            {resolvedCount
               ? 'Every comment is resolved.'
               : 'No suggestions or comments yet. In Suggest mode, what you type becomes a suggestion. Select text and use the comment icon to start a discussion.'}
-        </p>
+          </p>
+        )
       ) : (
-        <ul aria-label='Suggestions and comments' className='px-4 pb-2'>
+        <ul aria-label='Suggestions and comments' className='px-3 pb-2'>
           {newComment ? (
             <NewCommentCard
               workspaceID={workspaceID}
@@ -144,6 +148,31 @@ export function SuggestionCardList({
                   name={authorName}
                   createdAt={discussion?.createdAt}
                   ringColor={authorColor(card.author)}
+                  actions={
+                    canDecide ? (
+                      <>
+                        <CardIconButton
+                          label='Accept'
+                          kind='accept'
+                          disabled={disabled}
+                          onClick={() => onDecide(card.id, 'accept')}
+                        />
+                        <CardIconButton
+                          label='Reject'
+                          kind='reject'
+                          disabled={disabled}
+                          onClick={() => onDecide(card.id, 'reject')}
+                        />
+                      </>
+                    ) : own ? (
+                      <CardIconButton
+                        label='Withdraw'
+                        kind='reject'
+                        disabled={disabled}
+                        onClick={() => onDecide(card.id, 'reject')}
+                      />
+                    ) : null
+                  }
                 />
                 <Button
                   type='button'
@@ -164,40 +193,8 @@ export function SuggestionCardList({
                     documentID={documentID}
                     userID={userID}
                     canInteract={canInteract}
+                    focused={focusedSuggestionID === card.id}
                   />
-                ) : null}
-                {canDecide || own ? (
-                  <div className='mt-2 flex gap-1'>
-                    {canDecide ? (
-                      <>
-                        <Button
-                          size='sm'
-                          variant='outline'
-                          disabled={disabled}
-                          onClick={() => onDecide(card.id, 'accept')}
-                        >
-                          Accept
-                        </Button>
-                        <Button
-                          size='sm'
-                          variant='outline'
-                          disabled={disabled}
-                          onClick={() => onDecide(card.id, 'reject')}
-                        >
-                          Reject
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        disabled={disabled}
-                        onClick={() => onDecide(card.id, 'reject')}
-                      >
-                        Withdraw
-                      </Button>
-                    )}
-                  </div>
                 ) : null}
               </li>
             )
