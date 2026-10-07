@@ -223,7 +223,7 @@ export async function createCollabServer(options: CollabOptions): Promise<Collab
       http(options.serviceSecret ?? null, metrics),
       instrumentation(metrics, options.maxMessagesPerSecond ?? 500),
       authentication(options.backend, metrics, options.maxConnections ?? 1000),
-      permissions(fragmentName),
+      permissions(fragmentName, metrics),
       signals(),
       persistence(options.backend, metrics),
       ...(options.redisURL ? [redis(options.redisURL)] : []),
