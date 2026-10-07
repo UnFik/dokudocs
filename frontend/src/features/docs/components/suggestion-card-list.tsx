@@ -4,7 +4,6 @@ import type {
   CommentThread,
   DocumentSuggestion,
 } from '@/lib/domain-api'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { authorColor } from '../lib/author-color'
 import {
@@ -12,6 +11,7 @@ import {
   type SuggestionCard,
 } from '../lib/prosemirror/suggestionCards'
 import { CommentCard, NewCommentCard } from './comment-card'
+import { ReviewCardHeader, SuggestionTitle } from './review-card'
 import { SuggestionThread } from './suggestion-thread'
 
 // The suggestions made in the document itself (ADR 0027), as cards: Add, Delete,
@@ -131,13 +131,6 @@ export function SuggestionCardList({
             )
             const authorName =
               discussion?.proposerName || (own ? 'You' : 'Collaborator')
-            const authorInitials = authorName
-              .trim()
-              .split(/\s+/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((part) => part[0]!.toUpperCase())
-              .join('')
             return (
               <li
                 key={card.id}
@@ -145,37 +138,24 @@ export function SuggestionCardList({
                 data-focused={
                   focusedSuggestionID === card.id ? 'true' : undefined
                 }
-                className={`border-t py-2 text-xs first:border-t-0 ${focusedSuggestionID === card.id ? 'bg-secondary outline outline-1 -outline-offset-1 outline-border' : ''}`}
+                className={`mb-2 rounded-lg p-3 text-xs ${focusedSuggestionID === card.id ? 'bg-secondary ring-1 ring-border' : 'bg-muted/50'}`}
               >
-                <div className='flex min-w-0 flex-wrap items-center gap-2 text-muted-foreground'>
-                  <Avatar
-                    aria-hidden
-                    className='size-6 shrink-0 border'
-                    style={{ borderColor: authorColor(card.author) }}
-                  >
-                    <AvatarFallback className='bg-muted text-[9px] text-muted-foreground'>
-                      {authorInitials || '?'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className='min-w-0 break-words'>{authorName}</span>
-                  {discussion ? (
-                    <time
-                      className='text-[10px] tabular-nums'
-                      dateTime={discussion.createdAt}
-                    >
-                      {new Date(discussion.createdAt).toLocaleString()}
-                    </time>
-                  ) : null}
-                </div>
+                <ReviewCardHeader
+                  name={authorName}
+                  createdAt={discussion?.createdAt}
+                  ringColor={authorColor(card.author)}
+                />
                 <Button
                   type='button'
                   variant='ghost'
                   size='sm'
-                  className='mt-1 h-auto min-h-11 w-full justify-start px-0 py-2 text-left text-xs font-medium whitespace-normal text-foreground'
+                  className='-mx-2 mt-1 h-auto min-h-9 w-[calc(100%_+_1rem)] justify-start px-2 py-1.5 text-left text-sm font-normal whitespace-normal text-foreground'
                   aria-label={`Show in document: ${cardTitle(card)}`}
                   onClick={() => onSelect(card.id)}
                 >
-                  {cardTitle(card)}
+                  <span>
+                    <SuggestionTitle title={cardTitle(card)} />
+                  </span>
                 </Button>
                 {discussion ? (
                   <SuggestionThread

@@ -66,9 +66,9 @@ describe('SuggestionCardList', () => {
     const { getByText } = await renderList()
 
     await expect
-      .element(getByText('Replace: "old" with "new"'))
+      .element(getByText('Replace: “old” with “new”'))
       .toBeInTheDocument()
-    await expect.element(getByText('Delete: "gone"')).toBeInTheDocument()
+    await expect.element(getByText('Delete: “gone”')).toBeInTheDocument()
     await expect.element(getByText('You')).toBeInTheDocument()
     await expect.element(getByText('Collaborator')).toBeInTheDocument()
   })

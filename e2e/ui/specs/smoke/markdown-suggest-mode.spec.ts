@@ -195,7 +195,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenter.keyboard.type("!!");
     await expect(commenterEditor.locator(".suggest-ins")).toHaveText("!!");
     await expect(ownerEditor.locator(".suggest-ins")).toHaveText("!!");
-    await expect(ownerCards).toContainText('Add: "!!"');
+    await expect(ownerCards).toContainText('Add: “!!”');
 
     // Replace: delete a word, type another right there.
     await commenterEditor.getByText("Original phrase").click();
@@ -235,7 +235,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenter.keyboard.press("Backspace");
     await commenter.keyboard.type("Changed");
     await expect(ownerCards).toContainText(
-      'Replace: "Original" with "Changed"',
+      'Replace: “Original” with “Changed”',
     );
     const replaceCard = ownerCards
       .locator("li")
@@ -265,7 +265,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await showSuggestion.click();
     await expect.poll(canonicalRuns).toEqual(["Original phrase"]);
     await expect(replaceCard).toContainText(
-      'Replace: "Original" with "Changed"',
+      'Replace: “Original” with “Changed”',
     );
     const focusedText = ownerEditor.locator(
       `[data-suggestion-focus-id="${replaceID}"]`,
@@ -301,7 +301,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await expect.poll(canonicalRuns).toEqual(["Original phrase"]);
 
     // Reject the Add, accept the Replace.
-    const addCard = ownerCards.locator("li").filter({ hasText: 'Add: "!!"' });
+    const addCard = ownerCards.locator("li").filter({ hasText: 'Add: “!!”' });
     await addCard.getByRole("button", { name: "Reject" }).click();
     await expect(ownerEditor.locator(".suggest-ins")).toHaveCount(1);
     await expect(commenterEditor).not.toContainText("!!");
@@ -332,7 +332,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     const commenterCards = commenter.getByRole("list", {
       name: "Suggestions and comments",
     });
-    await expect(commenterCards).toContainText('Add: "?"');
+    await expect(commenterCards).toContainText('Add: “?”');
     await expect(
       commenterCards.getByRole("button", { name: "Accept" }),
     ).toHaveCount(0);
@@ -353,7 +353,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     const viewerCards = viewer.getByRole("list", {
       name: "Suggestions and comments",
     });
-    await expect(viewerCards).toContainText('Add: "?"');
+    await expect(viewerCards).toContainText('Add: “?”');
     await viewer.getByRole("button", { name: "Preview rejected" }).click();
     await expect(viewer.locator(".markdown-body")).toHaveAttribute(
       "data-suggestion-preview",
@@ -378,7 +378,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     if ((await ownerReview.getAttribute("aria-expanded")) !== "true") {
       await ownerReview.click();
     }
-    const liveCard = ownerCards.locator("li").filter({ hasText: 'Add: "?"' });
+    const liveCard = ownerCards.locator("li").filter({ hasText: 'Add: “?”' });
     await expect(liveCard).toBeVisible();
     await liveCard.getByLabel("Reply").fill("Please keep this change.");
     await liveCard.getByRole("button", { name: "Send reply" }).click();
@@ -399,7 +399,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenterEditor.getByText("Changed phrase?").click();
     await commenter.keyboard.press("Home");
     await commenter.keyboard.type("!");
-    await expect(ownerCards).toContainText('Add: "!"');
+    await expect(ownerCards).toContainText('Add: “!”');
     await page.getByRole("button", { name: "Reject all", exact: true }).click();
     const rejectAllDialog = page.getByRole("alertdialog");
     await expect(rejectAllDialog).toContainText("Reject all 1 suggestion?");
@@ -415,11 +415,11 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenterEditor.getByText("Changed phrase?").click();
     await commenter.keyboard.press("End");
     await commenter.keyboard.type("?");
-    await expect(commenterCards).toContainText('Add: "?"');
+    await expect(commenterCards).toContainText('Add: “?”');
 
     await commenterCards
       .locator("li")
-      .filter({ hasText: 'Add: "?"' })
+      .filter({ hasText: 'Add: “?”' })
       .last()
       .getByRole("button", { name: "Withdraw" })
       .click();
