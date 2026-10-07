@@ -177,4 +177,23 @@ describe('uploads', () => {
     expect(upload).toHaveBeenCalledWith(file)
     expect(types(view)).toContain('attachment')
   })
+
+  it('reads a pasted or dropped Markdown file into blocks instead of storing it', async () => {
+    const upload = vi.fn()
+    const view = mount({ upload })
+    const file = new File(['# Imported title\n\nSome body text'], 'notes.md', {
+      type: 'text/markdown',
+    })
+    const { handled } = paste(view, file)
+    expect(handled).toBe(true)
+    await vi.waitFor(() =>
+      expect(
+        prosemirrorToDocumentBody(view.state.doc).some(
+          (n) => n.type === 'atx-heading'
+        )
+      ).toBe(true)
+    )
+    expect(upload).not.toHaveBeenCalled()
+    expect(types(view)).not.toContain('attachment')
+  })
 })
