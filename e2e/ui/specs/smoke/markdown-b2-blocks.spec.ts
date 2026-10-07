@@ -3,8 +3,7 @@ import { openMarkdownDocument } from "../../helpers/markdown-document";
 
 async function chooseBlock(page: import("@playwright/test").Page, filter: string, name: RegExp) {
   await page.keyboard.press("/");
-  const menu = page.getByRole("combobox", { name: "Insert block" });
-  await menu.fill(filter);
+  await page.keyboard.type(filter);
   await page.getByRole("option", { name }).click();
 }
 
@@ -54,7 +53,7 @@ test("@live @smoke @blocks2: a notice, a toggle and a page break come from the b
 
   await page.locator(".dd-page-end").click();
   await page.keyboard.press("/");
-  await page.getByRole("combobox", { name: "Insert block" }).fill("page");
+  await page.keyboard.type("page");
   await page.getByRole("option", { name: /Page break/ }).click();
   await expect(editor.locator("hr.dd-page-break")).toHaveCount(1);
 });

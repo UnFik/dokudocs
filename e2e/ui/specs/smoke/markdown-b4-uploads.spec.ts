@@ -13,7 +13,7 @@ async function chooseFile(
   file: { name: string; mimeType: string; buffer: Buffer },
 ) {
   await page.keyboard.press("/");
-  await page.getByRole("combobox", { name: "Insert block" }).fill("image");
+  await page.keyboard.type("image");
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("option", { name: /Image or file/ }).click();
   await (await chooser).setFiles(file);
