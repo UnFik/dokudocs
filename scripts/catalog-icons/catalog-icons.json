@@ -1,0 +1,1162 @@
+{
+ "active-directory": {
+  "fallback": true,
+  "name": "lock",
+  "source": "lucide"
+ },
+ "activemq": {
+  "fallback": true,
+  "name": "mail",
+  "source": "lucide"
+ },
+ "actix-web": {
+  "name": "actix",
+  "source": "simple-icons"
+ },
+ "adonisjs": {
+  "name": "adonisjs",
+  "source": "devicon"
+ },
+ "algolia": {
+  "name": "algolia",
+  "source": "devicon"
+ },
+ "alibaba-cloud-ecs": {
+  "name": "alibabacloud",
+  "source": "simple-icons"
+ },
+ "android": {
+  "name": "android",
+  "source": "devicon"
+ },
+ "angular": {
+  "name": "angular",
+  "source": "devicon"
+ },
+ "anthropic": {
+  "name": "anthropic",
+  "source": "simple-icons"
+ },
+ "apache-httpd": {
+  "name": "apache",
+  "source": "devicon"
+ },
+ "apisix": {
+  "fallback": true,
+  "name": "route",
+  "source": "lucide"
+ },
+ "aspnet-core": {
+  "name": "dotnetcore",
+  "source": "devicon"
+ },
+ "astro": {
+  "name": "astro",
+  "source": "devicon"
+ },
+ "auth0": {
+  "name": "auth0",
+  "source": "simple-icons"
+ },
+ "authentik": {
+  "name": "authentik",
+  "source": "simple-icons"
+ },
+ "availability-zone": {
+  "name": "map-pin",
+  "source": "lucide"
+ },
+ "aws-alb": {
+  "fallback": true,
+  "name": "route",
+  "source": "lucide"
+ },
+ "aws-amplify": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-api-gateway": {
+  "fallback": true,
+  "name": "route",
+  "source": "lucide"
+ },
+ "aws-aurora": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-cognito": {
+  "fallback": true,
+  "name": "lock",
+  "source": "lucide"
+ },
+ "aws-ec2": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-ecs": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-eks": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-elastic-beanstalk": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-elasticache": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-eventbridge": {
+  "fallback": true,
+  "name": "mail",
+  "source": "lucide"
+ },
+ "aws-fargate": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-lambda": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-lightsail": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-msk": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-opensearch": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-rds": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "aws-s3": {
+  "fallback": true,
+  "name": "hard-drive",
+  "source": "lucide"
+ },
+ "aws-ses": {
+  "fallback": true,
+  "name": "plug",
+  "source": "lucide"
+ },
+ "aws-sns": {
+  "fallback": true,
+  "name": "mail",
+  "source": "lucide"
+ },
+ "aws-sqs": {
+  "fallback": true,
+  "name": "mail",
+  "source": "lucide"
+ },
+ "axum": {
+  "fallback": true,
+  "name": "server",
+  "source": "lucide"
+ },
+ "azure-aks": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "azure-app-service": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "azure-blob": {
+  "fallback": true,
+  "name": "hard-drive",
+  "source": "lucide"
+ },
+ "azure-cache-redis": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "azure-container-apps": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "azure-database-postgresql": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "azure-functions": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "azure-service-bus": {
+  "fallback": true,
+  "name": "mail",
+  "source": "lucide"
+ },
+ "azure-sql": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "azure-vm": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "bare-metal": {
+  "name": "server",
+  "source": "lucide"
+ },
+ "batch-job": {
+  "name": "layers",
+  "source": "lucide"
+ },
+ "biznet-gio": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "browser": {
+  "name": "app-window",
+  "source": "lucide"
+ },
+ "bun": {
+  "name": "bun",
+  "source": "devicon"
+ },
+ "c": {
+  "name": "c",
+  "source": "devicon"
+ },
+ "caddy": {
+  "name": "caddy",
+  "source": "simple-icons"
+ },
+ "cassandra": {
+  "name": "cassandra",
+  "source": "devicon"
+ },
+ "ceph": {
+  "name": "ceph",
+  "source": "simple-icons"
+ },
+ "chi": {
+  "fallback": true,
+  "name": "server",
+  "source": "lucide"
+ },
+ "chroma": {
+  "fallback": true,
+  "name": "database",
+  "source": "lucide"
+ },
+ "clerk": {
+  "name": "clerk",
+  "source": "simple-icons"
+ },
+ "cli": {
+  "name": "terminal",
+  "source": "lucide"
+ },
+ "clickhouse": {
+  "name": "clickhouse",
+  "source": "devicon"
+ },
+ "cloudflare": {
+  "name": "cloudflare",
+  "source": "devicon"
+ },
+ "cloudflare-pages": {
+  "name": "cloudflarepages",
+  "source": "simple-icons"
+ },
+ "cloudflare-r2": {
+  "fallback": true,
+  "name": "hard-drive",
+  "source": "lucide"
+ },
+ "cloudflare-workers": {
+  "name": "cloudflareworkers",
+  "source": "devicon"
+ },
+ "cloudfront": {
+  "fallback": true,
+  "name": "route",
+  "source": "lucide"
+ },
+ "cockroachdb": {
+  "fallback": true,
+  "name": "database",
+  "source": "lucide"
+ },
+ "confluent-cloud": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "container": {
+  "name": "container",
+  "source": "lucide"
+ },
+ "couchdb": {
+  "name": "couchdb",
+  "source": "devicon"
+ },
+ "cpp": {
+  "name": "cplusplus",
+  "source": "devicon"
+ },
+ "csharp": {
+  "name": "csharp",
+  "source": "devicon"
+ },
+ "dart": {
+  "name": "dart",
+  "source": "devicon"
+ },
+ "datadog": {
+  "name": "datadog",
+  "source": "devicon"
+ },
+ "deno": {
+  "name": "deno",
+  "source": "simple-icons"
+ },
+ "desktop": {
+  "name": "monitor",
+  "source": "lucide"
+ },
+ "digitalocean-app-platform": {
+  "name": "digitalocean",
+  "source": "devicon"
+ },
+ "digitalocean-droplet": {
+  "name": "digitalocean",
+  "source": "devicon"
+ },
+ "digitalocean-managed-db": {
+  "name": "digitalocean",
+  "source": "devicon"
+ },
+ "django": {
+  "name": "django",
+  "source": "simple-icons"
+ },
+ "dmz": {
+  "name": "shield-half",
+  "source": "lucide"
+ },
+ "docker-host": {
+  "name": "docker",
+  "source": "devicon"
+ },
+ "docker-swarm": {
+  "name": "docker",
+  "source": "devicon"
+ },
+ "dragonfly": {
+  "fallback": true,
+  "name": "zap",
+  "source": "lucide"
+ },
+ "duckdb": {
+  "name": "duckdb",
+  "source": "devicon"
+ },
+ "dynamodb": {
+  "fallback": true,
+  "name": "database",
+  "source": "lucide"
+ },
+ "echo": {
+  "fallback": true,
+  "name": "server",
+  "source": "lucide"
+ },
+ "elastic-apm": {
+  "fallback": true,
+  "name": "activity",
+  "source": "lucide"
+ },
+ "elasticsearch": {
+  "name": "elasticsearch",
+  "source": "devicon"
+ },
+ "electron": {
+  "name": "electron",
+  "source": "devicon"
+ },
+ "elixir": {
+  "name": "elixir",
+  "source": "devicon"
+ },
+ "emqx": {
+  "fallback": true,
+  "name": "mail",
+  "source": "lucide"
+ },
+ "envoy": {
+  "name": "envoy",
+  "source": "devicon"
+ },
+ "expo": {
+  "name": "expo",
+  "source": "devicon"
+ },
+ "express": {
+  "name": "express",
+  "source": "devicon"
+ },
+ "fastapi": {
+  "name": "fastapi",
+  "source": "devicon"
+ },
+ "fastify": {
+  "name": "fastify",
+  "source": "devicon"
+ },
+ "fiber": {
+  "name": "fiber",
+  "source": "devicon"
+ },
+ "firebase-auth": {
+  "name": "firebase",
+  "source": "devicon"
+ },
+ "firebase-cloud-messaging": {
+  "name": "firebase",
+  "source": "devicon"
+ },
+ "firebase-hosting": {
+  "name": "firebase",
+  "source": "devicon"
+ },
+ "firestore": {
+  "name": "firestore",
+  "source": "google-cloud"
+ },
+ "flask": {
+  "name": "flask",
+  "source": "devicon"
+ },
+ "fluent-bit": {
+  "name": "fluentbit",
+  "source": "simple-icons"
+ },
+ "flutter": {
+  "name": "flutter",
+  "source": "devicon"
+ },
+ "fly-io": {
+  "name": "flydotio",
+  "source": "simple-icons"
+ },
+ "gcp-api-gateway": {
+  "name": "cloud_api_gateway",
+  "source": "google-cloud"
+ },
+ "gcp-app-engine": {
+  "name": "app_engine",
+  "source": "google-cloud"
+ },
+ "gcp-bigquery": {
+  "name": "bigquery",
+  "source": "google-cloud"
+ },
+ "gcp-bigtable": {
+  "name": "bigtable",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-cdn": {
+  "name": "cloud_cdn",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-functions": {
+  "name": "cloud_functions",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-run": {
+  "name": "cloud_run",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-scheduler": {
+  "name": "cloud_scheduler",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-sql": {
+  "name": "cloud_sql",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-tasks": {
+  "name": "cloud_tasks",
+  "source": "google-cloud"
+ },
+ "gcp-compute-engine": {
+  "name": "compute_engine",
+  "source": "google-cloud"
+ },
+ "gcp-gke": {
+  "name": "google_kubernetes_engine",
+  "source": "google-cloud"
+ },
+ "gcp-identity-platform": {
+  "name": "identity_platform",
+  "source": "google-cloud"
+ },
+ "gcp-load-balancing": {
+  "name": "cloud_load_balancing",
+  "source": "google-cloud"
+ },
+ "gcp-memorystore": {
+  "name": "memorystore",
+  "source": "google-cloud"
+ },
+ "gcp-pubsub": {
+  "name": "pubsub",
+  "source": "google-cloud"
+ },
+ "gcp-spanner": {
+  "name": "cloud_spanner",
+  "source": "google-cloud"
+ },
+ "gcs": {
+  "name": "cloud_storage",
+  "source": "google-cloud"
+ },
+ "gin": {
+  "name": "gin",
+  "source": "simple-icons"
+ },
+ "github": {
+  "name": "github",
+  "source": "devicon"
+ },
+ "gitlab": {
+  "name": "gitlab",
+  "source": "devicon"
+ },
+ "go-net-http": {
+  "name": "go",
+  "source": "devicon"
+ },
+ "golang": {
+  "name": "go",
+  "source": "devicon"
+ },
+ "google-gemini": {
+  "name": "googlegemini",
+  "source": "simple-icons"
+ },
+ "google-maps": {
+  "name": "googlemaps",
+  "source": "simple-icons"
+ },
+ "google-oauth": {
+  "name": "google",
+  "source": "devicon"
+ },
+ "grafana": {
+  "name": "grafana",
+  "source": "devicon"
+ },
+ "haproxy": {
+  "fallback": true,
+  "name": "route",
+  "source": "lucide"
+ },
+ "heroku": {
+  "name": "heroku",
+  "source": "devicon"
+ },
+ "hono": {
+  "name": "hono",
+  "source": "simple-icons"
+ },
+ "htmx": {
+  "name": "htmx",
+  "source": "devicon"
+ },
+ "idcloudhost": {
+  "fallback": true,
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "influxdb": {
+  "name": "influxdb",
+  "source": "devicon"
+ },
+ "ionic": {
+  "name": "ionic",
+  "source": "devicon"
+ },
+ "ios": {
+  "name": "ios",
+  "source": "simple-icons"
+ },
+ "iot-device": {
+  "name": "cpu",
+  "source": "lucide"
+ },
+ "istio": {
+  "name": "istio",
+  "source": "simple-icons"
+ },
+ "jaeger": {
+  "name": "jaegertracing",
+  "source": "devicon"
+ },
+ "java": {
+  "name": "java",
+  "source": "devicon"
+ },
+ "javascript": {
+  "name": "javascript",
+  "source": "devicon"
+ },
+ "jetpack-compose": {
+  "name": "jetpackcompose",
+  "source": "devicon"
+ },
+ "kafka": {
+  "name": "apachekafka",
+  "source": "devicon"
+ },
+ "keycloak": {
+  "name": "keycloak",
+  "source": "simple-icons"
+ },
+ "keydb": {
+  "fallback": true,
+  "name": "zap",
+  "source": "lucide"
+ },
+ "kibana": {
+  "name": "kibana",
+  "source": "devicon"
+ },
+ "koa": {
+  "name": "koa",
+  "source": "simple-icons"
+ },
+ "kong": {
+  "name": "kong",
+  "source": "simple-icons"
+ },
+ "kotlin": {
+  "name": "kotlin",
+  "source": "devicon"
+ },
+ "kotlin-multiplatform": {
+  "name": "kotlin",
+  "source": "devicon"
+ },
+ "ktor": {
+  "name": "ktor",
+  "source": "devicon"
+ },
+ "kubernetes": {
+  "name": "kubernetes",
+  "source": "devicon"
+ },
+ "kubernetes-namespace": {
+  "name": "kubernetes",
+  "source": "devicon"
+ },
+ "kubernetes-node": {
+  "name": "kubernetes",
+  "source": "devicon"
+ },
+ "kubernetes-pod": {
+  "name": "kubernetes",
+  "source": "devicon"
+ },
+ "laptop": {
+  "name": "laptop",
+  "source": "lucide"
+ },
+ "laravel": {
+  "name": "laravel",
+  "source": "devicon"
+ },
+ "llama-cpp": {
+  "fallback": true,
+  "name": "brain-circuit",
+  "source": "lucide"
+ },
+ "local-disk": {
+  "name": "hard-drive",
+  "source": "lucide"
+ },
+ "logstash": {
+  "name": "logstash",
+  "source": "devicon"
+ },
+ "loki": {
+  "name": "grafana",
+  "source": "devicon"
+ },
+ "lua": {
+  "name": "lua",
+  "source": "devicon"
+ },
+ "mailgun": {
+  "name": "mailgun",
+  "source": "simple-icons"
+ },
+ "mariadb": {
+  "name": "mariadb",
+  "source": "devicon"
+ },
+ "meilisearch": {
+  "name": "meilisearch",
+  "source": "simple-icons"
+ },
+ "memcached": {
+  "name": "memcached",
+  "source": "devicon"
+ },
+ "micronaut": {
+  "fallback": true,
+  "name": "server",
+  "source": "lucide"
+ },
+ "midtrans": {
+  "fallback": true,
+  "name": "plug",
+  "source": "lucide"
+ },
+ "milvus": {
+  "name": "milvus",
+  "source": "simple-icons"
+ },
+ "minio": {
+  "name": "minio",
+  "source": "simple-icons"
+ },
+ "mongodb": {
+  "name": "mongodb",
+  "source": "devicon"
+ },
+ "mongodb-atlas": {
+  "name": "mongodb",
+  "source": "devicon"
+ },
+ "mosquitto": {
+  "name": "eclipsemosquitto",
+  "source": "simple-icons"
+ },
+ "mysql": {
+  "name": "mysql",
+  "source": "devicon"
+ },
+ "nats": {
+  "name": "nats",
+  "source": "devicon"
+ },
+ "neo4j": {
+  "name": "neo4j",
+  "source": "devicon"
+ },
+ "neon": {
+  "name": "neon",
+  "source": "simple-icons"
+ },
+ "nestjs": {
+  "name": "nestjs",
+  "source": "devicon"
+ },
+ "netlify": {
+  "name": "netlify",
+  "source": "devicon"
+ },
+ "new-relic": {
+  "name": "newrelic",
+  "source": "devicon"
+ },
+ "nextjs": {
+  "name": "nextjs",
+  "source": "devicon"
+ },
+ "nfs": {
+  "name": "folder-sync",
+  "source": "lucide"
+ },
+ "nginx": {
+  "name": "nginx",
+  "source": "devicon"
+ },
+ "nodejs": {
+  "name": "nodejs",
+  "source": "devicon"
+ },
+ "nomad": {
+  "name": "nomad",
+  "source": "devicon"
+ },
+ "nuxt": {
+  "name": "nuxt",
+  "source": "devicon"
+ },
+ "ollama": {
+  "name": "ollama",
+  "source": "simple-icons"
+ },
+ "on-premise": {
+  "name": "building-2",
+  "source": "lucide"
+ },
+ "onesignal": {
+  "fallback": true,
+  "name": "plug",
+  "source": "lucide"
+ },
+ "openai": {
+  "fallback": true,
+  "name": "plug",
+  "source": "lucide"
+ },
+ "openldap": {
+  "fallback": true,
+  "name": "lock",
+  "source": "lucide"
+ },
+ "opensearch": {
+  "name": "opensearch",
+  "source": "simple-icons"
+ },
+ "opentelemetry-collector": {
+  "name": "opentelemetry",
+  "source": "devicon"
+ },
+ "oracle": {
+  "name": "oracle",
+  "source": "devicon"
+ },
+ "ory": {
+  "name": "ory",
+  "source": "devicon"
+ },
+ "paypal": {
+  "name": "paypal",
+  "source": "simple-icons"
+ },
+ "phoenix": {
+  "name": "phoenix",
+  "source": "devicon"
+ },
+ "php": {
+  "name": "php",
+  "source": "devicon"
+ },
+ "pinecone": {
+  "fallback": true,
+  "name": "plug",
+  "source": "lucide"
+ },
+ "planetscale": {
+  "name": "planetscale",
+  "source": "simple-icons"
+ },
+ "postgresql": {
+  "name": "postgresql",
+  "source": "devicon"
+ },
+ "preact": {
+  "name": "preact",
+  "source": "simple-icons"
+ },
+ "prometheus": {
+  "name": "prometheus",
+  "source": "devicon"
+ },
+ "pulsar": {
+  "name": "pulsar",
+  "source": "devicon"
+ },
+ "python": {
+  "name": "python",
+  "source": "devicon"
+ },
+ "qdrant": {
+  "name": "qdrant",
+  "source": "simple-icons"
+ },
+ "quarkus": {
+  "name": "quarkus",
+  "source": "devicon"
+ },
+ "qwik": {
+  "name": "qwik",
+  "source": "devicon"
+ },
+ "rabbitmq": {
+  "name": "rabbitmq",
+  "source": "devicon"
+ },
+ "rails": {
+  "name": "rubyonrails",
+  "source": "simple-icons"
+ },
+ "railway": {
+  "name": "railway",
+  "source": "devicon"
+ },
+ "react": {
+  "name": "react",
+  "source": "devicon"
+ },
+ "react-native": {
+  "name": "reactnative",
+  "source": "devicon"
+ },
+ "redis": {
+  "name": "redis",
+  "source": "devicon"
+ },
+ "redis-streams": {
+  "name": "redis",
+  "source": "devicon"
+ },
+ "redpanda": {
+  "fallback": true,
+  "name": "mail",
+  "source": "lucide"
+ },
+ "region": {
+  "name": "globe",
+  "source": "lucide"
+ },
+ "remix": {
+  "name": "remix",
+  "source": "devicon"
+ },
+ "render": {
+  "name": "render",
+  "source": "simple-icons"
+ },
+ "resend": {
+  "name": "resend",
+  "source": "simple-icons"
+ },
+ "ruby": {
+  "name": "ruby",
+  "source": "devicon"
+ },
+ "rust": {
+  "name": "rust",
+  "source": "devicon"
+ },
+ "saas": {
+  "name": "cloud",
+  "source": "lucide"
+ },
+ "scala": {
+  "name": "scala",
+  "source": "devicon"
+ },
+ "scheduled-job": {
+  "name": "clock",
+  "source": "lucide"
+ },
+ "scylladb": {
+  "name": "scylladb",
+  "source": "simple-icons"
+ },
+ "sendgrid": {
+  "fallback": true,
+  "name": "plug",
+  "source": "lucide"
+ },
+ "sentry": {
+  "name": "sentry",
+  "source": "devicon"
+ },
+ "service": {
+  "name": "cog",
+  "source": "lucide"
+ },
+ "slack": {
+  "name": "slack",
+  "source": "devicon"
+ },
+ "solid": {
+  "name": "solidjs",
+  "source": "devicon"
+ },
+ "solr": {
+  "name": "apachesolr",
+  "source": "simple-icons"
+ },
+ "spring-boot": {
+  "name": "springboot",
+  "source": "simple-icons"
+ },
+ "sql-server": {
+  "name": "microsoftsqlserver",
+  "source": "devicon"
+ },
+ "sqlite": {
+  "name": "sqlite",
+  "source": "devicon"
+ },
+ "static-site": {
+  "name": "file-code",
+  "source": "lucide"
+ },
+ "stripe": {
+  "name": "stripe",
+  "source": "simple-icons"
+ },
+ "subnet": {
+  "name": "layout-grid",
+  "source": "lucide"
+ },
+ "supabase": {
+  "name": "supabase",
+  "source": "devicon"
+ },
+ "supabase-auth": {
+  "name": "supabase",
+  "source": "devicon"
+ },
+ "svelte": {
+  "name": "svelte",
+  "source": "devicon"
+ },
+ "sveltekit": {
+  "name": "svelte",
+  "source": "devicon"
+ },
+ "swift": {
+  "name": "swift",
+  "source": "devicon"
+ },
+ "swiftui": {
+  "name": "swift",
+  "source": "devicon"
+ },
+ "symfony": {
+  "name": "symfony",
+  "source": "devicon"
+ },
+ "tanstack-start": {
+  "name": "tanstack",
+  "source": "simple-icons"
+ },
+ "tauri": {
+  "name": "tauri",
+  "source": "devicon"
+ },
+ "tempo": {
+  "name": "grafana",
+  "source": "devicon"
+ },
+ "text-embeddings-inference": {
+  "fallback": true,
+  "name": "brain-circuit",
+  "source": "lucide"
+ },
+ "tidb": {
+  "name": "tidb",
+  "source": "simple-icons"
+ },
+ "timescaledb": {
+  "name": "timescale",
+  "source": "simple-icons"
+ },
+ "traefik": {
+  "name": "traefikproxy",
+  "source": "devicon"
+ },
+ "twilio": {
+  "name": "twilio",
+  "source": "devicon"
+ },
+ "typescript": {
+  "name": "typescript",
+  "source": "devicon"
+ },
+ "typesense": {
+  "fallback": true,
+  "name": "search",
+  "source": "lucide"
+ },
+ "upstash": {
+  "name": "upstash",
+  "source": "simple-icons"
+ },
+ "valkey": {
+  "fallback": true,
+  "name": "zap",
+  "source": "lucide"
+ },
+ "vercel": {
+  "name": "vercel",
+  "source": "devicon"
+ },
+ "vllm": {
+  "name": "vllm",
+  "source": "simple-icons"
+ },
+ "vm": {
+  "name": "box",
+  "source": "lucide"
+ },
+ "vpc": {
+  "name": "network",
+  "source": "lucide"
+ },
+ "vps": {
+  "name": "server-cog",
+  "source": "lucide"
+ },
+ "vue": {
+  "name": "vuejs",
+  "source": "devicon"
+ },
+ "weaviate": {
+  "fallback": true,
+  "name": "database",
+  "source": "lucide"
+ },
+ "whatsapp-business": {
+  "name": "whatsapp",
+  "source": "simple-icons"
+ },
+ "worker": {
+  "name": "repeat",
+  "source": "lucide"
+ },
+ "xendit": {
+  "name": "xendit",
+  "source": "simple-icons"
+ },
+ "zitadel": {
+  "fallback": true,
+  "name": "lock",
+  "source": "lucide"
+ }
+}
