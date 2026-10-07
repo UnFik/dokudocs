@@ -380,6 +380,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     }
     const liveCard = ownerCards.locator("li").filter({ hasText: 'Add: “?”' });
     await expect(liveCard).toBeVisible();
+    await liveCard.getByRole("button", { name: "Reply", exact: true }).click();
     await liveCard.getByLabel("Reply").fill("Please keep this change.");
     await liveCard.getByRole("button", { name: "Send reply" }).click();
     await expect(liveCard).toContainText("Please keep this change.");

@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import { reviewTime } from '../lib/review-time'
 
 function initials(name: string) {
@@ -74,5 +76,33 @@ export function SuggestionTitle({ title }: { title: string }) {
         )
       )}
     </>
+  )
+}
+
+/**
+ * A card offers Reply as a quiet button that shows when the card is hovered or
+ * focused (always on touch screens); the box appears once it is pressed. The
+ * card must be a `group`.
+ */
+export function ReplyReveal({
+  open,
+  onOpen,
+  children,
+}: {
+  open: boolean
+  onOpen: () => void
+  children: ReactNode
+}) {
+  if (open) return <>{children}</>
+  return (
+    <Button
+      type='button'
+      variant='ghost'
+      size='sm'
+      className='mt-1 -ml-2 h-7 px-2 text-xs text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100'
+      onClick={onOpen}
+    >
+      Reply
+    </Button>
   )
 }

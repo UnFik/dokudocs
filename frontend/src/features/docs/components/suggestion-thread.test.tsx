@@ -77,6 +77,9 @@ describe('SuggestionThread', () => {
 
   it('sends a trimmed reply and keeps Send disabled while it is empty', async () => {
     const { getByRole, getByLabelText } = await renderThread(suggestion())
+    // The box only appears once Reply is pressed.
+    await expect.element(getByLabelText('Reply')).not.toBeInTheDocument()
+    await userEvent.click(getByRole('button', { name: 'Reply' }))
     const send = getByRole('button', { name: 'Send reply' })
     await expect.element(send).toBeDisabled()
     await userEvent.fill(getByLabelText('Reply'), '  Agreed.  ')
@@ -91,6 +94,7 @@ describe('SuggestionThread', () => {
 
   it('blocks a reply that is too long and says by how much', async () => {
     const { getByRole, getByLabelText } = await renderThread(suggestion())
+    await userEvent.click(getByRole('button', { name: 'Reply' }))
     await userEvent.fill(getByLabelText('Reply'), 'x'.repeat(2003))
     await expect.element(getByRole('alert')).toHaveTextContent('Cut 3')
     await expect

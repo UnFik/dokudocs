@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { ReviewCardHeader } from './review-card'
+import { ReplyReveal, ReviewCardHeader } from './review-card'
 
 /** Compact actions in the review rail: 12px text, 28px high, aligned to the text edge. */
 const action = 'h-7 px-2 text-xs'
@@ -194,6 +194,7 @@ export function CommentCard({
   const queryClient = useQueryClient()
   const resolved = Boolean(thread.resolvedAt)
   const [showReplies, setShowReplies] = useState(false)
+  const [replying, setReplying] = useState(false)
   const refresh = () =>
     queryClient.invalidateQueries({
       queryKey: ['document-comments', workspaceID, documentID],
@@ -204,7 +205,10 @@ export function CommentCard({
         replyID: crypto.randomUUID(),
         content,
       }),
-    onSuccess: refresh,
+    onSuccess: async () => {
+      setReplying(false)
+      await refresh()
+    },
     onError: (error) => toast.error(error.message),
   })
   const resolve = useMutation({
@@ -267,7 +271,7 @@ export function CommentCard({
     <li
       data-comment-thread-id={thread.id}
       data-focused={focused ? 'true' : undefined}
-      className={`mb-2 rounded-lg p-3 text-xs ${focused ? 'bg-secondary ring-1 ring-border' : 'bg-muted/50'}`}
+      className={`group mb-2 rounded-lg p-3 text-xs ${focused ? 'bg-secondary ring-1 ring-border' : 'bg-muted/50'}`}
     >
       <ReviewCardHeader
         name={who(thread.authorId, thread.authorName)}
@@ -417,13 +421,17 @@ export function CommentCard({
         </ul>
       ) : null}
       {canInteract && !resolved ? (
-        <CommentForm
-          id={`comment-reply-${thread.id}`}
-          label='Reply'
-          submitLabel='Send reply'
-          pending={reply.isPending}
-          onSubmit={(content) => reply.mutate(content)}
-        />
+        <ReplyReveal open={replying} onOpen={() => setReplying(true)}>
+          <CommentForm
+            id={`comment-reply-${thread.id}`}
+            label='Reply'
+            submitLabel='Send reply'
+            autoFocus
+            pending={reply.isPending}
+            onSubmit={(content) => reply.mutate(content)}
+            onCancel={() => setReplying(false)}
+          />
+        </ReplyReveal>
       ) : null}
       {canInteract ? (
         <div className='mt-2 -ml-2'>

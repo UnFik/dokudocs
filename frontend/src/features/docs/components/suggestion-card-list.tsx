@@ -138,7 +138,7 @@ export function SuggestionCardList({
                 data-focused={
                   focusedSuggestionID === card.id ? 'true' : undefined
                 }
-                className={`mb-2 rounded-lg p-3 text-xs ${focusedSuggestionID === card.id ? 'bg-secondary ring-1 ring-border' : 'bg-muted/50'}`}
+                className={`group mb-2 rounded-lg p-3 text-xs ${focusedSuggestionID === card.id ? 'bg-secondary ring-1 ring-border' : 'bg-muted/50'}`}
               >
                 <ReviewCardHeader
                   name={authorName}
