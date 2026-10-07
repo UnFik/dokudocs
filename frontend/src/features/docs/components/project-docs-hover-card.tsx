@@ -8,6 +8,7 @@ import {
   Folder,
   GitFork,
   Search,
+  Network,
 } from 'lucide-react'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { formatRelativeTime } from '@/lib/time-utils'
@@ -34,6 +35,8 @@ function getDocTypeIcon(type: DocType) {
       return <GitFork className='size-3.5 shrink-0 text-muted-foreground' />
     case 'dbdiagram':
       return <Database className='size-3.5 shrink-0 text-muted-foreground' />
+    case 'architecture':
+      return <Network className='size-3.5 shrink-0 text-muted-foreground' />
     case 'markdown':
     default:
       return <FileText className='size-3.5 shrink-0 text-muted-foreground' />

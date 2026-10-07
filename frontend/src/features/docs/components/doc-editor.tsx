@@ -11,6 +11,8 @@ import { getLocalUserScope, subscribeLocalUser } from '@/lib/user-storage'
 import { useTheme } from '@/context/theme-provider'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
+import { ArchitectureDocEditor } from '@/features/architecture/components/architecture-editor'
+import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { useDocEditor } from '../hooks/use-doc-editor'
 import { DbmlEditor } from './dbml-editor'
@@ -19,7 +21,6 @@ import { EditorHeader } from './editor-header'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
 import { RemoteMarkdownDocEditor } from './remote-markdown-doc-editor'
-import { ArchitectureDocEditor } from '@/features/architecture/components/architecture-editor'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
 export function DocEditor() {
@@ -338,6 +339,13 @@ function ScopedDocEditor({ docId }: { docId: string }) {
         isStarred={doc.isStarred}
         onToggleStar={handleToggleStar}
       />
+      {doc.workspaceId && (
+        <ArchitectureUses
+          workspaceID={doc.workspaceId}
+          documentID={doc.id}
+          className='border-b border-border px-4 py-1.5'
+        />
+      )}
 
       <div className='flex-1 overflow-hidden'>
         {doc.type === 'markdown' && (

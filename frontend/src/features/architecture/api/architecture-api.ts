@@ -12,10 +12,19 @@ const useSchema = z.object({
 export type ArchitectureUse = z.infer<typeof useSchema>
 
 /** The canvases the reader may open whose elements link to this document. */
-export async function listArchitectureUses(workspaceID: string, documentID: string, signal?: AbortSignal) {
-  return z.array(useSchema).parse(
-    await apiFetch<unknown>(`/api/v1/documents/${documentID}/architecture-uses`, { headers: workspaceHeaders(workspaceID), signal })
-  )
+export async function listArchitectureUses(
+  workspaceID: string,
+  documentID: string,
+  signal?: AbortSignal
+) {
+  return z
+    .array(useSchema)
+    .parse(
+      await apiFetch<unknown>(
+        `/api/v1/documents/${documentID}/architecture-uses`,
+        { headers: workspaceHeaders(workspaceID), signal }
+      )
+    )
 }
 
 const pinSchema = z.object({
@@ -39,13 +48,30 @@ const versionSchema = z.object({
 })
 export type ArchitectureVersion = z.infer<typeof versionSchema>
 
-const versionsPath = (documentID: string) => `/api/v1/documents/${documentID}/architecture-versions`
+const versionsPath = (documentID: string) =>
+  `/api/v1/documents/${documentID}/architecture-versions`
 
-export async function listArchitectureVersions(workspaceID: string, documentID: string, signal?: AbortSignal) {
-  return z.array(versionSchema).parse(await apiFetch<unknown>(versionsPath(documentID), { headers: workspaceHeaders(workspaceID), signal }))
+export async function listArchitectureVersions(
+  workspaceID: string,
+  documentID: string,
+  signal?: AbortSignal
+) {
+  return z
+    .array(versionSchema)
+    .parse(
+      await apiFetch<unknown>(versionsPath(documentID), {
+        headers: workspaceHeaders(workspaceID),
+        signal,
+      })
+    )
 }
 
-export async function createArchitectureVersion(workspaceID: string, documentID: string, label: string, description: string) {
+export async function createArchitectureVersion(
+  workspaceID: string,
+  documentID: string,
+  label: string,
+  description: string
+) {
   return versionSchema.parse(
     await apiFetch<unknown>(versionsPath(documentID), {
       method: 'POST',
@@ -55,7 +81,13 @@ export async function createArchitectureVersion(workspaceID: string, documentID:
   )
 }
 
-export async function updateArchitectureVersion(workspaceID: string, documentID: string, versionID: string, label: string, description: string) {
+export async function updateArchitectureVersion(
+  workspaceID: string,
+  documentID: string,
+  versionID: string,
+  label: string,
+  description: string
+) {
   await apiFetch(`${versionsPath(documentID)}/${versionID}`, {
     method: 'PATCH',
     headers: workspaceHeaders(workspaceID),
@@ -63,8 +95,15 @@ export async function updateArchitectureVersion(workspaceID: string, documentID:
   })
 }
 
-export async function deleteArchitectureVersion(workspaceID: string, documentID: string, versionID: string) {
-  await apiFetch(`${versionsPath(documentID)}/${versionID}`, { method: 'DELETE', headers: workspaceHeaders(workspaceID) })
+export async function deleteArchitectureVersion(
+  workspaceID: string,
+  documentID: string,
+  versionID: string
+) {
+  await apiFetch(`${versionsPath(documentID)}/${versionID}`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(workspaceID),
+  })
 }
 
 const myRequestSchema = z.object({
@@ -99,20 +138,34 @@ const notificationSchema = z.object({
 export type AppNotification = z.infer<typeof notificationSchema>
 
 export async function listMyCatalogRequests(signal?: AbortSignal) {
-  return z.array(myRequestSchema).parse(await apiFetch<unknown>('/api/v1/catalog/requests/mine', { signal }))
+  return z
+    .array(myRequestSchema)
+    .parse(await apiFetch<unknown>('/api/v1/catalog/requests/mine', { signal }))
 }
 
 /** Open requests for platform admins; anyone else gets a 403. */
 export async function listOpenCatalogRequests(signal?: AbortSignal) {
-  return z.array(openRequestSchema).parse(await apiFetch<unknown>('/api/v1/catalog/requests', { signal }))
+  return z
+    .array(openRequestSchema)
+    .parse(await apiFetch<unknown>('/api/v1/catalog/requests', { signal }))
 }
 
-export async function answerCatalogRequest(id: string, answer: { status: 'added'; slug: string } | { status: 'declined'; reason: string }) {
-  await apiFetch(`/api/v1/catalog/requests/${id}`, { method: 'PATCH', body: JSON.stringify(answer) })
+export async function answerCatalogRequest(
+  id: string,
+  answer:
+    | { status: 'added'; slug: string }
+    | { status: 'declined'; reason: string }
+) {
+  await apiFetch(`/api/v1/catalog/requests/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(answer),
+  })
 }
 
 export async function listNotifications(signal?: AbortSignal) {
-  return z.array(notificationSchema).parse(await apiFetch<unknown>('/api/v1/notifications', { signal }))
+  return z
+    .array(notificationSchema)
+    .parse(await apiFetch<unknown>('/api/v1/notifications', { signal }))
 }
 
 export async function markNotificationsRead() {

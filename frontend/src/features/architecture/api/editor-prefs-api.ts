@@ -16,19 +16,25 @@ const settingsSchema = z.object({
 function parseObject(raw: string): Record<string, unknown> {
   try {
     const value = JSON.parse(raw) as unknown
-    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {}
   } catch {
     return {}
   }
 }
 
 export async function readEditorPrefs(signal?: AbortSignal) {
-  const settings = settingsSchema.parse(await apiFetch<unknown>('/api/v1/users/me/settings', { signal }))
+  const settings = settingsSchema.parse(
+    await apiFetch<unknown>('/api/v1/users/me/settings', { signal })
+  )
   return parseObject(settings.editorPrefs)
 }
 
 export async function writeEditorPref(key: string, value: unknown) {
-  const settings = settingsSchema.parse(await apiFetch<unknown>('/api/v1/users/me/settings'))
+  const settings = settingsSchema.parse(
+    await apiFetch<unknown>('/api/v1/users/me/settings')
+  )
   await apiFetch('/api/v1/users/me/settings', {
     method: 'PUT',
     body: JSON.stringify({

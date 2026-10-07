@@ -1,11 +1,15 @@
-import { useTheme } from '@/context/theme-provider'
-import { cn } from '@/lib/utils'
 import manifestJSON from '@/assets/catalog/manifest.json'
+import { cn } from '@/lib/utils'
+import { useTheme } from '@/context/theme-provider'
 import { pickIcon, type IconManifest } from '../lib/catalog-icon'
 
 const manifest = manifestJSON as IconManifest
 // Every icon is a file next to the manifest; Vite gives each a URL and loads it only when shown.
-const urls = import.meta.glob('/src/assets/catalog/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
+const urls = import.meta.glob('/src/assets/catalog/*.svg', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>
 
 /**
  * The logo of a catalog entry in the current theme. A logo that would fade into
@@ -42,12 +46,20 @@ export function CatalogIcon({
       data-fallback={icon?.fallback || undefined}
     >
       {src ? (
-        <img src={src} alt='' width={size - (icon?.tile ? 4 : 2)} height={size - (icon?.tile ? 4 : 2)} draggable={false} />
+        <img
+          src={src}
+          alt=''
+          width={size - (icon?.tile ? 4 : 2)}
+          height={size - (icon?.tile ? 4 : 2)}
+          draggable={false}
+        />
       ) : null}
     </span>
   )
 }
 
 export function groupIconURL(theme: 'light' | 'dark') {
-  return urls[`/src/assets/catalog/lucide-square-dashed${theme === 'dark' ? '.dark' : ''}.svg`]
+  return urls[
+    `/src/assets/catalog/lucide-square-dashed${theme === 'dark' ? '.dark' : ''}.svg`
+  ]
 }

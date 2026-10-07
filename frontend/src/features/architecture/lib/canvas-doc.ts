@@ -20,7 +20,14 @@ export function readCanvas(doc: Y.Doc): ArchitectureJSON {
   return architectureToJSON(doc)
 }
 
-export type NewSystem = { catalog: string; name: string; x: number; y: number; parentId: string | null; id?: string }
+export type NewSystem = {
+  catalog: string
+  name: string
+  x: number
+  y: number
+  parentId: string | null
+  id?: string
+}
 export type NewContainer = {
   kind: 'host' | 'group'
   catalog: string | null
@@ -33,7 +40,11 @@ export type NewContainer = {
   id?: string
 }
 
-function addNode(doc: Y.Doc, fields: Record<string, unknown>, id: string = crypto.randomUUID()) {
+function addNode(
+  doc: Y.Doc,
+  fields: Record<string, unknown>,
+  id: string = crypto.randomUUID()
+) {
   doc.transact(() => {
     const m = new Y.Map<unknown>()
     nodesOf(doc).set(id, m)
@@ -47,7 +58,18 @@ function addNode(doc: Y.Doc, fields: Record<string, unknown>, id: string = crypt
 export function addSystem(doc: Y.Doc, input: NewSystem) {
   return addNode(
     doc,
-    { kind: 'system', parentId: input.parentId, x: input.x, y: input.y, w: null, h: null, name: input.name, catalog: input.catalog, description: '', repoUrl: null },
+    {
+      kind: 'system',
+      parentId: input.parentId,
+      x: input.x,
+      y: input.y,
+      w: null,
+      h: null,
+      name: input.name,
+      catalog: input.catalog,
+      description: '',
+      repoUrl: null,
+    },
     input.id
   )
 }
@@ -55,12 +77,26 @@ export function addSystem(doc: Y.Doc, input: NewSystem) {
 export function addContainer(doc: Y.Doc, input: NewContainer) {
   return addNode(
     doc,
-    { kind: input.kind, parentId: input.parentId, x: input.x, y: input.y, w: input.w, h: input.h, name: input.name, catalog: input.catalog, description: '', repoUrl: null },
+    {
+      kind: input.kind,
+      parentId: input.parentId,
+      x: input.x,
+      y: input.y,
+      w: input.w,
+      h: input.h,
+      name: input.name,
+      catalog: input.catalog,
+      description: '',
+      repoUrl: null,
+    },
     input.id
   )
 }
 
-export function addConnection(doc: Y.Doc, input: { source: string; target: string; protocol: string; id?: string }) {
+export function addConnection(
+  doc: Y.Doc,
+  input: { source: string; target: string; protocol: string; id?: string }
+) {
   const id = input.id ?? crypto.randomUUID()
   doc.transact(() => {
     const m = new Y.Map<unknown>()
@@ -75,7 +111,10 @@ export function addConnection(doc: Y.Doc, input: { source: string; target: strin
   return id
 }
 
-function setFields(target: Y.Map<unknown> | undefined, fields: Record<string, unknown>) {
+function setFields(
+  target: Y.Map<unknown> | undefined,
+  fields: Record<string, unknown>
+) {
   if (!target) return
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined) continue
@@ -106,9 +145,18 @@ export function updateNode(doc: Y.Doc, id: string, fields: NodeFields) {
   doc.transact(() => setFields(nodesOf(doc).get(id), fields), localOrigin)
 }
 
-export type ConnectionFields = Partial<{ protocol: string; label: string; port: string | null; links: string[] }>
+export type ConnectionFields = Partial<{
+  protocol: string
+  label: string
+  port: string | null
+  links: string[]
+}>
 
-export function updateConnection(doc: Y.Doc, id: string, fields: ConnectionFields) {
+export function updateConnection(
+  doc: Y.Doc,
+  id: string,
+  fields: ConnectionFields
+) {
   doc.transact(() => setFields(connectionsOf(doc).get(id), fields), localOrigin)
 }
 
@@ -116,7 +164,8 @@ export function updateConnection(doc: Y.Doc, id: string, fields: ConnectionField
 export function applyPatches(doc: Y.Doc, patches: Patch[]) {
   if (!patches.length) return
   doc.transact(() => {
-    for (const { id, ...fields } of patches) setFields(nodesOf(doc).get(id), fields)
+    for (const { id, ...fields } of patches)
+      setFields(nodesOf(doc).get(id), fields)
   }, localOrigin)
 }
 
@@ -135,7 +184,11 @@ export function removeElement(doc: Y.Doc, id: string) {
     for (let grew = true; grew; ) {
       grew = false
       for (const n of json.nodes) {
-        if (n.parentId && removedNodes.has(n.parentId) && !removedNodes.has(n.id)) {
+        if (
+          n.parentId &&
+          removedNodes.has(n.parentId) &&
+          !removedNodes.has(n.id)
+        ) {
           removedNodes.add(n.id)
           grew = true
         }
@@ -143,16 +196,22 @@ export function removeElement(doc: Y.Doc, id: string) {
     }
   }
   const removedConnections = json.connections.filter(
-    (c) => c.id === id || removedNodes.has(c.source) || removedNodes.has(c.target)
+    (c) =>
+      c.id === id || removedNodes.has(c.source) || removedNodes.has(c.target)
   )
   const documents = new Set<string>()
-  for (const n of json.nodes) if (removedNodes.has(n.id)) n.links.forEach((d) => documents.add(d))
+  for (const n of json.nodes)
+    if (removedNodes.has(n.id)) n.links.forEach((d) => documents.add(d))
   for (const c of removedConnections) c.links.forEach((d) => documents.add(d))
   doc.transact(() => {
     removedNodes.forEach((n) => nodes.delete(n))
     removedConnections.forEach((c) => connections.delete(c.id))
   }, localOrigin)
-  return { nodes: removedNodes.size, connections: removedConnections.length, linkedDocuments: documents.size }
+  return {
+    nodes: removedNodes.size,
+    connections: removedConnections.length,
+    linkedDocuments: documents.size,
+  }
 }
 
 /** Undo for this editor only: changes from other people are never taken back. */
