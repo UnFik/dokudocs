@@ -57,6 +57,8 @@ function Harness({ onReady }: { onReady: (editor: Editor) => void }) {
         onToggleMark={(mark) => editorRef.current?.toggleMark(mark)}
         onSetLink={(href) => editorRef.current?.setLink(href) ?? false}
         onRemoveLink={() => editorRef.current?.removeLink()}
+        onSetHeading={(level) => editorRef.current?.setHeading(level)}
+        onWrapBlock={(kind) => editorRef.current?.wrapBlock(kind)}
       />
     </div>
   )
