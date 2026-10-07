@@ -182,6 +182,39 @@ export async function pastePlainText(page: Page, text: string) {
 }
 
 /** What the user must never see from an ordinary gesture. */
+/**
+ * Waits until the browser's selection sits in the editor (collapsed or not, as
+ * asked), then gives the editor a frame to read it. The editor takes the
+ * selection from a selectionchange event, so a key pressed right after a click
+ * or a delete can reach it while its own selection is a step behind.
+ */
+export async function settleSelection(
+  page: Page,
+  { collapsed }: { collapsed?: boolean } = {},
+) {
+  await expect
+    .poll(() =>
+      page.evaluate((wantCollapsed) => {
+        const selection = window.getSelection();
+        const editor = document.querySelector(
+          '.ProseMirror[contenteditable="true"]',
+        );
+        return (
+          Boolean(selection && selection.rangeCount > 0 && editor) &&
+          editor!.contains(selection!.anchorNode) &&
+          (wantCollapsed === undefined || selection!.isCollapsed === wantCollapsed)
+        );
+      }, collapsed),
+    )
+    .toBe(true);
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => setTimeout(resolve, 0)),
+      ),
+  );
+}
+
 export async function expectNoInternalMessage(page: Page) {
   await expect(page.getByText(/Local changes need review/)).toHaveCount(0);
   await expect(page.getByText(/structural deletion requires/)).toHaveCount(0);
