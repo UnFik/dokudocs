@@ -56,14 +56,12 @@ export async function listArchitectureVersions(
   documentID: string,
   signal?: AbortSignal
 ) {
-  return z
-    .array(versionSchema)
-    .parse(
-      await apiFetch<unknown>(versionsPath(documentID), {
-        headers: workspaceHeaders(workspaceID),
-        signal,
-      })
-    )
+  return z.array(versionSchema).parse(
+    await apiFetch<unknown>(versionsPath(documentID), {
+      headers: workspaceHeaders(workspaceID),
+      signal,
+    })
+  )
 }
 
 export async function createArchitectureVersion(

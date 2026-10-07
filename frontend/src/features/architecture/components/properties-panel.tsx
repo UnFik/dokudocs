@@ -126,7 +126,12 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
         <OrphanedComments
           workspaceID={props.workspaceID}
           documentID={props.documentID}
-          elementIDs={new Set([...canvas.nodes.map((n) => n.id), ...canvas.connections.map((c) => c.id)])}
+          elementIDs={
+            new Set([
+              ...canvas.nodes.map((n) => n.id),
+              ...canvas.connections.map((c) => c.id),
+            ])
+          }
         />
       </div>
     )
@@ -544,7 +549,9 @@ function ContainerProperties({
         workspaceID={props.workspaceID}
         documentID={props.documentID}
         elementID={node.id}
-        elementName={node.name || (node.kind === 'group' ? 'this Group' : 'this Host')}
+        elementName={
+          node.name || (node.kind === 'group' ? 'this Group' : 'this Host')
+        }
         canComment={props.canComment}
         onChanged={props.onCommentsChanged}
       />

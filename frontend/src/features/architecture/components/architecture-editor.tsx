@@ -114,6 +114,7 @@ function Editor({
   })
   const catalog = useCatalog()
   const [selection, setSelection] = useState<Selection>(null)
+  const lastPointerShare = useRef(0)
   const [pendingDelete, setPendingDelete] = useState<{
     id: string
     name: string
@@ -131,9 +132,14 @@ function Editor({
 
   const canEdit = Boolean(session.access?.canEdit) && !session.refused
   // Commenters cannot change the canvas but may discuss its elements.
-  const canComment = Boolean(session.access?.canComment ?? session.access?.canEdit)
+  const canComment = Boolean(
+    session.access?.canComment ?? session.access?.canEdit
+  )
   const comments = useCanvasComments(workspaceID, doc.id)
-  const commentCounts = useMemo(() => openThreadCounts(comments.data), [comments.data])
+  const commentCounts = useMemo(
+    () => openThreadCounts(comments.data),
+    [comments.data]
+  )
   const readOnly = !canEdit
   const undo = useMemo(
     () => (session.doc ? createUndo(session.doc) : null),
@@ -494,15 +500,13 @@ function Editor({
               session.share('selection', next?.id ?? null)
             }}
             peers={session.peers}
-            onPointer={(() => {
-              let last = 0
-              return (point: { x: number; y: number } | null) => {
-                const now = performance.now()
-                if (point && now - last < 50) return
-                last = now
-                session.share('pointer', point)
-              }
-            })()}
+            onPointer={(point) => {
+              // Others see the pointer move; at most one update every 50 ms.
+              const now = performance.now()
+              if (point && now - lastPointerShare.current < 50) return
+              lastPointerShare.current = now
+              session.share('pointer', point)
+            }}
             onConnected={(id, screen) => setProtocolFor({ id, ...screen })}
             onAdd={(item, point) => add(item, point)}
             onDelete={remove}
