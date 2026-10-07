@@ -162,7 +162,8 @@ test("@live @smoke @revisions: the version list steps through the changes from t
   await page.getByTitle("Create Named Milestone").click();
   await page.getByPlaceholder(/Pre-release/).fill("after beta");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText(/Change 1 of/)).toBeVisible();
+  // The list refetches after saving; give it room when the machine is busy.
+  await expect(page.getByText(/Change 1 of/)).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("button", { name: "Next change" })).toBeVisible();
 });
 

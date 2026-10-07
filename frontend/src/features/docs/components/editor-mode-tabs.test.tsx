@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
-import { page, userEvent } from 'vitest/browser'
+import { page } from 'vitest/browser'
 import { EditorModeTabs, modeTabStates, resolveMode } from './editor-mode-tabs'
 
 const editor = { canEdit: true, canSuggest: true, online: true, synced: true }
@@ -49,7 +49,11 @@ describe('modeTabStates', () => {
 })
 
 describe('EditorModeTabs', () => {
-  it('renders View, Edit and Suggest as tabs and marks the active one', async () => {
+  const trigger = () => page.getByRole('button', { name: /Editor mode/ })
+  const item = (name: string) =>
+    page.getByRole('menuitemradio', { name, exact: true })
+
+  it('shows the current mode on a button and lists View, Edit and Suggest when opened', async () => {
     await render(
       <EditorModeTabs
         mode='edit'
@@ -57,18 +61,11 @@ describe('EditorModeTabs', () => {
         onChange={vi.fn()}
       />
     )
-    await expect
-      .element(page.getByRole('tablist', { name: 'Editor mode' }))
-      .toBeVisible()
-    await expect
-      .element(page.getByRole('tab', { name: 'Edit', exact: true }))
-      .toHaveAttribute('aria-selected', 'true')
-    await expect
-      .element(page.getByRole('tab', { name: 'View', exact: true }))
-      .toHaveAttribute('aria-selected', 'false')
-    await expect
-      .element(page.getByRole('tab', { name: 'Suggest', exact: true }))
-      .toBeVisible()
+    await expect.element(trigger()).toHaveTextContent('Edit')
+    await trigger().click()
+    await expect.element(item('Edit')).toHaveAttribute('aria-checked', 'true')
+    await expect.element(item('View')).toHaveAttribute('aria-checked', 'false')
+    await expect.element(item('Suggest')).toBeVisible()
   })
 
   it('reports the chosen mode', async () => {
@@ -80,11 +77,12 @@ describe('EditorModeTabs', () => {
         onChange={onChange}
       />
     )
-    await page.getByRole('tab', { name: 'Suggest', exact: true }).click()
+    await trigger().click()
+    await item('Suggest').click()
     expect(onChange).toHaveBeenCalledWith('suggest')
   })
 
-  it('keeps a disabled tab visible, explains why, and ignores clicks', async () => {
+  it('keeps a disabled mode listed, says why, and ignores it', async () => {
     const onChange = vi.fn()
     await render(
       <EditorModeTabs
@@ -93,13 +91,12 @@ describe('EditorModeTabs', () => {
         onChange={onChange}
       />
     )
-    const edit = page.getByRole('tab', { name: 'Edit', exact: true })
-    await expect.element(edit).toHaveAttribute('aria-disabled', 'true')
-    await userEvent.hover(edit)
+    await trigger().click()
+    await expect.element(item('Edit')).toHaveAttribute('aria-disabled', 'true')
     await expect
-      .element(page.getByRole('tooltip'))
-      .toHaveTextContent('Edit needs edit access to this document.')
-    await edit.click({ force: true })
+      .element(page.getByText('Edit needs edit access to this document.'))
+      .toBeVisible()
+    await item('Edit').click({ force: true })
     expect(onChange).not.toHaveBeenCalled()
   })
 })

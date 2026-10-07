@@ -185,7 +185,8 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     );
     const commenterEditor = commenter.locator(".ProseMirror");
     await expect(commenterEditor).toContainText("Original phrase");
-    await commenter.getByRole("tab", { name: "Suggest", exact: true }).click();
+    await commenter.getByRole("button", { name: /^Editor mode/ }).click();
+  await commenter.getByRole("menuitemradio", { name: "Suggest", exact: true }).click();
     await expect(commenter.getByRole("status")).toContainText("Synced");
 
     await page.goto(`/docs/${documentID}`);

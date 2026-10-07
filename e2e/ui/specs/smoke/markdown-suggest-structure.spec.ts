@@ -145,7 +145,8 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await commenter.goto(`/docs/${documentID}`);
     const commenterEditor = commenter.locator(".ProseMirror");
     await expect(commenterEditor).toContainText("Original phrase");
-    await commenter.getByRole("tab", { name: "Suggest", exact: true }).click();
+    await commenter.getByRole("button", { name: /^Editor mode/ }).click();
+  await commenter.getByRole("menuitemradio", { name: "Suggest", exact: true }).click();
     await expect(commenterEditor).toHaveAttribute("contenteditable", "true");
     await expect(commenter.getByRole("status")).toContainText("Synced");
 
