@@ -57,8 +57,8 @@ func TestTheCatalogHoldsTheSeededEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListEntries(): %v", err)
 	}
-	if len(entries) != 295 {
-		t.Fatalf("entries = %d, want 295 (265 Hosts and Systems, 30 protocols)", len(entries))
+	if len(entries) != 304 {
+		t.Fatalf("entries = %d, want 304 (274 Hosts and Systems, 30 protocols)", len(entries))
 	}
 	bySlug := map[string]appcatalog.Entry{}
 	for _, e := range entries {

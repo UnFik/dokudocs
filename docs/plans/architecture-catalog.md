@@ -260,6 +260,9 @@ A React app built on Vercel and used in a browser can sit in either Host; pick t
 | `weaviate` | Weaviate |
 | `milvus` | Milvus |
 | `chroma` | Chroma |
+| `gcp-spanner` | Google Cloud Spanner |
+| `gcp-bigquery` | Google BigQuery |
+| `gcp-bigtable` | Google Cloud Bigtable |
 
 ### Subkind `cache`
 
@@ -299,6 +302,7 @@ A React app built on Vercel and used in a browser can sit in either Host; pick t
 | `aws-eventbridge` | Amazon EventBridge |
 | `gcp-pubsub` | Google Pub/Sub |
 | `azure-service-bus` | Azure Service Bus |
+| `gcp-cloud-tasks` | Google Cloud Tasks |
 
 ### Subkind `gateway`: web servers, proxies, load balancers, API gateways
 
@@ -317,6 +321,9 @@ A React app built on Vercel and used in a browser can sit in either Host; pick t
 | `aws-api-gateway` | Amazon API Gateway |
 | `cloudflare` | Cloudflare |
 | `cloudfront` | Amazon CloudFront |
+| `gcp-load-balancing` | Google Cloud Load Balancing |
+| `gcp-cloud-cdn` | Google Cloud CDN |
+| `gcp-api-gateway` | Google Cloud API Gateway |
 
 ### Subkind `storage`
 
@@ -346,6 +353,7 @@ A React app built on Vercel and used in a browser can sit in either Host; pick t
 | `authentik` | authentik |
 | `openldap` | OpenLDAP |
 | `active-directory` | Active Directory |
+| `gcp-identity-platform` | Google Identity Platform |
 
 ### Subkind `observability`
 
@@ -383,6 +391,7 @@ A React app built on Vercel and used in a browser can sit in either Host; pick t
 | `scheduled-job` | Scheduled job |
 | `cli` | Command-line tool |
 | `batch-job` | Batch job |
+| `gcp-cloud-scheduler` | Google Cloud Scheduler |
 
 ### Subkind `external`: third-party APIs you call but do not run
 
