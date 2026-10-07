@@ -9,6 +9,7 @@ import {
 } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { ReplyReveal } from './review-card'
 
 // Replies are signed by role because the panel has no member directory:
 // the proposer, or an editor.
@@ -37,6 +38,7 @@ export function SuggestionThread({
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
   const [showReplies, setShowReplies] = useState(false)
+  const [replying, setReplying] = useState(false)
   const resolved = Boolean(suggestion.resolvedAt)
   const replies = suggestion.replies
   const refresh = () =>
@@ -54,6 +56,7 @@ export function SuggestionThread({
       ),
     onSuccess: async () => {
       setDraft('')
+      setReplying(false)
       await refresh()
     },
     onError: (error) => toast.error(error.message),
@@ -125,52 +128,59 @@ export function SuggestionThread({
         </ul>
       ) : null}
       {canInteract && !resolved ? (
-        <form
-          className='mt-2 space-y-1'
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (trimmed && !tooLong) replyMutation.mutate()
-          }}
-        >
-          <label
-            className='block text-muted-foreground'
-            htmlFor={`reply-${suggestion.suggestionId}`}
-          >
-            Reply
-          </label>
-          <Textarea
-            id={`reply-${suggestion.suggestionId}`}
-            className='min-h-14 text-xs md:text-xs'
-            value={draft}
-            aria-invalid={tooLong}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === 'Enter' &&
-                (event.ctrlKey || event.metaKey) &&
-                trimmed &&
-                !tooLong
-              ) {
-                event.preventDefault()
-                replyMutation.mutate()
-              }
+        <ReplyReveal open={replying} onOpen={() => setReplying(true)}>
+          <form
+            className='mt-2 space-y-1'
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (trimmed && !tooLong) replyMutation.mutate()
             }}
-          />
-          {tooLong ? (
-            <p role='alert' className='text-destructive'>
-              Replies can be up to {maxSuggestionReplyLength} characters. Cut{' '}
-              {draft.length - maxSuggestionReplyLength} to send it.
-            </p>
-          ) : null}
-          <Button
-            size='sm'
-            type='submit'
-            variant='outline'
-            disabled={!trimmed || tooLong || replyMutation.isPending}
           >
-            Send reply
-          </Button>
-        </form>
+            <label
+              className='block text-muted-foreground'
+              htmlFor={`reply-${suggestion.suggestionId}`}
+            >
+              Reply
+            </label>
+            <Textarea
+              id={`reply-${suggestion.suggestionId}`}
+              className='min-h-14 text-xs md:text-xs'
+              value={draft}
+              autoFocus
+              aria-invalid={tooLong}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !draft) {
+                  event.preventDefault()
+                  setReplying(false)
+                }
+                if (
+                  event.key === 'Enter' &&
+                  (event.ctrlKey || event.metaKey) &&
+                  trimmed &&
+                  !tooLong
+                ) {
+                  event.preventDefault()
+                  replyMutation.mutate()
+                }
+              }}
+            />
+            {tooLong ? (
+              <p role='alert' className='text-destructive'>
+                Replies can be up to {maxSuggestionReplyLength} characters. Cut{' '}
+                {draft.length - maxSuggestionReplyLength} to send it.
+              </p>
+            ) : null}
+            <Button
+              size='sm'
+              type='submit'
+              variant='outline'
+              disabled={!trimmed || tooLong || replyMutation.isPending}
+            >
+              Send reply
+            </Button>
+          </form>
+        </ReplyReveal>
       ) : null}
     </div>
   )

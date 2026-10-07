@@ -245,6 +245,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     await expect(ownerThread).toHaveAttribute("data-focused", "true");
 
     // The owner replies; the commenter sees it live.
+    await ownerThread.getByRole("button", { name: "Reply", exact: true }).click();
     await ownerThread.getByLabel("Reply").fill("Yes, keep it.");
     await ownerThread.getByRole("button", { name: "Send reply" }).click();
     await expect(commenterRail).toContainText("Yes, keep it.");

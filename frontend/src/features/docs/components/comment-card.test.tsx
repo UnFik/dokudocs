@@ -52,6 +52,7 @@ describe('CommentCard layout', () => {
   it('lines the comment, first action, reply box and resolve button up with the avatar', async () => {
     const screen = await renderCard()
     await expect.element(screen.getByText('kayanya ganti deh')).toBeVisible()
+    await screen.getByRole('button', { name: 'Reply', exact: true }).click()
     const li = screen.container.querySelector('li')!
     const edge = li
       .querySelector('[data-slot="avatar"]')!
@@ -81,6 +82,7 @@ describe('CommentCard layout', () => {
   it('keeps every action the same compact height', async () => {
     const screen = await renderCard()
     await expect.element(screen.getByText('kayanya ganti deh')).toBeVisible()
+    await screen.getByRole('button', { name: 'Reply', exact: true }).click()
     const heights = [...screen.container.querySelectorAll('button')]
       .filter((b) =>
         ['Edit', 'Delete', 'Send reply', 'Resolve comment'].includes(
