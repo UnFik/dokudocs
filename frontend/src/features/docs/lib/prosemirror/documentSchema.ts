@@ -248,7 +248,16 @@ function nodeDOM(
     return [headingTag(node.attrs.bodyAttributes), idAttrs, 0]
   if (bodyType === 'table.cell') {
     const align = cellAlign(node.attrs.bodyAttributes)
-    return ['td', { ...idAttrs, ...(align ? { 'data-align': align } : {}) }, 0]
+    const style = sizeStyle(bodyType, node.attrs.bodyAttributes)
+    return [
+      'td',
+      {
+        ...idAttrs,
+        ...(align ? { 'data-align': align } : {}),
+        ...(style ? { style } : {}),
+      },
+      0,
+    ]
   }
   if (bodyType === 'notice') {
     const variant = noticeVariant(node.attrs.bodyAttributes)
@@ -334,7 +343,7 @@ function nodeDOM(
       kind === 'person' ? `@${label}` : label,
     ]
   }
-  if (bodyType === 'table.cell' || bodyType === 'table.row') {
+  if (bodyType === 'table.row') {
     const style = sizeStyle(bodyType, node.attrs.bodyAttributes)
     return [definition.tag, style ? { ...idAttrs, style } : idAttrs, 0]
   }
