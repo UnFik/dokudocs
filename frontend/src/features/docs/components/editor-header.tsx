@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import type { PresenceUser } from '../lib/collaboration-socket'
+import type { PresenceUser } from '../lib/collab-session'
 import { DocTypeBadge } from './doc-type-badge'
 import { PresenceAvatars } from './presence-avatars'
 import { ProjectDocsHoverCard } from './project-docs-hover-card'
@@ -60,6 +60,8 @@ interface EditorHeaderProps {
   isStarred?: boolean
   onToggleStar?: () => void
   presenceUsers?: PresenceUser[]
+  followedUserID?: string | null
+  onFollowUser?: (userID: string | null) => void
   currentUserID?: string
 }
 
@@ -90,6 +92,8 @@ export function EditorHeader({
   isStarred,
   onToggleStar,
   presenceUsers,
+  followedUserID,
+  onFollowUser,
   currentUserID = '',
 }: EditorHeaderProps) {
   const navigate = useNavigate()
@@ -208,6 +212,8 @@ export function EditorHeader({
             <PresenceAvatars
               users={presenceUsers}
               currentUserID={currentUserID}
+              followedID={followedUserID}
+              onFollow={onFollowUser}
             />
           </div>
         ) : null}

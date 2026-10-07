@@ -19,8 +19,20 @@ type RevisionRepository interface {
 	RestoreDocumentRevision(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) (model.DocumentRestoreResult, error)
 }
 
+// RoomReloader closes a document's open room after the document was replaced.
+type RoomReloader interface {
+	ReloadRoom(ctx context.Context, workspaceID, documentID uuid.UUID) error
+}
+
 type DocumentRevisionUseCase struct {
-	repo RevisionRepository
+	repo   RevisionRepository
+	reload RoomReloader
+}
+
+// WithRoomReloader makes a restore close the room that is open on the document.
+func (u *DocumentRevisionUseCase) WithRoomReloader(reload RoomReloader) *DocumentRevisionUseCase {
+	u.reload = reload
+	return u
 }
 
 func NewDocumentRevisionUseCase(repo RevisionRepository) *DocumentRevisionUseCase {
@@ -46,5 +58,14 @@ func (u *DocumentRevisionUseCase) Restore(ctx context.Context, documentID, revis
 	if documentID == uuid.Nil || revisionID == uuid.Nil || workspaceID == uuid.Nil || actorID == uuid.Nil || requestID == uuid.Nil {
 		return model.DocumentRestoreResult{}, ErrInvalidRevisionRequest
 	}
-	return u.repo.RestoreDocumentRevision(ctx, documentID, revisionID, workspaceID, actorID, requestID)
+	result, err := u.repo.RestoreDocumentRevision(ctx, documentID, revisionID, workspaceID, actorID, requestID)
+	if err != nil {
+		return result, err
+	}
+	// The restore is committed; a room that stays open is stale until its editors reconnect,
+	// so a failed call here is not a failed restore.
+	if u.reload != nil {
+		_ = u.reload.ReloadRoom(ctx, workspaceID, documentID)
+	}
+	return result, nil
 }

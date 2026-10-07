@@ -13,7 +13,7 @@ import (
 func (r *Repository) GetByShareToken(ctx context.Context, token string) (model.Document, error) {
 	const query = `
 		SELECT d.id, d.workspace_id, d.project_id, ''::text, d.title, d.type::text,
-		       CASE WHEN d.type = 'markdown' AND d.root_node_id IS NOT NULL THEN '' ELSE d.content END,
+		       d.content,
 		       d.author_id, u.full_name, u.email, COALESCE(u.avatar_url, ''),
 		       COALESCE(array_to_string(d.tags, ','), ''), d.is_draft, d.visibility::text,
 		       COALESCE(d.thumbnail, ''), COALESCE(d.thumbnail_dark, ''),

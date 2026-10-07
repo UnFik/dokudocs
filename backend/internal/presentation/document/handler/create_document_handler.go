@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"backend/internal/application/document/dto"
-	"backend/internal/domain/documentbody"
 	_ "backend/internal/domain/model"
 	"backend/internal/presentation/document/presenter"
 	"backend/internal/presentation/response"
@@ -39,26 +38,6 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	var inputBody *documentbody.Body
-	if req.InitialBody != nil {
-		if (req.Type != "" && req.Type != "markdown") || req.Content != "" {
-			response.Error(w, http.StatusBadRequest, "initialBody requires a Markdown document without legacy content")
-			return
-		}
-		body := documentbody.Body{
-			DocumentID: req.InitialBody.DocumentID,
-			RootNodeID: req.InitialBody.RootNodeID,
-			Nodes:      make([]documentbody.Node, len(req.InitialBody.Nodes)),
-		}
-		for index, node := range req.InitialBody.Nodes {
-			body.Nodes[index] = documentbody.Node{
-				DocumentID: body.DocumentID, NodeID: node.NodeID, ParentID: node.ParentID,
-				SiblingOrder: node.SiblingOrder, Type: node.Type, Content: node.Content,
-				Attributes: node.Attributes, Version: 1,
-			}
-		}
-		inputBody = &body
-	}
 	requestID, err := parseIdempotencyKey(r)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
@@ -71,16 +50,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Type:        req.Type,
 		Content:     req.Content,
+		ContentJSON: req.ContentJSON,
 		Visibility:  req.Visibility,
 		Tags:        req.Tags,
 		Categories:  req.Categories,
 		IsDraft:     req.IsDraft,
 		ProjectID:   req.ProjectID,
-	}
-	if inputBody != nil {
-		input.DocumentID = inputBody.DocumentID
-		input.InitialBody = inputBody
-		input.BodySchemaVersion = req.InitialBody.BodySchemaVersion
 	}
 	doc, err := h.service.CreateDocument(r.Context(), input)
 	if err != nil {

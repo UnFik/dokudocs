@@ -7,7 +7,7 @@ import (
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/config"
 	"backend/internal/infrastructure/api"
-	"backend/internal/infrastructure/collaboration/redisfanout"
+	"backend/internal/infrastructure/api/routes"
 	"backend/internal/infrastructure/logger"
 	"backend/internal/infrastructure/openai"
 	"backend/internal/infrastructure/postgres"
@@ -40,21 +40,23 @@ func main() {
 		c.RAGAnswerModel = openai.NewAnswerModel(cfg.OpenAIAPIKey, cfg.RAGAnswerModel)
 		c.RAGEmbeddingModel = openai.NewEmbeddingModel(cfg.OpenAIAPIKey, cfg.RAGEmbeddingModel)
 	}
-	if cfg.RedisURL != "" {
-		broker, err := redisfanout.New(cfg.RedisURL)
-		if err != nil {
-			log.Fatalf("create collaboration Redis broker: %v", err)
-		}
-		c.CollaborationBroker = broker
-		presence, err := redisfanout.NewPresenceStore(cfg.RedisURL, redisfanout.DefaultPresenceTTL)
-		if err != nil {
-			log.Fatalf("create collaboration presence store: %v", err)
-		}
-		c.CollaborationPresence = presence
-	}
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()
 	go runRAGIndexWorker(workerCtx, documentrepo.NewRepository(db), c.RAGEmbeddingModel, log)
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-ticker.C:
+				if _, err := routes.SweepAssets(workerCtx, c, cfg, 24*time.Hour); err != nil {
+					log.Printf("sweep assets: %v", err)
+				}
+			}
+		}
+	}()
 	if err := api.RunHTTPServer(workerCtx, cfg, c); err != nil {
 		log.Fatalf("server error: %v", err)
 	}

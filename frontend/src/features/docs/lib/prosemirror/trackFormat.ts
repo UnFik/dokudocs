@@ -15,6 +15,8 @@ export const formatKeys = {
   em: 'italic',
   strike: 'strike',
   code: 'code',
+  underline: 'underline',
+  highlight: 'highlight',
 } as const satisfies Record<InlineMarkName, string>
 
 export type FormatKey = (typeof formatKeys)[InlineMarkName]

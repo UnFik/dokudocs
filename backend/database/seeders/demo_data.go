@@ -3,6 +3,7 @@ package seeders
 import (
 	"context"
 	"database/sql"
+	"fmt"
 )
 
 const (
@@ -14,7 +15,6 @@ const (
 	DemoCat2ID = "00000000-0000-0000-0000-000000000042"
 	DemoCat3ID = "00000000-0000-0000-0000-000000000043"
 
-	DemoDoc1ID = "00000000-0000-0000-0000-000000000031"
 	DemoDoc2ID = "00000000-0000-0000-0000-000000000032"
 	DemoDoc3ID = "00000000-0000-0000-0000-000000000033"
 )
@@ -23,6 +23,11 @@ func init() {
 	Register(func(ctx context.Context, db *sql.DB) error {
 		return SeedDemoData(ctx, db)
 	})
+}
+
+// mockDocumentID is the fixed ID of the index-th mock Markdown document.
+func mockDocumentID(index int) string {
+	return fmt.Sprintf("00000000-0000-0000-0000-0000000001%02d", index)
 }
 
 func SeedDemoData(ctx context.Context, db *sql.DB) error {
@@ -77,22 +82,22 @@ func SeedDemoData(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	// The Markdown document the AST-era seed made is gone; the mock documents below replace it.
+	if _, err := db.ExecContext(ctx, `DELETE FROM documents WHERE id = '00000000-0000-0000-0000-000000000031'`); err != nil {
+		return err
+	}
+
 	// 5. Seed Documents
 	const seedDocsQuery = `
 		INSERT INTO documents (id, workspace_id, project_id, title, type, content, author_id, tags, is_draft, visibility)
 		VALUES
 			(
-				$1, $2, $3, 'Order Processing FSD', 'markdown',
-				'# Functional Specification: Order Processing Service\n\n## 1. Overview\nThe Order Processing Service manages cart validation, inventory reservation, payment authorization, and fulfillment dispatch.\n\n## 2. Order States\n- **PENDING**: Order placed, waiting for payment confirmation.\n- **PAID**: Payment verified by gateway.\n- **PROCESSING**: Warehouse allocation underway.\n- **SHIPPED**: Courier tracking active.\n- **COMPLETED**: Received by customer.',
-				$4, '{"Checkout", "Core API", "FSD"}', false, 'workspace'
-			),
-			(
-				$5, $2, $3, 'E-Commerce Database Schema', 'dbdiagram',
+				$1, $2, $3, 'E-Commerce Database Schema', 'dbdiagram',
 				'Table users {\n  id int [pk, increment]\n  email varchar(255) [unique, not null]\n  full_name varchar(150)\n  created_at timestamp\n}\n\nTable orders {\n  id int [pk, increment]\n  user_id int [ref: > users.id]\n  total_amount decimal(12,2)\n  status varchar(50)\n  created_at timestamp\n}',
 				$4, '{"Database", "Postgres", "DBML"}', false, 'workspace'
 			),
 			(
-				$6, $2, $3, 'Checkout & Payment Flow', 'mermaid',
+				$5, $2, $3, 'Checkout & Payment Flow', 'mermaid',
 				'graph TD\n  Customer([Customer]) --> AddCart[Add Item to Cart]\n  AddCart --> Review[Review Cart]\n  Review --> Checkout[Click Checkout]\n  CheckStock -- No --> OutOfStock[Show Stock Error]\n  CheckStock -- Yes --> ReserveStock[Reserve Inventory 15m]\n  ReserveStock --> SelectPayment[Select Payment Method]',
 				$4, '{"Flowchart", "Mermaid", "Checkout"}', false, 'workspace'
 			)
@@ -101,8 +106,27 @@ func SeedDemoData(ctx context.Context, db *sql.DB) error {
 			content = EXCLUDED.content,
 			updated_at = NOW();
 	`
-	if _, err := db.ExecContext(ctx, seedDocsQuery, DemoDoc1ID, DemoWorkspaceID, DemoProject1ID, AdminUser.ID, DemoDoc2ID, DemoDoc3ID); err != nil {
+	if _, err := db.ExecContext(ctx, seedDocsQuery, DemoDoc2ID, DemoWorkspaceID, DemoProject1ID, AdminUser.ID, DemoDoc3ID); err != nil {
 		return err
+	}
+
+	// 5b. Seed the Markdown documents, with their editor JSON.
+	for index, doc := range mockMarkdownDocuments() {
+		id := mockDocumentID(index)
+		if _, err := db.ExecContext(ctx, `
+			INSERT INTO documents (id, workspace_id, project_id, title, type, content, content_json, author_id, is_draft, visibility)
+			VALUES ($1, $2, $3, $4, 'markdown', $5, $6::jsonb, $7, false, 'workspace')
+			ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, content = EXCLUDED.content, content_json = EXCLUDED.content_json, updated_at = NOW()
+		`, id, DemoWorkspaceID, DemoProject1ID, doc.title, doc.markdown, doc.json, AdminUser.ID); err != nil {
+			return err
+		}
+		// A new JSON replaces the old state; the collaboration service builds a fresh one.
+		if _, err := db.ExecContext(ctx, `DELETE FROM document_collab_states WHERE document_id = $1`, id); err != nil {
+			return err
+		}
+		if err := ensureSeedDocumentOwnerGrant(ctx, db, id, AdminUser.ID); err != nil {
+			return err
+		}
 	}
 
 	// 6. Seed Document Category Mappings
@@ -113,15 +137,29 @@ func SeedDemoData(ctx context.Context, db *sql.DB) error {
 			($3, $4)
 		ON CONFLICT (document_id, category_id) DO NOTHING;
 	`
-	if _, err := db.ExecContext(ctx, seedCatMappingsQuery, DemoDoc1ID, DemoCat1ID, DemoDoc2ID, DemoCat2ID); err != nil {
+	if _, err := db.ExecContext(ctx, seedCatMappingsQuery, mockDocumentID(0), DemoCat1ID, DemoDoc2ID, DemoCat2ID); err != nil {
 		return err
 	}
 
-	for _, documentID := range []string{DemoDoc1ID, DemoDoc2ID, DemoDoc3ID} {
+	for _, documentID := range []string{DemoDoc2ID, DemoDoc3ID} {
 		if err := ensureSeedDocumentOwnerGrant(ctx, db, documentID, AdminUser.ID); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func ensureSeedDocumentOwnerGrant(ctx context.Context, db *sql.DB, documentID, ownerID string) error {
+	const query = `
+		INSERT INTO document_accesses (document_id, user_id, access_level)
+		SELECT $1, $2, 'owner'::document_access_level
+		WHERE EXISTS (SELECT 1 FROM documents WHERE id = $1)
+		  AND NOT EXISTS (
+			SELECT 1 FROM document_accesses WHERE document_id = $1 AND access_level = 'owner'
+		  )
+		ON CONFLICT (document_id, user_id) DO UPDATE SET access_level = EXCLUDED.access_level;
+	`
+	_, err := db.ExecContext(ctx, query, documentID, ownerID)
+	return err
 }

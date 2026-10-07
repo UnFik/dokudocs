@@ -293,7 +293,9 @@ export class InlineFormatToolbar extends BaseFloat {
 
       const payload = {
         selectedText,
-        blockId: (anchorBlock as { id?: string })?.id || (focusBlock as { id?: string })?.id,
+        blockId:
+          (anchorBlock as { id?: string })?.id ||
+          (focusBlock as { id?: string })?.id,
         blockPath: anchorPath,
         from: startOffset,
         to: endOffset,

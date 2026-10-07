@@ -47,6 +47,8 @@ export default defineConfig({
           ...process.env,
           API_PROXY_TARGET:
             process.env.API_PROXY_TARGET || 'http://127.0.0.1:8080',
+          COLLAB_PROXY_TARGET:
+            process.env.COLLAB_PROXY_TARGET || 'http://127.0.0.1:1234',
         },
         timeout: 30000,
       },

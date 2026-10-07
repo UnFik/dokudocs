@@ -33,9 +33,9 @@ export function createNode(
 }
 
 /**
- * Local edits may not remove an existing node (that needs the DeleteNode
- * command), so an empty paragraph is converted in place when the new block
- * holds text; any other block is inserted after the current one.
+ * The new block takes the place of the empty paragraph the caret is in (a
+ * heading just changes that paragraph's type); in a line that has text it goes
+ * after it.
  */
 export function insertBlock(block: ProseMirrorNode): Command {
   return (state, dispatch) => {
@@ -50,13 +50,15 @@ export function insertBlock(block: ProseMirrorNode): Command {
       const current = $from.node(depth)
       const container = $from.node(depth - 1)
       const index = $from.index(depth - 1)
-      const inPlace =
+      const blank =
         current.type === documentBodySchema.nodes.paragraph &&
         current.content.size === 0 &&
-        block.isTextblock &&
         container.canReplaceWith(index, index + 1, block.type)
+      const inPlace = blank && block.isTextblock
+      const replaces = blank && !block.isTextblock
       if (
         !inPlace &&
+        !replaces &&
         !container.canReplaceWith(index + 1, index + 1, block.type)
       )
         continue
@@ -73,8 +75,9 @@ export function insertBlock(block: ProseMirrorNode): Command {
         if (block.content.size) tr.insert(start + 1, block.content)
         cursor = start + 1
       } else {
-        const at = $from.after(depth)
-        tr.insert(at, block)
+        const at = replaces ? $from.before(depth) : $from.after(depth)
+        if (replaces) tr.replaceWith(at, $from.after(depth), block)
+        else tr.insert(at, block)
         cursor = at + 1
         for (
           let node = block;

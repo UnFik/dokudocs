@@ -1,11 +1,11 @@
-import { LinkedList } from './linkedList/linkedList'
-import TreeNode from './treeNode'
 import { CLASS_NAMES } from '../../config'
 import type { TState } from '../../state/types'
 import type { Nullable } from '../../types'
 import { operateClassName } from '../../utils/dom'
 import logger from '../../utils/logger'
 import type { TBlockPath } from '../types'
+import { LinkedList } from './linkedList/linkedList'
+import TreeNode from './treeNode'
 
 const debug = logger('parent:')
 

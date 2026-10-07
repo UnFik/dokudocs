@@ -4,21 +4,57 @@ import type { Command, EditorState } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import { documentBodySchema } from './documentBody'
 
-export type InlineMarkName = 'strong' | 'em' | 'strike' | 'code'
+export type InlineMarkName =
+  | 'strong'
+  | 'em'
+  | 'strike'
+  | 'code'
+  | 'underline'
+  | 'highlight'
+
+/** The kind of block the selection starts in, as far as the toolbar shows it. */
+export type BlockKind =
+  | 'paragraph'
+  | 'heading-1'
+  | 'heading-2'
+  | 'heading-3'
+  | 'heading-other'
+  | 'quote'
+  | 'toggle'
+  | 'task-list'
+  | 'bullet-list'
+  | 'ordered-list'
+  | 'other'
 
 export interface InlineState {
   hasSelection: boolean
+  block: BlockKind
   marks: Record<InlineMarkName, boolean>
   link: string | null
   rect: { top: number; bottom: number; left: number; right: number } | null
 }
 
-const inlineMarkNames: InlineMarkName[] = ['strong', 'em', 'strike', 'code']
+const inlineMarkNames: InlineMarkName[] = [
+  'strong',
+  'em',
+  'strike',
+  'code',
+  'underline',
+  'highlight',
+]
 const safeLinkProtocols = new Set(['http:', 'https:', 'mailto:', 'tel:'])
 
 export const emptyInlineState: InlineState = {
   hasSelection: false,
-  marks: { strong: false, em: false, strike: false, code: false },
+  block: 'other',
+  marks: {
+    strong: false,
+    em: false,
+    strike: false,
+    code: false,
+    underline: false,
+    highlight: false,
+  },
   link: null,
   rect: null,
 }
@@ -95,6 +131,38 @@ export function linkRange(state: EditorState) {
   return { from: origin, to: origin + node.node.nodeSize }
 }
 
+const wrapperKinds: Record<string, BlockKind> = {
+  block_quote: 'quote',
+  toggle: 'toggle',
+  task_list: 'task-list',
+  bullet_list: 'bullet-list',
+  order_list: 'ordered-list',
+}
+
+function blockKindOf(state: EditorState): BlockKind {
+  const { $from } = state.selection
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const node = $from.node(depth)
+    const wrapper = wrapperKinds[node.type.name]
+    if (wrapper) return wrapper
+    if (node.type.name === 'atx_heading') {
+      let level = 0
+      try {
+        level = Number(JSON.parse(String(node.attrs.bodyAttributes)).level)
+      } catch {
+        level = 0
+      }
+      return level >= 1 && level <= 3
+        ? (`heading-${level}` as BlockKind)
+        : 'heading-other'
+    }
+  }
+  return $from.parent.type.name === 'paragraph' ||
+    $from.parent.type.name === 'run'
+    ? 'paragraph'
+    : 'other'
+}
+
 export function readInlineState(view: EditorView): InlineState {
   const { state } = view
   const { from, to, empty } = state.selection
@@ -137,5 +205,5 @@ export function readInlineState(view: EditorView): InlineState {
       rect = null
     }
   }
-  return { hasSelection: !empty, marks, link, rect }
+  return { hasSelection: !empty, block: blockKindOf(state), marks, link, rect }
 }

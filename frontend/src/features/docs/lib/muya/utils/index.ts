@@ -76,7 +76,11 @@ export function union(
   { start: tStart, end: tEnd }: IUnion,
   { start: lStart, end: lEnd, active, ...rest }: IUnion
 ) {
-  if (lStart === lEnd && 'insertedText' in rest && (rest as { insertedText?: string }).insertedText) {
+  if (
+    lStart === lEnd &&
+    'insertedText' in rest &&
+    (rest as { insertedText?: string }).insertedText
+  ) {
     if (lStart >= tStart && lStart <= tEnd) {
       return {
         start: lStart,

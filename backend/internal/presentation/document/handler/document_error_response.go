@@ -5,8 +5,7 @@ import (
 	"net/http"
 
 	"backend/constant"
-	"backend/internal/application/collaboration"
-	"backend/internal/domain/documentbody"
+	appdoc "backend/internal/application/document/usecase"
 	"backend/internal/presentation/response"
 )
 
@@ -25,20 +24,10 @@ func writeDocumentError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, constant.ErrDocumentConflict):
 		response.Error(w, http.StatusConflict, err.Error())
-	case errors.Is(err, collaboration.ErrInvalidMoveNode):
-		response.Error(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, documentbody.ErrTooLarge):
-		response.Error(w, http.StatusRequestEntityTooLarge, err.Error())
-	case errors.Is(err, collaboration.ErrInvalidBodyInitialization):
+	case errors.Is(err, appdoc.ErrInvalidContentJSON):
 		response.Error(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, constant.ErrInvalidIdempotencyKey):
 		response.Error(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, collaboration.ErrMoveCommandReplay):
-		response.Error(w, http.StatusConflict, err.Error())
-	case errors.Is(err, collaboration.ErrBodyNotInitialized),
-		errors.Is(err, collaboration.ErrBodySchemaMismatch),
-		errors.Is(err, collaboration.ErrStaleBodyEpoch):
-		response.Error(w, http.StatusConflict, err.Error())
 	default:
 		response.Error(w, http.StatusInternalServerError, "internal server error")
 	}

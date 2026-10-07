@@ -60,6 +60,40 @@ function toStateBody(
   switch (node.type) {
     case 'block-quote':
       return { name: 'block-quote', children: childStates() }
+    case 'notice': {
+      const variant = requiredChoice(node.attributes, 'variant', [
+        'info',
+        'success',
+        'warning',
+        'tip',
+      ])
+      return {
+        name: 'fence-container',
+        meta: { marker: ':::', label: variant },
+        children: childStates(),
+      }
+    }
+    case 'toggle':
+      return {
+        name: 'fence-container',
+        meta: { marker: '+++', label: '' },
+        children: childStates(),
+      }
+    case 'embed':
+      noChildren(node, descendants)
+      return {
+        name: 'paragraph',
+        text: `<${requiredString(node.attributes, 'url')}>`,
+      }
+    case 'attachment':
+      noChildren(node, descendants)
+      return {
+        name: 'paragraph',
+        text: `[${requiredString(node.attributes, 'fileName')}](${requiredString(node.attributes, 'src')})`,
+      }
+    case 'page-break':
+      noChildren(node, descendants)
+      return { name: 'html-block', text: '<div class="page-break"></div>' }
     case 'list-item':
       return { name: 'list-item', children: childStates() }
     case 'task-list-item':
@@ -126,9 +160,12 @@ function toStateBody(
       return {
         name: 'atx-heading',
         meta: { level },
+        // Text typed straight into a heading sits in its own content, without the marker.
         text: descendants.length
           ? `${'#'.repeat(level)} ${text}`
-          : node.content || `${'#'.repeat(level)} `,
+          : /^#{1,6}(\s|$)/.test(node.content)
+            ? node.content
+            : `${'#'.repeat(level)} ${node.content}`,
       }
     }
     case 'setext-heading': {
@@ -290,6 +327,8 @@ function inlineText(
         return { type: 'run', content: node.content, attributes }
       case 'image':
         return { type: 'image', attributes }
+      case 'mention':
+        return { type: 'mention', attributes }
       case 'math':
         return { type: 'math', content: node.content, attributes }
       case 'line-break':

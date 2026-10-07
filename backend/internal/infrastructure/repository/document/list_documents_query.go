@@ -16,7 +16,7 @@ func (r *Repository) List(ctx context.Context, workspaceID, userID uuid.UUID, fi
 		SELECT d.id, d.workspace_id, d.project_id,
 		       CASE WHEN p.id IS NOT NULL AND ` + projectMetadataPredicate("$2", "p") + ` THEN p.name ELSE '' END,
 		       d.title, d.type::text,
-		       CASE WHEN d.type = 'markdown' AND d.root_node_id IS NOT NULL THEN '' ELSE d.content END,
+		       d.content,
 		       d.author_id, u.full_name, u.email, COALESCE(u.avatar_url, ''),
 		       COALESCE(array_to_string(d.tags, ','), ''), d.is_draft, d.visibility::text,
 		       COALESCE(d.thumbnail, ''), COALESCE(d.thumbnail_dark, ''),
@@ -45,22 +45,7 @@ func (r *Repository) List(ctx context.Context, workspaceID, userID uuid.UUID, fi
 	}
 
 	if filter.Search != "" {
-		query += fmt.Sprintf(` AND (
-			d.title ILIKE $%d
-			OR (
-				d.type = 'markdown'
-				AND d.root_node_id IS NOT NULL
-				AND EXISTS (
-					SELECT 1 FROM document_nodes dn
-					WHERE dn.document_id = d.id
-					  AND (dn.content ILIKE $%d OR dn.attributes::text ILIKE $%d)
-				)
-			)
-			OR (
-				(d.type <> 'markdown' OR d.root_node_id IS NULL)
-				AND d.content ILIKE $%d
-			)
-		)`, argIdx, argIdx, argIdx, argIdx)
+		query += fmt.Sprintf(" AND (d.title ILIKE $%d OR d.content ILIKE $%d)", argIdx, argIdx)
 		args = append(args, "%"+filter.Search+"%")
 		argIdx++
 	}

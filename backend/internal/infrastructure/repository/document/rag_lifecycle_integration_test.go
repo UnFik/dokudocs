@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"backend/internal/domain/documentbody"
-	"backend/internal/infrastructure/collaboration/yjs"
 	"backend/internal/infrastructure/database"
 	workspacerepo "backend/internal/infrastructure/repository/workspace"
 
@@ -69,17 +67,8 @@ func (f *ragLifecycleFixture) count(query string, args ...any) int {
 // newDocument seeds one Markdown document whose single paragraph contains text.
 func (f *ragLifecycleFixture) newDocument(title, visibility, text string) uuid.UUID {
 	f.t.Helper()
-	documentID, rootID, paragraphID, runID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
-	body := documentbody.Body{DocumentID: documentID, RootNodeID: rootID, Nodes: []documentbody.Node{
-		{DocumentID: documentID, NodeID: rootID, Type: "document", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: documentID, NodeID: paragraphID, ParentID: &rootID, Type: "paragraph", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: documentID, NodeID: runID, ParentID: &paragraphID, Type: "run", Content: text, Attributes: []byte(`{}`), Version: 1},
-	}}
-	state, err := yjs.EncodeBodyV1(body)
-	if err != nil {
-		f.t.Fatalf("encode body: %v", err)
-	}
-	if err := seedCollaborativeDocument(f.ctx, f.db, f.workspaceID, documentID, f.owner, body, state); err != nil {
+	documentID := uuid.New()
+	if err := seedJSONDocument(f.ctx, f.db, f.workspaceID, documentID, f.owner, text); err != nil {
 		f.t.Fatalf("seed document: %v", err)
 	}
 	f.exec(`UPDATE documents SET title = $2, visibility = $3::document_visibility WHERE id = $1`, documentID, title, visibility)

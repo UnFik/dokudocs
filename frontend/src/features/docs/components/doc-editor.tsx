@@ -55,6 +55,8 @@ export function DocEditor() {
     enabled:
       isRemoteID && Boolean(workspaceID) && auth.status === 'authenticated',
     retry: false,
+    // Keeps "updated by" under the title current while others edit.
+    refetchInterval: 30_000,
   })
 
   if (!isRemoteID)

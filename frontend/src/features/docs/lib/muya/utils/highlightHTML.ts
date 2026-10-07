@@ -1,6 +1,6 @@
+import { getLongUniqueId } from '.'
 import { CLASS_NAMES } from '../config'
 import type { IHighlight } from '../inlineRenderer/types'
-import { getLongUniqueId } from '.'
 
 // TODO: @jocs any better solutions?
 export const MARKER_HASH = {

@@ -1,4 +1,6 @@
 ---
+
+> Superseded by [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md): the AST, epochs and structural commands no longer exist.
 status: accepted
 ---
 

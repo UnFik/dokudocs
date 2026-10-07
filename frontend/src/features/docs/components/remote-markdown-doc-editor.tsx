@@ -1,55 +1,44 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
+import { FileCode, ListOrdered, Quote, TableOfContents } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
-import { ApiError } from '@/lib/api-client'
 import {
   createNamedDocumentRevision,
-  getMarkdownBody,
   listDocumentSuggestions,
   listDocumentRevisions,
   restoreDocumentRevision,
   updateDocumentMetadata,
   listDocumentComments,
+  listProjects,
+  listWorkspaceMembers,
   type CommentAnchor,
   type CommentThread,
+  listDocumentBacklinks,
 } from '@/lib/domain-api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
-import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
+import { assetObjectURL, uploadDocumentAsset } from '../lib/assets'
+import { decodeBase64, encodeBase64 } from '../lib/collab-encoding'
 import {
-  executeDeleteNode,
-  executeMoveNode,
-  type CollaborativeDocumentStatus,
-} from '../lib/collaboration-provider'
-import {
-  clearLocalMarkdown,
-  loadOfflineMarkdownBody,
-  recoverPendingMarkdown,
-} from '../lib/collaboration-recovery'
-import {
-  acceptHeldEdit,
-  loadReviewModel,
-  resolveHeldCommand,
-} from '../lib/collaboration-review'
-import {
-  decodeBase64,
-  encodeBase64,
+  clearLocalCopy,
+  type CollabAccess,
+  type CollabStatus,
   type PresenceUser,
-} from '../lib/collaboration-socket'
-import {
-  IndexedDBCollaborationStore,
-  type PendingCollaborationUpdate,
-  type PendingDeleteNodeCommand,
-  type PendingMoveNodeCommand,
-} from '../lib/collaboration-store'
+} from '../lib/collab-session'
 import { mountCollaborativeDocumentBody } from '../lib/collaborative-document-body'
+import { countTasks } from '../lib/count-tasks'
+import { documentStats, maxCharacters, sizeState } from '../lib/document-stats'
+import { revisionInsights } from '../lib/insights'
 import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
 } from '../lib/muya/state/documentBodyToMarkdown'
+import { activeHeadingID, outlineOf, type OutlineItem } from '../lib/outline'
 import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
 import { EditorNotice } from '../lib/prosemirror/editorNotice'
 import {
@@ -59,8 +48,12 @@ import {
 } from '../lib/prosemirror/inlineMarks'
 import { type SuggestionCard } from '../lib/prosemirror/suggestionCards'
 import { shouldSelectDocumentBody } from '../lib/select-all-scope'
-import { ConflictReviewPanel } from './conflict-review-panel'
+import { slidesOf } from '../lib/slides'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
+import { DocumentInfoLine } from './document-info-line'
+import { DocumentInsightsDialog } from './document-insights-dialog'
+import { DocumentStatsDialog } from './document-stats-dialog'
+import { DocumentTitleRow } from './document-title-row'
 import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
 import { EditorHeader } from './editor-header'
 import {
@@ -70,9 +63,15 @@ import {
   type EditorMode,
 } from './editor-mode-tabs'
 import './markdown-body.css'
-import { MuyaEditor } from './muya-editor/MuyaEditor'
+import { MarkdownSource } from './markdown-source'
+import { OutlinePanel } from './outline-panel'
+import { PresentationMode } from './presentation-mode'
 import { SuggestionCardList } from './suggestion-card-list'
 import { VersionHistorySidebar } from './version-history-sidebar'
+
+// Ghost toggles: muted when off, filled and full-ink when on.
+const toggleButtonClass =
+  'size-11 text-muted-foreground md:size-8 aria-pressed:bg-accent aria-pressed:text-foreground'
 
 export function RemoteMarkdownDocEditor({
   document,
@@ -87,47 +86,11 @@ export function RemoteMarkdownDocEditor({
   offline?: boolean
   focusNodeID?: string
 }) {
-  const [localStateNonce, setLocalStateNonce] = useState(0)
-  // A delete merged into the live document moves the body to a new epoch without
-  // rebuilding the editor. The editor is rebuilt for any other change of body,
-  // so what the page mounted is tracked as a generation of its own.
-  const [advanced, setAdvanced] = useState<{
-    epoch: number
-    version: number
-  } | null>(null)
-  const [mounted, setMounted] = useState({ stamp: '', generation: 0 })
+  // Bumped when the server replaces the body (a restored revision): the local
+  // copy is dropped and the editor opens again on what the server holds.
+  const [sessionNonce, setSessionNonce] = useState(0)
+  const [access, setAccess] = useState<CollabAccess | null>(null)
   const queryClient = useQueryClient()
-  const bodyQuery = useQuery({
-    queryKey: ['markdown-body', workspaceID, document.id, userID, offline],
-    queryFn: async ({ signal }) => {
-      if (offline) {
-        const body = await loadOfflineMarkdownBody({
-          userID,
-          documentID: document.id,
-        })
-        if (!body)
-          throw new Error('No compatible offline document body is cached')
-        return body
-      }
-      return getMarkdownBody(workspaceID, document.id, signal)
-    },
-    retry: false,
-  })
-  if (bodyQuery.data) {
-    const stamp = `${bodyQuery.data.bodyEpoch}:${bodyQuery.data.bodyVersion}`
-    if (mounted.stamp !== stamp) {
-      const followsAdvance =
-        advanced !== null &&
-        bodyQuery.data.bodyEpoch === advanced.epoch &&
-        bodyQuery.data.bodyVersion >= advanced.version
-      setMounted({
-        stamp,
-        generation: followsAdvance
-          ? mounted.generation
-          : mounted.generation + 1,
-      })
-    }
-  }
   const titleMutation = useMutation({
     mutationFn: (title: string) =>
       updateDocumentMetadata(workspaceID, document.id, { title }),
@@ -167,30 +130,20 @@ export function RemoteMarkdownDocEditor({
       restoreDocumentRevision(workspaceID, document.id, revisionID, requestID),
     onSuccess: async (_result, { revisionID }) => {
       restoreRequestIDs.current.delete(revisionID)
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ['markdown-body', workspaceID, document.id],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ['document-revisions', workspaceID, document.id],
-        }),
-      ])
+      await clearLocalCopy(workspaceID, document.id)
+      setSessionNonce((value) => value + 1)
+      await queryClient.invalidateQueries({
+        queryKey: ['document-revisions', workspaceID, document.id],
+      })
       toast.success('Revision restored')
     },
     onError: (error) => toast.error(error.message),
   })
   const [markdownOverride, setMarkdownOverride] = useState<string | null>(null)
-  const canonicalMarkdown = useMemo(() => {
-    if (!bodyQuery.data) return document.content
-    try {
-      return documentBodyToMarkdown(bodyQuery.data.nodes as DocumentBodyNode[])
-    } catch {
-      return ''
-    }
-  }, [bodyQuery.data, document.content])
-  const markdown = markdownOverride ?? canonicalMarkdown
+  const markdown = markdownOverride ?? document.content
   const [accessUnavailable, setAccessUnavailable] = useState(false)
   const [presence, setPresence] = useState<PresenceUser[]>([])
+  const [followedUser, setFollowedUser] = useState<string | null>(null)
   const restoreRevision = (revision: DocumentRevision) => {
     if (
       !window.confirm(
@@ -219,23 +172,21 @@ export function RemoteMarkdownDocEditor({
         lastSaved={new Date(document.updatedAt)}
         onTitleChange={(title) => titleMutation.mutate(title)}
         presenceUsers={presence}
+        followedUserID={followedUser}
+        onFollowUser={setFollowedUser}
         currentUserID={userID}
-        titleReadOnly={offline || !bodyQuery.data?.canEdit || accessUnavailable}
+        titleReadOnly={offline || !access?.canEdit || accessUnavailable}
         onToggleHistory={
           offline ? undefined : () => setIsHistoryOpen((open) => !open)
         }
         onOpenShare={
-          !offline &&
-          !document.isDraft &&
-          bodyQuery.data?.canEdit &&
-          !accessUnavailable
+          !offline && !document.isDraft && access?.canEdit && !accessUnavailable
             ? () => setIsShareOpen(true)
             : undefined
         }
         isHistoryOpen={isHistoryOpen}
         onExportCode={
-          !accessUnavailable &&
-          (Boolean(bodyQuery.data) || isUninitializedBody(bodyQuery.error))
+          !accessUnavailable
             ? () => {
                 void navigator.clipboard.writeText(markdown)
                 toast.success('Document Markdown copied')
@@ -244,71 +195,46 @@ export function RemoteMarkdownDocEditor({
         }
       />
 
-      {bodyQuery.isPending ? (
-        <p className='p-6 text-sm text-muted-foreground'>
-          Loading document body…
-        </p>
-      ) : bodyQuery.data ? (
-        <CollaborativeMarkdownBody
-          key={`${document.id}:${mounted.generation}:${localStateNonce}`}
-          documentID={document.id}
-          workspaceID={workspaceID}
-          userID={userID}
-          offline={offline}
-          snapshot={bodyQuery.data}
-          focusNodeID={focusNodeID}
-          onLocalStateChanged={() => setLocalStateNonce((value) => value + 1)}
-          onCanonicalBody={(body) => {
-            queryClient.setQueryData(
-              ['markdown-body', workspaceID, document.id, userID, offline],
-              body
-            )
-            // A rebase at startup lands on the body this page already loaded,
-            // so the key alone would not remount onto the rebased state.
-            setLocalStateNonce((value) => value + 1)
-          }}
-          onBodyAdvanced={(body) => {
-            queryClient.setQueryData(
-              ['markdown-body', workspaceID, document.id, userID, offline],
-              body
-            )
-            setAdvanced({ epoch: body.bodyEpoch, version: body.bodyVersion })
-          }}
-          onMarkdownChange={setMarkdownOverride}
-          onPresence={setPresence}
-          onAccessUnavailable={() => {
-            setAccessUnavailable(true)
-            setMarkdownOverride('')
-          }}
-        />
-      ) : isUninitializedBody(bodyQuery.error) ? (
-        <div className='flex min-h-0 flex-1 flex-col'>
-          <p className='border-b px-6 py-3 text-sm text-muted-foreground'>
-            This legacy Markdown document needs AST backfill before it can be
-            edited. It is shown read-only until then.
-          </p>
-          <MuyaEditor
-            docId={document.id}
-            content={document.content}
-            onChange={() => undefined}
-            readOnly
-            className='min-h-0 flex-1'
-          />
-        </div>
-      ) : (
-        <p role='alert' className='p-6 text-sm text-destructive'>
-          Could not load the canonical document body:{' '}
-          {bodyQuery.error instanceof Error
-            ? bodyQuery.error.message
-            : 'request failed'}
-        </p>
-      )}
+      <CollaborativeMarkdownBody
+        followedUser={followedUser}
+        key={`${document.id}:${sessionNonce}`}
+        documentID={document.id}
+        workspaceID={workspaceID}
+        userID={userID}
+        offline={offline}
+        access={access}
+        focusNodeID={focusNodeID}
+        title={document.title}
+        titleReadOnly={offline || !access?.canEdit || accessUnavailable}
+        onTitleChange={(title) => titleMutation.mutate(title)}
+        meta={{
+          updatedAt: document.updatedAt,
+          updatedBy: document.updatedBy?.name ?? null,
+          author: document.author.name,
+          isDraft: Boolean(document.isDraft),
+          createdAt: document.createdAt,
+          views: document.viewCount ?? 0,
+        }}
+        markdown={markdown}
+        onAccess={setAccess}
+        onReloaded={() => {
+          void clearLocalCopy(workspaceID, document.id).then(() =>
+            setSessionNonce((value) => value + 1)
+          )
+        }}
+        onMarkdownChange={setMarkdownOverride}
+        onPresence={setPresence}
+        onAccessUnavailable={() => {
+          setAccessUnavailable(true)
+          setMarkdownOverride('')
+        }}
+      />
       <VersionHistorySidebar
         docId={document.id}
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         revisions={offline ? [] : (revisionsQuery.data ?? [])}
-        canEdit={bodyQuery.data?.canEdit ?? false}
+        canEdit={access?.canEdit ?? false}
         isLoading={isHistoryOpen && !offline && revisionsQuery.isPending}
         loadError={
           revisionsQuery.error instanceof Error
@@ -331,32 +257,60 @@ export function RemoteMarkdownDocEditor({
 }
 
 function CollaborativeMarkdownBody({
+  followedUser,
   documentID,
   workspaceID,
   userID,
   offline,
-  snapshot,
+  access,
   focusNodeID,
-  onCanonicalBody,
-  onBodyAdvanced,
-  onLocalStateChanged,
+  title,
+  titleReadOnly,
+  onTitleChange,
+  meta,
+  markdown,
+  onAccess,
+  onReloaded,
   onMarkdownChange,
   onPresence,
   onAccessUnavailable,
 }: {
+  followedUser: string | null
   documentID: string
   workspaceID: string
   userID: string
   offline: boolean
-  snapshot: Awaited<ReturnType<typeof getMarkdownBody>>
+  access: CollabAccess | null
   focusNodeID?: string
-  onCanonicalBody: (body: Awaited<ReturnType<typeof getMarkdownBody>>) => void
-  onBodyAdvanced: (body: Awaited<ReturnType<typeof getMarkdownBody>>) => void
-  onLocalStateChanged: () => void
+  title: string
+  titleReadOnly: boolean
+  onTitleChange: (title: string) => void
+  meta: {
+    updatedAt: string
+    updatedBy: string | null
+    author: string
+    isDraft: boolean
+    createdAt: string
+    views: number
+  }
+  markdown: string
+  onAccess: (access: CollabAccess) => void
+  onReloaded: () => void
   onMarkdownChange: (markdown: string) => void
   onPresence: (users: PresenceUser[]) => void
   onAccessUnavailable: () => void
 }) {
+  const { name: profileName } = useCurrentProfile()
+  const profileNameRef = useRef(profileName)
+  const followedRef = useRef(followedUser)
+  useEffect(() => {
+    followedRef.current = followedUser
+    sessionRef.current?.editor.follow(followedUser)
+  }, [followedUser])
+  useEffect(() => {
+    profileNameRef.current = profileName
+    sessionRef.current?.session.setUserName(profileName)
+  }, [profileName])
   const [suggestionPreview, setSuggestionPreview] = useState<
     'suggestions' | 'accepted' | 'rejected'
   >('suggestions')
@@ -375,15 +329,113 @@ function CollaborativeMarkdownBody({
   const setPreviewMode = useEditorPreferenceStore(
     (state) => state.setPreviewMode
   )
-  const [status, setStatus] =
-    useState<CollaborativeDocumentStatus>('connecting')
+  const smartText = useEditorPreferenceStore(
+    (state) => state.preferencesByUser[userID || 'guest']?.smartText ?? false
+  )
+  const setSmartText = useEditorPreferenceStore((state) => state.setSmartText)
+  const titleRef = useRef<HTMLInputElement>(null)
+  const showOutline = useEditorPreferenceStore(
+    (state) => state.preferencesByUser[userID || 'guest']?.showOutline ?? false
+  )
+  // Only asked for while the Contents panel that lists them is open.
+  const backlinksQuery = useQuery({
+    queryKey: ['document-backlinks', workspaceID, documentID],
+    queryFn: () => listDocumentBacklinks(workspaceID, documentID),
+    enabled: showOutline && !offline,
+    staleTime: 30_000,
+  })
+  const setShowOutline = useEditorPreferenceStore(
+    (state) => state.setShowOutline
+  )
+  const [statsOpen, setStatsOpen] = useState(false)
+  const [presenting, setPresenting] = useState(false)
+  const [showSource, setShowSource] = useState(false)
+  const [insightsOpen, setInsightsOpen] = useState(false)
+  const insightsHistory = useQuery({
+    queryKey: ['document-revisions', workspaceID, documentID],
+    queryFn: ({ signal }) =>
+      listDocumentRevisions(workspaceID, documentID, signal),
+    enabled: insightsOpen && !offline,
+    retry: false,
+  })
+  const stats = useMemo(() => documentStats(markdown), [markdown])
+  const size = sizeState(stats.characters, maxCharacters)
+  // Ctrl+Shift+G, as in Outline: what the page holds.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === 'g'
+      ) {
+        event.preventDefault()
+        setStatsOpen(true)
+      }
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === 'i'
+      ) {
+        event.preventDefault()
+        setInsightsOpen(true)
+      }
+      // Ctrl+Alt+P, as in Outline: the page as slides.
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.altKey &&
+        event.code === 'KeyP'
+      ) {
+        event.preventDefault()
+        setPresenting(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const [outline, setOutline] = useState<OutlineItem[]>([])
+  const [activeHeading, setActiveHeading] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  // The heading being read follows the scroll position of the page.
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container || !showOutline) return
+    const update = () => {
+      const top = container.getBoundingClientRect().top
+      const positions = outline.flatMap((item) => {
+        const heading = container.querySelector<HTMLElement>(
+          `[data-node-id="${item.nodeID}"]`
+        )
+        return heading
+          ? [
+              {
+                nodeID: item.nodeID,
+                top: heading.getBoundingClientRect().top - top,
+              },
+            ]
+          : []
+      })
+      setActiveHeading(activeHeadingID(positions, 80))
+    }
+    update()
+    container.addEventListener('scroll', update, { passive: true })
+    return () => container.removeEventListener('scroll', update)
+  }, [outline, showOutline])
+  const numberHeadings = useEditorPreferenceStore(
+    (state) =>
+      state.preferencesByUser[userID || 'guest']?.numberHeadings ?? false
+  )
+  const setNumberHeadings = useEditorPreferenceStore(
+    (state) => state.setNumberHeadings
+  )
+  const smartTextRef = useRef(smartText)
+  useEffect(() => {
+    smartTextRef.current = smartText
+  })
+  const [status, setStatus] = useState<CollabStatus>('connecting')
   const statusRef = useRef(status)
-  const [canEdit, setCanEdit] = useState(snapshot.canEdit)
+  const canEdit = access?.canEdit ?? false
+  const canSuggest = access?.canSuggest ?? false
   const [error, setError] = useState('')
-  const [recoveryPendingCount, setRecoveryPendingCount] = useState(0)
-  const [, setIsExportingRecovery] = useState(false)
-  const [hasHeldEdits, setHasHeldEdits] = useState(false)
-  const [reviewKey, setReviewKey] = useState(0)
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false)
   const [cards, setCards] = useState<SuggestionCard[]>([])
   const [focusedSuggestionID, setFocusedSuggestionID] = useState<string | null>(
@@ -398,6 +450,10 @@ function CollaborativeMarkdownBody({
     anchor: CommentAnchor
   } | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
+  useEffect(() => {
+    if (sessionReady)
+      sessionRef.current?.editor.setNumberHeadings(numberHeadings)
+  }, [numberHeadings, sessionReady])
   const queryClient = useQueryClient()
   const commentsQuery = useQuery({
     queryKey: ['document-comments', workspaceID, documentID],
@@ -442,11 +498,54 @@ function CollaborativeMarkdownBody({
     })
     setIsSuggestionsOpen(true)
   }
+  // Our own comment changes are told to the others in the room.
+  const fromRemoteComments = useRef(false)
+  useEffect(() => {
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === 'updated' &&
+        event.action.type === 'invalidate' &&
+        event.query.queryKey[0] === 'document-comments' &&
+        event.query.queryKey[2] === documentID &&
+        !fromRemoteComments.current
+      )
+        sessionRef.current?.session.signalCommentsChanged()
+    })
+  }, [queryClient, documentID])
+  // A click anywhere but on a card (or its dialogs) puts the chosen card away
+  // and with it the reply box. A reply being written keeps its card. Text that
+  // carries a comment or a suggestion is not "elsewhere": a double click on it
+  // would otherwise drop the card its first click chose.
+  const hasChosenCard =
+    focusedCommentID !== null || focusedSuggestionID !== null
+  useEffect(() => {
+    if (!hasChosenCard) return
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null
+      if (
+        target?.closest(
+          'li[data-comment-thread-id],li[data-suggestion-id],li[data-new-comment],[role=dialog],[role=alertdialog],[data-comment-id],[data-suggestion-id]'
+        )
+      )
+        return
+      const writing = [
+        ...window.document.querySelectorAll<HTMLTextAreaElement>(
+          '#suggestion-panel textarea'
+        ),
+      ].some((box) => box.value.trim() !== '')
+      if (writing) return
+      setFocusedCommentID(null)
+      setFocusedSuggestionID(null)
+      sessionRef.current?.editor.setFocusedComment(null)
+    }
+    window.document.addEventListener('pointerdown', onPointerDown)
+    return () =>
+      window.document.removeEventListener('pointerdown', onPointerDown)
+  }, [hasChosenCard])
   const startCommentRef = useRef(startComment)
   useEffect(() => {
     startCommentRef.current = startComment
   })
-  const reviewStore = useMemo(() => new IndexedDBCollaborationStore(), [])
   const [history, setHistory] = useState<EditorHistoryState>({
     canUndo: false,
     canRedo: false,
@@ -456,25 +555,23 @@ function CollaborativeMarkdownBody({
   const modeRef = useRef<EditorMode>(requestedMode)
   const lastEffectiveRef = useRef<EditorMode | null>(null)
   const canEditRef = useRef(canEdit)
-  const suggestEnabled =
-    Boolean(snapshot.canSuggest) && !offline && status === 'ready'
+  const canSuggestRef = useRef(canSuggest)
+  useEffect(() => {
+    canSuggestRef.current = canSuggest
+  })
+  useEffect(() => {
+    canEditRef.current = canEdit
+  })
+  const suggestEnabled = canSuggest && !offline && status === 'ready'
   const mode = resolveMode(requestedMode, { canEdit, suggestEnabled })
 
   const applyEditorMode = () => {
     const editor = sessionRef.current?.editor
     if (!editor) return
-    // The collaboration session locks the editor itself in these states.
-    if (
-      statusRef.current === 'closed' ||
-      statusRef.current === 'recovery-required'
-    )
-      return
     const effective = resolveMode(modeRef.current, {
       canEdit: canEditRef.current,
       suggestEnabled:
-        Boolean(snapshot.canSuggest) &&
-        !offline &&
-        statusRef.current === 'ready',
+        canSuggestRef.current && !offline && statusRef.current === 'ready',
     })
     editor.setSuggestMode(effective === 'suggest')
     editor.setReadOnly(
@@ -486,14 +583,12 @@ function CollaborativeMarkdownBody({
   }
 
   function hideBodyAfterAccessLoss(clearStoredData: boolean) {
-    setRecoveryPendingCount(0)
     sessionRef.current?.destroy()
     sessionRef.current = null
     mountRef.current?.replaceChildren()
     onMarkdownChange('')
     onAccessUnavailable()
-    if (clearStoredData)
-      void clearLocalMarkdown({ userID, documentID }).catch(() => {})
+    if (clearStoredData) void clearLocalCopy(workspaceID, documentID)
   }
 
   useMountEffect(() => {
@@ -501,33 +596,94 @@ function CollaborativeMarkdownBody({
     if (!mount) return
     let disposed = false
 
-    void new IndexedDBCollaborationStore()
-      .load({ userID, documentID })
-      .then((stored) => {
-        if (!disposed && stored.heldEdits.length) setHasHeldEdits(true)
-      })
-      .catch(() => {})
-
     void mountCollaborativeDocumentBody(mount, {
       documentID,
       workspaceID,
       userID,
+      userName: profileNameRef.current,
+      smartText: () => smartTextRef.current,
+      maxCharacters,
+      upload: (file) => uploadDocumentAsset(workspaceID, documentID, file),
+      resolveAsset: (src) => assetObjectURL(workspaceID, src),
+      onUploadError: (message) => toast.error(message),
+      mentionSource: async (query) => {
+        const needle = query.trim().toLowerCase()
+        const matches = (name: string) =>
+          !needle || name.toLowerCase().includes(needle)
+        const [members, projects] = await Promise.all([
+          listWorkspaceMembers(workspaceID).catch(() => []),
+          listProjects(workspaceID).catch(() => []),
+        ])
+        const pages = useDokudocsStore
+          .getState()
+          .documents.filter(
+            (item) =>
+              item.workspaceId === workspaceID &&
+              !item.deletedAt &&
+              item.id !== documentID
+          )
+        return [
+          ...members
+            .filter((person) => matches(person.name))
+            .map((person) => ({
+              kind: 'person' as const,
+              id: person.id,
+              label: person.name,
+              hint: 'Person',
+            })),
+          ...pages
+            .filter((page) => matches(page.title))
+            .map((page) => ({
+              kind: 'document' as const,
+              id: page.id,
+              label: page.title,
+              hint: 'Page',
+            })),
+          ...projects
+            .filter((project) => matches(project.name))
+            .map((project) => ({
+              kind: 'project' as const,
+              id: project.id,
+              label: project.name,
+              hint: 'Project',
+            })),
+        ]
+      },
+      resolveLinkTitle: async (href) => {
+        const id = /^\/docs\/([0-9a-f-]{36})/i.exec(href)?.[1]
+        return (
+          useDokudocsStore.getState().documents.find((item) => item.id === id)
+            ?.title ?? null
+        )
+      },
+      onNavigateToTitle: () => titleRef.current?.focus(),
+      onHeadingLink: (nodeID) => {
+        const link = `${window.location.origin}${window.location.pathname}#node-${nodeID}`
+        void navigator.clipboard
+          .writeText(link)
+          .then(() => toast.success('Link to heading copied'))
+          .catch(() => toast.error('Could not copy the link'))
+      },
       token: () => useAuthStore.getState().auth.accessToken,
-      snapshot,
       focusNodeID,
       readOnly:
         resolveMode(modeRef.current, {
-          canEdit: snapshot.canEdit,
+          canEdit: canEditRef.current,
           suggestEnabled: false,
         }) === 'view',
       onSuggestRefused: (message) =>
         toast.error(message, { id: 'suggest-refused' }),
       onSuggestionCards: setCards,
       onCommentPositions: setCommentPositions,
-      onCommentsChanged: () =>
+      onCommentsChanged: () => {
+        // A change that came from someone else must not be announced again.
+        fromRemoteComments.current = true
         void queryClient.invalidateQueries({
           queryKey: ['document-comments', workspaceID, documentID],
-        }),
+        })
+        fromRemoteComments.current = false
+      },
+      onReloaded,
       onCommentRequest: () => startCommentRef.current(),
       onCommentClick: (id) => {
         setFocusedCommentID(id)
@@ -566,26 +722,14 @@ function CollaborativeMarkdownBody({
         }
       },
       onPresence,
-      onCanEdit: (next) => {
-        canEditRef.current = next
-        setCanEdit(next)
+      onAccess: (next) => {
+        canEditRef.current = next.canEdit
+        canSuggestRef.current = next.canSuggest
+        onAccess(next)
         applyEditorMode()
       },
-      onRecovery: (
-        reason,
-        pending: PendingCollaborationUpdate[],
-        commands: PendingDeleteNodeCommand[],
-        moves: PendingMoveNodeCommand[]
-      ) => {
-        setRecoveryPendingCount(pending.length + commands.length + moves.length)
-        setError(`Local changes need review (${reason}).`)
-      },
-      onCanonicalBody,
-      onBodyAdvanced,
-      // eslint-disable-next-line no-console
-      onEditDropped: (code) => console.warn('edit dropped by the server', code),
-      onHeldEdits: () => setHasHeldEdits(true),
       onBodyChange: (nodes: DocumentBodyNode[]) => {
+        setOutline(outlineOf(nodes))
         try {
           onMarkdownChange(documentBodyToMarkdown(nodes))
         } catch (cause) {
@@ -611,15 +755,13 @@ function CollaborativeMarkdownBody({
           return
         }
         sessionRef.current = session
+        session.editor.follow(followedRef.current)
+        session.session.setUserName(profileNameRef.current)
         setSessionReady(true)
         setCards(session.editor.getSuggestionCards())
         onMarkdownChange(documentBodyToMarkdown(session.editor.getBody()))
+        setOutline(outlineOf(session.editor.getBody()))
         applyEditorMode()
-        if (
-          statusRef.current === 'closed' ||
-          statusRef.current === 'recovery-required'
-        )
-          session.editor.setReadOnly(true)
       })
       .catch((cause) => {
         if (!disposed)
@@ -661,43 +803,6 @@ function CollaborativeMarkdownBody({
     else sessionRef.current?.editor.setReadOnly(true)
   }
 
-  const exportPendingChanges = async () => {
-    setIsExportingRecovery(true)
-    try {
-      await getMarkdownBody(workspaceID, documentID)
-      const recovered = await recoverPendingMarkdown({ userID, documentID })
-      if (recovered === null) {
-        setError('No unsynced local changes are available to export.')
-        return
-      }
-      const url = URL.createObjectURL(
-        new Blob([recovered], { type: 'text/markdown;charset=utf-8' })
-      )
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = `${documentID}-offline-recovery.md`
-      link.click()
-      window.setTimeout(() => URL.revokeObjectURL(url), 0)
-      setError('')
-    } catch (cause) {
-      if (cause instanceof ApiError && [403, 404].includes(cause.status)) {
-        hideBodyAfterAccessLoss(true)
-        setError(
-          'Read access is no longer available; local changes were cleared.'
-        )
-      } else if (cause instanceof ApiError && cause.status === 401) {
-        hideBodyAfterAccessLoss(false)
-        setError(
-          'Sign in again to verify access before exporting local changes.'
-        )
-      } else {
-        setError('Could not verify access or recover local changes.')
-      }
-    } finally {
-      setIsExportingRecovery(false)
-    }
-  }
-
   const showSuggestionPanel =
     !offline && status !== 'forbidden' && status !== 'unauthorized'
   return (
@@ -707,7 +812,7 @@ function CollaborativeMarkdownBody({
           mode={mode}
           states={modeTabStates({
             canEdit,
-            canSuggest: Boolean(snapshot.canSuggest),
+            canSuggest: canSuggest,
             online: !offline,
             synced: status === 'ready',
           })}
@@ -727,19 +832,57 @@ function CollaborativeMarkdownBody({
           />
         ) : null}
         <div className='ml-auto flex items-center gap-3'>
-          {showSuggestionPanel ? (
-            <Button
-              size='sm'
-              variant='outline'
-              className='h-11 md:h-8'
-              aria-expanded={isSuggestionsOpen}
-              aria-controls='suggestion-panel'
-              onClick={() => setIsSuggestionsOpen((open) => !open)}
-            >
-              Review
-            </Button>
-          ) : null}
-          <span role='status' className='text-xs text-muted-foreground'>
+          <Button
+            size='icon'
+            variant='ghost'
+            className={toggleButtonClass}
+            aria-label='Contents'
+            title='Contents'
+            aria-pressed={showOutline}
+            onClick={() => setShowOutline(userID, !showOutline)}
+          >
+            <TableOfContents className='size-4' strokeWidth={1.5} />
+          </Button>
+          <Button
+            size='icon'
+            variant='ghost'
+            className={toggleButtonClass}
+            aria-label='Markdown'
+            title='Markdown source'
+            aria-pressed={showSource}
+            onClick={() => setShowSource(!showSource)}
+          >
+            <FileCode className='size-4' strokeWidth={1.5} />
+          </Button>
+          <Button
+            size='icon'
+            variant='ghost'
+            className={toggleButtonClass}
+            aria-label='Number headings'
+            title='Number headings'
+            aria-pressed={numberHeadings}
+            onClick={() => setNumberHeadings(userID, !numberHeadings)}
+          >
+            <ListOrdered className='size-4' strokeWidth={1.5} />
+          </Button>
+          <Button
+            size='icon'
+            variant='ghost'
+            className={toggleButtonClass}
+            aria-label='Smart text'
+            aria-pressed={smartText}
+            title='Smart text: curly quotes, arrows and an ellipsis as you type'
+            onClick={() => setSmartText(userID, !smartText)}
+          >
+            <Quote className='size-4' strokeWidth={1.5} />
+          </Button>
+          {/* "Synced" is the normal state and the header already says Saved: keep it for screen readers, show the rest. */}
+          <span
+            role='status'
+            className={
+              status === 'ready' ? 'sr-only' : 'text-xs text-muted-foreground'
+            }
+          >
             {status === 'ready'
               ? 'Synced'
               : status === 'offline'
@@ -753,72 +896,106 @@ function CollaborativeMarkdownBody({
           {error}
         </p>
       ) : null}
-      {(status === 'recovery-required' && recoveryPendingCount > 0) ||
-      hasHeldEdits ? (
-        <ConflictReviewPanel
-          key={reviewKey}
-          load={() =>
-            loadReviewModel({
-              scope: { userID, documentID },
-              includePendingDiff: statusRef.current === 'recovery-required',
-              store: reviewStore,
-              fetchBody: () => getMarkdownBody(workspaceID, documentID),
-            })
-          }
-          actions={{
-            copyText: (text) => navigator.clipboard.writeText(text),
-            acceptHeld: async (nodeID) => {
-              await acceptHeldEdit({
-                scope: { userID, documentID },
-                store: reviewStore,
-                nodeID,
-                fetchBody: () => getMarkdownBody(workspaceID, documentID),
-              })
-              onLocalStateChanged()
-            },
-            exportLocal: exportPendingChanges,
-            dismissHeld: async () => {
-              await reviewStore.clearHeldEdits({ userID, documentID })
-              setHasHeldEdits(false)
-            },
-            discardLocal: async () => {
-              const body = await getMarkdownBody(workspaceID, documentID)
-              await clearLocalMarkdown({ userID, documentID })
-              setHasHeldEdits(false)
-              setRecoveryPendingCount(0)
-              setError('')
-              onCanonicalBody(body)
-            },
-            resolveCommand: async (kind, commandID, choice) => {
-              const body = await resolveHeldCommand({
-                scope: { userID, documentID },
-                store: reviewStore,
-                kind,
-                commandID,
-                choice,
-                fetchBody: () => getMarkdownBody(workspaceID, documentID),
-                executeDelete: (command) =>
-                  executeDeleteNode(workspaceID, documentID, command),
-                executeMove: (command) =>
-                  executeMoveNode(workspaceID, documentID, command),
-              })
-              setReviewKey((value) => value + 1)
-              onCanonicalBody(body)
-            },
-          }}
+      {presenting ? (
+        <PresentationMode
+          slides={slidesOf(markdown)}
+          onClose={() => setPresenting(false)}
         />
       ) : null}
+      <DocumentInsightsDialog
+        open={insightsOpen}
+        onOpenChange={setInsightsOpen}
+        insights={{
+          views: meta.views,
+          createdBy: meta.author,
+          createdAt: meta.createdAt,
+          versions: insightsHistory.data
+            ? revisionInsights(insightsHistory.data).versions
+            : null,
+          contributors: insightsHistory.data
+            ? revisionInsights(insightsHistory.data).contributors
+            : null,
+        }}
+      />
+      <DocumentStatsDialog
+        open={statsOpen}
+        stats={stats}
+        limit={maxCharacters}
+        onOpenChange={setStatsOpen}
+      />
       <div className='flex min-h-0 flex-1 flex-col md:flex-row'>
+        {showOutline ? (
+          <OutlinePanel
+            backlinks={backlinksQuery.data}
+            items={outline}
+            activeID={activeHeading}
+            onSelect={(nodeID) => {
+              setActiveHeading(nodeID)
+              const editor = sessionRef.current?.editor
+              editor?.focusBlock(nodeID, 'start')
+              scrollRef.current
+                ?.querySelector(`[data-node-id="${nodeID}"]`)
+                ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+            }}
+          />
+        ) : null}
         <div
+          ref={scrollRef}
           className='markdown-body min-h-0 min-w-0 flex-1 overflow-auto p-6'
           data-suggestion-preview={suggestionPreview}
         >
+          <DocumentTitleRow
+            ref={titleRef}
+            title={title}
+            readOnly={titleReadOnly}
+            onCommit={onTitleChange}
+            onEnterBody={() => sessionRef.current?.editor.focusStart()}
+          />
+          {size !== 'ok' ? (
+            <p
+              role={size === 'full' ? 'alert' : 'status'}
+              className='mb-2 text-xs text-destructive'
+            >
+              {size === 'full'
+                ? 'This page is full: no more text can be added. Delete some, or continue in a new page.'
+                : `This page is getting long: ${stats.characters.toLocaleString('en-US')} of ${maxCharacters.toLocaleString('en-US')} characters.`}
+            </p>
+          ) : null}
+          <div className='mb-6'>
+            <DocumentInfoLine
+              updatedAt={meta.updatedAt}
+              updatedBy={meta.updatedBy}
+              author={meta.author}
+              isDraft={meta.isDraft}
+              tasks={countTasks(markdown)}
+              onToggleComments={
+                showSuggestionPanel
+                  ? () => setIsSuggestionsOpen((open) => !open)
+                  : undefined
+              }
+              commentsOpen={isSuggestionsOpen}
+            />
+          </div>
           <div ref={mountRef} />
         </div>
+        {showSource ? <MarkdownSource markdown={markdown} /> : null}
         {(mode === 'edit' && canEdit) || mode === 'suggest' ? (
           <SelectionToolbar
             inline={inline}
             linkRequest={linkRequest}
+            onComment={canEdit || canSuggest ? startComment : undefined}
+            onSetHeading={(level) => {
+              sessionRef.current?.editor.setHeading(level)
+              sessionRef.current?.editor.focus()
+            }}
+            onWrapBlock={
+              mode === 'edit' && canEdit
+                ? (kind) => {
+                    sessionRef.current?.editor.wrapBlock(kind)
+                    sessionRef.current?.editor.focus()
+                  }
+                : undefined
+            }
             onToggleMark={(mark: InlineMarkName) => {
               sessionRef.current?.editor.toggleMark(mark)
               sessionRef.current?.editor.focus()
@@ -841,7 +1018,7 @@ function CollaborativeMarkdownBody({
             documentID={documentID}
             userID={userID}
             canDecide={canEdit}
-            canInteract={canEdit || Boolean(snapshot.canSuggest)}
+            canInteract={canEdit || canSuggest}
             cards={cards}
             decisionsDisabled={
               mode === 'view' || suggestionPreview !== 'suggestions'
@@ -853,10 +1030,8 @@ function CollaborativeMarkdownBody({
             commentPositions={commentPositions}
             focusedCommentID={focusedCommentID}
             newComment={commentDraft}
-            canComment={canEdit || Boolean(snapshot.canSuggest)}
             commentsFailed={Boolean(commentsQuery.error)}
             commentsLoading={commentsQuery.isPending}
-            onStartComment={startComment}
             onNewCommentDone={() => setCommentDraft(null)}
             onSelectComment={(id) => {
               setFocusedCommentID(id)
@@ -879,14 +1054,6 @@ function CollaborativeMarkdownBody({
   )
 }
 
-function isUninitializedBody(error: unknown): error is ApiError {
-  return (
-    error instanceof ApiError &&
-    error.status === 409 &&
-    error.title === 'document body is not initialized'
-  )
-}
-
 function SuggestionPanel({
   open,
   workspaceID,
@@ -905,10 +1072,8 @@ function SuggestionPanel({
   commentPositions,
   focusedCommentID,
   newComment,
-  canComment,
   commentsFailed,
   commentsLoading,
-  onStartComment,
   onNewCommentDone,
   onSelectComment,
 }: {
@@ -929,16 +1094,11 @@ function SuggestionPanel({
   commentPositions: Record<string, number | null>
   focusedCommentID: string | null
   newComment: { selectedText: string; anchor: CommentAnchor } | null
-  canComment: boolean
   commentsFailed: boolean
   commentsLoading: boolean
-  onStartComment: () => void
   onNewCommentDone: () => void
   onSelectComment: (id: string) => void
 }) {
-  const [bulkDecision, setBulkDecision] = useState<'accept' | 'reject' | null>(
-    null
-  )
   const suggestionsQuery = useQuery({
     queryKey: [
       'document-suggestions',
@@ -950,6 +1110,16 @@ function SuggestionPanel({
       listDocumentSuggestions(workspaceID, documentID, signal),
     enabled: true,
     retry: false,
+    // The server learns of a new suggestion when it next stores the document.
+    refetchInterval: (query) =>
+      cards.some(
+        (card) =>
+          !query.state.data?.some(
+            (discussion) => discussion.suggestionId === card.id
+          )
+      )
+        ? 1500
+        : false,
   })
   return (
     <>
@@ -959,25 +1129,12 @@ function SuggestionPanel({
           aria-label='Review'
           className='max-h-[40vh] min-w-0 shrink-0 overflow-auto border-t bg-card md:max-h-none md:w-80 md:border-t-0 md:border-l'
         >
-          {canComment ? (
-            <div className='flex justify-end px-4 pt-3'>
-              <Button
-                size='sm'
-                variant='outline'
-                // Keep the text selected: a click would otherwise clear it.
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={onStartComment}
-              >
-                Comment
-              </Button>
-            </div>
-          ) : null}
           {cards.length ? (
-            <div className='flex flex-wrap items-center justify-between gap-2 px-4 pt-3'>
+            <div className='flex flex-wrap items-center justify-start gap-2 px-3 pt-3 pb-2'>
               <div
                 role='group'
                 aria-label='Suggestion preview'
-                className='flex rounded-md border p-0.5'
+                className='flex gap-1 rounded-md border p-1'
               >
                 {(
                   [
@@ -999,25 +1156,6 @@ function SuggestionPanel({
                   </Button>
                 ))}
               </div>
-            </div>
-          ) : null}
-          {canDecide && cards.length ? (
-            <div className='flex justify-end gap-2 px-4 pt-2'>
-              <Button
-                size='sm'
-                variant='outline'
-                disabled={decisionsDisabled}
-                onClick={() => setBulkDecision('reject')}
-              >
-                Reject all
-              </Button>
-              <Button
-                size='sm'
-                disabled={decisionsDisabled}
-                onClick={() => setBulkDecision('accept')}
-              >
-                Accept all
-              </Button>
             </div>
           ) : null}
           <SuggestionCardList
@@ -1051,21 +1189,6 @@ function SuggestionPanel({
               Could not load suggestion discussions.
             </p>
           ) : null}
-          <ConfirmDialog
-            open={bulkDecision !== null}
-            onOpenChange={(open) => {
-              if (!open) setBulkDecision(null)
-            }}
-            title={`${bulkDecision === 'accept' ? 'Accept' : 'Reject'} all ${cards.length} ${cards.length === 1 ? 'suggestion' : 'suggestions'}?`}
-            desc={`This will ${bulkDecision ?? 'decide'} ${cards.length} ${cards.length === 1 ? 'suggestion' : 'suggestions'} in the document.`}
-            confirmText={`${bulkDecision === 'accept' ? 'Accept' : 'Reject'} all`}
-            destructive={bulkDecision === 'reject'}
-            handleConfirm={() => {
-              if (!bulkDecision) return
-              for (const card of cards) onDecide(card.id, bulkDecision)
-              setBulkDecision(null)
-            }}
-          />
         </aside>
       ) : null}
     </>

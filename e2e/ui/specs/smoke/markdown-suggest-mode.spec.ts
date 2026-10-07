@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the document that the owner accepts or rejects", async ({
   page,
@@ -8,7 +9,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
   test.setTimeout(90_000);
   const suffix = randomUUID();
   const workspaceName = `Suggestion workspace ${suffix}`;
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const runNodeID = randomUUID();
@@ -50,10 +51,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     "X-Workspace-Id": workspaceID,
   };
   const canonicalRuns = async () => {
-    const response = await page.request.get(
-      `${apiURL}/api/v1/documents/${documentID}/body`,
-      { headers: ownerHeaders },
-    );
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, ownerHeaders) } }) };
     const data = (await response.json()) as {
       data: { nodes: { type: string; content: string }[] };
     };
@@ -67,11 +65,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
       title: `Suggestion document ${suffix}`,
       type: "markdown",
       visibility: "private",
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           {
             nodeID: rootNodeID,
             parentID: null,
@@ -96,11 +90,11 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
             content: "Original phrase",
             attributes: {},
           },
-        ],
-      },
+        ]),
     },
   });
   expect(createResponse.status()).toBe(201);
+  documentID = await createdDocumentID(createResponse);
   const legacyProposal = await page.request.post(
     `${apiURL}/api/v1/documents/${documentID}/suggestions`,
     { headers: ownerHeaders, data: {} },
@@ -170,15 +164,16 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     const commenterEditor = commenter.locator(".ProseMirror");
     await expect(commenterEditor).toContainText("Original phrase");
 
-    const tab = (name: string) =>
-      commenter.getByRole("tab", { name, exact: true });
-    await expect(tab("Edit")).toHaveAttribute("aria-disabled", "true");
-    await expect(tab("Suggest")).not.toHaveAttribute("aria-disabled", "true");
-    await tab("Suggest").click();
+    const mode = (name: string) =>
+      commenter.getByRole("menuitemradio", { name, exact: true });
+    await commenter.getByRole("button", { name: /^Editor mode/ }).click();
+    await expect(mode("Edit")).toHaveAttribute("aria-disabled", "true");
+    await expect(mode("Suggest")).not.toHaveAttribute("aria-disabled", "true");
+    await mode("Suggest").click();
     await expect(commenterEditor).toHaveAttribute("contenteditable", "true");
     await expect(commenter.getByRole("status")).toContainText("Synced");
     await commenter
-      .getByRole("button", { name: "Review", exact: true })
+      .getByRole("button", { name: "Comment", exact: true })
       .click();
     expect(
       await commenter.getByRole("button", { name: /^Suggest/ }).count(),
@@ -189,7 +184,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     const ownerEditor = page.locator(".ProseMirror");
     await expect(ownerEditor).toContainText("Original phrase");
     await expect(page.getByRole("status")).toContainText("Synced");
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
     const ownerCards = page.getByRole("list", {
       name: "Suggestions and comments",
     });
@@ -200,7 +195,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenter.keyboard.type("!!");
     await expect(commenterEditor.locator(".suggest-ins")).toHaveText("!!");
     await expect(ownerEditor.locator(".suggest-ins")).toHaveText("!!");
-    await expect(ownerCards).toContainText('Add: "!!"');
+    await expect(ownerCards).toContainText('Add: “!!”');
 
     // Replace: delete a word, type another right there.
     await commenterEditor.getByText("Original phrase").click();
@@ -240,7 +235,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenter.keyboard.press("Backspace");
     await commenter.keyboard.type("Changed");
     await expect(ownerCards).toContainText(
-      'Replace: "Original" with "Changed"',
+      'Replace: “Original” with “Changed”',
     );
     const replaceCard = ownerCards
       .locator("li")
@@ -270,7 +265,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await showSuggestion.click();
     await expect.poll(canonicalRuns).toEqual(["Original phrase"]);
     await expect(replaceCard).toContainText(
-      'Replace: "Original" with "Changed"',
+      'Replace: “Original” with “Changed”',
     );
     const focusedText = ownerEditor.locator(
       `[data-suggestion-focus-id="${replaceID}"]`,
@@ -306,7 +301,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await expect.poll(canonicalRuns).toEqual(["Original phrase"]);
 
     // Reject the Add, accept the Replace.
-    const addCard = ownerCards.locator("li").filter({ hasText: 'Add: "!!"' });
+    const addCard = ownerCards.locator("li").filter({ hasText: 'Add: “!!”' });
     await addCard.getByRole("button", { name: "Reject" }).click();
     await expect(ownerEditor.locator(".suggest-ins")).toHaveCount(1);
     await expect(commenterEditor).not.toContainText("!!");
@@ -325,7 +320,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
 
     // The commenter can only withdraw their own, not decide.
     const commenterReview = commenter.getByRole("button", {
-      name: "Review",
+      name: "Comment",
       exact: true,
     });
     if ((await commenterReview.getAttribute("aria-expanded")) !== "true") {
@@ -337,7 +332,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     const commenterCards = commenter.getByRole("list", {
       name: "Suggestions and comments",
     });
-    await expect(commenterCards).toContainText('Add: "?"');
+    await expect(commenterCards).toContainText('Add: “?”');
     await expect(
       commenterCards.getByRole("button", { name: "Accept" }),
     ).toHaveCount(0);
@@ -351,14 +346,14 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await viewer.goto(`/docs/${documentID}`);
     const viewerEditor = viewer.locator(".ProseMirror");
     await expect(viewerEditor.locator(".suggest-ins")).toHaveText("?");
-    await viewer.getByRole("button", { name: "Review", exact: true }).click();
+    await viewer.getByRole("button", { name: "Comment", exact: true }).click();
     await expect(
       viewer.getByRole("complementary", { name: "Review" }),
     ).toBeVisible();
     const viewerCards = viewer.getByRole("list", {
       name: "Suggestions and comments",
     });
-    await expect(viewerCards).toContainText('Add: "?"');
+    await expect(viewerCards).toContainText('Add: “?”');
     await viewer.getByRole("button", { name: "Preview rejected" }).click();
     await expect(viewer.locator(".markdown-body")).toHaveAttribute(
       "data-suggestion-preview",
@@ -377,24 +372,20 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     ).toHaveCount(0);
 
     const ownerReview = page.getByRole("button", {
-      name: "Review",
+      name: "Comment",
       exact: true,
     });
     if ((await ownerReview.getAttribute("aria-expanded")) !== "true") {
       await ownerReview.click();
     }
-    const liveCard = ownerCards.locator("li").filter({ hasText: 'Add: "?"' });
+    const liveCard = ownerCards.locator("li").filter({ hasText: 'Add: “?”' });
     await expect(liveCard).toBeVisible();
+    await liveCard.getByRole("button", { name: /^Show in document/ }).click();
     await liveCard.getByLabel("Reply").fill("Please keep this change.");
     await liveCard.getByRole("button", { name: "Send reply" }).click();
     await expect(liveCard).toContainText("Please keep this change.");
 
-    await page.getByRole("button", { name: "Accept all", exact: true }).click();
-    const acceptAllDialog = page.getByRole("alertdialog");
-    await expect(acceptAllDialog).toContainText("Accept all 1 suggestion?");
-    await acceptAllDialog
-      .getByRole("button", { name: "Accept all", exact: true })
-      .click();
+    await liveCard.getByRole("button", { name: "Accept", exact: true }).click();
     await expect(
       page.getByText(/No suggestions or comments yet/),
     ).toBeVisible();
@@ -404,12 +395,11 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenterEditor.getByText("Changed phrase?").click();
     await commenter.keyboard.press("Home");
     await commenter.keyboard.type("!");
-    await expect(ownerCards).toContainText('Add: "!"');
-    await page.getByRole("button", { name: "Reject all", exact: true }).click();
-    const rejectAllDialog = page.getByRole("alertdialog");
-    await expect(rejectAllDialog).toContainText("Reject all 1 suggestion?");
-    await rejectAllDialog
-      .getByRole("button", { name: "Reject all", exact: true })
+    await expect(ownerCards).toContainText('Add: “!”');
+    await ownerCards
+      .locator("li")
+      .filter({ hasText: 'Add: “!”' })
+      .getByRole("button", { name: "Reject", exact: true })
       .click();
     await expect(
       page.getByText(/No suggestions or comments yet/),
@@ -420,11 +410,11 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenterEditor.getByText("Changed phrase?").click();
     await commenter.keyboard.press("End");
     await commenter.keyboard.type("?");
-    await expect(commenterCards).toContainText('Add: "?"');
+    await expect(commenterCards).toContainText('Add: “?”');
 
     await commenterCards
       .locator("li")
-      .filter({ hasText: 'Add: "?"' })
+      .filter({ hasText: 'Add: “?”' })
       .last()
       .getByRole("button", { name: "Withdraw" })
       .click();

@@ -6,6 +6,7 @@ import { documentBodySchema } from '../documentBody'
 import { prepareBodyTransaction } from '../prepareBodyTransaction'
 import {
   htmlToMarkdownText,
+  looksLikeMarkdown,
   markdownToSlice,
   normalizePastedMarkdown,
   pasteFromClipboard,
@@ -50,6 +51,14 @@ function clipboard(data: Record<string, string>) {
   return dt
 }
 
+describe('looksLikeMarkdown notices and toggles', () => {
+  it('recognises :::variant and +++ markers', () => {
+    expect(looksLikeMarkdown(':::tip\nHi\n:::')).toBe(true)
+    expect(looksLikeMarkdown('+++\nTitle\nBody\n+++')).toBe(true)
+    expect(looksLikeMarkdown('plain words only')).toBe(false)
+  })
+})
+
 describe('markdownToSlice', () => {
   it('parses blocks without node IDs', async () => {
     const slice = await markdownToSlice('# Title\n\n- a\n- b\n')
@@ -60,6 +69,24 @@ describe('markdownToSlice', () => {
       if (node.attrs.nodeID) ids++
     })
     expect(ids).toBe(0)
+  })
+
+  it('reads :::variant and +++ markers as a notice and a toggle', async () => {
+    const slice = await markdownToSlice(
+      'Before\n\n:::tip\nInside the notice\n:::\n\n+++\nToggle title\nHidden body\n+++\n\nAfter'
+    )
+    const names = [] as string[]
+    slice.content.forEach((node) => names.push(node.type.name))
+    expect(names).toEqual(['paragraph', 'notice', 'toggle', 'paragraph'])
+    const notice = slice.content.child(1)
+    expect(JSON.parse(notice.attrs.bodyAttributes)).toEqual({ variant: 'tip' })
+    expect(notice.textContent).toBe('Inside the notice')
+    expect(slice.content.child(2).textContent).toContain('Hidden body')
+  })
+
+  it('leaves markers inside a code fence alone', async () => {
+    const slice = await markdownToSlice('```\n:::tip\nnot a notice\n:::\n```')
+    expect(slice.content.child(0).type.name).toBe('code_block')
   })
 
   it('returns an open inline slice for a single line', async () => {
@@ -209,6 +236,19 @@ describe('sliceToMarkdown', () => {
 })
 
 describe('normalizePastedMarkdown', () => {
+  it('joins table rows that came one to a paragraph', () => {
+    const spaced =
+      '| a | b |\n\n| :-- | :-- |\n\n| 1 | 2 |\n\n| 3 | 4 |\n\nafter'
+    expect(normalizePastedMarkdown(spaced)).toBe(
+      '| a | b |\n| :-- | :-- |\n| 1 | 2 |\n| 3 | 4 |\n\nafter'
+    )
+  })
+
+  it('leaves separate one-line pipe paragraphs alone', () => {
+    const text = '| a |\n\n| b |\n\n| c |'
+    expect(normalizePastedMarkdown(text)).toBe(text)
+  })
+
   it('drops the spaces that end a list item or a paragraph, and keeps a real line break', () => {
     const text = [
       '1. first  ',

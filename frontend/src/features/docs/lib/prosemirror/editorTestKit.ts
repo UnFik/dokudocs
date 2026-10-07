@@ -93,3 +93,29 @@ export function runStart(
   if (found < 0) throw new Error(`no run with text ${text}`)
   return found
 }
+
+/**
+ * Records, for every edit, the top-level blocks it removed: the observable
+ * result of a delete, with no command in between.
+ */
+export function trackRemovedBlocks(initial: DocumentBodyNode[]) {
+  let previous = initial
+  const batches: string[][] = []
+  return {
+    batches,
+    onBodyChange(next: DocumentBodyNode[]) {
+      const kept = new Set(next.map((node) => node.nodeID))
+      const removed = previous
+        .filter((node) => node.parentID !== null && !kept.has(node.nodeID))
+        .filter((node) =>
+          previous.some(
+            (parent) =>
+              parent.nodeID === node.parentID && parent.parentID === null
+          )
+        )
+        .map((node) => node.nodeID)
+      if (removed.length) batches.push(removed)
+      previous = next
+    },
+  }
+}

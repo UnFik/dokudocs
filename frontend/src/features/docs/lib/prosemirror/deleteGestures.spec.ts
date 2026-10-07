@@ -2,7 +2,11 @@ import { NodeSelection, TextSelection } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import type { DocumentBodyNode } from '../documentBody'
-import { mountTestEditor, paragraphsBody } from './editorTestKit'
+import {
+  mountTestEditor,
+  paragraphsBody,
+  trackRemovedBlocks,
+} from './editorTestKit'
 
 // Real key presses on a focused editor: the browser's own deletion is ignored
 // for selections that cross blocks, so these gestures are handled explicitly.
@@ -38,12 +42,10 @@ function withSeparator(): DocumentBodyNode[] {
 }
 
 function mount(body: DocumentBodyNode[]) {
-  const batches: string[][] = []
+  const { batches, onBodyChange } = trackRemovedBlocks(body)
   const errors: unknown[] = []
   const mounted = mountTestEditor(body, {
-    onDeleteNode: (nodeIDs) => {
-      batches.push(nodeIDs)
-    },
+    onBodyChange,
     onTransactionError: (error) => errors.push(error),
   })
   mounted.editor.view.focus()
@@ -68,8 +70,8 @@ describe('delete gestures with a real keyboard', () => {
         await userEvent.keyboard(`{Control>}a{/Control}{${key}}`)
         expect(errors).toEqual([])
         expect(batches).toEqual([['p0', 'p1', 'p2']])
-        // Nothing changes locally; the canonical body arrives with the new epoch.
-        expect(editor.getBody()).toHaveLength(7)
+        // One empty line is left to type on.
+        expect(editor.getBody()).toHaveLength(2)
       } finally {
         cleanup()
       }

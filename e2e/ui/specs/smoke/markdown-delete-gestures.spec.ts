@@ -1,5 +1,10 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import {
+  createdDocumentID,
+  documentPayload,
+  settleSelection,
+} from "../../helpers/markdown-document";
 
 // Structural deletes round-trip to the server and remount the editor, so they
 // take longer than the default assertion wait.
@@ -66,7 +71,7 @@ async function openDocument(page: Page, blocks: Block[]) {
     (await (await workspaceResponse).json()) as { data: { id: string } }
   ).data.id;
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const nodes: unknown[] = [
     {
@@ -166,16 +171,18 @@ async function openDocument(page: Page, blocks: Block[]) {
       title: `Delete doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: { documentID, bodySchemaVersion: 1, rootNodeID, nodes },
+      ...documentPayload(nodes),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}`);
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible({ timeout: 20000 });
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
   return { editor, documentURL: page.url() };
 }
 
@@ -380,6 +387,7 @@ test("@live @smoke @deletegestures: emptying a line and pressing Backspace again
     await expect(editor).not.toContainText("Beta");
     await expect(editor.locator("p")).toHaveCount(3);
     // The caret is put back after the delete: no click needed to go on.
+    await settleSelection(page, { collapsed: true });
     await page.keyboard.press("Backspace");
     await expect(editor.locator("p")).toHaveCount(2);
     await expectNoReviewBanner(page);
@@ -485,12 +493,14 @@ test("@live @smoke @deletegestures: Ctrl+Z after joining two lines does not brea
   const { editor } = await openDocument(page, threeParagraphs);
   await diagnose(async () => {
     await editor.locator("p").filter({ hasText: "Beta" }).click();
+    await settleSelection(page, { collapsed: true });
     await page.keyboard.press("Home");
     await page.keyboard.press("Backspace");
     await expect(editor.locator("p")).toHaveCount(2);
     await expect(page.getByRole("status")).toContainText("Synced");
     await expect(editor).toBeVisible();
     await editor.locator("p").first().click();
+    await settleSelection(page, { collapsed: true });
     await page.keyboard.press("ControlOrMeta+z");
     await expectNoReviewBanner(page);
     await expect(page.getByRole("status")).toContainText("Synced");
@@ -538,11 +548,6 @@ test("@live @smoke @deletegestures: triple-click a list item then Backspace remo
   page,
 }) => {
   test.setTimeout(90000);
-  const requests: string[] = [];
-  page.on("response", (response) => {
-    const path = new URL(response.url()).pathname;
-    if (path.endsWith("/body")) requests.push(path);
-  });
   const diagnose = watch(page);
   const { editor } = await openDocument(page, [
     { kind: "list", items: ["one", "two", "three"] },
@@ -557,10 +562,6 @@ test("@live @smoke @deletegestures: triple-click a list item then Backspace remo
     await expect(editor).not.toContainText("two");
     await expectNoReviewBanner(page);
     await expect(page.getByRole("status")).toContainText("Synced");
-    // The body is read again once after the delete, not over and over.
-    const before = requests.length;
-    await page.waitForTimeout(2000);
-    expect(requests.length - before).toBeLessThanOrEqual(1);
     await page.reload();
     await expect(page.getByRole("status")).toContainText("Synced");
     await expect(editor.locator("li")).toHaveCount(2);
@@ -591,6 +592,7 @@ test("@live @smoke @deletegestures: after a line is deleted the caret is back an
     await expect(editor.locator("p").first())
       .toBeFocused({ timeout: 10000 })
       .catch(() => {});
+    await settleSelection(page, { collapsed: true });
     await page.keyboard.type("X");
     await expect(editor).toContainText("X");
     await expectNoReviewBanner(page);

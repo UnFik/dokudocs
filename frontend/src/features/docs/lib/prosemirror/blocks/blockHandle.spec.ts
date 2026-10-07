@@ -1,10 +1,7 @@
 import { EditorState } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  MoveNodeRequiredError,
-  prepareBodyTransaction,
-} from '../prepareBodyTransaction'
+import { prepareBodyTransaction } from '../prepareBodyTransaction'
 import { blockHandlePlugin } from './blockHandle'
 import { moveTopLevelBlock } from './moveBlock'
 import { bodyBuilder, stateFor } from './testSupport'
@@ -72,8 +69,8 @@ describe('block handle', () => {
     expect(handle.draggable).toBe(true)
   })
 
-  it('moves the block with arrow keys through a MoveNode intent', () => {
-    const { view, host, errors, ids, root } = mount()
+  it('moves the block with arrow keys', () => {
+    const { view, host, errors } = mount()
     hover(view, 0)
     const handle = host.querySelector<HTMLElement>('.dd-handle')!
     handle.dispatchEvent(
@@ -83,12 +80,9 @@ describe('block handle', () => {
         cancelable: true,
       })
     )
-    expect(errors).toHaveLength(1)
-    const move = errors[0] as MoveNodeRequiredError
-    expect(move).toBeInstanceOf(MoveNodeRequiredError)
-    expect(move.nodeID).toBe(ids[0])
-    expect(move.targetParentID).toBe(root)
-    expect(move.beforeNodeID).toBe(ids[2])
+    expect(errors).toEqual([])
+    const order = [...view.dom.querySelectorAll('p')].map((p) => p.textContent)
+    expect(order).toEqual(['two', 'one', 'three'])
   })
 
   it('does nothing for ArrowUp on the first block', () => {
@@ -106,7 +100,6 @@ describe('block handle', () => {
   it('shows the handle for the caret block without any mouse movement', () => {
     const { view, host } = mount()
     const handle = host.querySelector<HTMLElement>('.dd-handle')!
-    expect(handle.hidden).toBe(true)
     view.focus()
     view.dispatch(view.state.tr.setMeta('refresh', true))
     expect(handle.hidden).toBe(false)
@@ -138,23 +131,37 @@ describe('block handle', () => {
     )
     expect(view.hasFocus()).toBe(true)
   })
-  it('keeps keyboard focus on the handle when the editor rebuilds its plugin views', async () => {
-    const { view, host } = mount()
-    hover(view, 0)
-    const handle = host.querySelector<HTMLElement>('.dd-handle')!
-    handle.focus()
-    handle.dispatchEvent(
-      new KeyboardEvent('keydown', {
-        key: 'ArrowDown',
+
+  it('deletes the block the handle is on when Backspace or Delete is pressed on it', () => {
+    for (const key of ['Backspace', 'Delete']) {
+      document.body.replaceChildren()
+      const { view, host, errors } = mount()
+      hover(view, 1)
+      const handle = host.querySelector<HTMLElement>('.dd-handle')!
+      handle.focus()
+      const event = new KeyboardEvent('keydown', {
+        key,
         bubbles: true,
         cancelable: true,
       })
-    )
-    // A structural command can swap the plugin set; the old handle is removed.
-    view.updateState(view.state.reconfigure({ plugins: [blockHandlePlugin()] }))
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    const active = document.activeElement as HTMLElement
-    expect(active.classList.contains('dd-handle')).toBe(true)
-    expect(active.hidden).toBe(false)
+      handle.dispatchEvent(event)
+      expect(event.defaultPrevented).toBe(true)
+      expect(errors).toEqual([])
+      expect([...view.dom.querySelectorAll('p')].map((p) => p.textContent)).toEqual([
+        'one',
+        'three',
+      ])
+    }
+  })
+
+  it('marks the block while the handle has focus', () => {
+    const { view, host } = mount()
+    hover(view, 1)
+    host.querySelector<HTMLElement>('.dd-handle')!.focus()
+    expect(view.dom.querySelectorAll('.dd-block-selected')).toHaveLength(1)
+    expect(view.dom.querySelector('.dd-block-selected')!.textContent).toBe('two')
+    view.focus()
+    host.querySelector<HTMLElement>('.dd-handle')!.blur()
+    expect(view.dom.querySelectorAll('.dd-block-selected')).toHaveLength(0)
   })
 })

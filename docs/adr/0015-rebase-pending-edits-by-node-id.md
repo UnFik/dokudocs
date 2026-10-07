@@ -1,5 +1,7 @@
 # Rebase pending text edits by node ID across a BodyEpoch
 
+> Superseded by [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md): the AST, epochs and structural commands no longer exist.
+
 Supersedes the "never merged automatically" part of [ADR 0014](0014-structural-moves-start-body-epoch.md); the rest of 0014 and all of [ADR 0012](0012-movenode-owns-existing-node-structure.md) still hold.
 
 A changed `MoveNode` or `DeleteNode` still rebuilds AST/Yjs and increments `body_epoch`, and the server still rejects Yjs updates from an older epoch. What changes is what the client does with its own pending Yjs updates when the epoch moved on. Instead of always holding them for review, the client now three-way merges them by stable `nodeID`:

@@ -7,12 +7,8 @@ import {
   createRAGConversation,
   createWorkspace,
   deleteRAGConversation,
-  deleteMarkdownNode,
   getPublicDocument,
-  getPublicMarkdownBody,
-  getMarkdownBody,
   getRAGConversation,
-  initializeMarkdownBody,
   listDocuments,
   listDocumentSuggestions,
   listDocumentComments,
@@ -24,8 +20,8 @@ import {
   deleteDocumentCommentReply,
   listProjects,
   listRAGConversations,
+  listWorkspaceMembers,
   listWorkspaces,
-  moveMarkdownNode,
   askRAGQuestion,
 } from './domain-api'
 
@@ -315,40 +311,32 @@ describe('Dokudocs domain API adapter', () => {
     expect(new Headers(init.headers).has('Authorization')).toBe(false)
   })
 
-  it('loads a public body as AST without CRDT state', async () => {
+  it('lists the people of a workspace', async () => {
     const fetch = vi.fn().mockResolvedValue(
-      jsonResponse({
-        bodyVersion: 2,
-        bodySchemaVersion: 1,
-        rootNodeID: documentId,
-        nodes: [
-          {
-            nodeID: documentId,
-            parentID: null,
-            siblingOrder: 0,
-            type: 'document',
-            content: '',
-            attributes: {},
-            version: 1,
-          },
-        ],
-      })
+      jsonResponse([
+        {
+          workspaceId,
+          userId: '00000000-0000-0000-0000-000000000001',
+          email: 'rina@example.com',
+          fullName: 'Rina Putri',
+          avatarUrl: '',
+          role: 'member',
+          joinedAt: '2026-10-01T00:00:00Z',
+        },
+      ])
     )
     vi.stubGlobal('fetch', fetch)
 
-    await expect(getPublicMarkdownBody('opaque-token')).resolves.toMatchObject({
-      bodyVersion: 2,
-      bodySchemaVersion: 1,
-      rootNodeID: documentId,
-      nodes: [
-        expect.objectContaining({ nodeID: documentId, type: 'document' }),
-      ],
-    })
-    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
-    expect(new URL(url).pathname).toBe(
-      '/api/v1/public/documents/opaque-token/body'
+    await expect(listWorkspaceMembers(workspaceId)).resolves.toEqual([
+      {
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'Rina Putri',
+        email: 'rina@example.com',
+      },
+    ])
+    expect(new URL(fetch.mock.calls[0][0]).pathname).toBe(
+      `/api/v1/workspaces/${workspaceId}/members`
     )
-    expect(new Headers(init.headers).has('Authorization')).toBe(false)
   })
 
   it('loads workspaces from the backend and rejects malformed rows', async () => {
@@ -506,151 +494,6 @@ describe('Dokudocs domain API adapter', () => {
     await expect(listDocuments(legacyDemoWorkspaceId)).resolves.toMatchObject([
       { id: documentId, workspaceId: legacyDemoWorkspaceId },
     ])
-  })
-
-  it('initializes an AST body against the source version', async () => {
-    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
-    vi.stubGlobal('fetch', fetch)
-
-    const input = {
-      baseBodyVersion: 1,
-      bodySchemaVersion: 1,
-      sourceFingerprint: 'ab'.repeat(32),
-      rootNodeID: documentId,
-      nodes: [
-        {
-          nodeID: documentId,
-          parentID: null,
-          siblingOrder: 0,
-          type: 'document',
-          content: '',
-          attributes: {},
-        },
-      ],
-    }
-    await expect(
-      initializeMarkdownBody(workspaceId, documentId, input)
-    ).resolves.toBeUndefined()
-
-    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
-    expect(new URL(url).pathname).toBe(
-      `/api/v1/documents/${documentId}/body/initialize`
-    )
-    expect(init.method).toBe('POST')
-    expect(new Headers(init.headers).get('X-Workspace-Id')).toBe(workspaceId)
-    expect(JSON.parse(String(init.body))).toEqual(input)
-  })
-
-  it('loads the AST and matching Yjs snapshot with workspace scope', async () => {
-    const fetch = vi.fn().mockResolvedValue(
-      jsonResponse({
-        bodyVersion: 3,
-        bodyEpoch: 2,
-        bodySchemaVersion: 1,
-        canEdit: true,
-        rootNodeID: documentId,
-        nodes: [
-          {
-            nodeID: documentId,
-            parentID: null,
-            siblingOrder: 0,
-            type: 'document',
-            content: '',
-            attributes: {},
-            version: 1,
-          },
-        ],
-        encodedState: 'AQ==',
-      })
-    )
-    vi.stubGlobal('fetch', fetch)
-
-    await expect(
-      getMarkdownBody(workspaceId, documentId)
-    ).resolves.toMatchObject({
-      bodyVersion: 3,
-      bodyEpoch: 2,
-      bodySchemaVersion: 1,
-      canEdit: true,
-      rootNodeID: documentId,
-      encodedState: 'AQ==',
-    })
-    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
-    expect(new URL(url).pathname).toBe(`/api/v1/documents/${documentId}/body`)
-    expect(new Headers(init.headers).get('X-Workspace-Id')).toBe(workspaceId)
-  })
-
-  it('sends an idempotent DeleteNode command through the workspace API', async () => {
-    const result = {
-      documentID: documentId,
-      commandID: requestID,
-      nodeID: workspaceId,
-      bodyEpoch: 2,
-      bodyVersion: 8,
-      changed: true,
-    }
-    const fetch = vi.fn().mockResolvedValue(jsonResponse(result))
-    vi.stubGlobal('fetch', fetch)
-
-    await expect(
-      deleteMarkdownNode(workspaceId, documentId, {
-        commandID: requestID,
-        bodyEpoch: 1,
-        bodySchemaVersion: 1,
-        nodeID: workspaceId,
-      })
-    ).resolves.toEqual(result)
-
-    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
-    expect(new URL(url).pathname).toBe(
-      `/api/v1/documents/${documentId}/body/delete`
-    )
-    expect(init.method).toBe('POST')
-    expect(new Headers(init.headers).get('X-Workspace-Id')).toBe(workspaceId)
-    expect(JSON.parse(String(init.body))).toEqual({
-      commandID: requestID,
-      bodyEpoch: 1,
-      bodySchemaVersion: 1,
-      nodeID: workspaceId,
-    })
-  })
-
-  it('sends a durable MoveNode command through the workspace API', async () => {
-    const result = {
-      documentID: documentId,
-      commandID: requestID,
-      bodyEpoch: 2,
-      bodyVersion: 8,
-      changed: true,
-    }
-    const fetch = vi.fn().mockResolvedValue(jsonResponse(result))
-    vi.stubGlobal('fetch', fetch)
-
-    await expect(
-      moveMarkdownNode(workspaceId, documentId, {
-        commandID: requestID,
-        bodyEpoch: 1,
-        bodySchemaVersion: 1,
-        nodeID: workspaceId,
-        targetParentID: documentId,
-        beforeNodeID: null,
-      })
-    ).resolves.toEqual(result)
-
-    const [url, init] = fetch.mock.calls[0] as [string, RequestInit]
-    expect(new URL(url).pathname).toBe(
-      `/api/v1/documents/${documentId}/body/move`
-    )
-    expect(init.method).toBe('POST')
-    expect(new Headers(init.headers).get('X-Workspace-Id')).toBe(workspaceId)
-    expect(JSON.parse(String(init.body))).toEqual({
-      commandID: requestID,
-      bodyEpoch: 1,
-      bodySchemaVersion: 1,
-      nodeID: workspaceId,
-      targetParentID: documentId,
-      beforeNodeID: null,
-    })
   })
 
   it('maps project category rows and workspace IDs to the current UI model', async () => {
