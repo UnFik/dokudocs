@@ -10,7 +10,8 @@ export type CollabStatus =
   | 'unauthorized'
   | 'forbidden'
 
-export type CollabAccess = { canEdit: boolean; canSuggest: boolean }
+/** canComment is absent from a service that predates it; then suggesting implies commenting. */
+export type CollabAccess = { canEdit: boolean; canSuggest: boolean; canComment?: boolean }
 
 /** A collaborator's selection. Only name and color are shared, never contact data. */
 export type RemoteCursor = {
@@ -127,6 +128,10 @@ export function openCollabSession(input: {
         input.onAccess?.({
           canEdit: Boolean(message.canEdit),
           canSuggest: Boolean(message.canSuggest),
+          canComment:
+            message.canComment === undefined
+              ? Boolean(message.canEdit || message.canSuggest)
+              : Boolean(message.canComment),
         })
       else if (message.type === 'comments_changed') input.onCommentsChanged?.()
       else if (message.type === 'reloaded') input.onReloaded?.()

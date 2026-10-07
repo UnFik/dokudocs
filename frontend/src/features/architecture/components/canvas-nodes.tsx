@@ -14,7 +14,7 @@ import {
   type NodeProps,
   type ResizeParams,
 } from '@xyflow/react'
-import { FileText, LogOut } from 'lucide-react'
+import { FileText, LogOut, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type {
   ArchitectureConnection,
@@ -36,6 +36,7 @@ export type CanvasContextValue = {
   onResizeEnd: (id: string, params: ResizeParams) => void
   takeOut: (id: string) => void
   familyOf: (protocol: string) => string
+  commentCounts: Map<string, number>
 }
 
 export const CanvasContext = createContext<CanvasContextValue | null>(null)
@@ -110,7 +111,8 @@ function TakeOutToolbar({
 }
 
 export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
-  const { readOnly, catalog } = useCanvas()
+  const { readOnly, catalog, commentCounts } = useCanvas()
+  const comments = commentCounts.get(id) ?? 0
   const element = data.element
   const entry = element.catalog ? catalog.get(element.catalog) : undefined
   const external = entry?.subkind === 'external'
@@ -144,6 +146,14 @@ export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
           title={`${element.links.length} linked document${element.links.length === 1 ? '' : 's'}`}
         >
           <FileText className='size-2.5' aria-hidden /> {element.links.length}
+        </span>
+      )}
+      {comments > 0 && (
+        <span
+          className='absolute -right-2 -bottom-2 inline-flex items-center gap-0.5 rounded-[2px] border border-border bg-card px-1 font-mono text-[10px] text-muted-foreground'
+          title={`${comments} open comment${comments === 1 ? '' : 's'}`}
+        >
+          <MessageSquare className='size-2.5' aria-hidden /> {comments}
         </span>
       )}
       <Handle

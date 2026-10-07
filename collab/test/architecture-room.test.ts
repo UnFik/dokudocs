@@ -71,7 +71,7 @@ describe('an Architecture room', () => {
     const commenter = connect(port, room, 'tok-c')
     await Promise.all([editor.synced, commenter.synced])
     await waitFor(() => commenter.statelessMessages.some((m: any) => m.type === 'access'))
-    expect(commenter.statelessMessages.find((m: any) => m.type === 'access')).toMatchObject({ canEdit: false, canSuggest: false })
+    expect(commenter.statelessMessages.find((m: any) => m.type === 'access')).toMatchObject({ canEdit: false, canSuggest: false, canComment: true })
 
     addSystem(commenter.doc, 'vandal')
     addSystem(editor.doc, 'real')

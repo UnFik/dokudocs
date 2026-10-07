@@ -75,6 +75,13 @@ test("@live @smoke: an Architecture canvas is built from the palette and shared"
   await protocolDialog.getByRole("button", { name: "Done" }).click();
   await expect(page.locator(".react-flow__edge")).toHaveCount(1);
 
+  // A comment on a System; the node shows it has an open thread.
+  await pgNode.click();
+  await page.getByLabel("New comment on PostgreSQL").fill("Which version runs here?");
+  await page.getByRole("button", { name: "Comment", exact: true }).click();
+  await expect(page.getByText("Which version runs here?")).toBeVisible();
+  await expect(pgNode.getByTitle("1 open comment")).toBeVisible();
+
   // A second browser sees the canvas, and it is still there after a reload.
   const storageState = await page.context().storageState();
   const second = await browser.newContext({ storageState });
@@ -82,6 +89,10 @@ test("@live @smoke: an Architecture canvas is built from the palette and shared"
   await secondPage.goto(documentURL);
   await expect(secondPage.locator(".react-flow__node-system").filter({ hasText: "PostgreSQL" })).toBeVisible({ timeout: 20000 });
   await expect(secondPage.locator(".react-flow__edge")).toHaveCount(1);
+  const secondPg = secondPage.locator(".react-flow__node-system").filter({ hasText: "PostgreSQL" });
+  await expect(secondPg.getByTitle("1 open comment")).toBeVisible();
+  await secondPg.click();
+  await expect(secondPage.getByText("Which version runs here?")).toBeVisible();
   await second.close();
 
   await page.waitForTimeout(1500);

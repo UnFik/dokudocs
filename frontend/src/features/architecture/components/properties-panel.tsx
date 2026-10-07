@@ -21,6 +21,7 @@ import { fitsContents, minSize } from '../lib/layout'
 import type { Selection } from './architecture-canvas'
 import { CatalogIcon } from './catalog-icon'
 import { DocumentLinks } from './document-links'
+import { ElementComments, OrphanedComments } from './element-comments'
 
 const fieldLabel = 'font-mono text-[11px] text-muted-foreground'
 const selectClass =
@@ -104,6 +105,10 @@ export type PropertiesPanelProps = {
   projectID: string | null
   onDelete: (selection: NonNullable<Selection>) => void
   onGesture: () => void
+  documentID: string
+  /** May start and answer comments: editors and commenters. */
+  canComment: boolean
+  onCommentsChanged: () => void
 }
 
 export function PropertiesPanel(props: PropertiesPanelProps) {
@@ -114,9 +119,16 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
   )
   if (!selection) {
     return (
-      <p className='text-xs text-muted-foreground'>
-        Select a Host, System or Connection to see and change its properties.
-      </p>
+      <div className='flex flex-col gap-3'>
+        <p className='text-xs text-muted-foreground'>
+          Select a Host, System or Connection to see and change its properties.
+        </p>
+        <OrphanedComments
+          workspaceID={props.workspaceID}
+          documentID={props.documentID}
+          elementIDs={new Set([...canvas.nodes.map((n) => n.id), ...canvas.connections.map((c) => c.id)])}
+        />
+      </div>
     )
   }
   if (selection.kind === 'edge') {
@@ -275,6 +287,14 @@ function SystemProperties({
         canEdit={canEdit}
         onChange={(links) => set({ links })}
       />
+      <ElementComments
+        workspaceID={props.workspaceID}
+        documentID={props.documentID}
+        elementID={node.id}
+        elementName={node.name || 'this System'}
+        canComment={props.canComment}
+        onChanged={props.onCommentsChanged}
+      />
       {canEdit && (
         <DeleteButton {...props} node={node} linkCount={node.links.length} />
       )}
@@ -345,6 +365,14 @@ function ConnectionProperties({
         links={connection.links}
         canEdit={canEdit}
         onChange={(links) => set({ links })}
+      />
+      <ElementComments
+        workspaceID={props.workspaceID}
+        documentID={props.documentID}
+        elementID={connection.id}
+        elementName={`${names[0] || 'Untitled'} → ${names[1] || 'Untitled'}`}
+        canComment={props.canComment}
+        onChanged={props.onCommentsChanged}
       />
       {canEdit && (
         <div className='flex flex-col gap-1'>
@@ -512,6 +540,14 @@ function ContainerProperties({
           ? 'A Group only gathers elements; it does not change where they run.'
           : 'Documents are linked to the Systems inside a Host.'}
       </p>
+      <ElementComments
+        workspaceID={props.workspaceID}
+        documentID={props.documentID}
+        elementID={node.id}
+        elementName={node.name || (node.kind === 'group' ? 'this Group' : 'this Host')}
+        canComment={props.canComment}
+        onChanged={props.onCommentsChanged}
+      />
       {canEdit && <DeleteButton {...props} node={node} linkCount={0} />}
     </div>
   )
