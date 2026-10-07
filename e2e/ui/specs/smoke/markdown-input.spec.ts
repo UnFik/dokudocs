@@ -194,3 +194,38 @@ test("@live @smoke @markdowninput: a notice that held text and was emptied, or c
   await expect(editor.locator(".dd-notice-info")).toHaveCount(0);
   await expect(editor).toContainText("after");
 });
+
+test("@live @smoke @markdowninput: Backspace at the end of a pasted heading takes one character, not the whole line", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const { editor } = await openMarkdownDocument(page, ["start"]);
+  await editor.locator("p").first().click();
+  await page.keyboard.press("End");
+  await pastePlainText(page, "\n\n# Judul besar\n\nisi");
+  const heading = editor.locator("h1");
+  await heading.click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Backspace");
+  await expect(heading).toHaveText("Judul besa");
+  await expectNoInternalMessage(page);
+});
+
+test("@live @smoke @markdowninput: table rows pasted one to a paragraph still become one table", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const { editor } = await openMarkdownDocument(page, ["start"]);
+  await editor.locator("p").first().click();
+  await page.keyboard.press("End");
+  const rows = [
+    "| Key | Value |",
+    "| :---- | :---- |",
+    "| Method | GET |",
+    "| URL | …./member |",
+  ];
+  await pastePlainText(page, "\n\n" + rows.join("\n\n"));
+  await expect(editor.locator("table")).toHaveCount(1);
+  await expect(editor.locator("tr")).toHaveCount(3);
+  await expectNoInternalMessage(page);
+});

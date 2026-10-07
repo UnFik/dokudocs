@@ -34,7 +34,7 @@ const blockStart = /^\s*([-*+]\s|\d+[.)]\s|#{1,6}\s|>|\||```|---+\s*$)/
  * follows, they stay: that is a real line break.
  */
 export function normalizePastedMarkdown(text: string): string {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  const lines = joinSpacedTableRows(text.replace(/\r\n?/g, '\n').split('\n'))
   return lines
     .map((line, index) => {
       if (!/ {2,}$/.test(line)) return line.replace(/\t+$/, '')
@@ -44,6 +44,42 @@ export function normalizePastedMarkdown(text: string): string {
       return endsBlock ? line.replace(/[ \t]+$/, '') : line
     })
     .join('\n')
+}
+
+const tableDelimiterRow = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
+
+/**
+ * A table copied from a page that puts each row in its own paragraph arrives
+ * with a blank line between rows, which reads as many one-line paragraphs. A run
+ * of pipe rows with one blank line between each, whose second row is the
+ * delimiter row, is joined back into one table.
+ */
+function joinSpacedTableRows(lines: string[]): string[] {
+  const out: string[] = []
+  let index = 0
+  while (index < lines.length) {
+    const rows: string[] = []
+    let end = index
+    while (
+      end < lines.length &&
+      lines[end]!.trim().startsWith('|') &&
+      (end + 1 >= lines.length || lines[end + 1]!.trim() === '') &&
+      (end + 2 >= lines.length || lines[end + 2]!.trim().startsWith('|'))
+    ) {
+      rows.push(lines[end]!)
+      end += 2
+    }
+    const last = end < lines.length && lines[end]!.trim().startsWith('|')
+    if (last) rows.push(lines[end]!)
+    if (rows.length >= 3 && tableDelimiterRow.test(rows[1]!)) {
+      out.push(...rows)
+      index = end + (last ? 1 : 0)
+    } else {
+      out.push(lines[index]!)
+      index++
+    }
+  }
+  return out
 }
 
 type Segment =
@@ -57,8 +93,11 @@ const noticeVariants = new Set(['info', 'success', 'warning', 'tip'])
 function splitContainers(markdown: string): Segment[] {
   const segments: Segment[] = []
   let plain: string[] = []
-  let open: { kind: 'notice' | 'toggle'; variant: string; lines: string[] } | null =
-    null
+  let open: {
+    kind: 'notice' | 'toggle'
+    variant: string
+    lines: string[]
+  } | null = null
   let fenced = false
   const flush = () => {
     if (plain.join('\n').trim())
@@ -70,7 +109,9 @@ function splitContainers(markdown: string): Segment[] {
     if (!fenced) {
       if (open) {
         const closes =
-          open.kind === 'notice' ? /^:::\s*$/.test(line) : /^\+\+\+\s*$/.test(line)
+          open.kind === 'notice'
+            ? /^:::\s*$/.test(line)
+            : /^\+\+\+\s*$/.test(line)
         if (closes) {
           const text = open.lines.join('\n')
           segments.push(
