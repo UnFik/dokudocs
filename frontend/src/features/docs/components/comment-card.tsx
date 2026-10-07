@@ -13,27 +13,18 @@ import {
   type CommentAnchor,
   type CommentThread,
 } from '@/lib/domain-api'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { ReviewCardHeader } from './review-card'
 
-function initials(name: string) {
-  return (
-    name
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]!.toUpperCase())
-      .join('') || '?'
-  )
-}
+/** Compact actions in the review rail: 12px text, 28px high, aligned to the text edge. */
+const action = 'h-7 px-2 text-xs'
 
 function Quote({ text }: { text: string }) {
   if (!text) return null
   return (
-    <blockquote className='mt-1 line-clamp-3 rounded-sm bg-muted px-2 py-1 text-xs break-words text-muted-foreground'>
+    <blockquote className='mt-2 line-clamp-3 rounded-sm bg-muted px-2 py-1.5 text-xs break-words text-muted-foreground'>
       {text}
     </blockquote>
   )
@@ -66,7 +57,7 @@ function CommentForm({
   }
   return (
     <form
-      className='mt-2 space-y-1'
+      className='mt-2 space-y-1.5'
       onSubmit={(event) => {
         event.preventDefault()
         send()
@@ -99,9 +90,10 @@ function CommentForm({
           {draft.length - maxCommentLength} to send it.
         </p>
       ) : null}
-      <div className='flex gap-1'>
+      <div className='flex gap-1.5'>
         <Button
           size='sm'
+          className={action}
           type='submit'
           variant='outline'
           disabled={!trimmed || tooLong || pending}
@@ -109,7 +101,13 @@ function CommentForm({
           {submitLabel}
         </Button>
         {onCancel ? (
-          <Button size='sm' type='button' variant='ghost' onClick={onCancel}>
+          <Button
+            size='sm'
+            className={action}
+            type='button'
+            variant='ghost'
+            onClick={onCancel}
+          >
             Cancel
           </Button>
         ) : null}
@@ -152,7 +150,7 @@ export function NewCommentCard({
   return (
     <li
       data-new-comment
-      className='border-t py-2 text-xs first:border-t-0'
+      className='mb-2 rounded-lg bg-muted/50 p-3 text-xs'
       aria-label='New comment'
     >
       <Quote text={selectedText} />
@@ -269,29 +267,20 @@ export function CommentCard({
     <li
       data-comment-thread-id={thread.id}
       data-focused={focused ? 'true' : undefined}
-      className={`border-t py-2 text-xs first:border-t-0 ${focused ? 'bg-secondary outline outline-1 -outline-offset-1 outline-border' : ''}`}
+      className={`mb-2 rounded-lg p-3 text-xs ${focused ? 'bg-secondary ring-1 ring-border' : 'bg-muted/50'}`}
     >
-      <div className='flex min-w-0 flex-wrap items-center gap-2 text-muted-foreground'>
-        <Avatar aria-hidden className='size-6 shrink-0 border'>
-          <AvatarFallback className='bg-muted text-[9px] text-muted-foreground'>
-            {initials(thread.authorName)}
-          </AvatarFallback>
-        </Avatar>
-        <span className='min-w-0 break-words'>
-          {who(thread.authorId, thread.authorName)}
-        </span>
-        <time className='text-[10px] tabular-nums' dateTime={thread.createdAt}>
-          {new Date(thread.createdAt).toLocaleString()}
-        </time>
-        {thread.editedAt ? <span className='text-[10px]'>edited</span> : null}
-        {orphaned ? (
-          <span className='rounded-sm bg-border px-1 font-mono text-[10.5px] text-foreground'>
-            text changed
-          </span>
-        ) : null}
-        {resolved ? <span>Resolved</span> : null}
-      </div>
-      <Quote text={thread.selectedText} />
+      <ReviewCardHeader
+        name={who(thread.authorId, thread.authorName)}
+        createdAt={thread.createdAt}
+        note={[
+          thread.editedAt ? 'edited' : '',
+          orphaned ? 'text changed' : '',
+          resolved ? 'Resolved' : '',
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      />
+      {orphaned ? <Quote text={thread.selectedText} /> : null}
       {editing === 'thread' ? (
         <CommentForm
           id={`comment-edit-${thread.id}`}
@@ -307,7 +296,7 @@ export function CommentCard({
         <>
           {orphaned ? (
             // Nothing to show in the document, so this is plain text.
-            <p className='py-2 break-words whitespace-pre-wrap'>
+            <p className='mt-1 py-1.5 break-words whitespace-pre-wrap'>
               {thread.content}
             </p>
           ) : (
@@ -315,7 +304,7 @@ export function CommentCard({
               type='button'
               variant='ghost'
               size='sm'
-              className='h-auto min-h-11 w-full justify-start px-0 py-2 text-left text-xs font-normal whitespace-normal text-foreground'
+              className='-mx-2 mt-1 h-auto min-h-9 w-[calc(100%_+_1rem)] justify-start px-2 py-1.5 text-left text-xs font-normal whitespace-normal text-foreground'
               aria-label={`Show in document: ${thread.selectedText || thread.content}`}
               onClick={() => onSelect(thread.id)}
             >
@@ -325,10 +314,11 @@ export function CommentCard({
             </Button>
           )}
           {canChange(thread.authorId) ? (
-            <div className='flex gap-1'>
+            <div className='-ml-2 flex gap-1'>
               {thread.authorId === userID ? (
                 <Button
                   size='sm'
+                  className={action}
                   variant='ghost'
                   onClick={() => setEditing('thread')}
                 >
@@ -337,6 +327,7 @@ export function CommentCard({
               ) : null}
               <Button
                 size='sm'
+                className={action}
                 variant='ghost'
                 onClick={() => setDeleting({ replyID: null })}
               >
@@ -349,6 +340,7 @@ export function CommentCard({
       {resolved && thread.replies.length ? (
         <Button
           size='sm'
+          className={`${action} -ml-2`}
           variant='ghost'
           aria-expanded={showReplies}
           onClick={() => setShowReplies((open) => !open)}
@@ -359,10 +351,10 @@ export function CommentCard({
         </Button>
       ) : null}
       {repliesShown && thread.replies.length ? (
-        <ul className='mt-1 space-y-2' aria-label='Replies'>
+        <ul className='mt-2 space-y-3 border-l pl-3' aria-label='Replies'>
           {thread.replies.map((item) => (
             <li key={item.id}>
-              <p className='flex items-baseline gap-2'>
+              <p className='flex flex-wrap items-baseline gap-x-2'>
                 <span className='font-medium'>
                   {who(item.authorId, item.authorName)}
                 </span>
@@ -397,10 +389,11 @@ export function CommentCard({
                     {item.content}
                   </p>
                   {canChange(item.authorId) ? (
-                    <div className='flex gap-1'>
+                    <div className='-ml-2 flex gap-1'>
                       {item.authorId === userID ? (
                         <Button
                           size='sm'
+                          className={action}
                           variant='ghost'
                           onClick={() => setEditing(item.id)}
                         >
@@ -409,6 +402,7 @@ export function CommentCard({
                       ) : null}
                       <Button
                         size='sm'
+                        className={action}
                         variant='ghost'
                         onClick={() => setDeleting({ replyID: item.id })}
                       >
@@ -432,9 +426,10 @@ export function CommentCard({
         />
       ) : null}
       {canInteract ? (
-        <div className='mt-2'>
+        <div className='mt-2 -ml-2'>
           <Button
             size='sm'
+            className={action}
             variant='ghost'
             disabled={resolve.isPending}
             onClick={() => resolve.mutate(!resolved)}

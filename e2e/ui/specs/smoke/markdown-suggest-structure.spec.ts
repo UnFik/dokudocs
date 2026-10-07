@@ -170,7 +170,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await commenter.keyboard.press("End");
     await commenter.keyboard.press("Enter");
     await commenter.keyboard.type("Second line");
-    await expect(ownerCards).toContainText('Add: "Second line"');
+    await expect(ownerCards).toContainText('Add: “Second line”');
     await expect(ownerEditor.locator("p")).toHaveCount(2);
     await expect.poll(canonicalRuns).toEqual(["Original phrase"]);
 
@@ -271,7 +271,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await selectOriginal();
     await commenter.keyboard.press("Control+b");
     await openReview();
-    await expect(ownerCards).toContainText('Format: bold "Original"');
+    await expect(ownerCards).toContainText('Format: bold “Original”');
     await expect(ownerEditor.locator("strong")).toHaveCount(0);
     await expect(ownerEditor.locator(".suggest-fmt")).toContainText("Original");
     await page.getByRole("button", { name: "Preview accepted" }).click();
@@ -289,7 +289,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await selectOriginal();
     await commenter.keyboard.press("Control+i");
     await openReview();
-    await expect(ownerCards).toContainText('Format: italic "Original"');
+    await expect(ownerCards).toContainText('Format: italic “Original”');
     await ownerCards.getByRole("button", { name: "Reject" }).click();
     await expect(ownerCards).toHaveCount(0);
     await expect(ownerEditor.locator("em")).toHaveCount(0);
@@ -304,7 +304,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
       .fill("https://example.com/title");
     await commenter.getByRole("button", { name: "Apply link" }).click();
     await openReview();
-    await expect(ownerCards).toContainText('Format: link "Original"');
+    await expect(ownerCards).toContainText('Format: link “Original”');
     await expect(ownerEditor.locator("[data-link-href]")).toHaveCount(0);
     await ownerCards.getByRole("button", { name: "Accept" }).click();
     await expect(
@@ -327,7 +327,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await commenterEditor.getByText("Original").first().click();
     await commenter.keyboard.press("Control+Alt+2");
     await openReview();
-    await expect(ownerCards).toContainText('Format: heading 2 "Original"');
+    await expect(ownerCards).toContainText('Format: heading 2 “Original”');
     await expect(ownerEditor.locator("h2")).toHaveCount(0);
     await expect(ownerEditor.locator(".suggest-block-fmt")).toHaveAttribute(
       "data-suggest-label",

@@ -235,7 +235,7 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await commenter.keyboard.press("End");
     await commenter.keyboard.press("Enter");
     await commenter.keyboard.type("Pears");
-    await expect(ownerCards).toContainText('Add: "Pears"');
+    await expect(ownerCards).toContainText('Add: “Pears”');
     await expect(ownerEditor.locator("li")).toHaveCount(2);
     await expect.poll(canonicalRuns).toEqual(["Apples", "Quoted", "Tail"]);
     await ownerCards.getByRole("button", { name: "Accept" }).click();
@@ -266,7 +266,7 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await commenter.keyboard.press("End");
     await commenter.keyboard.press("Enter");
     await commenter.keyboard.type("More");
-    await expect(ownerCards).toContainText('Add: "More"');
+    await expect(ownerCards).toContainText('Add: “More”');
     await expect(ownerEditor.locator("blockquote p")).toHaveCount(2);
     await ownerCards.getByRole("button", { name: "Reject" }).click();
     await expect(ownerCards).toHaveCount(0);
