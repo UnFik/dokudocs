@@ -63,7 +63,7 @@ import {
   type EditorMode,
 } from './editor-mode-tabs'
 import './markdown-body.css'
-import { MarkdownPreview } from './markdown-preview'
+import { MarkdownSource } from './markdown-source'
 import { OutlinePanel } from './outline-panel'
 import { PresentationMode } from './presentation-mode'
 import { SuggestionCardList } from './suggestion-card-list'
@@ -345,7 +345,7 @@ function CollaborativeMarkdownBody({
   )
   const [statsOpen, setStatsOpen] = useState(false)
   const [presenting, setPresenting] = useState(false)
-  const [split, setSplit] = useState(false)
+  const [showSource, setShowSource] = useState(false)
   const [insightsOpen, setInsightsOpen] = useState(false)
   const insightsHistory = useQuery({
     queryKey: ['document-revisions', workspaceID, documentID],
@@ -810,10 +810,10 @@ function CollaborativeMarkdownBody({
             size='sm'
             variant='ghost'
             className='h-11 md:h-8'
-            aria-pressed={split}
-            onClick={() => setSplit(!split)}
+            aria-pressed={showSource}
+            onClick={() => setShowSource(!showSource)}
           >
-            Split view
+            Markdown
           </Button>
           <Button
             size='sm'
@@ -942,7 +942,7 @@ function CollaborativeMarkdownBody({
           </div>
           <div ref={mountRef} />
         </div>
-        {split ? <MarkdownPreview markdown={markdown} /> : null}
+        {showSource ? <MarkdownSource markdown={markdown} /> : null}
         {(mode === 'edit' && canEdit) || mode === 'suggest' ? (
           <SelectionToolbar
             inline={inline}
