@@ -1,12 +1,10 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import DOMPurify from 'dompurify'
-import { marked } from 'marked'
 import { getPublicDocument } from '@/lib/domain-api'
 import { rememberOpenedPublicLink } from '@/lib/public-link-session'
+import '../lib/prosemirror/blocks/blocks.css'
+import { drawDiagrams, renderMarkdown } from '../lib/render-markdown'
 import './markdown-body.css'
-
-marked.setOptions({ gfm: true, breaks: true })
 
 export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
   const documentQuery = useQuery({
@@ -19,10 +17,11 @@ export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
     retry: false,
   })
   const markdown = documentQuery.data?.content ?? ''
-  const html = useMemo(
-    () => DOMPurify.sanitize(marked.parse(markdown) as string),
-    [markdown]
-  )
+  const html = useMemo(() => renderMarkdown(markdown), [markdown])
+  const articleRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (articleRef.current) void drawDiagrams(articleRef.current)
+  }, [html])
 
   if (documentQuery.isPending)
     return (
@@ -48,6 +47,7 @@ export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
         </p>
       </header>
       <article
+        ref={articleRef}
         aria-label='Document contents'
         className='markdown-body mx-auto max-w-4xl px-6 py-8 sm:px-10'
       >
