@@ -21,6 +21,7 @@ import {
 } from '@/lib/domain-api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
+import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
 import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
 import { assetObjectURL, uploadDocumentAsset } from '../lib/assets'
 import { decodeBase64, encodeBase64 } from '../lib/collab-encoding'
@@ -195,6 +196,13 @@ export function RemoteMarkdownDocEditor({
         }
       />
 
+      {!offline && (
+        <ArchitectureUses
+          workspaceID={workspaceID}
+          documentID={document.id}
+          className='border-b border-border px-4 py-1.5'
+        />
+      )}
       <CollaborativeMarkdownBody
         followedUser={followedUser}
         key={`${document.id}:${sessionNonce}`}

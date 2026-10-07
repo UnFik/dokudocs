@@ -16,7 +16,10 @@ import {
 } from '@xyflow/react'
 import { FileText, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { ArchitectureConnection, ArchitectureNode } from '../lib/canvas-model'
+import type {
+  ArchitectureConnection,
+  ArchitectureNode,
+} from '../lib/canvas-model'
 import type { CatalogEntry } from '../lib/catalog'
 import { CatalogIcon } from './catalog-icon'
 
@@ -39,11 +42,17 @@ export const CanvasContext = createContext<CanvasContextValue | null>(null)
 
 function useCanvas() {
   const value = useContext(CanvasContext)
-  if (!value) throw new Error('canvas nodes must be rendered inside the Architecture canvas')
+  if (!value)
+    throw new Error(
+      'canvas nodes must be rendered inside the Architecture canvas'
+    )
   return value
 }
 
-export type ElementNode = Node<{ element: ArchitectureNode }, 'host' | 'group' | 'system'>
+export type ElementNode = Node<
+  { element: ArchitectureNode },
+  'host' | 'group' | 'system'
+>
 export type SlotNode = Node<Record<string, never>, 'slot'>
 
 function PeerOutline({ id }: { id: string }) {
@@ -67,12 +76,25 @@ function PeerOutline({ id }: { id: string }) {
   )
 }
 
-function TakeOutToolbar({ id, element, selected }: { id: string; element: ArchitectureNode; selected: boolean }) {
+function TakeOutToolbar({
+  id,
+  element,
+  selected,
+}: {
+  id: string
+  element: ArchitectureNode
+  selected: boolean
+}) {
   const { readOnly, containers, takeOut } = useCanvas()
   const parent = element.parentId ? containers.get(element.parentId) : undefined
   if (readOnly || !parent) return null
   return (
-    <NodeToolbar isVisible={selected} position={Position.Top} align='end' offset={8}>
+    <NodeToolbar
+      isVisible={selected}
+      position={Position.Top}
+      align='end'
+      offset={8}
+    >
       <button
         type='button'
         className='nodrag inline-flex h-7 items-center gap-1.5 rounded-[4px] border border-input bg-card px-2 text-xs font-medium shadow-sm hover:border-signal hover:text-signal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal'
@@ -103,10 +125,18 @@ export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
     >
       <PeerOutline id={id} />
       <TakeOutToolbar id={id} element={element} selected={Boolean(selected)} />
-      <CatalogIcon slug={element.catalog} subkind={entry?.subkind ?? 'job'} size={20} />
+      <CatalogIcon
+        slug={element.catalog}
+        subkind={entry?.subkind ?? 'job'}
+        size={20}
+      />
       <span className='min-w-0'>
-        <span className='block truncate text-[12.5px] leading-tight font-medium'>{element.name || 'Untitled'}</span>
-        <span className='block truncate font-mono text-[10.5px] text-muted-foreground'>{entry?.name ?? element.catalog ?? 'no type'}</span>
+        <span className='block truncate text-[12.5px] leading-tight font-medium'>
+          {element.name || 'Untitled'}
+        </span>
+        <span className='block truncate font-mono text-[10.5px] text-muted-foreground'>
+          {entry?.name ?? element.catalog ?? 'no type'}
+        </span>
       </span>
       {element.links.length > 0 && (
         <span
@@ -116,7 +146,12 @@ export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
           <FileText className='size-2.5' aria-hidden /> {element.links.length}
         </span>
       )}
-      <Handle type='target' position={Position.Left} className='!size-2.5 !border-input !bg-card' isConnectable={!readOnly} />
+      <Handle
+        type='target'
+        position={Position.Left}
+        className='!size-2.5 !border-input !bg-card'
+        isConnectable={!readOnly}
+      />
       <Handle
         type='source'
         position={Position.Right}
@@ -128,8 +163,14 @@ export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
   )
 }
 
-function ContainerNode({ id, data, selected, kind }: NodeProps<ElementNode> & { kind: 'host' | 'group' }) {
-  const { readOnly, catalog, minSizeOf, shouldResize, onResize, onResizeEnd } = useCanvas()
+function ContainerNode({
+  id,
+  data,
+  selected,
+  kind,
+}: NodeProps<ElementNode> & { kind: 'host' | 'group' }) {
+  const { readOnly, catalog, minSizeOf, shouldResize, onResize, onResizeEnd } =
+    useCanvas()
   const element = data.element
   const entry = element.catalog ? catalog.get(element.catalog) : undefined
   const min = minSizeOf(id)
@@ -137,7 +178,9 @@ function ContainerNode({ id, data, selected, kind }: NodeProps<ElementNode> & { 
     <div
       className={cn(
         'relative h-full w-full rounded-[6px] border',
-        kind === 'group' ? 'border-dotted border-input' : 'border-dashed border-input bg-muted/40',
+        kind === 'group'
+          ? 'border-dotted border-input'
+          : 'border-dashed border-input bg-muted/40',
         selected && 'border-solid border-signal'
       )}
       data-element={id}
@@ -157,15 +200,27 @@ function ContainerNode({ id, data, selected, kind }: NodeProps<ElementNode> & { 
         />
       )}
       <div className='absolute top-1.5 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 text-[11.5px] text-muted-foreground'>
-        {kind === 'host' && <CatalogIcon slug={element.catalog} subkind={entry?.subkind ?? 'compute'} size={16} />}
-        <span className='truncate'>{element.name || (kind === 'group' ? 'Group' : 'Host')}</span>
+        {kind === 'host' && (
+          <CatalogIcon
+            slug={element.catalog}
+            subkind={entry?.subkind ?? 'compute'}
+            size={16}
+          />
+        )}
+        <span className='truncate'>
+          {element.name || (kind === 'group' ? 'Group' : 'Host')}
+        </span>
       </div>
     </div>
   )
 }
 
-export const HostNode = (props: NodeProps<ElementNode>) => <ContainerNode {...props} kind='host' />
-export const GroupNode = (props: NodeProps<ElementNode>) => <ContainerNode {...props} kind='group' />
+export const HostNode = (props: NodeProps<ElementNode>) => (
+  <ContainerNode {...props} kind='host' />
+)
+export const GroupNode = (props: NodeProps<ElementNode>) => (
+  <ContainerNode {...props} kind='group' />
+)
 
 /** Where an element will land when it is dropped into a container. */
 export function SlotNode({ width, height }: NodeProps<SlotNode>) {
@@ -178,7 +233,12 @@ export function SlotNode({ width, height }: NodeProps<SlotNode>) {
   )
 }
 
-export type ConnectionEdgeType = { id: string; source: string; target: string; data: { connection: ArchitectureConnection } }
+export type ConnectionEdgeType = {
+  id: string
+  source: string
+  target: string
+  data: { connection: ArchitectureConnection }
+}
 
 const familyStyle: Record<string, React.CSSProperties> = {
   request: {},
@@ -197,27 +257,45 @@ function facingSide(node: InternalNode, other: InternalNode) {
   const dx = b.x + (other.measured.width ?? 0) / 2 - (a.x + w / 2)
   const dy = b.y + (other.measured.height ?? 0) / 2 - (a.y + h / 2)
   if (Math.abs(dx) * h > Math.abs(dy) * w)
-    return dx > 0 ? { x: a.x + w, y: a.y + h / 2, position: Position.Right } : { x: a.x, y: a.y + h / 2, position: Position.Left }
-  return dy > 0 ? { x: a.x + w / 2, y: a.y + h, position: Position.Bottom } : { x: a.x + w / 2, y: a.y, position: Position.Top }
+    return dx > 0
+      ? { x: a.x + w, y: a.y + h / 2, position: Position.Right }
+      : { x: a.x, y: a.y + h / 2, position: Position.Left }
+  return dy > 0
+    ? { x: a.x + w / 2, y: a.y + h, position: Position.Bottom }
+    : { x: a.x + w / 2, y: a.y, position: Position.Top }
 }
 
-export function ConnectionEdge(props: EdgeProps & { data?: { connection: ArchitectureConnection } }) {
+export function ConnectionEdge(
+  props: EdgeProps & { data?: { connection: ArchitectureConnection } }
+) {
   const { familyOf, peerSelections } = useCanvas()
   const connection = props.data?.connection
   const sourceNode = useInternalNode(props.source)
   const targetNode = useInternalNode(props.target)
   const ends =
     sourceNode && targetNode
-      ? { s: facingSide(sourceNode, targetNode), t: facingSide(targetNode, sourceNode) }
+      ? {
+          s: facingSide(sourceNode, targetNode),
+          t: facingSide(targetNode, sourceNode),
+        }
       : null
   const [path, labelX, labelY] = getBezierPath(
     ends
-      ? { sourceX: ends.s.x, sourceY: ends.s.y, sourcePosition: ends.s.position, targetX: ends.t.x, targetY: ends.t.y, targetPosition: ends.t.position }
+      ? {
+          sourceX: ends.s.x,
+          sourceY: ends.s.y,
+          sourcePosition: ends.s.position,
+          targetX: ends.t.x,
+          targetY: ends.t.y,
+          targetPosition: ends.t.position,
+        }
       : props
   )
   const family = connection ? familyOf(connection.protocol) : 'request'
   const peer = peerSelections.get(props.id)?.[0]
-  const stroke = props.selected ? 'var(--signal)' : (peer?.color ?? 'var(--muted-foreground)')
+  const stroke = props.selected
+    ? 'var(--signal)'
+    : (peer?.color ?? 'var(--muted-foreground)')
   return (
     <>
       <BaseEdge
@@ -231,11 +309,17 @@ export function ConnectionEdge(props: EdgeProps & { data?: { connection: Archite
         <div
           className={cn(
             'nodrag nopan pointer-events-none absolute rounded-[2px] border bg-card px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap',
-            props.selected ? 'border-signal text-signal' : 'border-border text-muted-foreground'
+            props.selected
+              ? 'border-signal text-signal'
+              : 'border-border text-muted-foreground'
           )}
-          style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+          style={{
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+          }}
         >
-          {connection ? `${connection.protocol}${connection.label ? ` · ${connection.label}` : ''}` : ''}
+          {connection
+            ? `${connection.protocol}${connection.label ? ` · ${connection.label}` : ''}`
+            : ''}
         </div>
       </EdgeLabelRenderer>
     </>

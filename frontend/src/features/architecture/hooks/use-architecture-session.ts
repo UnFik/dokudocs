@@ -37,7 +37,9 @@ export function useArchitectureSession(input: {
   nonce: number
   onReloaded: () => void
 }) {
-  const [canvas, setCanvas] = useState<ArchitectureJSON>(input.initial ?? emptyCanvas)
+  const [canvas, setCanvas] = useState<ArchitectureJSON>(
+    input.initial ?? emptyCanvas
+  )
   const [status, setStatus] = useState<CollabStatus>('connecting')
   const [access, setAccess] = useState<CollabAccess | null>(null)
   const [presence, setPresence] = useState<PresenceUser[]>([])
@@ -75,7 +77,11 @@ export function useArchitectureSession(input: {
     }
     session.ydoc.on('update', publish)
     void session.loaded.then(() => {
-      if (session.ydoc.getMap('nodes').size || session.ydoc.getMap('connections').size) publish()
+      if (
+        session.ydoc.getMap('nodes').size ||
+        session.ydoc.getMap('connections').size
+      )
+        publish()
     })
     void session.synced.then(() => {
       setSynced(true)
@@ -87,14 +93,17 @@ export function useArchitectureSession(input: {
       const next: Peer[] = []
       for (const [clientID, state] of awareness.getStates()) {
         if (clientID === session.ydoc.clientID) continue
-        const user = state.user as { userID?: string; name?: string; color?: string } | undefined
+        const user = state.user as
+          | { userID?: string; name?: string; color?: string }
+          | undefined
         if (!user?.userID) continue
         next.push({
           clientID,
           userID: user.userID,
           name: user.name ?? 'Someone',
           color: user.color ?? 'currentColor',
-          selection: typeof state.selection === 'string' ? state.selection : null,
+          selection:
+            typeof state.selection === 'string' ? state.selection : null,
           pointer: (state.pointer as Peer['pointer']) ?? null,
         })
       }
