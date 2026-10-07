@@ -162,7 +162,7 @@ export async function openMarkdownDocument(
   await expect(page.getByRole("status")).toContainText("Synced");
   await page.getByRole("button", { name: /^Editor mode/ }).click();
   await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
-  return { editor, documentURL: page.url() };
+  return { editor, documentURL: page.url(), workspaceID, documentID };
 }
 
 /** Pastes plain text into the editor as the browser would, at the caret. */
