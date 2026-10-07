@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
+import { FileCode, ListOrdered, Quote, TableOfContents } from 'lucide-react'
 import { toast } from 'sonner'
-import { assetObjectURL, uploadDocumentAsset } from '../lib/assets'
 import { useAuthStore } from '@/stores/auth-store'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
@@ -21,8 +21,8 @@ import {
 } from '@/lib/domain-api'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
-import { ConfirmDialog } from '@/components/confirm-dialog'
 import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
+import { assetObjectURL, uploadDocumentAsset } from '../lib/assets'
 import { decodeBase64, encodeBase64 } from '../lib/collab-encoding'
 import {
   clearLocalCopy,
@@ -33,12 +33,11 @@ import {
 import { mountCollaborativeDocumentBody } from '../lib/collaborative-document-body'
 import { countTasks } from '../lib/count-tasks'
 import { documentStats, maxCharacters, sizeState } from '../lib/document-stats'
+import { revisionInsights } from '../lib/insights'
 import {
   documentBodyToMarkdown,
   type DocumentBodyNode,
 } from '../lib/muya/state/documentBodyToMarkdown'
-import { revisionInsights } from '../lib/insights'
-import { slidesOf } from '../lib/slides'
 import { activeHeadingID, outlineOf, type OutlineItem } from '../lib/outline'
 import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
 import { EditorNotice } from '../lib/prosemirror/editorNotice'
@@ -49,6 +48,7 @@ import {
 } from '../lib/prosemirror/inlineMarks'
 import { type SuggestionCard } from '../lib/prosemirror/suggestionCards'
 import { shouldSelectDocumentBody } from '../lib/select-all-scope'
+import { slidesOf } from '../lib/slides'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { DocumentInfoLine } from './document-info-line'
 import { DocumentInsightsDialog } from './document-insights-dialog'
@@ -68,6 +68,10 @@ import { OutlinePanel } from './outline-panel'
 import { PresentationMode } from './presentation-mode'
 import { SuggestionCardList } from './suggestion-card-list'
 import { VersionHistorySidebar } from './version-history-sidebar'
+
+// Ghost toggles: muted when off, filled and full-ink when on.
+const toggleButtonClass =
+  'size-11 text-muted-foreground md:size-8 aria-pressed:bg-accent aria-pressed:text-foreground'
 
 export function RemoteMarkdownDocEditor({
   document,
@@ -349,7 +353,8 @@ function CollaborativeMarkdownBody({
   const [insightsOpen, setInsightsOpen] = useState(false)
   const insightsHistory = useQuery({
     queryKey: ['document-revisions', workspaceID, documentID],
-    queryFn: ({ signal }) => listDocumentRevisions(workspaceID, documentID, signal),
+    queryFn: ({ signal }) =>
+      listDocumentRevisions(workspaceID, documentID, signal),
     enabled: insightsOpen && !offline,
     retry: false,
   })
@@ -507,6 +512,34 @@ function CollaborativeMarkdownBody({
         sessionRef.current?.session.signalCommentsChanged()
     })
   }, [queryClient, documentID])
+  // A click anywhere but on a card (or its dialogs) puts the chosen card away
+  // and with it the reply box. A reply being written keeps its card.
+  const hasChosenCard =
+    focusedCommentID !== null || focusedSuggestionID !== null
+  useEffect(() => {
+    if (!hasChosenCard) return
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null
+      if (
+        target?.closest(
+          'li[data-comment-thread-id],li[data-suggestion-id],li[data-new-comment],[role=dialog],[role=alertdialog]'
+        )
+      )
+        return
+      const writing = [
+        ...window.document.querySelectorAll<HTMLTextAreaElement>(
+          '#suggestion-panel textarea'
+        ),
+      ].some((box) => box.value.trim() !== '')
+      if (writing) return
+      setFocusedCommentID(null)
+      setFocusedSuggestionID(null)
+      sessionRef.current?.editor.setFocusedComment(null)
+    }
+    window.document.addEventListener('pointerdown', onPointerDown)
+    return () =>
+      window.document.removeEventListener('pointerdown', onPointerDown)
+  }, [hasChosenCard])
   const startCommentRef = useRef(startComment)
   useEffect(() => {
     startCommentRef.current = startComment
@@ -798,54 +831,49 @@ function CollaborativeMarkdownBody({
         ) : null}
         <div className='ml-auto flex items-center gap-3'>
           <Button
-            size='sm'
+            size='icon'
             variant='ghost'
-            className='h-11 md:h-8'
+            className={toggleButtonClass}
+            aria-label='Contents'
+            title='Contents'
             aria-pressed={showOutline}
             onClick={() => setShowOutline(userID, !showOutline)}
           >
-            Contents
+            <TableOfContents className='size-4' strokeWidth={1.5} />
           </Button>
           <Button
-            size='sm'
+            size='icon'
             variant='ghost'
-            className='h-11 md:h-8'
+            className={toggleButtonClass}
+            aria-label='Markdown'
+            title='Markdown source'
             aria-pressed={showSource}
             onClick={() => setShowSource(!showSource)}
           >
-            Markdown
+            <FileCode className='size-4' strokeWidth={1.5} />
           </Button>
           <Button
-            size='sm'
+            size='icon'
             variant='ghost'
-            className='h-11 md:h-8'
+            className={toggleButtonClass}
+            aria-label='Number headings'
+            title='Number headings'
             aria-pressed={numberHeadings}
             onClick={() => setNumberHeadings(userID, !numberHeadings)}
           >
-            Number headings
+            <ListOrdered className='size-4' strokeWidth={1.5} />
           </Button>
           <Button
-            size='sm'
+            size='icon'
             variant='ghost'
-            className='h-11 md:h-8'
+            className={toggleButtonClass}
+            aria-label='Smart text'
             aria-pressed={smartText}
-            title='Curly quotes, arrows and an ellipsis as you type'
+            title='Smart text: curly quotes, arrows and an ellipsis as you type'
             onClick={() => setSmartText(userID, !smartText)}
           >
-            Smart text
+            <Quote className='size-4' strokeWidth={1.5} />
           </Button>
-          {showSuggestionPanel ? (
-            <Button
-              size='sm'
-              variant='outline'
-              className='h-11 md:h-8'
-              aria-expanded={isSuggestionsOpen}
-              aria-controls='suggestion-panel'
-              onClick={() => setIsSuggestionsOpen((open) => !open)}
-            >
-              Review
-            </Button>
-          ) : null}
           {/* "Synced" is the normal state and the header already says Saved: keep it for screen readers, show the rest. */}
           <span
             role='status'
@@ -938,6 +966,12 @@ function CollaborativeMarkdownBody({
               author={meta.author}
               isDraft={meta.isDraft}
               tasks={countTasks(markdown)}
+              onToggleComments={
+                showSuggestionPanel
+                  ? () => setIsSuggestionsOpen((open) => !open)
+                  : undefined
+              }
+              commentsOpen={isSuggestionsOpen}
             />
           </div>
           <div ref={mountRef} />
@@ -948,6 +982,18 @@ function CollaborativeMarkdownBody({
             inline={inline}
             linkRequest={linkRequest}
             onComment={canEdit || canSuggest ? startComment : undefined}
+            onSetHeading={(level) => {
+              sessionRef.current?.editor.setHeading(level)
+              sessionRef.current?.editor.focus()
+            }}
+            onWrapBlock={
+              mode === 'edit' && canEdit
+                ? (kind) => {
+                    sessionRef.current?.editor.wrapBlock(kind)
+                    sessionRef.current?.editor.focus()
+                  }
+                : undefined
+            }
             onToggleMark={(mark: InlineMarkName) => {
               sessionRef.current?.editor.toggleMark(mark)
               sessionRef.current?.editor.focus()
@@ -1051,9 +1097,6 @@ function SuggestionPanel({
   onNewCommentDone: () => void
   onSelectComment: (id: string) => void
 }) {
-  const [bulkDecision, setBulkDecision] = useState<'accept' | 'reject' | null>(
-    null
-  )
   const suggestionsQuery = useQuery({
     queryKey: [
       'document-suggestions',
@@ -1085,11 +1128,11 @@ function SuggestionPanel({
           className='max-h-[40vh] min-w-0 shrink-0 overflow-auto border-t bg-card md:max-h-none md:w-80 md:border-t-0 md:border-l'
         >
           {cards.length ? (
-            <div className='flex flex-wrap items-center justify-between gap-2 px-4 pt-3'>
+            <div className='flex flex-wrap items-center justify-start gap-2 px-3 pt-3 pb-2'>
               <div
                 role='group'
                 aria-label='Suggestion preview'
-                className='flex rounded-md border p-0.5'
+                className='flex gap-1 rounded-md border p-1'
               >
                 {(
                   [
@@ -1111,25 +1154,6 @@ function SuggestionPanel({
                   </Button>
                 ))}
               </div>
-            </div>
-          ) : null}
-          {canDecide && cards.length ? (
-            <div className='flex justify-end gap-2 px-4 pt-2'>
-              <Button
-                size='sm'
-                variant='outline'
-                disabled={decisionsDisabled}
-                onClick={() => setBulkDecision('reject')}
-              >
-                Reject all
-              </Button>
-              <Button
-                size='sm'
-                disabled={decisionsDisabled}
-                onClick={() => setBulkDecision('accept')}
-              >
-                Accept all
-              </Button>
             </div>
           ) : null}
           <SuggestionCardList
@@ -1163,21 +1187,6 @@ function SuggestionPanel({
               Could not load suggestion discussions.
             </p>
           ) : null}
-          <ConfirmDialog
-            open={bulkDecision !== null}
-            onOpenChange={(open) => {
-              if (!open) setBulkDecision(null)
-            }}
-            title={`${bulkDecision === 'accept' ? 'Accept' : 'Reject'} all ${cards.length} ${cards.length === 1 ? 'suggestion' : 'suggestions'}?`}
-            desc={`This will ${bulkDecision ?? 'decide'} ${cards.length} ${cards.length === 1 ? 'suggestion' : 'suggestions'} in the document.`}
-            confirmText={`${bulkDecision === 'accept' ? 'Accept' : 'Reject'} all`}
-            destructive={bulkDecision === 'reject'}
-            handleConfirm={() => {
-              if (!bulkDecision) return
-              for (const card of cards) onDecide(card.id, bulkDecision)
-              setBulkDecision(null)
-            }}
-          />
         </aside>
       ) : null}
     </>

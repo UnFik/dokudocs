@@ -49,6 +49,26 @@ describe('DocumentInfoLine', () => {
       />
     )
     await expect.element(screen.getByText('Draft')).toBeInTheDocument()
-    await expect.element(screen.getByText('2 of 5 tasks done')).toBeInTheDocument()
+    await expect
+      .element(screen.getByText('2 of 5 tasks done'))
+      .toBeInTheDocument()
+  })
+
+  it('opens the comments panel from the Comment action beside the update time', async () => {
+    let clicks = 0
+    const screen = await render(
+      <DocumentInfoLine
+        updatedAt='2026-10-06T11:55:00Z'
+        updatedBy='Rina'
+        author='Dewi'
+        isDraft={false}
+        tasks={{ done: 0, total: 0 }}
+        now={now}
+        onToggleComments={() => clicks++}
+        commentsOpen={false}
+      />
+    )
+    await screen.getByRole('button', { name: 'Comment' }).click()
+    expect(clicks).toBe(1)
   })
 })
