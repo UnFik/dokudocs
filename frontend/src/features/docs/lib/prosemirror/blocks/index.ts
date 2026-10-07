@@ -3,13 +3,14 @@ import type { EditorView } from 'prosemirror-view'
 import { blockHandlePlugin } from './blockHandle'
 import { blockMenuPlugin } from './blockMenu'
 import { clipboardPlugin } from './clipboard'
+import { embedView } from './embedBlock'
 import { mediaNodeViews } from './mediaNodeViews'
 import { plusButtonPlugin } from './plusButton'
-import { embedView } from './embedBlock'
 import { goToNextCell, goToPreviousCell } from './tableCommands'
+import { tableControlsPlugin } from './tableControls'
 import { toggleView } from './toggleNodeView'
+import { imageFormPlugin, openImageForm } from './toolbar'
 import { uploadsPlugin, type UploadsOptions } from './uploads'
-import { openImageForm, toolbarPlugin } from './toolbar'
 
 function tableKeysPlugin() {
   return new Plugin({
@@ -56,7 +57,8 @@ export function blockEditing(
       blockMenuPlugin(),
       plusButtonPlugin(),
       blockHandlePlugin(),
-      toolbarPlugin(),
+      imageFormPlugin(),
+      tableControlsPlugin(),
     ],
     nodeViews: {
       ...mediaNodeViews({

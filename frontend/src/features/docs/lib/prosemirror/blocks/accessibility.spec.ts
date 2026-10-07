@@ -81,21 +81,6 @@ describe('IME composition', () => {
 })
 
 describe('phone width', () => {
-  it('keeps the toolbar scrollable inside the page instead of overflowing it', async () => {
-    await page.viewport(375, 700)
-    const { host } = mountEditor('text')
-    host.style.width = '375px'
-    const bar = host.querySelector<HTMLElement>('[role="toolbar"]')!
-    // Only shown inside a table; show it here to measure it.
-    expect(bar.hidden).toBe(true)
-    bar.hidden = false
-    expect(getComputedStyle(bar).overflowX).toBe('auto')
-    expect(bar.getBoundingClientRect().width).toBeLessThanOrEqual(375)
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(375)
-    for (const button of bar.querySelectorAll('button'))
-      expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(32)
-  })
-
   it('keeps the slash menu inside the editor width', async () => {
     await page.viewport(375, 700)
     const { editor, host } = mountEditor('')

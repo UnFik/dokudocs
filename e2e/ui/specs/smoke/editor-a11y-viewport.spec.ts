@@ -226,7 +226,7 @@ for (const viewport of viewports) {
       await page.keyboard.press("/");
       const combobox = page.getByRole("combobox", { name: "Insert block" });
       await expect(combobox).toBeVisible();
-      await expectTargets(page, ".dd-slash-input, .dd-slash-option", "slash menu");
+      await expectTargets(page, ".dd-slash-option", "slash menu");
       const menu = await page.locator(".dd-slash").boundingBox();
       expect(menu!.x).toBeGreaterThanOrEqual(0);
       expect(menu!.x + menu!.width).toBeLessThanOrEqual(viewport.width);
@@ -238,31 +238,29 @@ for (const viewport of viewports) {
 test.describe("@live editor accessibility, keyboard only, 768px", () => {
   test.use({ viewport: { width: 768, height: 1024 } });
 
-  test("table toolbar works with arrows, Enter and shows focus", async ({ page }) => {
+  test("table row and column bars open a menu with Enter and show focus", async ({ page }) => {
     test.setTimeout(90000);
     const editor = await prepareDocument(page);
     await placeCaret(editor, editor.locator("p").last());
-    const toolbar = page.getByRole("toolbar", { name: "Insert and table tools" });
-    await expect(toolbar).toBeHidden();
+    const bar = page.getByRole("button", { name: "Row 1", exact: true });
+    await expect(bar).toHaveCount(0);
 
     await page.keyboard.press("Enter");
     await page.keyboard.press("/");
-    await page.getByRole("combobox", { name: "Insert block" }).fill("table");
+    await page.keyboard.type("table");
     await page.getByRole("option", { name: /Table/ }).first().click();
     await expect(editor.locator("table")).toHaveCount(1);
-    await expect(toolbar).toBeVisible();
+    await expect(bar).toBeVisible();
 
-    const first = toolbar.getByRole("button", { name: "Add table row below" });
-    await first.focus();
+    await bar.focus();
     await expectFocusVisible(page);
-    await page.keyboard.press("ArrowRight");
-    await expect(toolbar.getByRole("button", { name: "Add table column after" })).toBeFocused();
-    await page.keyboard.press("End");
-    await expect(toolbar.getByRole("button", { name: "Align column right" })).toBeFocused();
-    await page.keyboard.press("Home");
-    await expect(first).toBeFocused();
-
     const rows = await editor.locator("table tr").count();
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem").first()).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(menu.getByRole("menuitem").nth(1)).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(editor.locator("table tr")).toHaveCount(rows + 1);
     await expect(editor).toBeFocused();
@@ -326,7 +324,7 @@ test.describe("@live editor accessibility, keyboard only, 768px", () => {
     await expect(toolbar).toBeVisible();
 
     const bold = toolbar.getByRole("button", { name: "Bold" });
-    for (let i = 0; i < 4 && !(await bold.evaluate((el) => el === document.activeElement)); i++)
+    for (let i = 0; i < 14 && !(await bold.evaluate((el) => el === document.activeElement)); i++)
       await page.keyboard.press("Tab");
     await expect(bold).toBeFocused();
     await expectFocusVisible(page);
@@ -349,25 +347,6 @@ for (const scheme of ["light", "dark"] as const) {
     await page.setViewportSize({ width: 768, height: 1024 });
     const editor = await prepareDocument(page);
     await expect(page.locator("html")).toHaveClass(new RegExp(scheme));
-
-    // Insert toolbar buttons: label text on the bar.
-    const toolbarPairs = await page.locator(".dd-tb button").evaluateAll((buttons) => {
-      const bg = (el: Element) => {
-        for (let node: Element | null = el; node; node = node.parentElement) {
-          const c = getComputedStyle(node).backgroundColor;
-          if (c !== "rgba(0, 0, 0, 0)" && c !== "transparent") return c;
-        }
-        return "rgb(255, 255, 255)";
-      };
-      return buttons.map((b) => ({
-        name: b.getAttribute("aria-label")!,
-        enabled: b.getAttribute("aria-disabled") !== "true",
-        fg: getComputedStyle(b).color,
-        bg: bg(b),
-      }));
-    });
-    for (const pair of toolbarPairs.filter((p) => p.enabled))
-      expect(contrast(pair.fg, pair.bg), `${scheme} toolbar "${pair.name}"`).toBeGreaterThanOrEqual(4.5);
 
     // Selection toolbar buttons (icons need 3:1, aria-labelled).
     await placeCaret(editor, editor.locator("p").filter({ hasText: "Alpha block" }));
