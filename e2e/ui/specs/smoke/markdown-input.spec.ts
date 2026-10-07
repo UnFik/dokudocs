@@ -135,3 +135,103 @@ test("@live @smoke @markdowninput: typing --- makes a separator with a line afte
   await expect(editor.locator("hr")).toHaveCount(1);
   await expect(editor.locator("p").last()).toHaveText("after");
 });
+
+test("@live @smoke @markdowninput: typing ':::tip ' makes a notice and '+++ ' makes a toggle", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", ""]);
+  await editor.locator("p").first().click();
+  await page.keyboard.type(":::tip ");
+  await page.keyboard.type("Typed notice");
+  await expect(editor.locator(".dd-notice-tip")).toContainText("Typed notice");
+
+  await editor.locator("p").last().click();
+  await page.keyboard.type("+++ ");
+  await page.keyboard.type("Toggle title");
+  await expect(editor.locator(".dd-toggle")).toContainText("Toggle title");
+  await expect(editor.getByText(":::tip")).toHaveCount(0);
+});
+
+test("@live @smoke @markdowninput: an empty notice goes away with Backspace in it, or from its handle", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", "after"]);
+  // Pasted, so that no Markdown rule is the latest edit: Backspace right after a
+  // typed rule gives the typed text back instead (see undoInputRule.spec.ts).
+  await editor.locator("p").first().click();
+  await page.keyboard.press("Home");
+  await pastePlainText(page, ":::tip\n\n:::");
+  await expect(editor.locator(".dd-notice-tip")).toHaveCount(1);
+  await editor.locator(".dd-notice-tip").click();
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-tip")).toHaveCount(0);
+  await expect(editor).toContainText("after");
+  await expect(editor.getByText(":::tip")).toHaveCount(0);
+
+  await editor.locator("p").first().click();
+  await page.keyboard.press("Home");
+  await pastePlainText(page, ":::warning\n\n:::");
+  await expect(editor.locator(".dd-notice-warning")).toHaveCount(1);
+  await editor.locator(".dd-notice-warning").click();
+  await page.locator(".dd-handle:not([hidden])").click();
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-warning")).toHaveCount(0);
+  await expect(editor).toContainText("after");
+});
+
+test("@live @smoke @markdowninput: a notice that held text and was emptied, or came from a paste, still goes with Backspace", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", "after"]);
+  await editor.locator("p").first().click();
+  await page.keyboard.type(":::tip ");
+  await page.keyboard.type("temporary");
+  for (let i = 0; i < "temporary".length; i++) await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-tip")).toHaveCount(1);
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-tip")).toHaveCount(0);
+
+  await editor.locator("p").first().click();
+  await page.keyboard.press("Home");
+  await pastePlainText(page, ":::info\n\n:::\n\n+++\n\n+++");
+  await expect(editor.locator(".dd-notice-info")).toHaveCount(1);
+  await editor.locator(".dd-notice-info").click();
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-info")).toHaveCount(0);
+  await expect(editor).toContainText("after");
+});
+
+test("@live @smoke @markdowninput: Backspace at the end of a pasted heading takes one character, not the whole line", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const { editor } = await openMarkdownDocument(page, ["start"]);
+  await editor.locator("p").first().click();
+  await page.keyboard.press("End");
+  await pastePlainText(page, "\n\n# Judul besar\n\nisi");
+  const heading = editor.locator("h1");
+  await heading.click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Backspace");
+  await expect(heading).toHaveText("Judul besa");
+  await expectNoInternalMessage(page);
+});
+
+test("@live @smoke @markdowninput: table rows pasted one to a paragraph still become one table", async ({
+  page,
+}) => {
+  test.setTimeout(60000);
+  const { editor } = await openMarkdownDocument(page, ["start"]);
+  await editor.locator("p").first().click();
+  await page.keyboard.press("End");
+  const rows = [
+    "| Key | Value |",
+    "| :---- | :---- |",
+    "| Method | GET |",
+    "| URL | …./member |",
+  ];
+  await pastePlainText(page, "\n\n" + rows.join("\n\n"));
+  await expect(editor.locator("table")).toHaveCount(1);
+  await expect(editor.locator("tr")).toHaveCount(3);
+  await expectNoInternalMessage(page);
+});

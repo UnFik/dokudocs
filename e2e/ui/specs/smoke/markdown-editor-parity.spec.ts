@@ -1,6 +1,7 @@
 import { inDocumentOrder } from "../../helpers/document-order";
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 // Gate G7 (#36): two clients edit tables through the toolbar, converge, and the
 // server projection matches. A second case covers inline marks, nested lists and
@@ -35,7 +36,7 @@ test("@live @smoke: table edits converge across two clients and persist", async 
     (await (await workspaceResponse).json()) as { data: { id: string } }
   ).data.id;
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const accessCookie = (await page.context().cookies()).find(
@@ -66,26 +67,23 @@ test("@live @smoke: table edits converge across two clients and persist", async 
       title: `G7 doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           node(rootNodeID, null, "document"),
           node(paragraphNodeID, rootNodeID, "paragraph"),
           node(randomUUID(), paragraphNodeID, "run", "Start"),
-        ],
-      },
+        ]),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}`);
   const documentURL = page.url();
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
@@ -98,9 +96,16 @@ test("@live @smoke: table edits converge across two clients and persist", async 
   await expect(secondEditor).toBeVisible();
   await expect(secondPage.getByRole("status")).toContainText("Synced");
 
-  // Client one inserts a table from the toolbar and fills the first cells with Tab.
-  await page.getByText("Start", { exact: true }).click();
-  await page.getByRole("button", { name: "Insert table" }).click();
+  // Client one inserts a table from the block menu and fills the first cells with Tab.
+  // Click past the end of the line so the caret is at its end.
+  await editor.locator("p").first().click({ position: { x: 400, y: 5 } });
+  await page.keyboard.press("Enter");
+  // The block menu reads the editor's own selection, which reaches the new
+  // line a moment after Enter; the empty line is marked once it has.
+  await expect(editor.locator(".dd-empty-line")).toHaveCount(1);
+  await page.keyboard.press("/");
+  await page.keyboard.type("table");
+  await page.getByRole("option", { name: /Table/ }).first().click();
   await page.keyboard.type("alpha");
   await page.keyboard.press("Tab");
   await page.keyboard.type("beta");
@@ -111,7 +116,8 @@ test("@live @smoke: table edits converge across two clients and persist", async 
 
   // Client two appends a row and writes into it.
   await secondEditor.locator("table td").nth(1).click();
-  await secondPage.getByRole("button", { name: "Add table row below" }).click();
+  await secondPage.getByRole("button", { name: "Row 1", exact: true }).click();
+  await secondPage.getByRole("menuitem", { name: "Insert 1 row below" }).click();
   await secondPage.keyboard.type("gamma");
   await expect(editor.locator("table tr")).toHaveCount(4);
   await expect(editor.locator("table td").nth(3)).toHaveText("gamma");
@@ -119,10 +125,7 @@ test("@live @smoke: table edits converge across two clients and persist", async 
   // The server projection holds the same table.
   await expect
     .poll(async () => {
-      const response = await page.request.get(
-        `${apiURL}/api/v1/documents/${documentID}/body`,
-        { headers },
-      );
+      const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, headers) } }) };
       const nodes = inDocumentOrder(
         ((await response.json()).data.nodes ?? []) as {
           nodeID: string;
@@ -174,7 +177,7 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
     (await (await workspaceResponse).json()) as { data: { id: string } }
   ).data.id;
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const accessCookie = (await page.context().cookies()).find(
@@ -205,26 +208,23 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
       title: `G7 marks doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           node(rootNodeID, null, "document"),
           node(paragraphNodeID, rootNodeID, "paragraph"),
           node(randomUUID(), paragraphNodeID, "run", "Start"),
-        ],
-      },
+        ]),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}`);
   const documentURL = page.url();
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
@@ -287,10 +287,7 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
   await expect(secondEditor.locator("p").first()).toContainText("by B");
 
   const readBody = async () => {
-    const response = await page.request.get(
-      `${apiURL}/api/v1/documents/${documentID}/body`,
-      { headers },
-    );
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, headers) } }) };
     return inDocumentOrder(
       ((await response.json()).data.nodes ?? []) as {
         nodeID: string;
@@ -350,8 +347,7 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
   expect(lines).toEqual([
     "Start **bold** *slanted by B*",
     "- outer",
-    "- ", // the blank paragraph that holds the nested list's item
-    "  - inner tail",
+    "- - inner tail", // an item that holds only the nested list
   ]);
 
   await secondContext.close();

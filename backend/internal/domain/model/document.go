@@ -15,15 +15,19 @@ type UserAuthor struct {
 }
 
 type Document struct {
-	ID                   uuid.UUID   `json:"id"`
-	WorkspaceID          uuid.UUID   `json:"workspaceId"`
-	ProjectID            *uuid.UUID  `json:"projectId,omitempty"`
-	ProjectName          string      `json:"projectName,omitempty"`
-	Title                string      `json:"title"`
-	Type                 string      `json:"type"` // markdown, dbdiagram, mermaid
-	Content              string      `json:"content"`
-	AuthorID             uuid.UUID   `json:"authorId"`
-	Author               UserAuthor  `json:"author"`
+	ID          uuid.UUID  `json:"id"`
+	WorkspaceID uuid.UUID  `json:"workspaceId"`
+	ProjectID   *uuid.UUID `json:"projectId,omitempty"`
+	ProjectName string     `json:"projectName,omitempty"`
+	Title       string     `json:"title"`
+	Type        string     `json:"type"` // markdown, dbdiagram, mermaid
+	Content     string     `json:"content"`
+	// ContentJSON is the editor document as ProseMirror JSON; only the single-document read fills it.
+	ContentJSON json.RawMessage `json:"contentJSON,omitempty"`
+	AuthorID    uuid.UUID       `json:"authorId"`
+	Author      UserAuthor      `json:"author"`
+	// UpdatedBy is the person whose edit was stored last; nil before the first edit. Only the single-document read fills it.
+	UpdatedBy            *UserAuthor `json:"updatedBy,omitempty"`
 	Tags                 []string    `json:"tags"`
 	IsDraft              bool        `json:"isDraft"`
 	Visibility           string      `json:"visibility"` // workspace, private, public_link, inherit
@@ -46,18 +50,17 @@ type Document struct {
 }
 
 type DocumentRevision struct {
-	ID                uuid.UUID       `json:"id"`
-	DocumentID        uuid.UUID       `json:"documentId"`
-	AuthorID          uuid.UUID       `json:"authorId"`
-	VersionNumber     int             `json:"versionNumber"`
-	Title             string          `json:"title,omitempty"`
-	Content           string          `json:"content"`
-	IsNamed           bool            `json:"isNamed"`
-	ASTSnapshot       json.RawMessage `json:"astSnapshot,omitempty"`
-	BodyVersion       *int64          `json:"bodyVersion,omitempty"`
-	BodySchemaVersion *int            `json:"bodySchemaVersion,omitempty"`
-	CreatedAt         time.Time       `json:"createdAt"`
-	UpdatedAt         time.Time       `json:"updatedAt"`
+	ID            uuid.UUID       `json:"id"`
+	DocumentID    uuid.UUID       `json:"documentId"`
+	AuthorID      uuid.UUID       `json:"authorId"`
+	VersionNumber int             `json:"versionNumber"`
+	Title         string          `json:"title,omitempty"`
+	Content       string          `json:"content"`
+	IsNamed       bool            `json:"isNamed"`
+	ContentJSON   json.RawMessage `json:"contentJSON,omitempty"`
+	BodyVersion   *int64          `json:"bodyVersion,omitempty"`
+	CreatedAt     time.Time       `json:"createdAt"`
+	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
 type DocumentRestoreResult struct {
@@ -65,7 +68,6 @@ type DocumentRestoreResult struct {
 	RevisionID       uuid.UUID `json:"revisionId"`
 	SourceRevisionID uuid.UUID `json:"sourceRevisionId"`
 	BodyVersion      int64     `json:"bodyVersion"`
-	BodyEpoch        int64     `json:"bodyEpoch"`
 }
 
 type TrashItem struct {

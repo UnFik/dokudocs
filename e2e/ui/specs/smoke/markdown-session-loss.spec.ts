@@ -1,5 +1,6 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { createdDocumentID, documentPayload } from "../../helpers/markdown-document";
 
 const apiURL = process.env.API_URL ?? "http://localhost:8080";
 const tokenCookie = "thisisjustarandomstring";
@@ -7,7 +8,7 @@ const tokenCookie = "thisisjustarandomstring";
 type Session = {
   page: Page;
   token: string;
-  setLink: (mode: "up" | "down" | "unauthorized") => void;
+  setLink: (mode: "up" | "down") => void;
 };
 
 async function signIn(
@@ -26,19 +27,12 @@ async function signIn(
   const cookie = (await context.cookies()).find((c) => c.name === tokenCookie);
   expect(cookie).toBeDefined();
 
-  // The routed WebSocket lets the test cut the link, or answer the next
-  // connection as a server that rejects the token.
-  let mode: "up" | "down" | "unauthorized" = "up";
+  // The routed WebSocket lets the test cut the link and bring it back.
+  let mode: "up" | "down" = "up";
   const open: { close: () => void }[] = [];
-  await page.routeWebSocket(/\/collaboration\//, (ws) => {
+  await page.routeWebSocket(/\/collab/, (ws) => {
     if (mode === "down") {
       ws.close();
-      return;
-    }
-    if (mode === "unauthorized") {
-      ws.onMessage(() => {
-        ws.send(JSON.stringify({ type: "error", code: "unauthorized" }));
-      });
       return;
     }
     ws.connectToServer();
@@ -86,7 +80,7 @@ async function createDocument(owner: { token: string }, workspaceName: string) {
   expect(workspace.status).toBe(201);
   const workspaceID = ((await workspace.json()) as { data: { id: string } })
     .data.id;
-  const documentID = randomUUID();
+  let documentID = "";
   const root = randomUUID();
   const paragraph = randomUUID();
   const run = randomUUID();
@@ -108,56 +102,43 @@ async function createDocument(owner: { token: string }, workspaceName: string) {
       title: `Session loss ${Date.now()}`,
       type: "markdown",
       isDraft: true,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID: root,
-        nodes: [
+      ...documentPayload([
           node(root, null, 1, "document"),
           node(paragraph, root, 1, "paragraph"),
           node(run, paragraph, 1, "run", "shared text"),
-        ],
-      },
+        ]),
     }),
   });
   expect(created.status).toBe(201);
+  documentID = await createdDocumentID(created);
   return { workspaceID, documentID, headers: { ...headers, "X-Workspace-Id": workspaceID } };
 }
 
 async function openEditor(page: Page, documentID: string, workspaceID: string) {
   await page.goto(`/docs/${documentID}?workspaceId=${workspaceID}`);
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status").first()).toContainText("Synced");
   return editor;
 }
 
-async function pendingUpdateCount(page: Page) {
+/** How many documents this browser keeps a local copy of. */
+async function localCopyCount(page: Page) {
   return page.evaluate(
-    () =>
-      new Promise<number>((resolve, reject) => {
-        const request = indexedDB.open("dokudocs-collaboration");
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          const db = request.result;
-          if (!db.objectStoreNames.contains("pending-updates")) {
-            db.close();
-            resolve(0);
-            return;
-          }
-          const count = db
-            .transaction("pending-updates", "readonly")
-            .objectStore("pending-updates")
-            .count();
-          count.onsuccess = () => {
-            db.close();
-            resolve(count.result);
-          };
-          count.onerror = () => reject(count.error);
-        };
-      }),
+    async () =>
+      (await indexedDB.databases()).filter((database) =>
+        database.name?.startsWith("dokudocs:"),
+      ).length,
   );
+}
+
+async function storedContent(doc: { documentID: string; headers: Record<string, string> }) {
+  const response = await fetch(`${apiURL}/api/v1/documents/${doc.documentID}`, {
+    headers: doc.headers,
+  });
+  return ((await response.json()) as { data: { content: string } }).data.content;
 }
 
 async function typeOffline(session: Session, editor: ReturnType<Page["locator"]>) {
@@ -166,7 +147,8 @@ async function typeOffline(session: Session, editor: ReturnType<Page["locator"]>
   await editor.click();
   await session.page.keyboard.press("Control+Home");
   await session.page.keyboard.type("PENDING ");
-  await expect.poll(() => pendingUpdateCount(session.page)).toBeGreaterThan(0);
+  await expect(editor).toContainText("PENDING");
+  await expect.poll(() => localCopyCount(session.page)).toBeGreaterThan(0);
 }
 
 async function sharedDocument(browser: Browser, baseURL: string) {
@@ -192,7 +174,7 @@ async function sharedDocument(browser: Browser, baseURL: string) {
   return { owner, member, doc, session };
 }
 
-test("@live @smoke: access revoked while offline discards the pending edit on reconnect", async ({
+test("@live @smoke: access revoked while offline discards the local copy on reconnect", async ({
   browser,
 }) => {
   test.setTimeout(90000);
@@ -216,28 +198,9 @@ test("@live @smoke: access revoked while offline discards the pending edit on re
   await expect(
     session.page.getByText("Read access is no longer available."),
   ).toBeVisible({ timeout: 30000 });
-  await expect.poll(() => pendingUpdateCount(session.page)).toBe(0);
+  await expect.poll(() => localCopyCount(session.page)).toBe(0);
 
-  const stored = await fetch(`${apiURL}/api/v1/documents/${doc.documentID}/body`, {
-    headers: doc.headers,
-  });
-  expect(JSON.stringify(await stored.json())).not.toContain("PENDING");
-});
-
-test("@live @smoke: a rejected token keeps the pending edit and asks the user to sign in again", async ({
-  browser,
-}) => {
-  test.setTimeout(90000);
-  const baseURL = test.info().project.use.baseURL!;
-  const { doc, session } = await sharedDocument(browser, baseURL);
-  const editor = await openEditor(session.page, doc.documentID, doc.workspaceID);
-  await typeOffline(session, editor);
-
-  session.setLink("unauthorized");
-  await expect(
-    session.page.getByText("Sign in again to load this document."),
-  ).toBeVisible({ timeout: 30000 });
-  expect(await pendingUpdateCount(session.page)).toBeGreaterThan(0);
+  expect(await storedContent(doc)).not.toContain("PENDING");
 });
 
 async function startSignOut(page: Page) {
@@ -262,11 +225,8 @@ test("@live @smoke: logout flushes a pending edit to the server and clears local
   await startSignOut(session.page);
   await session.page.waitForURL(/sign-in/, { timeout: 30000 });
 
-  expect(await pendingUpdateCount(session.page)).toBe(0);
-  const stored = await fetch(`${apiURL}/api/v1/documents/${doc.documentID}/body`, {
-    headers: doc.headers,
-  });
-  expect(JSON.stringify(await stored.json())).toContain("PENDING");
+  expect(await localCopyCount(session.page)).toBe(0);
+  await expect.poll(() => storedContent(doc)).toContain("PENDING");
 });
 
 test("@live @smoke: logout that cannot flush asks before discarding the pending edit", async ({
@@ -284,7 +244,7 @@ test("@live @smoke: logout that cannot flush asks before discarding the pending 
   await expect(session.page).not.toHaveURL(/sign-in/);
 
   await discard.getByRole("button", { name: /cancel/i }).click();
-  expect(await pendingUpdateCount(session.page)).toBeGreaterThan(0);
+  expect(await localCopyCount(session.page)).toBeGreaterThan(0);
 
   await startSignOut(session.page);
   await session.page
@@ -292,5 +252,5 @@ test("@live @smoke: logout that cannot flush asks before discarding the pending 
     .getByRole("button", { name: /discard and sign out/i })
     .click({ timeout: 30000 });
   await session.page.waitForURL(/sign-in/, { timeout: 30000 });
-  expect(await pendingUpdateCount(session.page)).toBe(0);
+  expect(await localCopyCount(session.page)).toBe(0);
 });

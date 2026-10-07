@@ -13,6 +13,8 @@ export interface ImageEditRequest {
 }
 
 export interface MediaNodeViewOptions {
+  /** Turns a stored file's address into one the page can load (it needs the session). */
+  resolveSource?: (src: string) => Promise<string>
   /** Called when the user asks to edit an image; the host shows its own form. */
   onImageEdit?: (request: ImageEditRequest) => void
 }
@@ -48,7 +50,16 @@ function imageView(options: MediaNodeViewOptions): NodeViewConstructor {
       applyIdentity(dom, node)
       if (isSafeImageSource(src)) {
         const img = document.createElement('img')
-        img.src = src
+        if (options.resolveSource && isStoredFile(src)) {
+          void options.resolveSource(src).then(
+            (resolved) => {
+              img.src = resolved
+            },
+            () => {
+              img.alt = `${alt || 'Image'} could not be loaded`
+            }
+          )
+        } else img.src = src
         img.alt = alt
         img.loading = 'lazy'
         dom.append(img)
@@ -72,6 +83,85 @@ function imageView(options: MediaNodeViewOptions): NodeViewConstructor {
         })
         dom.append(edit)
       }
+    }
+    render()
+    return {
+      dom,
+      update(next) {
+        if (next.type !== node.type) return false
+        node = next
+        render()
+        return true
+      },
+      stopEvent: (event) => event.target instanceof HTMLButtonElement,
+      ignoreMutation: () => true,
+    } satisfies NodeView
+  }
+}
+
+function isStoredFile(src: string) {
+  return src.startsWith('/api/')
+}
+
+function attachmentView(options: MediaNodeViewOptions): NodeViewConstructor {
+  return (initial) => {
+    const dom = document.createElement('div')
+    dom.className = 'dd-attachment'
+    dom.contentEditable = 'false'
+    let node = initial
+    const render = () => {
+      const {
+        src = '',
+        fileName = 'file',
+        contentType = '',
+      } = bodyAttributes(node) as {
+        src?: string
+        fileName?: string
+        contentType?: string
+      }
+      dom.replaceChildren()
+      applyIdentity(dom, node)
+      const resolve = () =>
+        options.resolveSource ? options.resolveSource(src) : Promise.resolve(src)
+      const media = contentType.startsWith('video/')
+        ? document.createElement('video')
+        : contentType === 'application/pdf'
+          ? document.createElement('iframe')
+          : null
+      if (media instanceof HTMLVideoElement) {
+        media.controls = true
+        media.preload = 'metadata'
+      }
+      if (media instanceof HTMLIFrameElement) {
+        media.title = fileName
+        media.setAttribute('sandbox', '')
+      }
+      if (media) {
+        void resolve().then(
+          (resolved) => media.setAttribute('src', resolved),
+          () => media.replaceWith(`${fileName} could not be loaded`)
+        )
+        dom.append(media)
+        return
+      }
+      const card = document.createElement('div')
+      card.className = 'dd-attachment-card'
+      const name = document.createElement('span')
+      name.textContent = fileName
+      const download = document.createElement('button')
+      download.type = 'button'
+      download.dataset.attachmentDownload = ''
+      download.textContent = 'Download'
+      download.addEventListener('click', () => {
+        void resolve().then((resolved) => {
+          const link = document.createElement('a')
+          link.href = resolved
+          link.download = fileName
+          link.click()
+        })
+      })
+      card.append(name, download)
+      dom.append(card)
     }
     render()
     return {
@@ -217,6 +307,7 @@ function blockView(kind: 'math' | 'diagram'): NodeViewConstructor {
 export function mediaNodeViews(options: MediaNodeViewOptions = {}) {
   return {
     image: imageView(options),
+    attachment: attachmentView(options),
     math: inlineMathView(),
     math_block: blockView('math'),
     diagram: blockView('diagram'),

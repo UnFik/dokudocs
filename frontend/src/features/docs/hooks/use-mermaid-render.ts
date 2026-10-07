@@ -128,7 +128,10 @@ export function enhanceMermaidSvgForDarkMode(
   return result
 }
 
-export function getMermaidConfig(isDark: boolean, themeName: string = 'default') {
+export function getMermaidConfig(
+  isDark: boolean,
+  themeName: string = 'default'
+) {
   if (themeName === 'neutral') {
     return {
       startOnLoad: false,
@@ -239,7 +242,10 @@ export async function renderMermaidSvgDirect(
     const normalizedSvg = cleanSvg
       .replace(/max-width:\s*[\d.]+px;?/gi, 'max-width: 100%;')
       .replace(/style="([^"]*)"/i, (_match, p1) => {
-        const updated = p1.replace(/max-width:\s*[\d.]+px;?/gi, 'max-width: 100%;')
+        const updated = p1.replace(
+          /max-width:\s*[\d.]+px;?/gi,
+          'max-width: 100%;'
+        )
         return `style="${updated}"`
       })
     return enhanceMermaidSvgForDarkMode(normalizedSvg, isDark)
@@ -350,7 +356,10 @@ class MermaidRenderStore {
           const normalizedSvg = cleanSvg
             .replace(/max-width:\s*[\d.]+px;?/gi, 'max-width: 100%;')
             .replace(/style="([^"]*)"/i, (_match, p1) => {
-              const updated = p1.replace(/max-width:\s*[\d.]+px;?/gi, 'max-width: 100%;')
+              const updated = p1.replace(
+                /max-width:\s*[\d.]+px;?/gi,
+                'max-width: 100%;'
+              )
               return `style="${updated}"`
             })
           return enhanceMermaidSvgForDarkMode(normalizedSvg, isDark)
@@ -379,13 +388,13 @@ class MermaidRenderStore {
       (err: unknown) => {
         const errorRecord = err as Record<string, unknown> | null | undefined
         const rawMsg =
-          (typeof err === 'object' && err !== null && 'message' in err
+          typeof err === 'object' && err !== null && 'message' in err
             ? String(errorRecord?.message)
             : typeof err === 'object' && err !== null && 'str' in err
               ? String(errorRecord?.str)
               : typeof err === 'string'
                 ? err
-                : 'Invalid Mermaid syntax')
+                : 'Invalid Mermaid syntax'
         const errorMsg = String(rawMsg)
           .replace(/^Error:\s*/i, '')
           .trim()

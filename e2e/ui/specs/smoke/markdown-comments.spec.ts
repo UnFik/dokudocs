@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 test("@live @smoke @comments: a commenter's comment reaches the owner at once, is replied to, resolved, and survives the text it was about", async ({
   page,
@@ -8,7 +9,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
   test.setTimeout(150_000);
   const suffix = randomUUID();
   const workspaceName = `Suggestion workspace ${suffix}`;
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const runNodeID = randomUUID();
@@ -50,10 +51,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     "X-Workspace-Id": workspaceID,
   };
   const canonicalRuns = async () => {
-    const response = await page.request.get(
-      `${apiURL}/api/v1/documents/${documentID}/body`,
-      { headers: ownerHeaders },
-    );
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, ownerHeaders) } }) };
     const data = (await response.json()) as {
       data: {
         nodes: {
@@ -82,11 +80,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
       title: `Suggestion document ${suffix}`,
       type: "markdown",
       visibility: "private",
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           {
             nodeID: rootNodeID,
             parentID: null,
@@ -111,11 +105,11 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
             content: "Original phrase",
             attributes: {},
           },
-        ],
-      },
+        ]),
     },
   });
   expect(createResponse.status()).toBe(201);
+  documentID = await createdDocumentID(createResponse);
 
   const registerResponse = await page.request.post(
     `${apiURL}/api/v1/auth/register`,
@@ -191,14 +185,15 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     );
     const commenterEditor = commenter.locator(".ProseMirror");
     await expect(commenterEditor).toContainText("Original phrase");
-    await commenter.getByRole("tab", { name: "Suggest", exact: true }).click();
+    await commenter.getByRole("button", { name: /^Editor mode/ }).click();
+  await commenter.getByRole("menuitemradio", { name: "Suggest", exact: true }).click();
     await expect(commenter.getByRole("status")).toContainText("Synced");
 
     await page.goto(`/docs/${documentID}`);
     const ownerEditor = page.locator(".ProseMirror");
     await expect(ownerEditor).toContainText("Original phrase");
     await expect(page.getByRole("status")).toContainText("Synced");
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
     const ownerRail = page.getByRole("list", {
       name: "Suggestions and comments",
     });
@@ -249,7 +244,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     await expect(ownerEditor.locator(".comment-focus")).toHaveText("Original");
     await expect(ownerThread).toHaveAttribute("data-focused", "true");
 
-    // The owner replies; the commenter sees it live.
+    // The chosen card shows its reply box; the owner replies and the commenter sees it live.
     await ownerThread.getByLabel("Reply").fill("Yes, keep it.");
     await ownerThread.getByRole("button", { name: "Send reply" }).click();
     await expect(commenterRail).toContainText("Yes, keep it.");
@@ -259,7 +254,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
       .locator("li[data-comment-thread-id]")
       .first();
     await commenterThread
-      .getByRole("button", { name: "Edit", exact: true })
+      .getByRole("button", { name: "Edit this comment" })
       .click();
     await commenterThread
       .getByLabel("Edit comment")
@@ -271,7 +266,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     await expect(ownerThread).toContainText("edited");
     // Nobody else gets Edit on it; the owner may still delete a reply of their own.
     await expect(
-      ownerThread.getByRole("button", { name: "Edit", exact: true }),
+      ownerThread.getByRole("button", { name: "Edit this comment" }),
     ).toHaveCount(0);
     await ownerThread.getByRole("button", { name: "Delete reply" }).click();
     await page
@@ -331,13 +326,14 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
 
     // Someone who can only view reads the threads and cannot add to them.
     const viewer = await signIn(viewerContext, viewerEmail, viewerPassword);
-    await viewer.getByRole("button", { name: "Review", exact: true }).click();
+    await viewer.getByRole("button", { name: "Comment", exact: true }).click();
     const viewerRail = viewer.getByRole("list", {
       name: "Suggestions and comments",
     });
     await expect(viewerRail).toContainText("Is this word needed?");
+    // The info line's Comment button only opens this panel; nothing in the panel adds a comment.
     await expect(
-      viewer.getByRole("button", { name: "Comment", exact: true }),
+      viewerRail.getByRole("button", { name: "Comment", exact: true }),
     ).toHaveCount(0);
     await expect(viewerRail.getByLabel("Reply")).toHaveCount(0);
     await expect(
@@ -346,7 +342,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
 
     // A reload agrees, and the rail fits a phone.
     await page.reload();
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
     await expect(
       page.getByRole("list", { name: "Suggestions and comments" }),
     ).toContainText("Is this word needed?");

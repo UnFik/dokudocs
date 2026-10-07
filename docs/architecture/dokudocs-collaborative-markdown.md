@@ -1,5 +1,7 @@
 # Arsitektur kolaborasi Markdown Dokudocs
 
+> Out of date: this describes the AST, epoch and structural-command design. The current design is in [ADR 0029](../adr/0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md).
+
 Status: target architecture; keputusan runtime/editor tertentu menunggu spike
 Tanggal: 2026-09-27
 Detail domain dan persistence: [spesifikasi domain/teknis](../specs/dokudocs-collaborative-markdown-domain-technical.md)

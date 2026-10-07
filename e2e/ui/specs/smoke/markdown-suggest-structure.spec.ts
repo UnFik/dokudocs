@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
+import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
 
 test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste are suggestions the owner accepts or rejects", async ({
   page,
@@ -8,7 +9,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
   test.setTimeout(120_000);
   const suffix = randomUUID();
   const workspaceName = `Suggestion workspace ${suffix}`;
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphNodeID = randomUUID();
   const runNodeID = randomUUID();
@@ -48,10 +49,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     "X-Workspace-Id": workspaceID,
   };
   const canonicalRuns = async () => {
-    const response = await page.request.get(
-      `${apiURL}/api/v1/documents/${documentID}/body`,
-      { headers: ownerHeaders },
-    );
+    const response = { json: async () => ({ data: { nodes: await storedNodes(page, documentID, ownerHeaders) } }) };
     const data = (await response.json()) as {
       data: {
         nodes: {
@@ -80,11 +78,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
       title: `Suggestion document ${suffix}`,
       type: "markdown",
       visibility: "private",
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           {
             nodeID: rootNodeID,
             parentID: null,
@@ -109,11 +103,11 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
             content: "Original phrase",
             attributes: {},
           },
-        ],
-      },
+        ]),
     },
   });
   expect(createResponse.status()).toBe(201);
+  documentID = await createdDocumentID(createResponse);
 
   const registerResponse = await page.request.post(
     `${apiURL}/api/v1/auth/register`,
@@ -151,7 +145,8 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await commenter.goto(`/docs/${documentID}`);
     const commenterEditor = commenter.locator(".ProseMirror");
     await expect(commenterEditor).toContainText("Original phrase");
-    await commenter.getByRole("tab", { name: "Suggest", exact: true }).click();
+    await commenter.getByRole("button", { name: /^Editor mode/ }).click();
+  await commenter.getByRole("menuitemradio", { name: "Suggest", exact: true }).click();
     await expect(commenterEditor).toHaveAttribute("contenteditable", "true");
     await expect(commenter.getByRole("status")).toContainText("Synced");
 
@@ -159,13 +154,13 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     const ownerEditor = page.locator(".ProseMirror");
     await expect(ownerEditor).toContainText("Original phrase");
     await expect(page.getByRole("status")).toContainText("Synced");
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
     const ownerCards = page.getByRole("list", {
       name: "Suggestions and comments",
     });
 
     const openReview = async () => {
-      const review = page.getByRole("button", { name: "Review", exact: true });
+      const review = page.getByRole("button", { name: "Comment", exact: true });
       if ((await review.getAttribute("aria-expanded")) !== "true")
         await review.click();
     };
@@ -175,7 +170,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await commenter.keyboard.press("End");
     await commenter.keyboard.press("Enter");
     await commenter.keyboard.type("Second line");
-    await expect(ownerCards).toContainText('Add: "Second line"');
+    await expect(ownerCards).toContainText('Add: “Second line”');
     await expect(ownerEditor.locator("p")).toHaveCount(2);
     await expect.poll(canonicalRuns).toEqual(["Original phrase"]);
 
@@ -276,7 +271,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await selectOriginal();
     await commenter.keyboard.press("Control+b");
     await openReview();
-    await expect(ownerCards).toContainText('Format: bold "Original"');
+    await expect(ownerCards).toContainText('Format: bold “Original”');
     await expect(ownerEditor.locator("strong")).toHaveCount(0);
     await expect(ownerEditor.locator(".suggest-fmt")).toContainText("Original");
     await page.getByRole("button", { name: "Preview accepted" }).click();
@@ -294,7 +289,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await selectOriginal();
     await commenter.keyboard.press("Control+i");
     await openReview();
-    await expect(ownerCards).toContainText('Format: italic "Original"');
+    await expect(ownerCards).toContainText('Format: italic “Original”');
     await ownerCards.getByRole("button", { name: "Reject" }).click();
     await expect(ownerCards).toHaveCount(0);
     await expect(ownerEditor.locator("em")).toHaveCount(0);
@@ -309,7 +304,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
       .fill("https://example.com/title");
     await commenter.getByRole("button", { name: "Apply link" }).click();
     await openReview();
-    await expect(ownerCards).toContainText('Format: link "Original"');
+    await expect(ownerCards).toContainText('Format: link “Original”');
     await expect(ownerEditor.locator("[data-link-href]")).toHaveCount(0);
     await ownerCards.getByRole("button", { name: "Accept" }).click();
     await expect(
@@ -332,7 +327,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await commenterEditor.getByText("Original").first().click();
     await commenter.keyboard.press("Control+Alt+2");
     await openReview();
-    await expect(ownerCards).toContainText('Format: heading 2 "Original"');
+    await expect(ownerCards).toContainText('Format: heading 2 “Original”');
     await expect(ownerEditor.locator("h2")).toHaveCount(0);
     await expect(ownerEditor.locator(".suggest-block-fmt")).toHaveAttribute(
       "data-suggest-label",

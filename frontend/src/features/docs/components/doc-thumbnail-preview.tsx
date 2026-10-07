@@ -5,11 +5,9 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import type { DocType } from '@/types/dokudocs'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
-import { getMarkdownBody } from '@/lib/domain-api'
 import {
   getLocalUserScope,
   isLocalUserScopeCurrent,
@@ -21,10 +19,6 @@ import {
   generateDbmlThumbnail,
   generateMermaidThumbnail,
 } from '../lib/doc-thumbnail-generator'
-import {
-  documentBodyToMarkdown,
-  type DocumentBodyNode,
-} from '../lib/muya/state/documentBodyToMarkdown'
 
 interface DocThumbnailPreviewProps {
   docId?: string
@@ -143,7 +137,6 @@ export function DocThumbnailPreview(props: DocThumbnailPreviewProps) {
 
 function ScopedDocThumbnailPreview({
   docId,
-  workspaceID,
   type,
   content,
   thumbnail,
@@ -163,29 +156,7 @@ function ScopedDocThumbnailPreview({
   const docKey = `${scope.generation}:${docId || `${type}-${(content || '').slice(0, 32)}`}`
   const [isVisible, setIsVisible] = useState(() => visibleDocCache.has(docKey))
 
-  const bodyQuery = useQuery({
-    queryKey: ['markdown-preview-body', scope.generation, workspaceID, docId],
-    queryFn: ({ signal }) => getMarkdownBody(workspaceID!, docId!, signal),
-    enabled: Boolean(
-      isVisible &&
-      type === 'markdown' &&
-      !content?.trim() &&
-      !activeThumbnail &&
-      workspaceID &&
-      docId
-    ),
-    retry: false,
-    staleTime: 30_000,
-  })
-  const astMarkdown = useMemo(() => {
-    if (!bodyQuery.data) return ''
-    try {
-      return documentBodyToMarkdown(bodyQuery.data.nodes as DocumentBodyNode[])
-    } catch {
-      return ''
-    }
-  }, [bodyQuery.data])
-  const previewMarkdown = content?.trim() ? content : astMarkdown
+  const previewMarkdown = content ?? ''
 
   const [isImgLoaded, setIsImgLoaded] = useState(() =>
     Boolean(activeThumbnail && loadedImageCache.has(activeThumbnail))

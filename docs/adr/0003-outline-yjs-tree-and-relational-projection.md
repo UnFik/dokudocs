@@ -1,3 +1,5 @@
 # Follow the Outline ProseMirror/Yjs collaboration model
 
+> Superseded by [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md): the AST, epochs and structural commands no longer exist.
+
 Use a ProseMirror schema bound to Yjs shared types as the collaborative editor tree, following Outline's editor/persistence pattern. Project accepted Yjs state transactionally into Dokudocs' relational Markdown AST, which remains the read/query/export model. `parent_id` and sibling order are canonical; recursive queries are the initial subtree implementation. Add a rebuildable LTree path only if a named product query and benchmark justify it. Keep stable Dokudocs node IDs across editor operations; do not treat Yjs internal shared-type identity as the public node identity. Structural moves use server-ordered `MoveNode` commands that revalidate current parent, cycle, and access after reconnect, because an integrated Yjs shared type cannot simply be moved to another location. If a move cannot be reconciled, hold it for user resolution instead of cloning or dropping content.

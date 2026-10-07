@@ -700,7 +700,10 @@ function renderFlowchartSvg(content: string, isDark = false): string {
     neighbors.forEach((nxt) => {
       const existingRank = ranks.get(nxt) ?? -1
       const nextRank = curr.rank + 1
-      if (nextRank < maxRank && (existingRank === -1 || nextRank > existingRank)) {
+      if (
+        nextRank < maxRank &&
+        (existingRank === -1 || nextRank > existingRank)
+      ) {
         ranks.set(nxt, nextRank)
         queue.push({ id: nxt, rank: nextRank })
       }

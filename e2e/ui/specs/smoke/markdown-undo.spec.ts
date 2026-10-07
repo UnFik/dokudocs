@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { createdDocumentID, documentPayload } from "../../helpers/markdown-document";
 
 test("@live @smoke: undo and redo only touch the local user's edits", async ({
   page,
@@ -33,7 +34,7 @@ test("@live @smoke: undo and redo only touch the local user's edits", async ({
     (await (await workspaceResponse).json()) as { data: { id: string } }
   ).data.id;
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootNodeID = randomUUID();
   const paragraphs = ["First block", "Second block"].map((content) => ({
     paragraphID: randomUUID(),
@@ -55,11 +56,7 @@ test("@live @smoke: undo and redo only touch the local user's edits", async ({
       title: `Undo doc ${suffix}`,
       type: "markdown",
       isDraft: true,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID,
-        nodes: [
+      ...documentPayload([
           {
             nodeID: rootNodeID,
             parentID: null,
@@ -86,18 +83,19 @@ test("@live @smoke: undo and redo only touch the local user's edits", async ({
               attributes: {},
             },
           ]),
-        ],
-      },
+        ]),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await page.goto(`/docs/${documentID}`);
   const documentURL = page.url();
   const editorA = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editorA).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),

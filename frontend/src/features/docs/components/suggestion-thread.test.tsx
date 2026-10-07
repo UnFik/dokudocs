@@ -54,7 +54,7 @@ function suggestion(
   }
 }
 
-function renderThread(item: DocumentSuggestion) {
+function renderThread(item: DocumentSuggestion, focused = true) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <SuggestionThread
@@ -62,6 +62,7 @@ function renderThread(item: DocumentSuggestion) {
         workspaceID='w'
         documentID='d'
         userID={ME}
+        focused={focused}
       />
     </QueryClientProvider>
   )
@@ -77,6 +78,7 @@ describe('SuggestionThread', () => {
 
   it('sends a trimmed reply and keeps Send disabled while it is empty', async () => {
     const { getByRole, getByLabelText } = await renderThread(suggestion())
+    // The box only appears once Reply is pressed.
     const send = getByRole('button', { name: 'Send reply' })
     await expect.element(send).toBeDisabled()
     await userEvent.fill(getByLabelText('Reply'), '  Agreed.  ')
@@ -87,6 +89,11 @@ describe('SuggestionThread', () => {
       method: 'POST',
       body: { replyID: expect.any(String), body: 'Agreed.' },
     })
+  })
+
+  it('shows the reply box only once the card is chosen', async () => {
+    const { getByLabelText } = await renderThread(suggestion(), false)
+    expect(getByLabelText('Reply').elements()).toHaveLength(0)
   })
 
   it('blocks a reply that is too long and says by how much', async () => {

@@ -1,3 +1,5 @@
 # Reopen cached Markdown documents offline
 
+> Superseded by [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md): the AST, epochs and structural commands no longer exist.
+
 Dokudocs supports reopening an existing, fully cached Markdown document after a browser restart once the app shell and editor assets have been cached. The offline entry point is a known document URL; projects, document lists, and search are not available offline. A locally cached session may open the document only while its AccessToken is unexpired; this is local cache access, not proof of current server authorization. Reconnect rechecks access before sync, and revocation cannot be known while disconnected. Token expiry locks the body and pending edits until the same User signs in online; pending state remains local, while confirmed logout clears it. A service worker caches static app/editor assets, IndexedDB holds document state, and browser-cleared or evicted site data is outside the recovery guarantee. This provides browser-restart offline editing without adding a separate offline credential or offline discovery system.

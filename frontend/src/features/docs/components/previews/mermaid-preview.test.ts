@@ -309,9 +309,8 @@ describe('Mermaid Syntax Validation & Error Handling', () => {
 
 describe('Mermaid Dark Mode SVG Enhancement & Theme Configuration', () => {
   it('converts bright rect fills to dark tints in dark mode', async () => {
-    const { enhanceMermaidSvgForDarkMode } = await import(
-      '../../hooks/use-mermaid-render'
-    )
+    const { enhanceMermaidSvgForDarkMode } =
+      await import('../../hooks/use-mermaid-render')
 
     const rawSvg = `<svg><rect class="rect" fill="rgb(240, 255, 240)" width="200" height="100"></rect><rect fill="#ffffff"></rect></svg>`
     const enhanced = enhanceMermaidSvgForDarkMode(rawSvg, true)
@@ -322,9 +321,8 @@ describe('Mermaid Dark Mode SVG Enhancement & Theme Configuration', () => {
   })
 
   it('preserves SVG as-is when isDark is false', async () => {
-    const { enhanceMermaidSvgForDarkMode } = await import(
-      '../../hooks/use-mermaid-render'
-    )
+    const { enhanceMermaidSvgForDarkMode } =
+      await import('../../hooks/use-mermaid-render')
 
     const rawSvg = `<svg><rect class="rect" fill="rgb(240, 255, 240)" width="200" height="100"></rect></svg>`
     const result = enhanceMermaidSvgForDarkMode(rawSvg, false)
@@ -344,5 +342,3 @@ describe('Mermaid Dark Mode SVG Enhancement & Theme Configuration', () => {
     expect(lightConfig.theme).toBe('default')
   })
 })
-
-

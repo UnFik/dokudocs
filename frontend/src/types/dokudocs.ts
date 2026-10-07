@@ -16,6 +16,7 @@ export interface UserAuthor {
 }
 
 export interface DocumentItem {
+  viewCount?: number
   id: string
   title: string
   type: DocType
@@ -27,6 +28,8 @@ export interface DocumentItem {
   workspaceId?: string
   orgId: string
   author: UserAuthor
+  /** Whose edit was stored last; absent before the first edit. */
+  updatedBy?: UserAuthor | null
   isStarred: boolean
   starredAt?: string | null
   isShared: boolean

@@ -1,4 +1,4 @@
-import { inputRules } from 'prosemirror-inputrules'
+import { inputRules, undoInputRule } from 'prosemirror-inputrules'
 import { keymap } from 'prosemirror-keymap'
 import {
   AllSelection,
@@ -6,7 +6,7 @@ import {
   NodeSelection,
   Plugin,
   PluginKey,
-  type Selection,
+  Selection,
   TextSelection,
   type Command,
   type Transaction,
@@ -30,16 +30,23 @@ import {
   yXmlFragmentToProseMirrorRootNode,
 } from 'y-prosemirror'
 import * as Y from 'yjs'
-import type { RemoteCursor } from '../collaboration-socket'
+import type { RemoteCursor } from '../collab-session'
 import type { DocumentBodyNode } from '../documentBody'
 import {
   headingInputRule,
   insertBlockCommand,
   setHeadingCommand,
+  newlineInSource,
   splitTextBlock,
   toggleTaskChecked,
   type InsertableBlock,
 } from './blockCommands'
+import { embedPlugin } from './blocks/embedBlock'
+import {
+  emojiMenuPlugin,
+  mentionMenuPlugin,
+  type MentionCandidate,
+} from './blocks/triggerMenu'
 import { decideSuggestion } from './decideSuggestion'
 import {
   caretAfterDelete,
@@ -47,6 +54,8 @@ import {
   type CaretHint,
 } from './deleteTargets'
 import { documentBodySchema, prosemirrorToDocumentBody } from './documentBody'
+import { findReplacePlugin } from './findReplace'
+import { headingMarginPlugin } from './headingMargin'
 import {
   emptyInlineState,
   readInlineState,
@@ -58,15 +67,17 @@ import {
   type InlineState,
 } from './inlineMarks'
 import { joinParagraphs } from './joinParagraphs'
-import { blockMarkdownRules, hiddenNodesPlugin } from './markdownBlockRules'
+import { linkFeaturesPlugin } from './linkFeatures'
+import {
+  blockMarkdownRules,
+  wrapLineCommand,
+  type WrapKind,
+} from './markdownBlockRules'
 import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
 import { nodeSuggestionOf } from './nodeSuggestion'
-import {
-  DeleteNodeRequiredError,
-  MoveNodeRequiredError,
-  prepareBodyTransaction,
-} from './prepareBodyTransaction'
+import { prepareBodyTransaction } from './prepareBodyTransaction'
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
+import { smartTextRules } from './smartText'
 import { suggestionBlocksPlugin } from './suggestionBlocks'
 import { suggestionCards, type SuggestionCard } from './suggestionCards'
 import {
@@ -123,16 +134,22 @@ export function createDocumentBodyEditor(
   ydoc: Y.Doc,
   options: {
     readOnly?: boolean
+    /** Whether typographic replacements (curly quotes, arrows, ellipsis) apply as the person types. */
+    smartText?: () => boolean
+    /** The person asked for a link to a heading (its node ID). */
+    onHeadingLink?: (nodeID: string) => void
+    /** What `@` offers: people, pages and projects matching what was typed. */
+    mentionSource?: (query: string) => Promise<MentionCandidate[]>
+    /** The title of the page a link to this app goes to, shown when the link is hovered. */
+    resolveLinkTitle?: (href: string) => Promise<string | null>
+    /** The most characters the page may hold; text past it is refused, deleting still works. */
+    maxCharacters?: number
+    /** Arrow up from the very start of the text: the title is the line above. */
+    onNavigateToTitle?: () => void
     plugins?: Plugin[]
     nodeViews?: EditorProps['nodeViews']
     onEditorReady?: (view: EditorView) => void
     onBodyChange?: (body: DocumentBodyNode[]) => void
-    onDeleteNode?: (nodeIDs: string[]) => void | Promise<void>
-    onDeleteNodeQueued?: (nodeID: string) => void
-    /** Where the caret should be put once the editor is rebuilt after a delete. */
-    onCaretHint?: (hint: CaretHint) => void
-    onMoveNode?: (move: MoveNodeIntent) => void | Promise<void>
-    onMoveNodeQueued?: (move: MoveNodeIntent) => void
     onTransactionError?: (error: unknown) => void
     onHistoryChange?: (history: EditorHistoryState) => void
     onInlineStateChange?: (state: InlineState) => void
@@ -157,7 +174,6 @@ export function createDocumentBodyEditor(
   let readOnly = options.readOnly ?? false
   let suggestMode = false
   let continueSuggestion = false
-  let structuralCommandPending = false
   const suggestionFocusKey = new PluginKey<string | null>('suggestionFocus')
   const suggestionFocusPlugin = new Plugin<string | null>({
     key: suggestionFocusKey,
@@ -218,60 +234,122 @@ export function createDocumentBodyEditor(
     props: {
       decorations: (editorState): DecorationSet => {
         const size = editorState.doc.content.size
-        return DecorationSet.create(
-          editorState.doc,
-          commentRanges
-            .filter((range) => range.to <= size)
-            .map((range) =>
-              Decoration.inline(range.from, range.to, {
-                class:
-                  range.id === focusedCommentID
-                    ? 'comment-mark comment-focus'
-                    : 'comment-mark',
-                'data-comment-id': range.id,
-              })
-            )
+        const ranges = commentRanges.filter((range) => range.to <= size)
+        // One marker in the margin for each line that has an open comment.
+        const lines = new Map<number, string[]>()
+        for (const range of ranges) {
+          const $from = editorState.doc.resolve(range.from)
+          for (let depth = $from.depth; depth > 0; depth--) {
+            if (!$from.node(depth).isTextblock) continue
+            const start = $from.start(depth)
+            lines.set(start, [...(lines.get(start) ?? []), range.id])
+            break
+          }
+        }
+        const gutter = [...lines].map(([start, ids]) =>
+          Decoration.widget(
+            start,
+            () => {
+              const marker = document.createElement('button')
+              marker.type = 'button'
+              marker.className = 'dd-comment-gutter'
+              marker.contentEditable = 'false'
+              marker.setAttribute(
+                'aria-label',
+                `${ids.length} ${ids.length === 1 ? 'comment' : 'comments'} on this line`
+              )
+              marker.addEventListener('mousedown', (event) =>
+                event.preventDefault()
+              )
+              marker.addEventListener('click', () =>
+                options.onCommentClick?.(ids[0]!)
+              )
+              return marker
+            },
+            { side: -1, key: `gutter-${start}-${ids.join(',')}` }
+          )
         )
+        return DecorationSet.create(editorState.doc, [
+          ...ranges.map((range) =>
+            Decoration.inline(range.from, range.to, {
+              class:
+                range.id === focusedCommentID
+                  ? 'comment-mark comment-focus'
+                  : 'comment-mark',
+              'data-comment-id': range.id,
+            })
+          ),
+          ...gutter,
+        ])
       },
     },
   })
   let remoteCursors: RemoteCursor[] = []
+  let followedUser: string | null = null
   const remoteCursorPlugin = new Plugin({
     props: {
       decorations: (editorState) => remoteCursorDecorations(editorState),
     },
   })
+  const characterLimit = new Plugin({
+    filterTransaction: (transaction, current) => {
+      const limit = options.maxCharacters
+      if (
+        limit === undefined ||
+        !transaction.docChanged ||
+        transaction.getMeta(ySyncPluginKey)?.isChangeOrigin === true
+      )
+        return true
+      const after = transaction.doc.textContent.length
+      return after <= limit || after <= current.doc.textContent.length
+    },
+  })
+  // Numbering headings is only a reading aid drawn by CSS from a decoration; it is not text.
+  let numberHeadings = false
   let state = EditorState.create({
     doc: yXmlFragmentToProseMirrorRootNode(fragment, documentBodySchema),
     plugins: [
       ySyncPlugin(fragment),
       yUndoPlugin(),
       remoteCursorPlugin,
+      characterLimit,
       suggestionFocusPlugin,
+      headingMarginPlugin(
+        (nodeID) => options.onHeadingLink?.(nodeID),
+        () => numberHeadings
+      ),
+      // Replacing is an edit, so Suggest mode only finds.
+      findReplacePlugin(() => !suggestMode),
+      // Mentions and emoji are inserted content, so Suggest mode does not offer them.
+      mentionMenuPlugin({
+        enabled: () => canEdit() && !suggestMode && !!options.mentionSource,
+        search: (query) => options.mentionSource?.(query) ?? [],
+      }),
+      emojiMenuPlugin(() => canEdit() && !suggestMode),
+      // Before the link feature: a known address on an empty line is an embed, not a link.
+      embedPlugin(),
+      linkFeaturesPlugin({
+        enabled: () => canEdit() && !suggestMode,
+        resolveTitle: options.resolveLinkTitle,
+      }),
       suggestionBlocksPlugin,
       commentsPlugin,
       // Block plugins (slash menu, drag handle) run before the keymaps below so
       // they can claim Enter and arrow keys while a menu is open.
       ...(options.plugins ?? []),
-      hiddenNodesPlugin,
       markRuleResetPlugin,
       inputRules({
         rules: [
           headingInputRule,
-          ...(options.onDeleteNode
-            ? blockMarkdownRules({
-                // The new block is already in the document; the line it replaced
-                // is deleted once this edit has been dispatched, and typing goes on.
-                replaced: (originalNodeID) =>
-                  queueMicrotask(() => deleteReplacedLine(originalNodeID)),
-              })
-            : []),
+          ...blockMarkdownRules(),
           ...inlineMarkdownRules,
+          ...smartTextRules(options.smartText ?? (() => false)),
         ],
       }),
       keymap({
         Enter: (_state, _dispatch, editorView) => {
-          if (!suggestMode) return runBlock(splitTextBlock)
+          if (!suggestMode)
+            return runBlock(newlineInSource) || runBlock(splitTextBlock)
           if (!canEdit() || !editorView) return false
           const current = stateAtDomSelection(editorView)
           suggest(() => suggestEnter(current, suggestionOptions()))
@@ -298,6 +376,7 @@ export function createDocumentBodyEditor(
           i: () => runInlineMark('em'),
           e: () => runInlineMark('code'),
           'Shift-x': () => runInlineMark('strike'),
+          u: () => runInlineMark('underline'),
           'Alt-m': () => {
             options.onCommentRequest?.()
             return true
@@ -318,13 +397,13 @@ export function createDocumentBodyEditor(
       ),
     ],
   })
-  const canEdit = () => !readOnly && !structuralCommandPending
+  const canEdit = () => !readOnly
   // Select all stays inside the document body. In read-only mode there is no
   // caret, so the selection is set on the DOM instead.
   const selectAllContent = () => {
     const view = viewHolder.current
     if (!view) return
-    if (readOnly || structuralCommandPending) {
+    if (readOnly) {
       const range = window.document.createRange()
       range.selectNodeContents(view.dom)
       const selection = window.getSelection()
@@ -365,13 +444,22 @@ export function createDocumentBodyEditor(
       )
     return true
   }
+  // A key pressed right after the selection changed can find the editor's
+  // selection one step behind, so formatting reads the browser's.
   const runInline = (command: Command) => {
-    if (canEdit()) command(state, (tr) => viewHolder.current?.dispatch(tr))
+    const view = viewHolder.current
+    if (canEdit() && view)
+      command(stateAtDomSelection(view), (tr) => view.dispatch(tr))
     return true
   }
+  // Like runInline, from the selection the browser has now: Enter pressed right
+  // after a click would otherwise split the line the caret was in before it.
   const runBlock = (command: Command) => {
     if (!canEdit()) return false
-    return command(state, (tr) => viewHolder.current?.dispatch(tr))
+    const view = viewHolder.current
+    return command(view ? stateAtDomSelection(view) : state, (tr) =>
+      view?.dispatch(tr)
+    )
   }
   let lastInline = emptyInlineState
   const publishInline = () => {
@@ -449,6 +537,7 @@ export function createDocumentBodyEditor(
             // The name is drawn by CSS from data-name so it never becomes
             // document text: it must not be copied or break text assertions.
             caret.dataset.name = cursor.name || 'Collaborator'
+            caret.dataset.userId = cursor.userID
             return caret
           },
           { key: `cursor-${cursor.connectionID}-${head}-${color}`, side: 1 }
@@ -474,31 +563,57 @@ export function createDocumentBodyEditor(
     }
   }
   const viewHolder: { current?: EditorView } = {}
-  const queueDeleteNode = (
-    requested: string[],
-    { lock = true, hint }: { lock?: boolean; hint?: CaretHint | null } = {}
-  ) => {
-    if (!options.onDeleteNode) return false
-    const nodeIDs = withEmptiedParents(state.doc, requested)
-    const caret =
-      hint === undefined ? caretAfterDelete(state.doc, nodeIDs) : hint
-    if (caret) options.onCaretHint?.(caret)
-    if (lock) {
-      structuralCommandPending = true
-      viewHolder.current?.setProps({ editable: () => false })
-    }
-    void Promise.resolve()
-      .then(() => options.onDeleteNode!(nodeIDs))
-      .then(() => options.onDeleteNodeQueued?.(nodeIDs[0]!))
-      .catch((cause: unknown) => options.onTransactionError?.(cause))
+  /** Puts the caret at the start or end of a text block and focuses the editor. */
+  const focusBlockAt = (nodeID: string, edge: 'start' | 'end') => {
+    const view = viewHolder.current
+    if (!view) return false
+    let target: { pos: number; size: number } | null = null
+    state.doc.descendants((node, pos) => {
+      if (target) return false
+      if (node.attrs.nodeID === nodeID && node.isTextblock)
+        target = { pos, size: node.nodeSize }
+      return !target
+    })
+    if (!target) return false
+    const { pos, size } = target as { pos: number; size: number }
+    const at = edge === 'start' ? pos + 1 : pos + size - 1
+    view.dispatch(
+      state.tr.setSelection(
+        TextSelection.near(state.doc.resolve(at), edge === 'start' ? 1 : -1)
+      )
+    )
+    view.focus()
     return true
   }
 
-  // A line a Markdown rule replaced with a block after it. The caret is already
-  // in the new block and typing is not paused while the old line is deleted, so
-  // no caret is put back afterwards: it would jump over what was typed since.
-  const deleteReplacedLine = (originalNodeID: string) =>
-    queueDeleteNode([originalNodeID], { lock: false, hint: null })
+  // Removes whole blocks (or runs) by node ID as one edit and puts the caret
+  // where the removed text was. The editor is the only writer, so the delete is
+  // applied at once: there is no command to wait for and nothing to rebuild.
+  const queueDeleteNode = (
+    requested: string[],
+    { hint }: { hint?: CaretHint | null } = {}
+  ) => {
+    const nodeIDs = withEmptiedParents(state.doc, requested)
+    const caret =
+      hint === undefined ? caretAfterDelete(state.doc, nodeIDs) : hint
+    const targets = new Set(nodeIDs)
+    const ranges: { from: number; to: number }[] = []
+    state.doc.descendants((node, pos) => {
+      if (node.isText) return false
+      if (targets.has(node.attrs.nodeID as string)) {
+        ranges.push({ from: pos, to: pos + node.nodeSize })
+        return false
+      }
+      return true
+    })
+    if (!ranges.length) return false
+    let tr = state.tr
+    for (const range of ranges.reverse()) tr = tr.delete(range.from, range.to)
+    // Applied as is, also in Suggest mode: accepting a suggestion removes blocks.
+    viewHolder.current?.dispatch(tr.setMeta(trackedMeta, true))
+    if (caret) focusBlockAt(caret.nodeID, caret.edge)
+    return true
+  }
 
   // The editor reads the browser's selection after a selectionchange event, so a
   // key pressed right after the caret moved (End, an arrow, a click) can find the
@@ -675,6 +790,52 @@ export function createDocumentBodyEditor(
     return queueDeleteNode([join.deleteNodeID])
   }
 
+  // Backspace with the caret at the end of a heading whose text is a run (what
+  // a pasted heading holds). The link button sits after the run, and the
+  // browser's own Backspace there removes the run whole, so one character goes
+  // instead.
+  const deleteLastHeadingCharacter = (selection: Selection) => {
+    if (!selection.empty || !canEdit()) return false
+    const { $from } = selection
+    if ($from.parent.type.name !== 'atx_heading') return false
+    const run = $from.nodeBefore
+    if (run?.type.name !== 'run' || run.content.size < 2) return false
+    const end = $from.pos - 1
+    const tr = state.tr.delete(end - 1, end)
+    tr.setSelection(TextSelection.create(tr.doc, end - 1))
+    viewHolder.current?.dispatch(tr)
+    return true
+  }
+
+  // Backspace on an empty line that is all there is of its block (a heading, a
+  // list item, a quote, a code, math or diagram block) or all that a notice,
+  // toggle or untouched table holds removes the block.
+  const deleteBlankBlock = (selection: Selection) => {
+    if (!selection.empty || !canEdit()) return false
+    const $pos = selection.$from
+    let line = $pos.depth
+    while (line > 0 && !$pos.node(line).isTextblock) line--
+    if (line < 2 || $pos.node(line).textContent !== '') return false
+    const top = $pos.node(2)
+    if (top.type.name === 'paragraph') return false
+    let blank = true
+    let textblocks = top.isTextblock ? 1 : 0
+    top.descendants((child) => {
+      if (child.isText || (child.isLeaf && child.isInline)) blank = false
+      if (child.isAtom && !child.isInline) blank = false
+      if (child.isTextblock) textblocks++
+      return blank
+    })
+    const nodeID = top.attrs.nodeID
+    if (!blank || typeof nodeID !== 'string') return false
+    const wholeBoxTypes = ['notice', 'toggle', 'table']
+    if (textblocks !== 1 && !wholeBoxTypes.includes(top.type.name)) return false
+    // A table goes only from its first cell, so moving between cells is safe.
+    if (top.type.name === 'table' && $pos.before(line) !== $pos.start(2) + 1)
+      return false
+    return queueDeleteNode([nodeID])
+  }
+
   // Delete at the end of a paragraph, or Backspace at the start of one, next to
   // a separator removes the separator. The browser has nothing to merge with, so
   // it does nothing on its own.
@@ -702,7 +863,10 @@ export function createDocumentBodyEditor(
       key === 'Delete' ? index + 1 : index - 1
     )
     const nodeID = neighbour?.attrs.nodeID
-    if (neighbour?.type.name !== 'thematic_break' || typeof nodeID !== 'string')
+    if (
+      !['thematic_break', 'page_break'].includes(neighbour?.type.name ?? '') ||
+      typeof nodeID !== 'string'
+    )
       return false
     return queueDeleteNode([nodeID])
   }
@@ -757,7 +921,6 @@ export function createDocumentBodyEditor(
     let prepared = transaction
 
     try {
-      if (structuralCommandPending && transaction.docChanged && !remote) return
       if (readOnly && transaction.docChanged && !remote) return
       const menu = transaction.getMeta(blockMenuMeta) as
         | BlockMenuMeta
@@ -785,21 +948,7 @@ export function createDocumentBodyEditor(
         return
       }
       if (transaction.docChanged && !remote) {
-        // A suggestion only ever removes text that was never canonical.
-        if (!tracked && wouldRemoveInlineRun(state.doc, transaction.doc)) {
-          viewHolder.current?.updateState(state)
-          return
-        }
         prepared = prepareBodyTransaction(state, transaction)
-        const afterIDs = new Set(
-          prosemirrorToDocumentBody(prepared.doc).map((node) => node.nodeID)
-        )
-        if (
-          prosemirrorToDocumentBody(state.doc).some(
-            (node) => !afterIDs.has(node.nodeID)
-          )
-        )
-          throw new Error('structural deletion requires a DeleteNode command')
       }
       const result = state.applyTransaction(prepared)
       state = result.state
@@ -810,6 +959,9 @@ export function createDocumentBodyEditor(
         refreshComments()
       }
       publishInline()
+      // Deleting every block leaves no line to type on: add one.
+      if (!remote && state.doc.firstChild?.childCount === 0)
+        queueMicrotask(() => ensureEmptyParagraph())
       if (
         options.onSelectionChange &&
         !remote &&
@@ -819,25 +971,6 @@ export function createDocumentBodyEditor(
         if (selection) options.onSelectionChange(selection)
       }
     } catch (error) {
-      if (
-        error instanceof DeleteNodeRequiredError &&
-        queueDeleteNode(error.nodeIDs)
-      )
-        return
-      if (error instanceof MoveNodeRequiredError && options.onMoveNode) {
-        const move = {
-          nodeID: error.nodeID,
-          targetParentID: error.targetParentID,
-          beforeNodeID: error.beforeNodeID,
-        }
-        structuralCommandPending = true
-        viewHolder.current?.setProps({ editable: () => false })
-        void Promise.resolve()
-          .then(() => options.onMoveNode!(move))
-          .then(() => options.onMoveNodeQueued?.(move))
-          .catch((cause: unknown) => options.onTransactionError?.(cause))
-        return
-      }
       options.onTransactionError?.(error)
     }
   }
@@ -913,7 +1046,7 @@ export function createDocumentBodyEditor(
     state,
     nodeViews: options.nodeViews,
     dispatchTransaction,
-    editable: () => !readOnly && !structuralCommandPending,
+    editable: () => !readOnly,
     handleTextInput: (_view, from, to, text) => {
       if (!suggestMode) return false
       suggest(() => suggestReplace(state, from, to, text, suggestionOptions()))
@@ -960,7 +1093,6 @@ export function createDocumentBodyEditor(
       if (
         !direct ||
         readOnly ||
-        structuralCommandPending ||
         suggestMode ||
         node.type.name !== 'thematic_break'
       )
@@ -974,8 +1106,7 @@ export function createDocumentBodyEditor(
     },
     handleKeyDown: (editorView, event) => {
       // Keys pressed during IME composition belong to the input method.
-      if (readOnly || structuralCommandPending || event.isComposing)
-        return false
+      if (readOnly || event.isComposing) return false
       // In Suggest mode Backspace and Delete are recorded as deletions; blocks
       // are not queued commands on the canonical body.
       if (suggestMode) {
@@ -1033,6 +1164,37 @@ export function createDocumentBodyEditor(
         return true
       }
       if (
+        event.key === 'ArrowUp' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        options.onNavigateToTitle &&
+        editorView.state.selection.empty &&
+        state.doc.textBetween(
+          0,
+          editorView.state.selection.from,
+          '\n',
+          '\ufffc'
+        ) === ''
+      ) {
+        event.preventDefault()
+        options.onNavigateToTitle()
+        return true
+      }
+      // Right after a Markdown rule changed the line, Backspace gives the typed text back.
+      if (
+        event.key === 'Backspace' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        undoInputRule(editorView.state, (tr) => editorView.dispatch(tr))
+      ) {
+        event.preventDefault()
+        return true
+      }
+      if (
         !event.altKey &&
         !event.ctrlKey &&
         !event.metaKey &&
@@ -1044,6 +1206,18 @@ export function createDocumentBodyEditor(
           event.preventDefault()
           return true
         }
+      }
+      if (
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        event.key === 'Backspace' &&
+        (deleteLastHeadingCharacter(selectionNow(editorView)) ||
+          deleteBlankBlock(selectionNow(editorView)))
+      ) {
+        event.preventDefault()
+        return true
       }
       if (
         !event.altKey &&
@@ -1098,13 +1272,41 @@ export function createDocumentBodyEditor(
     },
   })
   viewHolder.current = view
-  // Deleting every block leaves an empty body; give the user a line to type on.
+  // Room to click below the last block, as on any page: it puts the caret on a
+  // line there, adding a paragraph first when the page ends in a block that has
+  // no text line (code block, table, list). Suggest mode only moves the caret.
+  const pageEnd = document.createElement('div')
+  pageEnd.className = 'dd-page-end'
+  pageEnd.setAttribute('aria-hidden', 'true')
+  pageEnd.addEventListener('click', () => {
+    if (!canEdit()) return
+    const body = state.doc.firstChild
+    const last = body?.lastChild
+    if (
+      body &&
+      last &&
+      !suggestMode &&
+      last.type !== documentBodySchema.nodes.paragraph
+    )
+      view.dispatch(
+        state.tr.insert(
+          body.content.size + 1,
+          documentBodySchema.nodes.paragraph!.create({
+            nodeID: crypto.randomUUID(),
+            bodyAttributes: '{}',
+            bodyContent: '',
+          })
+        )
+      )
+    view.dispatch(state.tr.setSelection(Selection.atEnd(state.doc)))
+    view.focus()
+  })
+  mount.append(pageEnd)
   const ensureEmptyParagraph = () => {
     const body = state.doc.firstChild
     if (!canEdit() || suggestMode || body?.childCount !== 0) return
-    view.dispatch(
-      state.tr.insert(1, documentBodySchema.nodes.paragraph!.create())
-    )
+    const tr = state.tr.insert(1, documentBodySchema.nodes.paragraph!.create())
+    view.dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(2))))
   }
   options.onEditorReady?.(view)
   if (view.state !== state) view.updateState(state)
@@ -1206,41 +1408,22 @@ export function createDocumentBodyEditor(
       (suggestMode
         ? runHeading(level)
         : setHeadingCommand(level)(state, view.dispatch)),
+    wrapBlock: (kind: WrapKind) =>
+      canEdit() && !suggestMode && wrapLineCommand(kind)(state, view.dispatch),
     toggleTask: () => canEdit() && toggleTaskChecked(state, view.dispatch),
     insertBlock: (kind: InsertableBlock) =>
       canEdit() && insertBlockCommand(kind)(state, view.dispatch),
     focus: () => view.focus(),
-    /**
-     * A DeleteNode finished and was merged in place: typing is allowed again.
-     * Undo history from before it is dropped, as rebuilding the editor used to
-     * do: undoing an edit to a block the command removed would delete nodes
-     * outside any command, and the server refuses that.
-     */
-    finishStructuralCommand: () => {
-      structuralCommandPending = false
-      undoManager?.clear()
-      view.setProps({ editable: () => !readOnly && !structuralCommandPending })
+    setNumberHeadings: (next: boolean) => {
+      numberHeadings = next
+      view.dispatch(view.state.tr.setMeta('numberHeadings', next))
     },
-    /** Puts the caret at the start or end of a text block and focuses the editor. */
-    focusBlock: (nodeID: string, edge: 'start' | 'end') => {
-      let target: { pos: number; size: number } | null = null
-      state.doc.descendants((node, pos) => {
-        if (target) return false
-        if (node.attrs.nodeID === nodeID && node.isTextblock)
-          target = { pos, size: node.nodeSize }
-        return !target
-      })
-      if (!target) return false
-      const { pos, size } = target as { pos: number; size: number }
-      const at = edge === 'start' ? pos + 1 : pos + size - 1
-      view.dispatch(
-        state.tr.setSelection(
-          TextSelection.near(state.doc.resolve(at), edge === 'start' ? 1 : -1)
-        )
-      )
+    /** Puts the caret at the very start of the text and focuses the editor. */
+    focusStart: () => {
+      view.dispatch(state.tr.setSelection(Selection.atStart(state.doc)))
       view.focus()
-      return true
     },
+    focusBlock: focusBlockAt,
     selectAll: selectAllContent,
     undo: () => canEdit() && undoYjs(state),
     redo: () => canEdit() && redoYjs(state),
@@ -1252,10 +1435,21 @@ export function createDocumentBodyEditor(
     setRemoteCursors: (cursors: RemoteCursor[]) => {
       remoteCursors = cursors
       view.dispatch(view.state.tr.setMeta(remoteCursorPlugin, 'refresh'))
+      if (!followedUser) return
+      const target = [
+        ...view.dom.querySelectorAll<HTMLElement>('.remote-cursor'),
+      ].find((caret) => caret.dataset.userId === followedUser)
+      target?.scrollIntoView({ block: 'center' })
+    },
+    /** Keeps this collaborator's cursor in view as it moves; null stops. */
+    follow: (userID: string | null) => {
+      followedUser = userID
     },
     setSuggestMode: (next: boolean) => {
       if (suggestMode !== next) continueSuggestion = false
       suggestMode = next
+      view.dom.dataset.suggestMode = String(next)
+      view.dom.dispatchEvent(new Event('dd-table-mode'))
     },
     getSuggestionCards: () => suggestionCards(state.doc),
     scrollToSuggestion: (id: string) => {
@@ -1299,7 +1493,7 @@ export function createDocumentBodyEditor(
       readOnly = next
       if (changed)
         view.setProps({
-          editable: () => !readOnly && !structuralCommandPending,
+          editable: () => !readOnly,
         })
       if (!next) ensureEmptyParagraph()
     },
@@ -1307,6 +1501,7 @@ export function createDocumentBodyEditor(
       undoManager?.off('stack-item-added', publishHistory)
       undoManager?.off('stack-item-popped', publishHistory)
       undoManager?.off('stack-cleared', publishHistory)
+      pageEnd.remove()
       view.destroy()
     },
   }
@@ -1322,39 +1517,6 @@ function bindControlAndMeta<T>(bindings: Record<string, T>) {
       bound[[modifier, ...parts, last].join('-')] = command
   }
   return bound
-}
-
-function wouldRemoveInlineRun(
-  beforeDoc: EditorState['doc'],
-  afterDoc: EditorState['doc']
-) {
-  const indexNodes = (doc: EditorState['doc']) => {
-    const ids = new Set<string>()
-    const runs = new Map<string, { parentID: string | null; text: string }>()
-    const visit = (node: EditorState['doc'], parentID: string | null) => {
-      const nodeID =
-        typeof node.attrs.nodeID === 'string' ? node.attrs.nodeID : null
-      if (nodeID) ids.add(nodeID)
-      if (node.type.name === 'run' && nodeID)
-        runs.set(nodeID, { parentID, text: node.textContent })
-      for (let index = 0; index < node.childCount; index++)
-        visit(node.child(index), nodeID ?? parentID)
-    }
-    visit(doc, null)
-    return { ids, runs }
-  }
-
-  const before = indexNodes(beforeDoc)
-  const after = indexNodes(afterDoc)
-  return [...before.runs].some(([nodeID, run]) => {
-    const next = after.runs.get(nodeID)
-    return (
-      run.text.length > 0 &&
-      (!next || next.text.length === 0) &&
-      run.parentID !== null &&
-      after.ids.has(run.parentID)
-    )
-  })
 }
 
 function blockNodeIDAt(doc: EditorState['doc'], position: number) {

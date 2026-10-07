@@ -33,11 +33,11 @@ func (r *Repository) ReadRoomHead(ctx context.Context, workspaceID, documentID u
 		var documentType string
 		err := tx.QueryRowContext(ctx, `
 			SELECT id, workspace_id, project_id, author_id, is_draft, visibility::text, updated_at, deleted_at,
-			       type::text, body_version, body_epoch, body_schema_version
+			       type::text
 			FROM documents WHERE id = $1 AND workspace_id = $2
 		`, documentID, workspaceID).Scan(
 			&doc.ID, &doc.WorkspaceID, &doc.ProjectID, &doc.AuthorID, &doc.IsDraft, &doc.Visibility, &doc.UpdatedAt,
-			&deletedAt, &documentType, &head.BodyVersion, &head.BodyEpoch, &head.BodySchemaVersion,
+			&deletedAt, &documentType,
 		)
 		if errors.Is(err, sql.ErrNoRows) {
 			return constant.ErrDocumentNotFound

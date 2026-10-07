@@ -1,5 +1,7 @@
 # Hold deletion of a run's last character in the editor
 
+> Superseded by [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md): the AST, epochs and structural commands no longer exist.
+
 The editor guard `wouldRemoveInlineRun` in `createDocumentBodyEditor.ts` drops a local transaction that would empty or remove an inline run while its parent block survives. A run's ID is replicated state; letting ProseMirror delete it would either lose the ID or need a `DeleteNode` for a node the user did not mean to delete.
 
 Two gestures are therefore separate:

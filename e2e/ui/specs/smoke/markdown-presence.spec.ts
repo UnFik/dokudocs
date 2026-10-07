@@ -1,5 +1,6 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { createdDocumentID, documentPayload } from "../../helpers/markdown-document";
 
 const apiURL = process.env.API_URL ?? "http://localhost:8080";
 
@@ -59,7 +60,7 @@ test("@live @smoke: users in the same Markdown document see each other's presenc
   );
   expect(invite.status()).toBe(201);
 
-  const documentID = randomUUID();
+  let documentID = "";
   const rootID = randomUUID();
   const paragraphID = randomUUID();
   const runID = randomUUID();
@@ -79,19 +80,15 @@ test("@live @smoke: users in the same Markdown document see each other's presenc
       title: `Presence doc ${suffix}`,
       type: "markdown",
       isDraft: false,
-      initialBody: {
-        documentID,
-        bodySchemaVersion: 1,
-        rootNodeID: rootID,
-        nodes: [
+      ...documentPayload([
           node(rootID, null, "document"),
           node(paragraphID, rootID, "paragraph"),
           node(runID, paragraphID, "run", "shared"),
-        ],
-      },
+        ]),
     },
   });
   expect(created.status()).toBe(201);
+  documentID = await createdDocumentID(created);
 
   await openDocument(owner.page, documentID, workspaceID);
   const ownerList = owner.page.getByRole("list", {

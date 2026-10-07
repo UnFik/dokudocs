@@ -1,13 +1,10 @@
-import './markdown-body.css'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import DOMPurify from 'dompurify'
-import { marked } from 'marked'
-import { getPublicDocument, getPublicMarkdownBody } from '@/lib/domain-api'
+import { getPublicDocument } from '@/lib/domain-api'
 import { rememberOpenedPublicLink } from '@/lib/public-link-session'
-import { documentBodyToMarkdown } from '../lib/muya/state/documentBodyToMarkdown'
-
-marked.setOptions({ gfm: true, breaks: true })
+import '../lib/prosemirror/blocks/blocks.css'
+import { drawDiagrams, renderMarkdown } from '../lib/render-markdown'
+import './markdown-body.css'
 
 export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
   const documentQuery = useQuery({
@@ -19,31 +16,20 @@ export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
     },
     retry: false,
   })
-  const bodyQuery = useQuery({
-    queryKey: ['public-markdown-body', shareToken],
-    queryFn: ({ signal }) => getPublicMarkdownBody(shareToken, signal),
-    enabled: documentQuery.data?.type === 'markdown',
-    retry: false,
-  })
-  const markdown = useMemo(
-    () => (bodyQuery.data ? documentBodyToMarkdown(bodyQuery.data.nodes) : ''),
-    [bodyQuery.data]
-  )
-  const html = useMemo(
-    () => DOMPurify.sanitize(marked.parse(markdown) as string),
-    [markdown]
-  )
+  const markdown = documentQuery.data?.content ?? ''
+  const html = useMemo(() => renderMarkdown(markdown), [markdown])
+  const articleRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (articleRef.current) void drawDiagrams(articleRef.current)
+  }, [html])
 
-  if (
-    documentQuery.isPending ||
-    (documentQuery.data?.type === 'markdown' && bodyQuery.isPending)
-  )
+  if (documentQuery.isPending)
     return (
       <p role='status' className='p-6'>
         Loading shared document…
       </p>
     )
-  if (documentQuery.error || !documentQuery.data || bodyQuery.error)
+  if (documentQuery.error || !documentQuery.data)
     return (
       <p role='alert' className='p-6'>
         This shared document is unavailable.
@@ -61,6 +47,7 @@ export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
         </p>
       </header>
       <article
+        ref={articleRef}
         aria-label='Document contents'
         className='markdown-body mx-auto max-w-4xl px-6 py-8 sm:px-10'
       >

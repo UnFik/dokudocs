@@ -1,5 +1,7 @@
 # Fail closed on local edit storage and clear pending edits at logout
 
+> Superseded by [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md): the AST, epochs and structural commands no longer exist.
+
 Dokudocs stops accepting new Markdown edits when IndexedDB cannot persist pending CRDT state. The editor distinguishes a successful device write from a durable PostgreSQL ACK. At logout or account switch, it offers synchronization or export when current read permission can be verified, then clears that User's local document state and command queue after logout is confirmed. Offline users can cancel logout and wait to reconnect; export is unavailable until read permission can be checked. This favors an honest saved status and privacy on shared devices over continuing with memory-only edits or retaining document content across accounts.
 
 Offline editing covers existing Markdown documents whose body was stored on the device after authorized access. Creating or importing a document requires a server connection. Within one browser profile, one tab may edit a given User+Document pair at a time; another tab must take over the writer role before editing. This limits conflicting writes to the same local pending queue while leaving collaboration across browsers and devices intact.

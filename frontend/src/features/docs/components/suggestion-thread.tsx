@@ -27,12 +27,15 @@ export function SuggestionThread({
   documentID,
   userID,
   canInteract = true,
+  focused = false,
 }: {
   suggestion: DocumentSuggestion
   workspaceID: string
   documentID: string
   userID: string
   canInteract?: boolean
+  /** The card was chosen: its reply box is open. */
+  focused?: boolean
 }) {
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
@@ -124,7 +127,7 @@ export function SuggestionThread({
           ))}
         </ul>
       ) : null}
-      {canInteract && !resolved ? (
+      {canInteract && !resolved && focused ? (
         <form
           className='mt-2 space-y-1'
           onSubmit={(event) => {

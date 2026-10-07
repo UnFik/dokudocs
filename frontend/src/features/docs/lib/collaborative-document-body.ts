@@ -1,48 +1,43 @@
-import * as Y from 'yjs'
-import type { MarkdownBodySnapshot } from '@/lib/domain-api'
+import { registerOpenDocument } from './collab-registry'
 import {
-  CollaborativeDocumentProvider,
-  type CollaborativeDocumentStatus,
-  type RecoveryReason,
-} from './collaboration-provider'
-import type { HeldEdit } from './collaboration-rebase'
-import {
-  decodeBase64,
-  type CollaborationSocketOptions,
+  openCollabSession,
+  type CollabAccess,
+  type CollabStatus,
   type PresenceUser,
-  type RemoteCursor,
-} from './collaboration-socket'
-import {
-  IndexedDBCollaborationStore,
-  type CollaborationStore,
-  type PendingDeleteNodeCommand,
-  type PendingMoveNodeCommand,
-  type PendingCollaborationUpdate,
-} from './collaboration-store'
+} from './collab-session'
 import type { DocumentBodyNode } from './documentBody'
+import { documentBodyToMarkdown } from './muya/state/documentBodyToMarkdown'
 import { blockEditing } from './prosemirror/blocks'
+import type { UploadedFile } from './prosemirror/blocks/uploads'
+import type { MentionCandidate } from './prosemirror/blocks/triggerMenu'
 import {
   createDocumentBodyEditor,
   type EditorHistoryState,
   type DocumentBodySelection,
-  type MoveNodeIntent,
 } from './prosemirror/createDocumentBodyEditor'
-import type { CaretHint } from './prosemirror/deleteTargets'
 import type { InlineState } from './prosemirror/inlineMarks'
 import type { SuggestionCard } from './prosemirror/suggestionCards'
 
-// A delete rebuilds the editor, so the place the caret should return to is kept
-// here, outside it, until the next editor for the same document asks.
-const caretHints = new Map<string, CaretHint>()
+// How long a first open waits for the server before showing an empty body.
+const firstSyncWaitMs = 4000
 
-type CollaborativeBodySnapshot = {
-  bodyVersion: number
-  bodyEpoch: number
-  compatEpoch?: number
-  bodySchemaVersion: number
-  canEdit: boolean
-  canSuggest?: boolean
-  encodedState: string
+const accessKey = (room: string) => `dokudocs:access:${room}`
+
+function cachedAccess(room: string): CollabAccess | null {
+  try {
+    const raw = window.localStorage.getItem(accessKey(room))
+    return raw ? (JSON.parse(raw) as CollabAccess) : null
+  } catch {
+    return null
+  }
+}
+
+function cacheAccess(room: string, access: CollabAccess) {
+  try {
+    window.localStorage.setItem(accessKey(room), JSON.stringify(access))
+  } catch {
+    // The cache only lets an offline reload keep its mode.
+  }
 }
 
 export async function mountCollaborativeDocumentBody(
@@ -51,35 +46,24 @@ export async function mountCollaborativeDocumentBody(
     documentID: string
     workspaceID: string
     userID: string
+    userName?: string
     token: string | (() => string)
-    snapshot: CollaborativeBodySnapshot
     focusNodeID?: string
-    store?: CollaborationStore
-    executeDeleteNode?: (
-      command: PendingDeleteNodeCommand
-    ) => Promise<MarkdownBodySnapshot>
-    executeMoveNode?: (
-      command: PendingMoveNodeCommand
-    ) => Promise<MarkdownBodySnapshot>
-    socketFactory?: CollaborationSocketOptions['socketFactory']
-    baseURL?: string
+    url?: string
     readOnly?: boolean
-    onStatus?: (status: CollaborativeDocumentStatus) => void
-    onCanEdit?: (canEdit: boolean) => void
+    smartText?: () => boolean
+    maxCharacters?: number
+    resolveLinkTitle?: (href: string) => Promise<string | null>
+    mentionSource?: (query: string) => Promise<MentionCandidate[]>
+    upload?: (file: File) => Promise<UploadedFile>
+    resolveAsset?: (src: string) => Promise<string>
+    onUploadError?: (message: string) => void
+    onHeadingLink?: (nodeID: string) => void
+    onNavigateToTitle?: () => void
+    onStatus?: (status: CollabStatus) => void
+    onAccess?: (access: CollabAccess) => void
     onPresence?: (users: PresenceUser[]) => void
-    onRecovery?: (
-      reason: RecoveryReason,
-      pending: PendingCollaborationUpdate[],
-      deleteCommands: PendingDeleteNodeCommand[],
-      moveCommands: PendingMoveNodeCommand[]
-    ) => void
-    onBodyAdvanced?: (body: MarkdownBodySnapshot) => void
-    onEditDropped?: (code: string) => void
-    onCanonicalBody?: (body: MarkdownBodySnapshot) => void
-    onHeldEdits?: (edits: HeldEdit[]) => void
     onBodyChange?: (body: DocumentBodyNode[]) => void
-    onDeleteNodeQueued?: (nodeID: string) => void
-    onMoveNodeQueued?: (move: MoveNodeIntent) => void
     onTransactionError?: (error: unknown) => void
     onHistoryChange?: (history: EditorHistoryState) => void
     onInlineStateChange?: (state: InlineState) => void
@@ -88,110 +72,73 @@ export async function mountCollaborativeDocumentBody(
     onSuggestionCards?: (cards: SuggestionCard[]) => void
     onSuggestionClick?: (id: string) => void
     onCommentsChanged?: () => void
+    onReloaded?: () => void
     onCommentPositions?: (positions: Record<string, number | null>) => void
     onCommentClick?: (id: string) => void
     onCommentRequest?: () => void
   }
 ) {
-  const document = new Y.Doc()
-  let provider: CollaborativeDocumentProvider | undefined
+  const room = `${input.workspaceID}.${input.documentID}`
   const forceReadOnly = input.readOnly ?? false
-  let editorReadOnly = forceReadOnly || !input.snapshot.canEdit
-  let setEditorReadOnly = (readOnly: boolean) => {
-    editorReadOnly = readOnly
-  }
+  const known = cachedAccess(room)
+  // Until the server says what this person may do, the body is read-only.
+  let access: CollabAccess = known ?? { canEdit: false, canSuggest: false }
+  let setReadOnly = (_readOnly: boolean) => {}
+  let showCursors: Parameters<
+    typeof openCollabSession
+  >[0]['onCursors'] = () => {}
+  const session = openCollabSession({
+    workspaceID: input.workspaceID,
+    documentID: input.documentID,
+    userID: input.userID,
+    userName: input.userName,
+    token: input.token,
+    url: input.url,
+    onStatus: (status) => {
+      if (status === 'unauthorized' || status === 'forbidden') setReadOnly(true)
+      input.onStatus?.(status)
+    },
+    onAccess: (next) => {
+      access = next
+      cacheAccess(room, next)
+      setReadOnly(forceReadOnly || !next.canEdit)
+      input.onAccess?.(next)
+    },
+    onPresence: input.onPresence,
+    onCursors: (cursors) => showCursors?.(cursors),
+    onCommentsChanged: input.onCommentsChanged,
+    onReloaded: input.onReloaded,
+  })
+  let editorDestroyed = false
   let destroyEditor = () => {}
-  let showRemoteCursors: (cursors: RemoteCursor[]) => void = () => {}
-  let finishStructural = () => {}
-  const cursorSender = createCursorSender((selection) =>
-    provider?.sendCursor(selection)
-  )
-  let bodyDestroyed = false
-  const destroyBody = () => {
-    if (bodyDestroyed) return
-    bodyDestroyed = true
-    document.destroy()
-  }
   try {
-    Y.applyUpdate(document, decodeBase64(input.snapshot.encodedState))
-    const status: { current: CollaborativeDocumentStatus } = {
-      current: 'connecting',
-    }
-    provider = new CollaborativeDocumentProvider({
-      documentID: input.documentID,
-      workspaceID: input.workspaceID,
-      userID: input.userID,
-      token: input.token,
-      document,
-      bodyVersion: input.snapshot.bodyVersion,
-      bodyEpoch: input.snapshot.bodyEpoch,
-      compatEpoch: input.snapshot.compatEpoch,
-      bodySchemaVersion: input.snapshot.bodySchemaVersion,
-      canEdit: input.snapshot.canEdit,
-      canSuggest: input.snapshot.canSuggest,
-      store: input.store ?? new IndexedDBCollaborationStore(),
-      executeDeleteNode: input.executeDeleteNode,
-      executeMoveNode: input.executeMoveNode,
-      socketFactory: input.socketFactory,
-      baseURL: input.baseURL,
-      onStatus: (next) => {
-        status.current = next
-        if (
-          next === 'storage-error' ||
-          next === 'recovery-required' ||
-          next === 'unauthorized' ||
-          next === 'forbidden'
-        )
-          setEditorReadOnly(true)
-        if (next === 'forbidden') {
-          destroyEditor()
-          mount.replaceChildren()
-          destroyBody()
-        }
-        input.onStatus?.(next)
-      },
-      onRecovery: input.onRecovery,
-      onPresence: input.onPresence,
-      onRemoteCursors: (cursors) => showRemoteCursors(cursors),
-      onCommentsChanged: input.onCommentsChanged,
-      onCanonicalBody: input.onCanonicalBody,
-      onBodyAdvanced: (body) => {
-        finishStructural()
-        input.onBodyAdvanced?.(body)
-      },
-      onEditDropped: input.onEditDropped,
-      onHeldEdits: input.onHeldEdits,
-      onCanEdit: (canEdit) => {
-        // A caller that handles onCanEdit owns the mode, whether or not it asked
-        // for a read-only editor to start with. Setting read-only here first
-        // would flip the editor off and on again on every resync, and a
-        // contenteditable that flips loses focus in the middle of typing.
-        if (!input.onCanEdit) setEditorReadOnly(forceReadOnly || !canEdit)
-        input.onCanEdit?.(canEdit)
-      },
-    })
-    await provider.start()
-    if (
-      status.current === 'storage-error' ||
-      status.current === 'unauthorized' ||
-      status.current === 'forbidden'
-    )
-      throw new Error(`collaboration cannot start: ${status.current}`)
-    if (status.current === 'closed' || status.current === 'recovery-required')
-      editorReadOnly = true
+    await session.loaded
+    // A body that is empty here may only be empty because the server has not
+    // answered yet: wait, or the editor would add a paragraph of its own.
+    if (session.ydoc.getXmlFragment('body').length === 0)
+      await Promise.race([
+        session.synced,
+        new Promise((resolve) => setTimeout(resolve, firstSyncWaitMs)),
+      ])
+    if (known) input.onAccess?.(known)
 
-    const blocks = blockEditing()
-    const editor = createDocumentBodyEditor(mount, document, {
-      readOnly: editorReadOnly,
+    const blocks = blockEditing({
+      upload: input.upload,
+      resolveSource: input.resolveAsset,
+      onUploadError: input.onUploadError,
+    })
+    const editor = createDocumentBodyEditor(mount, session.ydoc, {
+      readOnly: forceReadOnly || !access.canEdit,
+      smartText: input.smartText,
+      maxCharacters: input.maxCharacters,
+      resolveLinkTitle: input.resolveLinkTitle,
+      mentionSource: input.mentionSource,
+      onHeadingLink: input.onHeadingLink,
+      onNavigateToTitle: input.onNavigateToTitle,
       plugins: blocks.plugins,
       nodeViews: blocks.nodeViews,
       onEditorReady: blocks.attach,
       onBodyChange: input.onBodyChange,
-      onDeleteNode: (nodeIDs) => provider!.deleteNode(nodeIDs),
-      onDeleteNodeQueued: input.onDeleteNodeQueued,
-      onCaretHint: (hint) => caretHints.set(input.documentID, hint),
-      onMoveNode: (move) => provider!.moveNode(move),
-      onMoveNodeQueued: input.onMoveNodeQueued,
       onTransactionError: input.onTransactionError,
       onHistoryChange: input.onHistoryChange,
       onInlineStateChange: input.onInlineStateChange,
@@ -203,91 +150,54 @@ export async function mountCollaborativeDocumentBody(
       onCommentPositions: input.onCommentPositions,
       onCommentClick: input.onCommentClick,
       onCommentRequest: input.onCommentRequest,
-      onSelectionChange: cursorSender.send,
+      onSelectionChange: (selection: DocumentBodySelection | null) =>
+        session.setCursor(selection),
     })
-    showRemoteCursors = (cursors) => editor.setRemoteCursors(cursors)
-    const placeCaret = () => {
-      const caretHint = caretHints.get(input.documentID)
-      caretHints.delete(input.documentID)
-      if (caretHint && !editorReadOnly)
-        requestAnimationFrame(() =>
-          editor.focusBlock(caretHint.nodeID, caretHint.edge)
-        )
-    }
-    finishStructural = () => {
-      editor.finishStructuralCommand()
-      placeCaret()
-    }
-    placeCaret()
-    if (input.focusNodeID) {
+    showCursors = (cursors) => editor.setRemoteCursors(cursors)
+    setReadOnly = (readOnly) => editor.setReadOnly(readOnly)
+    const hashTarget = window.location.hash.startsWith('#node-')
+      ? window.location.hash.slice('#node-'.length)
+      : undefined
+    const focusNodeID = input.focusNodeID ?? hashTarget
+    if (focusNodeID) {
       requestAnimationFrame(() => {
         const target = Array.from(
           mount.querySelectorAll<HTMLElement>('[data-node-id]')
-        ).find((node) => node.dataset.nodeId === input.focusNodeID)
+        ).find((node) => node.dataset.nodeId === focusNodeID)
         target?.scrollIntoView?.({ block: 'center' })
       })
     }
-    setEditorReadOnly = (readOnly) => {
-      editorReadOnly = readOnly
-      editor.setReadOnly(readOnly)
-    }
-    let editorDestroyed = false
+    let destroyed = false
+    const unregister = registerOpenDocument({
+      userID: input.userID,
+      documentID: input.documentID,
+      workspaceID: input.workspaceID,
+      unsyncedChanges: session.unsyncedChanges,
+      drained: session.drained,
+      markdown: () => documentBodyToMarkdown(editor.getBody()),
+      destroy: () => api.destroy(),
+    })
     destroyEditor = () => {
       if (editorDestroyed) return
       editorDestroyed = true
-      cursorSender.cancel()
       editor.destroy()
     }
-    return {
-      document,
+    const api = {
+      document: session.ydoc,
       editor,
-      provider,
+      session,
       destroy() {
-        provider?.stop()
+        if (destroyed) return
+        destroyed = true
+        unregister()
         destroyEditor()
-        destroyBody()
+        session.destroy()
       },
     }
+    return api
   } catch (error) {
-    provider?.stop()
     destroyEditor()
-    destroyBody()
+    session.destroy()
     throw error
-  }
-}
-
-const cursorIntervalMs = 100
-
-/**
- * Sends the first selection change at once, then at most one per interval
- * (the latest wins). A null selection (focus lost) is sent immediately so
- * others stop seeing a cursor that is no longer there.
- */
-function createCursorSender(
-  send: (selection: DocumentBodySelection | null) => void
-) {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let pending: DocumentBodySelection | null | undefined
-  const flush = () => {
-    timer = undefined
-    if (pending === undefined) return
-    const next = pending
-    pending = undefined
-    send(next)
-    timer = setTimeout(flush, cursorIntervalMs)
-  }
-  return {
-    send(selection: DocumentBodySelection | null) {
-      pending = selection
-      if (selection === null || timer === undefined) {
-        if (timer) clearTimeout(timer)
-        flush()
-      }
-    },
-    cancel() {
-      if (timer) clearTimeout(timer)
-      timer = undefined
-      pending = undefined
-    },
   }
 }

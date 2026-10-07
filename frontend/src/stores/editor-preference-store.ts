@@ -11,6 +11,10 @@ export interface UserEditorPreference {
   isLiveRenderActive: boolean
   syncScroll: boolean
   showOutline?: boolean
+  /** Curly quotes, arrows and an ellipsis as the person types. */
+  smartText?: boolean
+  /** Numbers the headings 1, 1.1, 1.2 as a reading aid. */
+  numberHeadings?: boolean
   previewMode?: MarkdownPreviewMode
 }
 
@@ -43,6 +47,11 @@ interface EditorPreferenceState {
   setPreviewMode: (
     userId: string | null | undefined,
     previewMode: MarkdownPreviewMode
+  ) => void
+  setSmartText: (userId: string | null | undefined, smartText: boolean) => void
+  setNumberHeadings: (
+    userId: string | null | undefined,
+    numberHeadings: boolean
   ) => void
 }
 
@@ -115,6 +124,32 @@ export const useEditorPreferenceStore = create<EditorPreferenceState>()(
                 ...current,
                 syncScroll,
               },
+            },
+          }
+        })
+      },
+
+      setNumberHeadings: (userId, numberHeadings) => {
+        const key = userId || 'guest'
+        set((state) => {
+          const current = state.preferencesByUser[key] ?? DEFAULT_PREFERENCE
+          return {
+            preferencesByUser: {
+              ...state.preferencesByUser,
+              [key]: { ...current, numberHeadings },
+            },
+          }
+        })
+      },
+
+      setSmartText: (userId, smartText) => {
+        const key = userId || 'guest'
+        set((state) => {
+          const current = state.preferencesByUser[key] ?? DEFAULT_PREFERENCE
+          return {
+            preferencesByUser: {
+              ...state.preferencesByUser,
+              [key]: { ...current, smartText },
             },
           }
         })
