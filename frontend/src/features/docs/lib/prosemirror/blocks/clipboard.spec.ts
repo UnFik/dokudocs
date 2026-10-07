@@ -236,6 +236,19 @@ describe('sliceToMarkdown', () => {
 })
 
 describe('normalizePastedMarkdown', () => {
+  it('joins table rows that came one to a paragraph', () => {
+    const spaced =
+      '| a | b |\n\n| :-- | :-- |\n\n| 1 | 2 |\n\n| 3 | 4 |\n\nafter'
+    expect(normalizePastedMarkdown(spaced)).toBe(
+      '| a | b |\n| :-- | :-- |\n| 1 | 2 |\n| 3 | 4 |\n\nafter'
+    )
+  })
+
+  it('leaves separate one-line pipe paragraphs alone', () => {
+    const text = '| a |\n\n| b |\n\n| c |'
+    expect(normalizePastedMarkdown(text)).toBe(text)
+  })
+
   it('drops the spaces that end a list item or a paragraph, and keeps a real line break', () => {
     const text = [
       '1. first  ',
