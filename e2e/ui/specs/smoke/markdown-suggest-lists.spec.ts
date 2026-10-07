@@ -234,6 +234,9 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await commenterEditor.getByText("Apples").click();
     await commenter.keyboard.press("End");
     await commenter.keyboard.press("Enter");
+    // Typing reads the editor's own selection, which moves to the new line a
+    // moment after Enter; the empty line is marked once it has.
+    await expect(commenterEditor.locator(".dd-empty-line")).toHaveCount(1);
     await commenter.keyboard.type("Pears");
     await expect(ownerCards).toContainText('Add: “Pears”');
     await expect(ownerEditor.locator("li")).toHaveCount(2);
@@ -265,6 +268,9 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await commenterEditor.getByText("Quoted").click();
     await commenter.keyboard.press("End");
     await commenter.keyboard.press("Enter");
+    // Typing reads the editor's own selection, which moves to the new line a
+    // moment after Enter; the empty line is marked once it has.
+    await expect(commenterEditor.locator(".dd-empty-line")).toHaveCount(1);
     await commenter.keyboard.type("More");
     await expect(ownerCards).toContainText('Add: “More”');
     await expect(ownerEditor.locator("blockquote p")).toHaveCount(2);
@@ -281,6 +287,9 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await commenterEditor.getByText("Quoted").click();
     await commenter.keyboard.press("End");
     await commenter.keyboard.press("Enter");
+    // The slash menu reads the editor's own selection. The empty line is marked
+    // only once the editor has moved there, so wait for it before typing.
+    await expect(commenterEditor.locator(".dd-empty-line")).toHaveCount(1);
     await commenter.keyboard.type("/");
     const menu = commenter.getByRole("combobox", { name: "Insert block" });
     await expect(menu).toBeFocused();

@@ -331,8 +331,9 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
       name: "Suggestions and comments",
     });
     await expect(viewerRail).toContainText("Is this word needed?");
+    // The info line's Comment button only opens this panel; nothing in the panel adds a comment.
     await expect(
-      viewer.getByRole("button", { name: "Comment", exact: true }),
+      viewerRail.getByRole("button", { name: "Comment", exact: true }),
     ).toHaveCount(0);
     await expect(viewerRail.getByLabel("Reply")).toHaveCount(0);
     await expect(

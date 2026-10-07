@@ -156,17 +156,23 @@ test("@live @smoke @markdowninput: an empty notice goes away with Backspace in i
   page,
 }) => {
   const { editor } = await openMarkdownDocument(page, ["", "after"]);
+  // Pasted, so that no Markdown rule is the latest edit: Backspace right after a
+  // typed rule gives the typed text back instead (see undoInputRule.spec.ts).
   await editor.locator("p").first().click();
-  await page.keyboard.type(":::tip ");
+  await page.keyboard.press("Home");
+  await pastePlainText(page, ":::tip\n\n:::");
   await expect(editor.locator(".dd-notice-tip")).toHaveCount(1);
+  await editor.locator(".dd-notice-tip").click();
   await page.keyboard.press("Backspace");
   await expect(editor.locator(".dd-notice-tip")).toHaveCount(0);
   await expect(editor).toContainText("after");
+  await expect(editor.getByText(":::tip")).toHaveCount(0);
 
   await editor.locator("p").first().click();
   await page.keyboard.press("Home");
-  await page.keyboard.type(":::warning ");
+  await pastePlainText(page, ":::warning\n\n:::");
   await expect(editor.locator(".dd-notice-warning")).toHaveCount(1);
+  await editor.locator(".dd-notice-warning").click();
   await page.locator(".dd-handle:not([hidden])").click();
   await page.keyboard.press("Backspace");
   await expect(editor.locator(".dd-notice-warning")).toHaveCount(0);
