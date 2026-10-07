@@ -1,4 +1,9 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { authorColor } from '../lib/author-color'
 import type { PresenceUser } from '../lib/collab-session'
 
@@ -35,47 +40,61 @@ export function PresenceAvatars({
     >
       {visible.map((user) => {
         const label = `${user.name || 'Anonymous'}${user.userID === currentUserID ? ' (you)' : ''}`
+        const name = user.name || 'Anonymous'
         const avatar = (
-            <Avatar
-              className='size-6 border-2 ring-2 ring-background'
-              style={{ borderColor: authorColor(user.userID) }}
-            >
-              {user.avatarURL ? (
-                <AvatarImage src={user.avatarURL} alt='' />
-              ) : null}
-              <AvatarFallback className='bg-muted text-[10px] font-semibold text-foreground'>
-                {initials(user.name)}
-              </AvatarFallback>
-            </Avatar>
+          <Avatar
+            className='size-6 border-2 ring-2 ring-background'
+            style={{ borderColor: authorColor(user.userID) }}
+          >
+            {user.avatarURL ? (
+              <AvatarImage src={user.avatarURL} alt='' />
+            ) : null}
+            <AvatarFallback className='bg-muted text-[10px] font-semibold text-foreground'>
+              {initials(user.name)}
+            </AvatarFallback>
+          </Avatar>
         )
         const followable = onFollow && user.userID !== currentUserID
         const following = followedID === user.userID
-        const name = user.name || 'Anonymous'
         return (
-          <li key={user.userID} aria-label={label} title={label}>
-            {followable ? (
-              <button
-                type='button'
-                aria-label={`${following ? 'Stop following' : 'Follow'} ${name}`}
-                aria-pressed={following}
-                className='rounded-full focus-visible:ring-2'
-                onClick={() => onFollow(following ? null : user.userID)}
-              >
-                {avatar}
-              </button>
-            ) : (
-              avatar
-            )}
+          <li key={user.userID} aria-label={label}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {followable ? (
+                  <button
+                    type='button'
+                    aria-label={`${following ? 'Stop following' : 'Follow'} ${name}`}
+                    aria-pressed={following}
+                    className='rounded-full focus-visible:ring-2'
+                    onClick={() => onFollow(following ? null : user.userID)}
+                  >
+                    {avatar}
+                  </button>
+                ) : (
+                  <span className='inline-flex rounded-full'>{avatar}</span>
+                )}
+              </TooltipTrigger>
+              <TooltipContent>{label}</TooltipContent>
+            </Tooltip>
           </li>
         )
       })}
       {hidden > 0 ? (
         <li
           aria-label={`${hidden} more people`}
-          title={`${hidden} more people`}
           className='z-10 flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground ring-2 ring-background'
         >
-          +{hidden}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>+{hidden}</span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {users
+                .slice(maxVisible)
+                .map((user) => user.name || 'Anonymous')
+                .join(', ')}
+            </TooltipContent>
+          </Tooltip>
         </li>
       ) : null}
     </ul>
