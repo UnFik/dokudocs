@@ -70,6 +70,18 @@ func TestInitRoutes(t *testing.T) {
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
+			name:           "Protected catalog requires auth",
+			method:         http.MethodGet,
+			path:           "/api/v1/catalog",
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "Protected catalog requests require auth",
+			method:         http.MethodPost,
+			path:           "/api/v1/catalog/requests",
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
 			name:           "Protected Projects requires auth",
 			method:         http.MethodGet,
 			path:           "/api/v1/projects",
