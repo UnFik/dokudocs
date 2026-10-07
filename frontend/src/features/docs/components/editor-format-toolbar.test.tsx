@@ -8,6 +8,7 @@ import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
 
 const selected: InlineState = {
   hasSelection: true,
+  block: 'paragraph',
   marks: {
     strong: true,
     em: false,

@@ -211,7 +211,13 @@ export function tableControlsPlugin(
         const meta = tr.getMeta(controlsKey) as ControlsState | undefined
         if (meta) return meta
         // The caret moving elsewhere ends a selection of rows or columns.
-        if (tr.selectionSet && (value.selected || value.cells) && !value.drag)
+        if (
+          tr.selectionSet &&
+          !pickingCells &&
+          !oldState.selection.eq(newState.selection) &&
+          (value.selected || value.cells) &&
+          !value.drag
+        )
           return empty
         return value
       },
