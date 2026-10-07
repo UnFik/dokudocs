@@ -1,7 +1,11 @@
 /** What a user may do in one document. A viewer can only read, a commenter can only suggest. */
 export type Access = { canRead: boolean; canEdit: boolean; canSuggest: boolean }
 
-export type Authorized = Access & { userID: string }
+/** The kinds of document that have a room. DBML and Mermaid documents stay plain text (ADR 0001). */
+export type DocumentType = 'markdown' | 'architecture'
+
+/** `documentType` is absent from an API that predates Architecture documents; that means Markdown. */
+export type Authorized = Access & { userID: string; documentType?: DocumentType | string }
 
 /** What is kept of a document: the Yjs state and the JSON derived from it. */
 export type StoredDocument = {
@@ -11,7 +15,7 @@ export type StoredDocument = {
   state: Uint8Array
   /** The document as ProseMirror JSON. */
   content: unknown
-  /** The same document as Markdown, for previews, search and exports. */
+  /** The same document as text, for previews, search and exports: Markdown, or an Architecture summary. */
   markdown: string
   /** The user whose edit this store is for, when it is known. */
   updatedBy: string | null
