@@ -73,6 +73,8 @@ services:
       RAG_REQUEST_TIMEOUT: ${RAG_REQUEST_TIMEOUT:-120s}
       JWT_SECRET: ${JWT_SECRET:-dev-secret}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-24h}
+      # Uploaded files live in their own volume, not in the bind-mounted source tree.
+      ASSET_DIR: /var/lib/dokudocs/assets
       READ_TIMEOUT: ${READ_TIMEOUT:-5s}
       WRITE_TIMEOUT: ${WRITE_TIMEOUT:-10s}
       IDLE_TIMEOUT: ${IDLE_TIMEOUT:-60s}
@@ -83,6 +85,7 @@ services:
       - "${API_PORT:-8080}:8080"
     volumes:
       - ./backend:/app
+      - assets:/var/lib/dokudocs/assets
       - go_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
     depends_on:
@@ -135,6 +138,7 @@ services:
 
 # Reuse the volumes created by backend/docker-compose.yaml so existing dev data carries over.
 volumes:
+  assets:
   postgres_data:
     name: backend_postgres_data
   go_cache:
