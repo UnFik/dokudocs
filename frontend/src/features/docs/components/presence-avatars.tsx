@@ -49,7 +49,7 @@ export function PresenceAvatars({
             {user.avatarURL ? (
               <AvatarImage src={user.avatarURL} alt='' />
             ) : null}
-            <AvatarFallback className='bg-muted text-[10px] font-semibold text-foreground'>
+            <AvatarFallback className='bg-muted text-[10px] leading-none font-semibold text-foreground'>
               {initials(user.name)}
             </AvatarFallback>
           </Avatar>
@@ -57,7 +57,7 @@ export function PresenceAvatars({
         const followable = onFollow && user.userID !== currentUserID
         const following = followedID === user.userID
         return (
-          <li key={user.userID} aria-label={label}>
+          <li key={user.userID} aria-label={label} className='flex'>
             <Tooltip>
               <TooltipTrigger asChild>
                 {followable ? (
