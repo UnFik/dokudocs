@@ -779,26 +779,33 @@ export function createDocumentBodyEditor(
     return queueDeleteNode([join.deleteNodeID])
   }
 
-  // Backspace on the empty line of a notice or toggle that holds nothing else
-  // removes the whole box.
-  const deleteBlankContainer = (selection: Selection) => {
+  // Backspace on an empty line that is all there is of its block (a heading, a
+  // list item, a quote, a code, math or diagram block) or all that a notice,
+  // toggle or untouched table holds removes the block.
+  const deleteBlankBlock = (selection: Selection) => {
     if (!selection.empty || !canEdit()) return false
     const $pos = selection.$from
-    if (!$pos.parent.isTextblock || $pos.parent.textContent !== '') return false
-    for (let depth = $pos.depth - 1; depth > 0; depth--) {
-      const node = $pos.node(depth)
-      if (!['notice', 'toggle'].includes(node.type.name)) continue
-      let blank = true
-      node.descendants((child) => {
-        if (child.isText || (child.isLeaf && child.isInline)) blank = false
-        if (child.isAtom && !child.isInline) blank = false
-        return blank
-      })
-      const nodeID = node.attrs.nodeID
-      if (!blank || typeof nodeID !== 'string') return false
-      return queueDeleteNode([nodeID])
-    }
-    return false
+    let line = $pos.depth
+    while (line > 0 && !$pos.node(line).isTextblock) line--
+    if (line < 2 || $pos.node(line).textContent !== '') return false
+    const top = $pos.node(2)
+    if (top.type.name === 'paragraph') return false
+    let blank = true
+    let textblocks = top.isTextblock ? 1 : 0
+    top.descendants((child) => {
+      if (child.isText || (child.isLeaf && child.isInline)) blank = false
+      if (child.isAtom && !child.isInline) blank = false
+      if (child.isTextblock) textblocks++
+      return blank
+    })
+    const nodeID = top.attrs.nodeID
+    if (!blank || typeof nodeID !== 'string') return false
+    const wholeBoxTypes = ['notice', 'toggle', 'table']
+    if (textblocks !== 1 && !wholeBoxTypes.includes(top.type.name)) return false
+    // A table goes only from its first cell, so moving between cells is safe.
+    if (top.type.name === 'table' && $pos.before(line) !== $pos.start(2) + 1)
+      return false
+    return queueDeleteNode([nodeID])
   }
 
   // Delete at the end of a paragraph, or Backspace at the start of one, next to
@@ -828,7 +835,10 @@ export function createDocumentBodyEditor(
       key === 'Delete' ? index + 1 : index - 1
     )
     const nodeID = neighbour?.attrs.nodeID
-    if (neighbour?.type.name !== 'thematic_break' || typeof nodeID !== 'string')
+    if (
+      !['thematic_break', 'page_break'].includes(neighbour?.type.name ?? '') ||
+      typeof nodeID !== 'string'
+    )
       return false
     return queueDeleteNode([nodeID])
   }
@@ -1175,7 +1185,7 @@ export function createDocumentBodyEditor(
         !event.metaKey &&
         !event.shiftKey &&
         event.key === 'Backspace' &&
-        deleteBlankContainer(selectionNow(editorView))
+        deleteBlankBlock(selectionNow(editorView))
       ) {
         event.preventDefault()
         return true
