@@ -452,9 +452,14 @@ export function createDocumentBodyEditor(
       command(stateAtDomSelection(view), (tr) => view.dispatch(tr))
     return true
   }
+  // Like runInline, from the selection the browser has now: Enter pressed right
+  // after a click would otherwise split the line the caret was in before it.
   const runBlock = (command: Command) => {
     if (!canEdit()) return false
-    return command(state, (tr) => viewHolder.current?.dispatch(tr))
+    const view = viewHolder.current
+    return command(view ? stateAtDomSelection(view) : state, (tr) =>
+      view?.dispatch(tr)
+    )
   }
   let lastInline = emptyInlineState
   const publishInline = () => {

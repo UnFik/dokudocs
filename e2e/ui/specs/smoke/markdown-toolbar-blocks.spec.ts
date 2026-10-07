@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import {
   expectNoInternalMessage,
   openMarkdownDocument,
+  settleSelection,
 } from "../../helpers/markdown-document";
 
 // The selection toolbar turns the selected line into a heading, a quote, a
@@ -16,9 +17,18 @@ test("@live @smoke @markdowntoolbar: the selection toolbar sets headings and wra
   const { editor } = await openMarkdownDocument(page, ["first line"]);
   const toolbar = page.getByRole("toolbar", { name: "Format selection" });
   const select = async () => {
-    await editor.getByText("first line").first().click();
-    await page.keyboard.press("Home");
-    await page.keyboard.press("Shift+End");
+    // Click, then select the line with the keys: retried until the browser has
+    // the whole line selected, since the keys can reach the editor before it has
+    // heard where the click put the caret.
+    await expect(async () => {
+      await editor.getByText("first line").first().click();
+      await settleSelection(page, { collapsed: true });
+      await page.keyboard.press("Home");
+      await page.keyboard.press("Shift+End");
+      expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
+        "first line",
+      );
+    }).toPass({ timeout: 15_000 });
     await expect(toolbar).toBeVisible();
   };
 

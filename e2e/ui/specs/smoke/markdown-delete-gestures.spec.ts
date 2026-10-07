@@ -1,6 +1,10 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { createdDocumentID, documentPayload } from "../../helpers/markdown-document";
+import {
+  createdDocumentID,
+  documentPayload,
+  settleSelection,
+} from "../../helpers/markdown-document";
 
 // Structural deletes round-trip to the server and remount the editor, so they
 // take longer than the default assertion wait.
@@ -383,6 +387,7 @@ test("@live @smoke @deletegestures: emptying a line and pressing Backspace again
     await expect(editor).not.toContainText("Beta");
     await expect(editor.locator("p")).toHaveCount(3);
     // The caret is put back after the delete: no click needed to go on.
+    await settleSelection(page, { collapsed: true });
     await page.keyboard.press("Backspace");
     await expect(editor.locator("p")).toHaveCount(2);
     await expectNoReviewBanner(page);
@@ -488,12 +493,14 @@ test("@live @smoke @deletegestures: Ctrl+Z after joining two lines does not brea
   const { editor } = await openDocument(page, threeParagraphs);
   await diagnose(async () => {
     await editor.locator("p").filter({ hasText: "Beta" }).click();
+    await settleSelection(page, { collapsed: true });
     await page.keyboard.press("Home");
     await page.keyboard.press("Backspace");
     await expect(editor.locator("p")).toHaveCount(2);
     await expect(page.getByRole("status")).toContainText("Synced");
     await expect(editor).toBeVisible();
     await editor.locator("p").first().click();
+    await settleSelection(page, { collapsed: true });
     await page.keyboard.press("ControlOrMeta+z");
     await expectNoReviewBanner(page);
     await expect(page.getByRole("status")).toContainText("Synced");
@@ -585,6 +592,7 @@ test("@live @smoke @deletegestures: after a line is deleted the caret is back an
     await expect(editor.locator("p").first())
       .toBeFocused({ timeout: 10000 })
       .catch(() => {});
+    await settleSelection(page, { collapsed: true });
     await page.keyboard.type("X");
     await expect(editor).toContainText("X");
     await expectNoReviewBanner(page);
