@@ -53,12 +53,13 @@ func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, document
 	return s.db.WithTransaction(ctx, func(tx database.Queryer) error {
 		var authorID uuid.UUID
 		var bodyVersion int64
+		var documentType string
 		err := tx.QueryRowContext(ctx, `
 			UPDATE documents SET content_json = $3, content = $4, body_version = body_version + 1, updated_at = NOW(),
 			    updated_by = COALESCE($5, updated_by)
 			WHERE id = $1 AND workspace_id = $2
-			RETURNING author_id, body_version
-		`, documentID, workspaceID, string(content), markdown, applied.UpdatedBy).Scan(&authorID, &bodyVersion)
+			RETURNING author_id, body_version, type::text
+		`, documentID, workspaceID, string(content), markdown, applied.UpdatedBy).Scan(&authorID, &bodyVersion, &documentType)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrCollabDocumentNotFound
 		}
@@ -74,6 +75,11 @@ func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, document
 		}
 		if err := reconcileSuggestions(ctx, tx, documentID, suggestions); err != nil {
 			return err
+		}
+		if documentType == "architecture" {
+			if err := projectArchitectureLinks(ctx, tx, workspaceID, documentID, content); err != nil {
+				return err
+			}
 		}
 		return storeAutoRevision(ctx, tx, documentID, authorID, markdown, content, bodyVersion, 0)
 	})
