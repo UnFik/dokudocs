@@ -172,3 +172,25 @@ test("@live @smoke @markdowninput: an empty notice goes away with Backspace in i
   await expect(editor.locator(".dd-notice-warning")).toHaveCount(0);
   await expect(editor).toContainText("after");
 });
+
+test("@live @smoke @markdowninput: a notice that held text and was emptied, or came from a paste, still goes with Backspace", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", "after"]);
+  await editor.locator("p").first().click();
+  await page.keyboard.type(":::tip ");
+  await page.keyboard.type("temporary");
+  for (let i = 0; i < "temporary".length; i++) await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-tip")).toHaveCount(1);
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-tip")).toHaveCount(0);
+
+  await editor.locator("p").first().click();
+  await page.keyboard.press("Home");
+  await pastePlainText(page, ":::info\n\n:::\n\n+++\n\n+++");
+  await expect(editor.locator(".dd-notice-info")).toHaveCount(1);
+  await editor.locator(".dd-notice-info").click();
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-info")).toHaveCount(0);
+  await expect(editor).toContainText("after");
+});

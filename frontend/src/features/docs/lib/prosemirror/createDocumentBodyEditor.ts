@@ -779,6 +779,28 @@ export function createDocumentBodyEditor(
     return queueDeleteNode([join.deleteNodeID])
   }
 
+  // Backspace on the empty line of a notice or toggle that holds nothing else
+  // removes the whole box.
+  const deleteBlankContainer = (selection: Selection) => {
+    if (!selection.empty || !canEdit()) return false
+    const $pos = selection.$from
+    if (!$pos.parent.isTextblock || $pos.parent.textContent !== '') return false
+    for (let depth = $pos.depth - 1; depth > 0; depth--) {
+      const node = $pos.node(depth)
+      if (!['notice', 'toggle'].includes(node.type.name)) continue
+      let blank = true
+      node.descendants((child) => {
+        if (child.isText || (child.isLeaf && child.isInline)) blank = false
+        if (child.isAtom && !child.isInline) blank = false
+        return blank
+      })
+      const nodeID = node.attrs.nodeID
+      if (!blank || typeof nodeID !== 'string') return false
+      return queueDeleteNode([nodeID])
+    }
+    return false
+  }
+
   // Delete at the end of a paragraph, or Backspace at the start of one, next to
   // a separator removes the separator. The browser has nothing to merge with, so
   // it does nothing on its own.
@@ -1146,6 +1168,17 @@ export function createDocumentBodyEditor(
           event.preventDefault()
           return true
         }
+      }
+      if (
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        event.key === 'Backspace' &&
+        deleteBlankContainer(selectionNow(editorView))
+      ) {
+        event.preventDefault()
+        return true
       }
       if (
         !event.altKey &&
