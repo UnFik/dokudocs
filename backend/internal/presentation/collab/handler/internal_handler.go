@@ -109,6 +109,8 @@ func (h *InternalHandler) authorize(w http.ResponseWriter, r *http.Request) {
 		"canRead":    access.CanRead,
 		"canEdit":    access.CanEdit,
 		"canSuggest": access.CanSuggest,
+		// The service picks how to read and store the room by this.
+		"documentType": head.DocumentType,
 	})
 }
 

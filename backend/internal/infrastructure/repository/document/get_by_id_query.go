@@ -59,7 +59,7 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 	if err != nil {
 		return d, err
 	}
-	if d.Type == "markdown" && len(contentJSON) > 0 {
+	if hasCollabBody(d.Type) && len(contentJSON) > 0 {
 		d.ContentJSON = contentJSON
 	}
 	if editorID.Valid {

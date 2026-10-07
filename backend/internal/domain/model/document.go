@@ -20,7 +20,7 @@ type Document struct {
 	ProjectID   *uuid.UUID `json:"projectId,omitempty"`
 	ProjectName string     `json:"projectName,omitempty"`
 	Title       string     `json:"title"`
-	Type        string     `json:"type"` // markdown, dbdiagram, mermaid
+	Type        string     `json:"type"` // markdown, dbdiagram, mermaid, architecture
 	Content     string     `json:"content"`
 	// ContentJSON is the editor document as ProseMirror JSON; only the single-document read fills it.
 	ContentJSON json.RawMessage `json:"contentJSON,omitempty"`
