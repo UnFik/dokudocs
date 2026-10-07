@@ -144,6 +144,22 @@ describe('hovering a link', () => {
     expect(card.querySelector('button[aria-label="Copy link"]')).not.toBeNull()
   })
 
+  it('offers Open and Copy as icons, each naming itself in a popover', () => {
+    const { host } = mount('a link', { linked: 'https://example.com/x' })
+    hover(host)
+    const card = host.querySelector<HTMLElement>('.dd-link-card')!
+    const open = card.querySelector<HTMLElement>('a[aria-label="Open link"]')!
+    const copy = card.querySelector<HTMLElement>(
+      'button[aria-label="Copy link"]'
+    )!
+    for (const control of [open, copy]) {
+      expect(control.querySelector('svg')).not.toBeNull()
+      expect(control.textContent).toBe('')
+    }
+    expect(open.dataset.tip).toBe('Open link')
+    expect(copy.dataset.tip).toBe('Copy link')
+  })
+
   it('shows the title of a page link once it is known', async () => {
     const { host } = mount('a page', {
       linked: '/docs/11111111-1111-4111-8111-111111111111',

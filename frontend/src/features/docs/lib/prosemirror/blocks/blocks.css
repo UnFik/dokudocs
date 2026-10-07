@@ -540,6 +540,37 @@
   text-decoration: underline;
   cursor: pointer;
 }
+/* Open and Copy are icons; the popover names them. */
+.dd-link-card a[data-tip],
+.dd-link-card button[data-tip] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 0 6px;
+  text-decoration: none;
+}
+.dd-link-card [data-tip]:hover,
+.dd-link-card [data-tip]:focus-visible {
+  background: var(--secondary);
+}
+.dd-link-card [data-tip]:hover::after,
+.dd-link-card [data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--primary, #111);
+  color: var(--primary-foreground, #fff);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+}
 @media (pointer: coarse) {
   .dd-link-card a,
   .dd-link-card button,

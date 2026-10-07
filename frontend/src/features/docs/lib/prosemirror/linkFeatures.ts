@@ -6,6 +6,26 @@ import { normalizeLinkTarget } from './inlineMarks'
 const link = documentBodySchema.marks.link!
 
 /** One URL and nothing else, with a scheme a link may have. */
+/** A 16px line icon from path data, drawn in the text color. */
+function icon(paths: string[]) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('width', '16')
+  svg.setAttribute('height', '16')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '2')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('stroke-linejoin', 'round')
+  svg.setAttribute('aria-hidden', 'true')
+  for (const d of paths) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    path.setAttribute('d', d)
+    svg.append(path)
+  }
+  return svg
+}
+
 function pastedURL(text: string) {
   const trimmed = text.trim()
   if (!/^(https?:\/\/|mailto:)\S+$/i.test(trimmed)) return null
@@ -160,13 +180,29 @@ class LinkHover {
     open.href = href
     open.target = '_blank'
     open.rel = 'noopener noreferrer'
-    open.textContent = 'Open'
+    open.dataset.tip = 'Open link'
+    open.append(
+      icon([
+        'M15 3h6v6',
+        'M10 14 21 3',
+        'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
+      ])
+    )
     const copy = document.createElement('button')
     copy.type = 'button'
     copy.setAttribute('aria-label', 'Copy link')
-    copy.textContent = 'Copy'
+    copy.dataset.tip = 'Copy link'
+    copy.append(
+      icon([
+        'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2',
+        'M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z',
+      ])
+    )
     copy.addEventListener('click', () => {
       void navigator.clipboard?.writeText(new URL(href, location.href).href)
+      // The popover says it worked, until the pointer leaves.
+      copy.dataset.tip = 'Copied'
+      setTimeout(() => (copy.dataset.tip = 'Copy link'), 1500)
     })
     card.append(title, address, open, copy)
     host.append(card)
