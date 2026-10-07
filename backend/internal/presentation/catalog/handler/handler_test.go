@@ -21,12 +21,35 @@ type fakeStore struct {
 	known    map[string]string
 	added    []appcatalog.RequestInput
 	addError error
+	notAdmin bool
+	answers  []appcatalog.Answer
+	read     bool
 }
 
 func (f *fakeStore) ListEntries(context.Context) ([]appcatalog.Entry, error) { return f.entries, nil }
 func (f *fakeStore) FindEntry(_ context.Context, key string) (string, error) {
 	return f.known[key], nil
 }
+func (f *fakeStore) OpenRequests(context.Context, uuid.UUID) ([]appcatalog.OpenRequest, error) {
+	if f.notAdmin {
+		return nil, appcatalog.ErrNotAdmin
+	}
+	return []appcatalog.OpenRequest{{ID: uuid.New(), Name: "Acme MQ", Votes: 3}}, nil
+}
+func (f *fakeStore) MyRequests(context.Context, uuid.UUID) ([]appcatalog.MyRequest, error) {
+	return []appcatalog.MyRequest{{Name: "Acme MQ", Status: "open"}}, nil
+}
+func (f *fakeStore) AnswerRequest(_ context.Context, _, _ uuid.UUID, a appcatalog.Answer) error {
+	if f.notAdmin {
+		return appcatalog.ErrNotAdmin
+	}
+	f.answers = append(f.answers, a)
+	return nil
+}
+func (f *fakeStore) Notifications(context.Context, uuid.UUID) ([]appcatalog.Notification, error) {
+	return []appcatalog.Notification{{Title: "“Acme MQ” is in the catalog"}}, nil
+}
+func (f *fakeStore) MarkNotificationsRead(context.Context, uuid.UUID) error { f.read = true; return nil }
 func (f *fakeStore) AddRequest(_ context.Context, in appcatalog.RequestInput, _ string) (appcatalog.RequestResult, error) {
 	if f.addError != nil {
 		return appcatalog.RequestResult{}, f.addError
@@ -109,5 +132,44 @@ func TestRequestingAMissingEntry(t *testing.T) {
 		if rec := call(h.Request, http.MethodPost, "/api/v1/catalog/requests", body("Other", "host"), nil); rec.Code != want {
 			t.Fatalf("%v = %d, want %d", err, rec.Code, want)
 		}
+	}
+}
+
+func TestReviewingRequestsAndReadingNotifications(t *testing.T) {
+	store := &fakeStore{}
+	h := handler.New(appcatalog.NewService(store))
+	if rec := call(h.OpenRequests, http.MethodGet, "/api/v1/catalog/requests", nil, nil); rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte("Acme MQ")) {
+		t.Fatalf("open requests = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := call(h.MyRequests, http.MethodGet, "/api/v1/catalog/requests/mine", nil, nil); rec.Code != http.StatusOK {
+		t.Fatalf("my requests = %d", rec.Code)
+	}
+	answer := func(body map[string]string) int {
+		raw, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPatch, "/api/v1/catalog/requests/x", bytes.NewReader(raw))
+		req.SetPathValue("id", uuid.NewString())
+		req = req.WithContext(middleware.ContextWithUser(req.Context(), dto.ResponseUser{ID: user.String()}))
+		rec := httptest.NewRecorder()
+		h.Answer(rec, req)
+		return rec.Code
+	}
+	if code := answer(map[string]string{"status": "added", "slug": "rabbitmq"}); code != http.StatusNoContent || store.answers[0].Slug != "rabbitmq" {
+		t.Fatalf("answer = %d (%+v)", code, store.answers)
+	}
+	if code := answer(map[string]string{"status": "declined"}); code != http.StatusBadRequest {
+		t.Fatalf("declined without a reason = %d, want 400", code)
+	}
+	store.notAdmin = true
+	if rec := call(h.OpenRequests, http.MethodGet, "/api/v1/catalog/requests", nil, nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("a member lists requests = %d, want 403", rec.Code)
+	}
+	if code := answer(map[string]string{"status": "added", "slug": "x"}); code != http.StatusForbidden {
+		t.Fatalf("a member answers = %d, want 403", code)
+	}
+	if rec := call(h.Notifications, http.MethodGet, "/api/v1/notifications", nil, nil); rec.Code != http.StatusOK {
+		t.Fatalf("notifications = %d", rec.Code)
+	}
+	if rec := call(h.MarkRead, http.MethodPost, "/api/v1/notifications/read", nil, nil); rec.Code != http.StatusNoContent || !store.read {
+		t.Fatalf("mark read = %d", rec.Code)
 	}
 }

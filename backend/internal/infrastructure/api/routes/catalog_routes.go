@@ -18,4 +18,11 @@ func addCatalogRoutes(f Router, c *container.Container, cfg config.Config) {
 	group := f.Group("/catalog", authRequired)
 	group.Get("", h.List)
 	group.Post("/requests", h.Request)
+	group.Get("/requests", h.OpenRequests)
+	group.Get("/requests/mine", h.MyRequests)
+	group.Patch("/requests/{id}", h.Answer)
+
+	notifications := f.Group("/notifications", authRequired)
+	notifications.Get("", h.Notifications)
+	notifications.Post("/read", h.MarkRead)
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -43,7 +44,47 @@ type RequestResult struct {
 // MaxOpenRequests is how many open requests one person may have.
 const MaxOpenRequests = 20
 
+// OpenRequest is a request waiting for an answer, as platform admins see it.
+type OpenRequest struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Category  string    `json:"category"`
+	Website   string    `json:"website"`
+	Note      string    `json:"note"`
+	Votes     int       `json:"votes"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// MyRequest is a request someone voted for, with its answer.
+type MyRequest struct {
+	ID            uuid.UUID `json:"id"`
+	Name          string    `json:"name"`
+	Status        string    `json:"status"`
+	ResolvedSlug  *string   `json:"resolvedSlug"`
+	DeclineReason string    `json:"declineReason"`
+	Votes         int       `json:"votes"`
+}
+
+// Answer closes a request: added with the slug it became, or declined with a reason.
+type Answer struct {
+	Status string `json:"status"`
+	Slug   string `json:"slug"`
+	Reason string `json:"reason"`
+}
+
+// Notification is one in-app message.
+type Notification struct {
+	ID        uuid.UUID `json:"id"`
+	Kind      string    `json:"kind"`
+	Title     string    `json:"title"`
+	Body      string    `json:"body"`
+	Read      bool      `json:"read"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 var (
+	ErrNotAdmin        = errors.New("only a platform admin may review catalog requests")
+	ErrInvalidAnswer   = errors.New("an answer is added with a catalog slug, or declined with a reason")
 	ErrInvalidRequest  = errors.New("a request needs a name of 1 to 100 characters and a category: host, system or protocol")
 	ErrTooManyRequests = errors.New("too many open catalog requests")
 	ErrNotMember       = errors.New("not a member of the workspace")
@@ -61,6 +102,11 @@ type Store interface {
 	FindEntry(ctx context.Context, key string) (string, error)
 	// AddRequest records the request or a vote on the open one with the same key.
 	AddRequest(ctx context.Context, input RequestInput, key string) (RequestResult, error)
+	OpenRequests(ctx context.Context, actorID uuid.UUID) ([]OpenRequest, error)
+	MyRequests(ctx context.Context, userID uuid.UUID) ([]MyRequest, error)
+	AnswerRequest(ctx context.Context, actorID, requestID uuid.UUID, answer Answer) error
+	Notifications(ctx context.Context, userID uuid.UUID) ([]Notification, error)
+	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
 }
 
 var notAlnum = regexp.MustCompile(`[^a-z0-9]+`)
@@ -91,4 +137,31 @@ func (s *Service) Request(ctx context.Context, input RequestInput) (RequestResul
 		return RequestResult{}, InCatalogError{Slug: slug}
 	}
 	return s.store.AddRequest(ctx, input, key)
+}
+
+func (s *Service) OpenRequests(ctx context.Context, actorID uuid.UUID) ([]OpenRequest, error) {
+	return s.store.OpenRequests(ctx, actorID)
+}
+
+func (s *Service) MyRequests(ctx context.Context, userID uuid.UUID) ([]MyRequest, error) {
+	return s.store.MyRequests(ctx, userID)
+}
+
+func (s *Service) Answer(ctx context.Context, actorID, requestID uuid.UUID, answer Answer) error {
+	answer.Reason = strings.TrimSpace(answer.Reason)
+	switch {
+	case answer.Status == "added" && answer.Slug != "":
+	case answer.Status == "declined" && answer.Reason != "" && len([]rune(answer.Reason)) <= 500:
+	default:
+		return ErrInvalidAnswer
+	}
+	return s.store.AnswerRequest(ctx, actorID, requestID, answer)
+}
+
+func (s *Service) Notifications(ctx context.Context, userID uuid.UUID) ([]Notification, error) {
+	return s.store.Notifications(ctx, userID)
+}
+
+func (s *Service) MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error {
+	return s.store.MarkNotificationsRead(ctx, userID)
 }
