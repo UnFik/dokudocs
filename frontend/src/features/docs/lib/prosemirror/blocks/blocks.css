@@ -890,3 +890,14 @@ details.dd-toggle > summary {
 .dd-tc-resize:active {
   background: color-mix(in srgb, var(--signal) 45%, transparent);
 }
+
+/* Column alignment set from the table menu (Align left, center, right). */
+.ProseMirror td[data-align='left'] {
+  text-align: left;
+}
+.ProseMirror td[data-align='center'] {
+  text-align: center;
+}
+.ProseMirror td[data-align='right'] {
+  text-align: right;
+}
