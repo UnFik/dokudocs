@@ -142,6 +142,8 @@ export type ArchitectureCanvasProps = {
   onGesture: () => void
   canAdd: boolean
   focusNodeID?: string
+  /** Open comment threads by element id, for the badge on each node. */
+  commentCounts?: Map<string, number>
 }
 
 export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
@@ -265,6 +267,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
         props.onGesture()
       },
       familyOf: (protocol) => familyOf(props.catalog, protocol),
+      commentCounts: props.commentCounts ?? new Map(),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -275,6 +278,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       canvas,
       doc,
       props.catalog,
+      props.commentCounts,
     ]
   )
 

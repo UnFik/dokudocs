@@ -50,6 +50,11 @@ import { ArchitecturePreview, parseCanvas } from './architecture-preview'
 import { ArchitectureVersions } from './architecture-versions'
 import { CatalogPalette } from './catalog-palette'
 import { CatalogRequests } from './catalog-requests'
+import {
+  commentsKey,
+  openThreadCounts,
+  useCanvasComments,
+} from './element-comments'
 import { PropertiesPanel } from './properties-panel'
 
 const WARN_AT = 0.8
@@ -102,6 +107,10 @@ function Editor({
       void clearLocalCopy(workspaceID, doc.id).then(() =>
         setNonce((n) => n + 1)
       ),
+    onCommentsChanged: () =>
+      void queryClient.invalidateQueries({
+        queryKey: commentsKey(workspaceID, doc.id),
+      }),
   })
   const catalog = useCatalog()
   const [selection, setSelection] = useState<Selection>(null)
@@ -121,6 +130,10 @@ function Editor({
   const [isVersionsOpen, setIsVersionsOpen] = useState(false)
 
   const canEdit = Boolean(session.access?.canEdit) && !session.refused
+  // Commenters cannot change the canvas but may discuss its elements.
+  const canComment = Boolean(session.access?.canComment ?? session.access?.canEdit)
+  const comments = useCanvasComments(workspaceID, doc.id)
+  const commentCounts = useMemo(() => openThreadCounts(comments.data), [comments.data])
   const readOnly = !canEdit
   const undo = useMemo(
     () => (session.doc ? createUndo(session.doc) : null),
@@ -497,6 +510,7 @@ function Editor({
             onRedo={() => undo?.redo()}
             onGesture={gesture}
             canAdd={!blocked}
+            commentCounts={commentCounts}
             focusNodeID={focusNodeID}
           />
           {protocolConnection && !readOnly && (
@@ -616,6 +630,9 @@ function Editor({
                 projectID={doc.projectId ?? null}
                 onDelete={remove}
                 onGesture={gesture}
+                documentID={doc.id}
+                canComment={canComment}
+                onCommentsChanged={() => session.signalComments()}
               />
             </div>
           ) : (

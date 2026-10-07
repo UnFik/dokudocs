@@ -156,9 +156,9 @@ describe('collaboration service', () => {
     await Promise.all([editor.synced, viewer.synced, commenter.synced])
 
     await waitFor(() => [editor, viewer, commenter].every((c) => c.statelessMessages.length > 0))
-    expect(editor.statelessMessages[0]).toEqual({ type: 'access', canEdit: true, canSuggest: true })
-    expect(viewer.statelessMessages[0]).toEqual({ type: 'access', canEdit: false, canSuggest: false })
-    expect(commenter.statelessMessages[0]).toEqual({ type: 'access', canEdit: false, canSuggest: true })
+    expect(editor.statelessMessages[0]).toEqual({ type: 'access', canEdit: true, canSuggest: true, canComment: true })
+    expect(viewer.statelessMessages[0]).toEqual({ type: 'access', canEdit: false, canSuggest: false, canComment: false })
+    expect(commenter.statelessMessages[0]).toEqual({ type: 'access', canEdit: false, canSuggest: true, canComment: true })
     for (const c of [editor, viewer, commenter]) c.provider.destroy()
   })
 

@@ -78,6 +78,8 @@ function authentication(backend: BackendApi, metrics: Metrics, maxConnections: n
           type: 'access',
           canEdit: context.access.canEdit,
           canSuggest: context.documentType === 'architecture' ? false : context.access.canSuggest,
+          // Someone who may suggest on Markdown may comment; on a canvas that is all they may do.
+          canComment: context.access.canEdit || context.access.canSuggest,
         })
       )
     },

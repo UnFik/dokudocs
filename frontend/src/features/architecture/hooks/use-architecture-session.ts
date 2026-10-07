@@ -36,6 +36,8 @@ export function useArchitectureSession(input: {
   initial: ArchitectureJSON | null
   nonce: number
   onReloaded: () => void
+  /** Someone in the room changed the comments. */
+  onCommentsChanged?: () => void
 }) {
   const [canvas, setCanvas] = useState<ArchitectureJSON>(
     input.initial ?? emptyCanvas
@@ -50,6 +52,8 @@ export function useArchitectureSession(input: {
   const sessionRef = useRef<Session | null>(null)
   const reloadedRef = useRef(input.onReloaded)
   reloadedRef.current = input.onReloaded
+  const commentsRef = useRef(input.onCommentsChanged)
+  commentsRef.current = input.onCommentsChanged
 
   useEffect(() => {
     const session = openCollabSession({
@@ -62,6 +66,7 @@ export function useArchitectureSession(input: {
       onAccess: setAccess,
       onPresence: setPresence,
       onReloaded: () => reloadedRef.current(),
+      onCommentsChanged: () => commentsRef.current?.(),
       onRefused: (reason) => {
         setRefused(reason || 'refused')
         // The update stays in this device's copy; without the reason the provider would send it forever.
@@ -135,6 +140,10 @@ export function useArchitectureSession(input: {
     peers,
     synced,
     refused,
+    /** Tells the others in the room to read the comments again. */
+    signalComments() {
+      sessionRef.current?.signalCommentsChanged()
+    },
     /** Shares what this person has selected and where their pointer is (canvas coordinates). */
     share(field: 'selection' | 'pointer', value: unknown) {
       sessionRef.current?.awareness?.setLocalStateField(field, value)
