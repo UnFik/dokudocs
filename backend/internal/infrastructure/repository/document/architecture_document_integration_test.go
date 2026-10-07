@@ -120,3 +120,31 @@ func TestDuplicatingAnArchitectureDocumentCopiesTheCanvas(t *testing.T) {
 		t.Fatalf("copy = (%s, %s, %q), want the canvas and its text", copyDoc.Type, copyDoc.ContentJSON, copyDoc.Content)
 	}
 }
+
+func TestAnArchitectureCanvasIsSearchableThroughTheRAGIndex(t *testing.T) {
+	ctx := context.Background()
+	db := openIntegrationDB(t)
+	_, documentID, _, repo := seedArchitectureDocument(t, ctx, db, canvasTwo, "")
+	result, err := repo.RebuildRAGIndex(ctx, documentID)
+	if err != nil || result.ChunkCount != 2 {
+		t.Fatalf("RebuildRAGIndex() = (%+v, %v), want a chunk per element", result, err)
+	}
+	var text string
+	if err := db.QueryRowContext(ctx, `SELECT string_agg(text, ' ' ORDER BY ordinal) FROM rag_chunks WHERE document_id = $1`, documentID).Scan(&text); err != nil || !strings.Contains(text, `System "DB".`) {
+		t.Fatalf("chunks = %q (%v)", text, err)
+	}
+}
+
+func TestAPublicLinkToAnArchitectureDocumentGivesItsCanvas(t *testing.T) {
+	ctx := context.Background()
+	db := openIntegrationDB(t)
+	_, documentID, _, repo := seedArchitectureDocument(t, ctx, db, canvasOne, `System "API".`)
+	token := "arch-" + uuid.NewString()
+	if _, err := db.ExecContext(ctx, `UPDATE documents SET share_token = $2, visibility = 'public_link', is_draft = FALSE WHERE id = $1`, documentID, token); err != nil {
+		t.Fatalf("share: %v", err)
+	}
+	got, err := repo.GetByShareToken(ctx, token)
+	if err != nil || got.Type != "architecture" || !sameJSON(t, got.ContentJSON, canvasOne) {
+		t.Fatalf("GetByShareToken() = (%s, %s, %v), want the canvas", got.Type, got.ContentJSON, err)
+	}
+}

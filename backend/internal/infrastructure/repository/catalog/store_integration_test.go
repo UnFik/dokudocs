@@ -91,7 +91,9 @@ func TestRequestsWithTheSameNameBecomeVotes(t *testing.T) {
 	alice, workspace := member(t, db)
 	bob, otherWorkspace := member(t, db)
 	key := "acme" + uuid.NewString()[:8]
-	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), `DELETE FROM catalog_requests WHERE name_key = $1`, key) })
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM catalog_requests WHERE name_key = $1`, key)
+	})
 
 	first, err := store.AddRequest(ctx, appcatalog.RequestInput{UserID: alice, WorkspaceID: workspace, Name: "Acme Queue", Category: "system"}, key)
 	if err != nil || first.Votes != 1 || first.AlreadyRequested {
@@ -123,7 +125,9 @@ func TestOnePersonHasAtMostTwentyOpenRequests(t *testing.T) {
 	ctx := context.Background()
 	alice, workspace := member(t, db)
 	prefix := "limit" + uuid.NewString()[:8]
-	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), `DELETE FROM catalog_requests WHERE name_key LIKE $1`, prefix+"%") })
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM catalog_requests WHERE name_key LIKE $1`, prefix+"%")
+	})
 	for i := 0; i < appcatalog.MaxOpenRequests; i++ {
 		if _, err := store.AddRequest(ctx, appcatalog.RequestInput{UserID: alice, WorkspaceID: workspace, Name: fmt.Sprintf("N%d", i), Category: "system"}, fmt.Sprintf("%s%d", prefix, i)); err != nil {
 			t.Fatalf("request %d: %v", i, err)
@@ -132,5 +136,76 @@ func TestOnePersonHasAtMostTwentyOpenRequests(t *testing.T) {
 	_, err := store.AddRequest(ctx, appcatalog.RequestInput{UserID: alice, WorkspaceID: workspace, Name: "One more", Category: "system"}, prefix+"more")
 	if !errors.Is(err, appcatalog.ErrTooManyRequests) {
 		t.Fatalf("21st request error = %v, want ErrTooManyRequests", err)
+	}
+}
+
+func platformAdmin(t *testing.T, db *sql.DB, userID uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx, `INSERT INTO roles (name, slug, is_system) VALUES ('Administrator', 'admin', true) ON CONFLICT (slug) DO NOTHING`); err != nil {
+		t.Fatalf("role: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO user_roles (user_id, role_id) SELECT $1, id FROM roles WHERE slug = 'admin'`, userID); err != nil {
+		t.Fatalf("grant admin: %v", err)
+	}
+}
+
+func TestAnAdminAnswersARequestAndEveryVoterIsNotified(t *testing.T) {
+	db := openDB(t)
+	store := NewStore(database.NewSQLDB(db))
+	ctx := context.Background()
+	alice, ws := member(t, db)
+	bob, ws2 := member(t, db)
+	admin, _ := member(t, db)
+	platformAdmin(t, db, admin)
+	key := "review" + uuid.NewString()[:8]
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM catalog_requests WHERE name_key = $1`, key)
+	})
+	first, _ := store.AddRequest(ctx, appcatalog.RequestInput{UserID: alice, WorkspaceID: ws, Name: "Acme MQ", Category: "system"}, key)
+	if _, err := store.AddRequest(ctx, appcatalog.RequestInput{UserID: bob, WorkspaceID: ws2, Name: "Acme MQ", Category: "system"}, key); err != nil {
+		t.Fatalf("vote: %v", err)
+	}
+
+	if _, err := store.OpenRequests(ctx, alice); !errors.Is(err, appcatalog.ErrNotAdmin) {
+		t.Fatalf("a member lists open requests: %v, want ErrNotAdmin", err)
+	}
+	open, err := store.OpenRequests(ctx, admin)
+	if err != nil {
+		t.Fatalf("OpenRequests(): %v", err)
+	}
+	var found *appcatalog.OpenRequest
+	for i := range open {
+		if open[i].ID == first.ID {
+			found = &open[i]
+		}
+	}
+	if found == nil || found.Votes != 2 {
+		t.Fatalf("open = %+v, want the request with 2 votes", open)
+	}
+	if err := store.AnswerRequest(ctx, alice, first.ID, appcatalog.Answer{Status: "declined", Reason: "x"}); !errors.Is(err, appcatalog.ErrNotAdmin) {
+		t.Fatalf("a member answers: %v, want ErrNotAdmin", err)
+	}
+	if err := store.AnswerRequest(ctx, admin, first.ID, appcatalog.Answer{Status: "added", Slug: "rabbitmq"}); err != nil {
+		t.Fatalf("AnswerRequest(): %v", err)
+	}
+	for _, voter := range []uuid.UUID{alice, bob} {
+		notes, err := store.Notifications(ctx, voter)
+		if err != nil || len(notes) == 0 || notes[0].Read || notes[0].Kind != "catalog_request" {
+			t.Fatalf("notifications of %s = (%+v, %v)", voter, notes, err)
+		}
+		mine, err := store.MyRequests(ctx, voter)
+		if err != nil || len(mine) != 1 || mine[0].Status != "added" || mine[0].ResolvedSlug == nil || *mine[0].ResolvedSlug != "rabbitmq" {
+			t.Fatalf("my requests of %s = (%+v, %v)", voter, mine, err)
+		}
+	}
+	if err := store.MarkNotificationsRead(ctx, alice); err != nil {
+		t.Fatalf("MarkNotificationsRead(): %v", err)
+	}
+	if notes, _ := store.Notifications(ctx, alice); notes[0].Read != true {
+		t.Fatalf("after reading: %+v", notes)
+	}
+	if err := store.AnswerRequest(ctx, admin, first.ID, appcatalog.Answer{Status: "added", Slug: "not-a-slug"}); err == nil {
+		t.Fatal("added with a slug that is not in the catalog succeeded")
 	}
 }

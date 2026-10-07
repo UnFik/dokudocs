@@ -102,3 +102,98 @@ func (h *Handler) Request(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusServiceUnavailable, "the request could not be saved; try again")
 	}
 }
+
+func actor(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	u, ok := middleware.UserFromContext(r.Context())
+	id, err := uuid.Parse(u.ID)
+	if !ok || err != nil {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+// OpenRequests lists requests waiting for an answer, most wanted first. Platform admins only.
+func (h *Handler) OpenRequests(w http.ResponseWriter, r *http.Request) {
+	userID, ok := actor(w, r)
+	if !ok {
+		return
+	}
+	open, err := h.service.OpenRequests(r.Context(), userID)
+	if errors.Is(err, appcatalog.ErrNotAdmin) {
+		response.Error(w, http.StatusForbidden, err.Error())
+		return
+	}
+	if err != nil {
+		response.Error(w, http.StatusServiceUnavailable, "the requests could not be read; try again")
+		return
+	}
+	_ = response.Data(w, http.StatusOK, open)
+}
+
+// MyRequests lists the requests this person asked or voted for, with their answers.
+func (h *Handler) MyRequests(w http.ResponseWriter, r *http.Request) {
+	userID, ok := actor(w, r)
+	if !ok {
+		return
+	}
+	mine, err := h.service.MyRequests(r.Context(), userID)
+	if err != nil {
+		response.Error(w, http.StatusServiceUnavailable, "your requests could not be read; try again")
+		return
+	}
+	_ = response.Data(w, http.StatusOK, mine)
+}
+
+// Answer closes a request as added (with its slug) or declined (with a reason), and notifies every voter.
+func (h *Handler) Answer(w http.ResponseWriter, r *http.Request) {
+	userID, ok := actor(w, r)
+	if !ok {
+		return
+	}
+	requestID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request id")
+		return
+	}
+	var answer appcatalog.Answer
+	if err := response.DecodeJSON(r, &answer); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+	switch err := h.service.Answer(r.Context(), userID, requestID, answer); {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, appcatalog.ErrNotAdmin):
+		response.Error(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, appcatalog.ErrInvalidAnswer):
+		response.Error(w, http.StatusBadRequest, err.Error())
+	default:
+		response.Error(w, http.StatusBadRequest, "the answer could not be saved: check that the slug is in the catalog")
+	}
+}
+
+func (h *Handler) Notifications(w http.ResponseWriter, r *http.Request) {
+	userID, ok := actor(w, r)
+	if !ok {
+		return
+	}
+	notes, err := h.service.Notifications(r.Context(), userID)
+	if err != nil {
+		response.Error(w, http.StatusServiceUnavailable, "notifications could not be read; try again")
+		return
+	}
+	_ = response.Data(w, http.StatusOK, notes)
+}
+
+func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
+	userID, ok := actor(w, r)
+	if !ok {
+		return
+	}
+	if err := h.service.MarkNotificationsRead(r.Context(), userID); err != nil {
+		response.Error(w, http.StatusServiceUnavailable, "notifications could not be updated; try again")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
