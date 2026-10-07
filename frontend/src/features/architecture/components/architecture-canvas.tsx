@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   type DragEvent,
-  type KeyboardEvent,
 } from 'react'
 import {
   Background,
@@ -408,9 +407,15 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     )
   }
 
-  const onKeyDown = (event: KeyboardEvent) => {
-    const target = event.target as HTMLElement
-    if (target.closest('input, textarea, select, [contenteditable="true"]'))
+  // Shortcuts work wherever focus is on the page (a click on the empty canvas
+  // focuses nothing), except while typing or inside a dialog.
+  const onKeyDown = (event: globalThis.KeyboardEvent) => {
+    const target = event.target as HTMLElement | null
+    if (
+      target?.closest?.(
+        'input, textarea, select, [contenteditable="true"], [role="dialog"], [role="alertdialog"]'
+      )
+    )
       return
     const mod = event.metaKey || event.ctrlKey
     if (mod && event.key.toLowerCase() === 'z') {
@@ -431,6 +436,16 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       props.onSelect(null)
     }
   }
+
+  const keyHandler = useRef(onKeyDown)
+  useEffect(() => {
+    keyHandler.current = onKeyDown
+  })
+  useEffect(() => {
+    const listener = (event: globalThis.KeyboardEvent) => keyHandler.current(event)
+    document.addEventListener('keydown', listener)
+    return () => document.removeEventListener('keydown', listener)
+  }, [])
 
   // Jump to an element named in the link ("Used in" on a document page).
   const focused = useRef(false)
@@ -455,7 +470,6 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     <CanvasContext.Provider value={context}>
       <div
         className='relative h-full w-full'
-        onKeyDown={onKeyDown}
         onDragOver={onDragOver}
         onDragLeave={() => setSlot(null)}
         onDrop={onDrop}
