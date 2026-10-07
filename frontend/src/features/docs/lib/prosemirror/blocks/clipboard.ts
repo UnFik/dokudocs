@@ -46,18 +46,117 @@ export function normalizePastedMarkdown(text: string): string {
     .join('\n')
 }
 
-/** Markdown text to a slice whose nodes carry no IDs; the editor assigns them. */
-export async function markdownToSlice(markdown: string): Promise<Slice> {
-  // Pasted text only has to read right, so it is imported leniently: a trailing
-  // space or a line ending that does not survive an export must not refuse it.
+type Segment =
+  | { kind: 'markdown'; text: string }
+  | { kind: 'notice'; variant: string; text: string }
+  | { kind: 'toggle'; text: string }
+
+const noticeVariants = new Set(['info', 'success', 'warning', 'tip'])
+
+/** Splits `:::variant` and `+++` blocks out of the Markdown, leaving code fences alone. */
+function splitContainers(markdown: string): Segment[] {
+  const segments: Segment[] = []
+  let plain: string[] = []
+  let open: { kind: 'notice' | 'toggle'; variant: string; lines: string[] } | null =
+    null
+  let fenced = false
+  const flush = () => {
+    if (plain.join('\n').trim())
+      segments.push({ kind: 'markdown', text: plain.join('\n') })
+    plain = []
+  }
+  for (const line of markdown.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced
+    if (!fenced) {
+      if (open) {
+        const closes =
+          open.kind === 'notice' ? /^:::\s*$/.test(line) : /^\+\+\+\s*$/.test(line)
+        if (closes) {
+          const text = open.lines.join('\n')
+          segments.push(
+            open.kind === 'notice'
+              ? { kind: 'notice', variant: open.variant, text }
+              : { kind: 'toggle', text }
+          )
+          open = null
+        } else open.lines.push(line)
+        continue
+      }
+      const notice = /^:::(\w+)\s*$/.exec(line)
+      if (notice && noticeVariants.has(notice[1]!)) {
+        flush()
+        open = { kind: 'notice', variant: notice[1]!, lines: [] }
+        continue
+      }
+      if (/^\+\+\+\s*$/.test(line)) {
+        flush()
+        open = { kind: 'toggle', variant: '', lines: [] }
+        continue
+      }
+    }
+    plain.push(line)
+  }
+  // A marker that never closes is just text.
+  if (open) {
+    plain.push(
+      open.kind === 'notice' ? `:::${open.variant}` : '+++',
+      ...open.lines
+    )
+  }
+  flush()
+  return segments
+}
+
+async function parseBlocks(markdown: string): Promise<ProseMirrorNode[]> {
   const parsed = await markdownToDocumentBody(
     crypto.randomUUID(),
     normalizePastedMarkdown(markdown),
     1,
     { lenient: true }
   )
-  const blocks = documentBodyToProseMirror(parsed.nodes).child(0).content
-  const content = sanitizePastedSlice(new Slice(blocks, 0, 0)).content
+  const blocks: ProseMirrorNode[] = []
+  documentBodyToProseMirror(parsed.nodes)
+    .child(0)
+    .content.forEach((node) => blocks.push(node))
+  return blocks
+}
+
+const emptyParagraph = () =>
+  documentBodySchema.nodes.paragraph!.create({
+    nodeID: null,
+    bodyAttributes: '{}',
+    bodyContent: '',
+  })
+
+/** Markdown text to a slice whose nodes carry no IDs; the editor assigns them. */
+export async function markdownToSlice(markdown: string): Promise<Slice> {
+  // Pasted text only has to read right, so it is imported leniently: a trailing
+  // space or a line ending that does not survive an export must not refuse it.
+  const segments = splitContainers(markdown.replace(/\r\n?/g, '\n'))
+  const blocks: ProseMirrorNode[] = []
+  for (const segment of segments) {
+    if (segment.kind === 'markdown') {
+      blocks.push(...(await parseBlocks(segment.text)))
+      continue
+    }
+    const inner = await parseBlocks(segment.text)
+    const content = inner.length ? inner : [emptyParagraph()]
+    blocks.push(
+      documentBodySchema.nodes[segment.kind]!.create(
+        {
+          nodeID: null,
+          bodyAttributes: JSON.stringify(
+            segment.kind === 'notice' ? { variant: segment.variant } : {}
+          ),
+          bodyContent: '',
+        },
+        content
+      )
+    )
+  }
+  const content = sanitizePastedSlice(
+    new Slice(Fragment.from(blocks.length ? blocks : [emptyParagraph()]), 0, 0)
+  ).content
   if (
     content.childCount === 1 &&
     content.child(0).type === documentBodySchema.nodes.paragraph
@@ -115,6 +214,8 @@ const markdownSignals = [
   /^```/m,
   /^\|.+\|\s*$/m,
   /^\s*---+\s*$/m,
+  /^:::(info|success|warning|tip)\s*$/m,
+  /^\+\+\+\s*$/m,
   /\*\*[^*\n]+\*\*/,
   /(^|[^\w])_[^_\n]+_([^\w]|$)/,
   /`[^`\n]+`/,

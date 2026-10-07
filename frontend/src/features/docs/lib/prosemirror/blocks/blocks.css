@@ -626,3 +626,20 @@ a.dd-mention {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* The read-only page (preview, share link, slides) shows a toggle as <details>. */
+details.dd-toggle {
+  padding-left: 0;
+}
+details.dd-toggle > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.dd-math-block {
+  margin: 12px 0;
+  overflow-x: auto;
+}
+.dd-diagram {
+  margin: 12px 0;
+  overflow-x: auto;
+}

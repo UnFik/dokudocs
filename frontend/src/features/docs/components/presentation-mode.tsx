@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import DOMPurify from 'dompurify'
-import { marked } from 'marked'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import '../lib/prosemirror/blocks/blocks.css'
+import { drawDiagrams, renderMarkdown } from '../lib/render-markdown'
 import './markdown-body.css'
 
 /** The page as full-screen slides: arrows or space to move, Escape to leave. */
@@ -14,9 +14,13 @@ export function PresentationMode({
   const [index, setIndex] = useState(0)
   const last = slides.length - 1
   const html = useMemo(
-    () => DOMPurify.sanitize(marked.parse(slides[Math.min(index, last)] ?? '') as string),
+    () => renderMarkdown(slides[Math.min(index, last)] ?? ''),
     [slides, index, last]
   )
+  const bodyRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (bodyRef.current) void drawDiagrams(bodyRef.current)
+  }, [html])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -38,6 +42,7 @@ export function PresentationMode({
       className='fixed inset-0 z-50 flex flex-col bg-background text-foreground'
     >
       <div
+        ref={bodyRef}
         className='markdown-body mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center overflow-auto px-8 py-10 text-2xl'
         dangerouslySetInnerHTML={{ __html: html }}
       />

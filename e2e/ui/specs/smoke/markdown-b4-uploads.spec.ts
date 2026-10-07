@@ -231,3 +231,19 @@ test("@live @smoke @markdownpaste: Markdown pasted as text, or chosen as a .md f
   await expect(editor.locator("ol li")).toHaveCount(2);
   await expect(editor.locator(".dd-attachment-card")).toHaveCount(0);
 });
+
+test("@live @smoke @split: the preview draws notices, toggles and math, and pasted :::/+++ blocks become real blocks", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", ""]);
+  await editor.locator("p").first().click();
+  await pastePlainText(page, ":::tip\nRemember this\n:::\n\n+++\nTitle line\nHidden body\n+++\n\nInline $E = mc^2$ here");
+  await expect(editor.locator(".dd-notice-tip")).toContainText("Remember this");
+  await expect(editor.locator(".dd-toggle")).toContainText("Hidden body");
+
+  await page.getByRole("button", { name: "Split view" }).click();
+  const preview = page.getByRole("complementary", { name: "Preview" });
+  await expect(preview.locator(".dd-notice-tip")).toContainText("Remember this");
+  await expect(preview.locator("details summary")).toHaveText("Title line");
+  await expect(preview.locator(".katex")).toHaveCount(1);
+});
