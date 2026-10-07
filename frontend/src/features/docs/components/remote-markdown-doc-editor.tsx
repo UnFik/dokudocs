@@ -513,7 +513,9 @@ function CollaborativeMarkdownBody({
     })
   }, [queryClient, documentID])
   // A click anywhere but on a card (or its dialogs) puts the chosen card away
-  // and with it the reply box. A reply being written keeps its card.
+  // and with it the reply box. A reply being written keeps its card. Text that
+  // carries a comment or a suggestion is not "elsewhere": a double click on it
+  // would otherwise drop the card its first click chose.
   const hasChosenCard =
     focusedCommentID !== null || focusedSuggestionID !== null
   useEffect(() => {
@@ -522,7 +524,7 @@ function CollaborativeMarkdownBody({
       const target = event.target as HTMLElement | null
       if (
         target?.closest(
-          'li[data-comment-thread-id],li[data-suggestion-id],li[data-new-comment],[role=dialog],[role=alertdialog]'
+          'li[data-comment-thread-id],li[data-suggestion-id],li[data-new-comment],[role=dialog],[role=alertdialog],[data-comment-id],[data-suggestion-id]'
         )
       )
         return
