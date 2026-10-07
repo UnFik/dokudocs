@@ -365,3 +365,39 @@ describe('insert blocks', () => {
     }
   })
 })
+
+describe('Enter in a diagram block', () => {
+  it('adds a line, also after the whole source was deleted', () => {
+    const harness = mountTestEditor([
+      ...paragraphsBody('before'),
+      {
+        nodeID: 'diagram',
+        parentID: 'root',
+        siblingOrder: 5,
+        type: 'diagram',
+        content: 'graph LR',
+        attributes: { type: 'mermaid' },
+      },
+    ])
+    try {
+      const { view } = harness.editor
+      let from = 0
+      view.state.doc.descendants((n, pos) => {
+        if (n.type.name === 'diagram') from = pos + 1
+      })
+      const diagram = () =>
+        harness.editor.getBody().find((i) => i.nodeID === 'diagram')!
+      view.dispatch(view.state.tr.delete(from, from + 'graph LR'.length))
+      view.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, from))
+      )
+      view.dom.focus()
+      view.dispatch(view.state.tr.insertText('a'))
+      pressKey(view.dom, 'Enter')
+      view.dispatch(view.state.tr.insertText('b'))
+      expect(diagram().content).toBe('a\nb')
+    } finally {
+      harness.cleanup()
+    }
+  })
+})

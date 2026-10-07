@@ -13,8 +13,8 @@ const { atx_heading, paragraph, run, list_item, task_list_item } =
 /** Depth of the paragraph or ATX heading that holds the cursor, or null. */
 function textBlockDepth(state: EditorState) {
   const { $from, $to } = state.selection
-  if (!$from.sameParent($to) && $from.depth !== $to.depth) return null
-  for (let depth = $from.depth; depth > 0; depth--) {
+  // A selection can start inside a run and end beside it, in the same block.
+  for (let depth = $from.sharedDepth($to.pos); depth > 0; depth--) {
     const type = $from.node(depth).type
     if (type === paragraph || type === atx_heading) return depth
     if (type !== run) return null
@@ -99,6 +99,14 @@ export const headingInputRule = new InputRule(
     )
   }
 )
+
+/** Enter in a code, math or diagram block adds a line to its source. */
+export const newlineInSource: Command = (state, dispatch) => {
+  const { $from } = state.selection
+  if (!$from.parent.type.spec.code) return false
+  dispatch?.(state.tr.insertText('\n').scrollIntoView())
+  return true
+}
 
 /**
  * Enter in a paragraph, heading or list item. Every node created by the split

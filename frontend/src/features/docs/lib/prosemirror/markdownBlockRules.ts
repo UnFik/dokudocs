@@ -1,6 +1,6 @@
 import { InputRule } from 'prosemirror-inputrules'
 import type { Node as ProseMirrorNode } from 'prosemirror-model'
-import { Selection, type Transaction } from 'prosemirror-state'
+import { Selection, type Command, type Transaction } from 'prosemirror-state'
 import { createNode } from './blocks/insertBlock'
 import { documentBodySchema } from './documentBody'
 import { nodeSuggestionOf } from './nodeSuggestion'
@@ -155,4 +155,68 @@ export function blockMarkdownRules() {
       createNode('atx_heading', { level: match[1]!.length }, runs),
     ]),
   ]
+}
+
+export type WrapKind =
+  | 'bullet-list'
+  | 'ordered-list'
+  | 'task-list'
+  | 'quote'
+  | 'toggle'
+
+const wrapped: Record<WrapKind, (runs: ProseMirrorNode[]) => ProseMirrorNode> =
+  {
+    'bullet-list': (runs) =>
+      list('bullet_list', { marker: '-', loose: false }, 'list_item', {}, runs),
+    'ordered-list': (runs) =>
+      list(
+        'order_list',
+        { start: 1, loose: false, delimiter: '.' },
+        'list_item',
+        {},
+        runs
+      ),
+    'task-list': (runs) =>
+      list(
+        'task_list',
+        { marker: '-', loose: false },
+        'task_list_item',
+        { checked: false },
+        runs
+      ),
+    quote: (runs) => createNode('block_quote', {}, [line(runs)]),
+    toggle: (runs) => createNode('toggle', {}, [line(runs), line([])]),
+  }
+
+/**
+ * The paragraph the caret is in, when it sits straight in the document,
+ * becomes a list, quote, task list or toggle holding the same text: the
+ * toolbar's counterpart of typing the Markdown prefix.
+ */
+export function wrapLineCommand(kind: WrapKind): Command {
+  return (state, dispatch) => {
+    const { $from } = state.selection
+    let depth = $from.depth
+    while (depth > 0 && !$from.node(depth).isTextblock) depth--
+    const paragraph = depth >= 2 ? $from.node(depth) : null
+    if (
+      !paragraph ||
+      paragraph.type !== nodes.paragraph ||
+      depth !== 2 ||
+      typeof paragraph.attrs.nodeID !== 'string' ||
+      nodeSuggestionOf(paragraph)
+    )
+      return false
+    if (!dispatch) return true
+    const from = $from.before(depth)
+    const tr = state.tr.replaceWith(
+      from,
+      $from.after(depth),
+      wrapped[kind](remainingRuns(paragraph, 0))
+    )
+    const selection = Selection.findFrom(tr.doc.resolve(from), 1, true)
+    if (selection) tr.setSelection(selection)
+    dispatch(tr)
+    return true
+  }
 }

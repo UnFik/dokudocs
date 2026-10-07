@@ -36,10 +36,12 @@ import {
   headingInputRule,
   insertBlockCommand,
   setHeadingCommand,
+  newlineInSource,
   splitTextBlock,
   toggleTaskChecked,
   type InsertableBlock,
 } from './blockCommands'
+import { embedPlugin } from './blocks/embedBlock'
 import {
   emojiMenuPlugin,
   mentionMenuPlugin,
@@ -66,10 +68,13 @@ import {
 } from './inlineMarks'
 import { joinParagraphs } from './joinParagraphs'
 import { linkFeaturesPlugin } from './linkFeatures'
-import { blockMarkdownRules } from './markdownBlockRules'
+import {
+  blockMarkdownRules,
+  wrapLineCommand,
+  type WrapKind,
+} from './markdownBlockRules'
 import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
 import { nodeSuggestionOf } from './nodeSuggestion'
-import { embedPlugin } from './blocks/embedBlock'
 import { prepareBodyTransaction } from './prepareBodyTransaction'
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
 import { smartTextRules } from './smartText'
@@ -343,7 +348,8 @@ export function createDocumentBodyEditor(
       }),
       keymap({
         Enter: (_state, _dispatch, editorView) => {
-          if (!suggestMode) return runBlock(splitTextBlock)
+          if (!suggestMode)
+            return runBlock(newlineInSource) || runBlock(splitTextBlock)
           if (!canEdit() || !editorView) return false
           const current = stateAtDomSelection(editorView)
           suggest(() => suggestEnter(current, suggestionOptions()))
@@ -779,6 +785,23 @@ export function createDocumentBodyEditor(
     return queueDeleteNode([join.deleteNodeID])
   }
 
+  // Backspace with the caret at the end of a heading whose text is a run (what
+  // a pasted heading holds). The link button sits after the run, and the
+  // browser's own Backspace there removes the run whole, so one character goes
+  // instead.
+  const deleteLastHeadingCharacter = (selection: Selection) => {
+    if (!selection.empty || !canEdit()) return false
+    const { $from } = selection
+    if ($from.parent.type.name !== 'atx_heading') return false
+    const run = $from.nodeBefore
+    if (run?.type.name !== 'run' || run.content.size < 2) return false
+    const end = $from.pos - 1
+    const tr = state.tr.delete(end - 1, end)
+    tr.setSelection(TextSelection.create(tr.doc, end - 1))
+    viewHolder.current?.dispatch(tr)
+    return true
+  }
+
   // Backspace on an empty line that is all there is of its block (a heading, a
   // list item, a quote, a code, math or diagram block) or all that a notice,
   // toggle or untouched table holds removes the block.
@@ -1185,7 +1208,8 @@ export function createDocumentBodyEditor(
         !event.metaKey &&
         !event.shiftKey &&
         event.key === 'Backspace' &&
-        deleteBlankBlock(selectionNow(editorView))
+        (deleteLastHeadingCharacter(selectionNow(editorView)) ||
+          deleteBlankBlock(selectionNow(editorView)))
       ) {
         event.preventDefault()
         return true
@@ -1379,6 +1403,8 @@ export function createDocumentBodyEditor(
       (suggestMode
         ? runHeading(level)
         : setHeadingCommand(level)(state, view.dispatch)),
+    wrapBlock: (kind: WrapKind) =>
+      canEdit() && !suggestMode && wrapLineCommand(kind)(state, view.dispatch),
     toggleTask: () => canEdit() && toggleTaskChecked(state, view.dispatch),
     insertBlock: (kind: InsertableBlock) =>
       canEdit() && insertBlockCommand(kind)(state, view.dispatch),
@@ -1417,6 +1443,8 @@ export function createDocumentBodyEditor(
     setSuggestMode: (next: boolean) => {
       if (suggestMode !== next) continueSuggestion = false
       suggestMode = next
+      view.dom.dataset.suggestMode = String(next)
+      view.dom.dispatchEvent(new Event('dd-table-mode'))
     },
     getSuggestionCards: () => suggestionCards(state.doc),
     scrollToSuggestion: (id: string) => {
