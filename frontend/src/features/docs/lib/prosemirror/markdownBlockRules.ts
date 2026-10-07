@@ -141,6 +141,14 @@ export function blockMarkdownRules() {
       }),
       line(runs),
     ]),
+    // ":::" or ":::tip" (info, success, warning, tip) and a space: a notice.
+    blockRule(/^:::(info|success|warning|tip)?\s$/, (runs, match) => [
+      createNode('notice', { variant: match[1] ?? 'info' }, [line(runs)]),
+    ]),
+    // "+++ ": a toggle; the line becomes its title, with a line below it to fold.
+    blockRule(/^\+\+\+\s$/, (runs) => [
+      createNode('toggle', {}, [line(runs), line([])]),
+    ]),
     // "# " to "###### ": a heading, for a line the in-place heading rule cannot
     // take because the marker is all there is in its run.
     blockRule(/^(#{1,6})\s$/, (runs, match) => [

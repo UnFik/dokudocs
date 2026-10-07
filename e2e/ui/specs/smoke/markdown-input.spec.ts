@@ -135,3 +135,19 @@ test("@live @smoke @markdowninput: typing --- makes a separator with a line afte
   await expect(editor.locator("hr")).toHaveCount(1);
   await expect(editor.locator("p").last()).toHaveText("after");
 });
+
+test("@live @smoke @markdowninput: typing ':::tip ' makes a notice and '+++ ' makes a toggle", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", ""]);
+  await editor.locator("p").first().click();
+  await page.keyboard.type(":::tip ");
+  await page.keyboard.type("Typed notice");
+  await expect(editor.locator(".dd-notice-tip")).toContainText("Typed notice");
+
+  await editor.locator("p").last().click();
+  await page.keyboard.type("+++ ");
+  await page.keyboard.type("Toggle title");
+  await expect(editor.locator(".dd-toggle")).toContainText("Toggle title");
+  await expect(editor.getByText(":::tip")).toHaveCount(0);
+});
