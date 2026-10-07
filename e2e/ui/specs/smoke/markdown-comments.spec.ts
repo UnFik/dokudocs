@@ -193,7 +193,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     const ownerEditor = page.locator(".ProseMirror");
     await expect(ownerEditor).toContainText("Original phrase");
     await expect(page.getByRole("status")).toContainText("Synced");
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
     const ownerRail = page.getByRole("list", {
       name: "Suggestions and comments",
     });
@@ -244,8 +244,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     await expect(ownerEditor.locator(".comment-focus")).toHaveText("Original");
     await expect(ownerThread).toHaveAttribute("data-focused", "true");
 
-    // The owner replies; the commenter sees it live.
-    await ownerThread.getByRole("button", { name: "Reply", exact: true }).click();
+    // The chosen card shows its reply box; the owner replies and the commenter sees it live.
     await ownerThread.getByLabel("Reply").fill("Yes, keep it.");
     await ownerThread.getByRole("button", { name: "Send reply" }).click();
     await expect(commenterRail).toContainText("Yes, keep it.");
@@ -255,7 +254,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
       .locator("li[data-comment-thread-id]")
       .first();
     await commenterThread
-      .getByRole("button", { name: "Edit", exact: true })
+      .getByRole("button", { name: "Edit this comment" })
       .click();
     await commenterThread
       .getByLabel("Edit comment")
@@ -267,7 +266,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     await expect(ownerThread).toContainText("edited");
     // Nobody else gets Edit on it; the owner may still delete a reply of their own.
     await expect(
-      ownerThread.getByRole("button", { name: "Edit", exact: true }),
+      ownerThread.getByRole("button", { name: "Edit this comment" }),
     ).toHaveCount(0);
     await ownerThread.getByRole("button", { name: "Delete reply" }).click();
     await page
@@ -327,7 +326,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
 
     // Someone who can only view reads the threads and cannot add to them.
     const viewer = await signIn(viewerContext, viewerEmail, viewerPassword);
-    await viewer.getByRole("button", { name: "Review", exact: true }).click();
+    await viewer.getByRole("button", { name: "Comment", exact: true }).click();
     const viewerRail = viewer.getByRole("list", {
       name: "Suggestions and comments",
     });
@@ -342,7 +341,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
 
     // A reload agrees, and the rail fits a phone.
     await page.reload();
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
     await expect(
       page.getByRole("list", { name: "Suggestions and comments" }),
     ).toContainText("Is this word needed?");

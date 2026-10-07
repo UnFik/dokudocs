@@ -154,13 +154,13 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     const ownerEditor = page.locator(".ProseMirror");
     await expect(ownerEditor).toContainText("Original phrase");
     await expect(page.getByRole("status")).toContainText("Synced");
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
     const ownerCards = page.getByRole("list", {
       name: "Suggestions and comments",
     });
 
     const openReview = async () => {
-      const review = page.getByRole("button", { name: "Review", exact: true });
+      const review = page.getByRole("button", { name: "Comment", exact: true });
       if ((await review.getAttribute("aria-expanded")) !== "true")
         await review.click();
     };

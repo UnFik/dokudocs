@@ -173,7 +173,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await expect(commenterEditor).toHaveAttribute("contenteditable", "true");
     await expect(commenter.getByRole("status")).toContainText("Synced");
     await commenter
-      .getByRole("button", { name: "Review", exact: true })
+      .getByRole("button", { name: "Comment", exact: true })
       .click();
     expect(
       await commenter.getByRole("button", { name: /^Suggest/ }).count(),
@@ -184,7 +184,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     const ownerEditor = page.locator(".ProseMirror");
     await expect(ownerEditor).toContainText("Original phrase");
     await expect(page.getByRole("status")).toContainText("Synced");
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("button", { name: "Comment", exact: true }).click();
     const ownerCards = page.getByRole("list", {
       name: "Suggestions and comments",
     });
@@ -320,7 +320,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
 
     // The commenter can only withdraw their own, not decide.
     const commenterReview = commenter.getByRole("button", {
-      name: "Review",
+      name: "Comment",
       exact: true,
     });
     if ((await commenterReview.getAttribute("aria-expanded")) !== "true") {
@@ -346,7 +346,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await viewer.goto(`/docs/${documentID}`);
     const viewerEditor = viewer.locator(".ProseMirror");
     await expect(viewerEditor.locator(".suggest-ins")).toHaveText("?");
-    await viewer.getByRole("button", { name: "Review", exact: true }).click();
+    await viewer.getByRole("button", { name: "Comment", exact: true }).click();
     await expect(
       viewer.getByRole("complementary", { name: "Review" }),
     ).toBeVisible();
@@ -372,7 +372,7 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     ).toHaveCount(0);
 
     const ownerReview = page.getByRole("button", {
-      name: "Review",
+      name: "Comment",
       exact: true,
     });
     if ((await ownerReview.getAttribute("aria-expanded")) !== "true") {
@@ -380,17 +380,12 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     }
     const liveCard = ownerCards.locator("li").filter({ hasText: 'Add: “?”' });
     await expect(liveCard).toBeVisible();
-    await liveCard.getByRole("button", { name: "Reply", exact: true }).click();
+    await liveCard.getByRole("button", { name: /^Show in document/ }).click();
     await liveCard.getByLabel("Reply").fill("Please keep this change.");
     await liveCard.getByRole("button", { name: "Send reply" }).click();
     await expect(liveCard).toContainText("Please keep this change.");
 
-    await page.getByRole("button", { name: "Accept all", exact: true }).click();
-    const acceptAllDialog = page.getByRole("alertdialog");
-    await expect(acceptAllDialog).toContainText("Accept all 1 suggestion?");
-    await acceptAllDialog
-      .getByRole("button", { name: "Accept all", exact: true })
-      .click();
+    await liveCard.getByRole("button", { name: "Accept", exact: true }).click();
     await expect(
       page.getByText(/No suggestions or comments yet/),
     ).toBeVisible();
@@ -401,11 +396,10 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     await commenter.keyboard.press("Home");
     await commenter.keyboard.type("!");
     await expect(ownerCards).toContainText('Add: “!”');
-    await page.getByRole("button", { name: "Reject all", exact: true }).click();
-    const rejectAllDialog = page.getByRole("alertdialog");
-    await expect(rejectAllDialog).toContainText("Reject all 1 suggestion?");
-    await rejectAllDialog
-      .getByRole("button", { name: "Reject all", exact: true })
+    await ownerCards
+      .locator("li")
+      .filter({ hasText: 'Add: “!”' })
+      .getByRole("button", { name: "Reject", exact: true })
       .click();
     await expect(
       page.getByText(/No suggestions or comments yet/),
