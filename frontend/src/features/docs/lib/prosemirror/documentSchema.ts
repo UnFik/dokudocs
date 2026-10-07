@@ -207,6 +207,20 @@ function sizeStyle(bodyType: string, bodyAttributes: unknown) {
   return null
 }
 
+/** The column alignment kept in a cell's attributes; none draws the default. */
+function cellAlign(bodyAttributes: unknown) {
+  try {
+    const value = (
+      JSON.parse(String(bodyAttributes ?? '{}')) as { align?: unknown }
+    ).align
+    return value === 'left' || value === 'center' || value === 'right'
+      ? value
+      : null
+  } catch {
+    return null
+  }
+}
+
 const noticeVariants = new Set(['info', 'success', 'warning', 'tip'])
 
 function noticeVariant(bodyAttributes: unknown) {
@@ -232,6 +246,10 @@ function nodeDOM(
   }
   if (bodyType === 'atx-heading' || bodyType === 'setext-heading')
     return [headingTag(node.attrs.bodyAttributes), idAttrs, 0]
+  if (bodyType === 'table.cell') {
+    const align = cellAlign(node.attrs.bodyAttributes)
+    return ['td', { ...idAttrs, ...(align ? { 'data-align': align } : {}) }, 0]
+  }
   if (bodyType === 'notice') {
     const variant = noticeVariant(node.attrs.bodyAttributes)
     return [

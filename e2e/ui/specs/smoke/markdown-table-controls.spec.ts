@@ -300,3 +300,31 @@ test("@live @smoke @tablecontrols: the stretch edges are out of the way while se
   await page.mouse.up();
   await expect(page.locator(".dd-tc-resize")).toHaveCount(0);
 });
+
+test("@live @smoke @tablecontrols: Align left, center and right from a column menu change how the column is drawn", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const editor = await openTable(page);
+  const alignOf = (n: number) =>
+    editor
+      .locator("tr")
+      .evaluateAll(
+        (rows, index) =>
+          rows.map((r) => getComputedStyle(r.children[index]!).textAlign),
+        n,
+      );
+
+  for (const [label, expected] of [
+    ["Align center", "center"],
+    ["Align right", "right"],
+    ["Align left", "left"],
+  ] as const) {
+    await column(page, 2).click();
+    await page.getByRole("menuitem", { name: label }).click();
+    await expect.poll(() => alignOf(1)).toEqual(Array(4).fill(expected));
+  }
+  // Only the chosen column moved.
+  expect(await alignOf(0)).toEqual(Array(4).fill("left"));
+  await expectNoInternalMessage(page);
+});
