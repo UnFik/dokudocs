@@ -154,3 +154,23 @@ describe('emoji menu', () => {
     expect(input(host)).toBeNull()
   })
 })
+
+describe('a menu with nothing to offer', () => {
+  it('gives the typed characters back to the page, so ::: can start a notice', async () => {
+    const { view, host } = mount('')
+    press(view.dom, ':')
+    type(input(host)!, '::')
+    await wait()
+    expect(input(host)).toBeNull()
+    expect(view.state.doc.textContent).toBe(':::')
+  })
+
+  it('keeps open while something still matches', async () => {
+    const { view, host } = mount('hello ')
+    press(view.dom, '@')
+    type(input(host)!, 'Rin')
+    await wait()
+    expect(input(host)).not.toBeNull()
+    expect(view.state.doc.textContent).toBe('hello ')
+  })
+})

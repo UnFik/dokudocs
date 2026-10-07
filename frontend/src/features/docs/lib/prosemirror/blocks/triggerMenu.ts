@@ -74,6 +74,14 @@ class TriggerMenu<T extends MenuItem> {
     if (this.closed || ticket !== this.latest) return
     this.items = found.slice(0, 12)
     this.active = 0
+    // Nothing matches what was typed, so it was not meant for the menu: write it
+    // into the page and carry on typing there (":::" and "@" in an address).
+    if (!this.items.length && this.input.value) {
+      const typed = this.config.trigger + this.input.value
+      this.close(true)
+      this.view.dispatch(this.view.state.tr.insertText(typed))
+      return
+    }
     this.render()
   }
 
