@@ -7,8 +7,8 @@ import {
   fitElement,
   resizeElement,
   takeOutElement,
+  toLayoutNodes,
 } from './canvas-actions'
-import { toLayoutNodes } from './canvas-actions'
 import { addContainer, addSystem, readCanvas } from './canvas-doc'
 import { absoluteRect } from './layout'
 

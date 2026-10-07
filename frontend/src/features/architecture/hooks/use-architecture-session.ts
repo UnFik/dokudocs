@@ -50,10 +50,13 @@ export function useArchitectureSession(input: {
   const [refused, setRefused] = useState<string | null>(null)
   const [doc, setDoc] = useState<Y.Doc | null>(null)
   const sessionRef = useRef<Session | null>(null)
+  // The latest callbacks, read by the session's handlers without reopening it.
   const reloadedRef = useRef(input.onReloaded)
-  reloadedRef.current = input.onReloaded
   const commentsRef = useRef(input.onCommentsChanged)
-  commentsRef.current = input.onCommentsChanged
+  useEffect(() => {
+    reloadedRef.current = input.onReloaded
+    commentsRef.current = input.onCommentsChanged
+  })
 
   useEffect(() => {
     const session = openCollabSession({
