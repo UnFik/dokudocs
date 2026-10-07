@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"testing"
 
+	"backend/internal/domain/model"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
@@ -107,5 +108,57 @@ func TestUsedInListsOnlyCanvasesTheReaderMayOpen(t *testing.T) {
 	}
 	if uses, err := repo.ArchitectureUses(ctx, workspaceID, spec, ownerID); err != nil || len(uses) != 1 {
 		t.Fatalf("the owner sees %+v (%v), want the canvas", uses, err)
+	}
+}
+
+// A canvas that arrives as JSON (created, restored or duplicated) records its
+// links at once, before anyone edits it.
+func TestACanvasThatArrivesAsJSONRecordsItsLinksAtOnce(t *testing.T) {
+	ctx := context.Background()
+	db := openIntegrationDB(t)
+	workspaceID, specOwnerDoc, ownerID, repo := seedArchitectureDocument(t, ctx, db, canvasOne, "")
+	_ = specOwnerDoc
+	spec := uuid.New()
+	if err := seedJSONDocument(ctx, db, workspaceID, spec, ownerID, "spec"); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	canvas := fmt.Sprintf(`{"version":1,"nodes":[{"id":"api","kind":"system","name":"API","links":["%s"]}],"connections":[]}`, spec)
+	created, err := repo.CreateIdempotent(ctx, model.Document{
+		WorkspaceID: workspaceID, Title: "Imported", Type: "architecture", ContentJSON: json.RawMessage(canvas), AuthorID: ownerID, Visibility: "inherit", Tags: []string{},
+	}, nil, uuid.New())
+	if err != nil {
+		t.Fatalf("CreateIdempotent(): %v", err)
+	}
+	count := func(id uuid.UUID) int {
+		var n int
+		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM architecture_document_links WHERE architecture_id = $1`, id).Scan(&n)
+		return n
+	}
+	if n := count(created.ID); n != 1 {
+		t.Fatalf("links after create = %d, want 1", n)
+	}
+	copyDoc, err := repo.DuplicateAuthorized(ctx, created.ID, workspaceID, ownerID, uuid.New())
+	if err != nil {
+		t.Fatalf("DuplicateAuthorized(): %v", err)
+	}
+	if n := count(copyDoc.ID); n != 1 {
+		t.Fatalf("links after duplicate = %d, want 1", n)
+	}
+	named, err := repo.CreateNamedDocumentRevision(ctx, created.ID, workspaceID, ownerID, "with link")
+	if err != nil {
+		t.Fatalf("named: %v", err)
+	}
+	store := NewCollabStateStore(database.NewSQLDB(db))
+	if err := store.StoreState(ctx, workspaceID, created.ID, []byte{1}, json.RawMessage(canvasOne), "", nil); err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	if n := count(created.ID); n != 0 {
+		t.Fatalf("links after the link was removed = %d", n)
+	}
+	if _, err := repo.RestoreDocumentRevision(ctx, created.ID, named.ID, workspaceID, ownerID, uuid.New()); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if n := count(created.ID); n != 1 {
+		t.Fatalf("links after restore = %d, want 1", n)
 	}
 }

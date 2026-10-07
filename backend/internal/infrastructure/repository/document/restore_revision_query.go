@@ -107,6 +107,11 @@ func (r *Repository) RestoreDocumentRevision(ctx context.Context, documentID, so
 		if _, err := tx.ExecContext(ctx, `DELETE FROM document_collab_states WHERE document_id = $1`, documentID); err != nil {
 			return err
 		}
+		if documentType == "architecture" {
+			if err := projectArchitectureLinks(ctx, tx, workspaceID, documentID, sourceJSON); err != nil {
+				return err
+			}
+		}
 
 		var restoredRevision model.DocumentRevision
 		if err := tx.QueryRowContext(ctx, `

@@ -96,6 +96,13 @@ func (r *Repository) DuplicateAuthorized(ctx context.Context, docID, workspaceID
 		if duplicateID == uuid.Nil {
 			return constant.ErrDocumentNotFound
 		}
+		// A copied canvas links to the same documents as its source.
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO architecture_document_links (architecture_id, element_id, element_kind, element_name, document_id)
+			SELECT $1, element_id, element_kind, element_name, document_id FROM architecture_document_links WHERE architecture_id = $2
+		`, duplicateID, docID); err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO document_category_mappings (document_id, category_id)
 			SELECT $1, category_id FROM document_category_mappings WHERE document_id = $2
