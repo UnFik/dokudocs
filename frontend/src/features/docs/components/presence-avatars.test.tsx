@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { render } from 'vitest-browser-react'
-import { page } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 import { PresenceAvatars } from './presence-avatars'
 
 const users = [
@@ -63,5 +63,29 @@ describe('PresenceAvatars', () => {
     await screen.getByRole('button', { name: 'Follow Anonymous' }).click()
     expect(calls).toEqual([null, 'u3'])
     expect(screen.getByRole('button', { name: /Ada Lovelace/ }).elements()).toHaveLength(0)
+  })
+
+  it('shows the person\'s name in a popover when their avatar is hovered', async () => {
+    const screen = await render(
+      <PresenceAvatars users={users} currentUserID='u1' />
+    )
+    await userEvent.hover(screen.getByText('BC'))
+    await expect
+      .element(page.getByRole('tooltip'))
+      .toHaveTextContent('Bo Chen')
+  })
+
+  it('names the people behind the +N count when it is hovered', async () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({
+      userID: `u${i}`,
+      name: `User ${i}`,
+    }))
+    const screen = await render(
+      <PresenceAvatars users={many} currentUserID='u0' />
+    )
+    await userEvent.hover(screen.getByText('+2'))
+    await expect
+      .element(page.getByRole('tooltip'))
+      .toHaveTextContent('User 4, User 5')
   })
 })
