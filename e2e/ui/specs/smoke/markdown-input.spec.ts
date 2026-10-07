@@ -151,3 +151,24 @@ test("@live @smoke @markdowninput: typing ':::tip ' makes a notice and '+++ ' ma
   await expect(editor.locator(".dd-toggle")).toContainText("Toggle title");
   await expect(editor.getByText(":::tip")).toHaveCount(0);
 });
+
+test("@live @smoke @markdowninput: an empty notice goes away with Backspace in it, or from its handle", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", "after"]);
+  await editor.locator("p").first().click();
+  await page.keyboard.type(":::tip ");
+  await expect(editor.locator(".dd-notice-tip")).toHaveCount(1);
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-tip")).toHaveCount(0);
+  await expect(editor).toContainText("after");
+
+  await editor.locator("p").first().click();
+  await page.keyboard.press("Home");
+  await page.keyboard.type(":::warning ");
+  await expect(editor.locator(".dd-notice-warning")).toHaveCount(1);
+  await page.locator(".dd-handle:not([hidden])").click();
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator(".dd-notice-warning")).toHaveCount(0);
+  await expect(editor).toContainText("after");
+});
