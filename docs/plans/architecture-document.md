@@ -183,9 +183,9 @@ Rules:
 
 ## Phases
 
-1. **Canvas.** `architecture` in `document_type` (migration + Go model comment + create menu); catalog table, seed, endpoint, icons; `collab/` loads and stores architecture rooms (state ↔ `content_json`); canvas with palette, nesting, connections, properties, undo, presence; revisions and restore; JSON export.
+1. **Canvas.** `architecture` in `document_type`; catalog table, seed, endpoint, icons; catalog requests stored; `collab/` loads and stores architecture rooms (state ↔ `content_json`); canvas with palette, containers (slot, take out, resize, fit), connections, properties, delete, collapsible panels, undo, presence; element limits with warnings; revisions and restore; JSON export. Split into five pull requests in [the phase 1 spec](../specs/architecture-document-phase-1.md#9-delivery-order).
 2. **Document links.** Links in the panel, create-and-link, `architecture_document_links` projection, locked cards, "Used in" section on document pages with jump-to-node.
-3. **Versions and reach.** Architecture versions (tag, pins, open read-only, restore canvas, label edit, owner delete); text summary for search and RAG; PNG and SVG export; public link view; limit warnings; visual diff between two versions (added, removed and changed elements coloured).
+3. **Versions and reach.** Architecture versions (tag, pins, open read-only, restore canvas, label edit, owner delete); visual diff between two versions (added, removed and changed elements coloured); text summary for search and RAG; PNG and SVG export; public link view; admin list of catalog requests with notifications.
 4. **Later.** CommentThreads anchored to a node or Connection (needs an anchor type besides text ranges).
 
 ## Out of scope
