@@ -2,7 +2,8 @@ import { Redis } from '@hocuspocus/extension-redis'
 import { Server, type Extension } from '@hocuspocus/server'
 import * as Y from 'yjs'
 import { yDocToProsemirrorJSON } from 'y-prosemirror'
-import type { Authorized, BackendApi } from './backend-api'
+import { architectureSummary, architectureToJSON, seedArchitecture } from './architecture'
+import type { Authorized, BackendApi, DocumentType } from './backend-api'
 import { toMarkdown } from './markdown'
 import { instrumentation, log, Metrics } from './operations'
 import { permissions } from './permissions'
@@ -13,7 +14,17 @@ import { suggestionsIn } from './suggestions'
 // The editor binds its document to this fragment.
 const fragmentName = 'body'
 
-export type CollabContext = { userID: string; access: Authorized; workspaceID: string; documentID: string }
+export type CollabContext = {
+  userID: string
+  access: Authorized
+  workspaceID: string
+  documentID: string
+  documentType: DocumentType
+}
+
+/** The kind of each open room, set when it loads; the store hook has no connection to ask. */
+const roomTypes = new Map<string, DocumentType>()
+export const roomType = (documentName: string): DocumentType => roomTypes.get(documentName) ?? 'markdown'
 
 export type CollabServer = { stop(): Promise<void> }
 
@@ -53,15 +64,21 @@ function authentication(backend: BackendApi, metrics: Metrics, maxConnections: n
       // A token that is not valid means signing in again; no access means asking for it.
       if (!access) throw refusal('unauthorized', metrics)
       if (!access.canRead) throw refusal('forbidden', metrics)
-      // A viewer only reads. Someone who can suggest still writes; what they may
-      // write is checked per message.
-      connectionConfig.readOnly = !access.canEdit && !access.canSuggest
-      return { userID: access.userID, access, ...room }
+      const documentType = access.documentType ?? 'markdown'
+      if (documentType !== 'markdown' && documentType !== 'architecture') throw refusal('forbidden', metrics)
+      // A viewer only reads. On Markdown someone who can suggest still writes; what they may
+      // write is checked per message. A canvas has no suggest mode: only an editor writes.
+      connectionConfig.readOnly = documentType === 'architecture' ? !access.canEdit : !access.canEdit && !access.canSuggest
+      return { userID: access.userID, access, ...room, documentType }
     },
     // The editor needs to know what it may do; the connection itself only says read or write.
     async connected({ connection, context }) {
       connection.sendStateless(
-        JSON.stringify({ type: 'access', canEdit: context.access.canEdit, canSuggest: context.access.canSuggest })
+        JSON.stringify({
+          type: 'access',
+          canEdit: context.access.canEdit,
+          canSuggest: context.documentType === 'architecture' ? false : context.access.canSuggest,
+        })
       )
     },
   }
@@ -134,15 +151,17 @@ function http(secret: string | null, metrics: Metrics): Extension {
 function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabContext> {
   return {
     extensionName: 'persistence',
-    async onLoadDocument({ document, documentName }) {
+    async onLoadDocument({ document, documentName, context }) {
       const room = parseRoom(documentName)
       if (!room) throw new Error('forbidden')
+      const documentType = (context as CollabContext | undefined)?.documentType ?? 'markdown'
+      roomTypes.set(documentName, documentType)
       const { state, content } = await backend.loadDocument(room.workspaceID, room.documentID)
       if (state) {
         Y.applyUpdate(document, state)
       } else if (content) {
-        // A document made from JSON alone (a seed, an import): build its state once.
-        Y.applyUpdate(document, seedFromJSON(content))
+        // A document made from JSON alone (a seed, an import, a restore): build its state once.
+        Y.applyUpdate(document, documentType === 'architecture' ? seedArchitecture(content) : seedFromJSON(content))
       }
     },
     async onChange({ documentName, context }) {
@@ -152,19 +171,27 @@ function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabCon
     async afterUnloadDocument({ documentName }) {
       droppedRooms.delete(documentName)
       lastEditors.delete(documentName)
+      roomTypes.delete(documentName)
     },
     async onStoreDocument({ document, documentName }) {
       const room = parseRoom(documentName)
       if (!room || droppedRooms.has(documentName)) return
-      const content = yDocToProsemirrorJSON(document, fragmentName)
+      const derived =
+        roomType(documentName) === 'architecture'
+          ? (() => {
+              const content = architectureToJSON(document)
+              return { content, markdown: architectureSummary(content), suggestions: [] }
+            })()
+          : (() => {
+              const content = yDocToProsemirrorJSON(document, fragmentName)
+              return { content, markdown: toMarkdown(content), suggestions: suggestionsIn(content) }
+            })()
       try {
         await backend.storeState({
           ...room,
           state: Y.encodeStateAsUpdate(document),
-          content,
-          markdown: toMarkdown(content),
-        updatedBy: lastEditors.get(documentName) ?? null,
-          suggestions: suggestionsIn(content),
+          ...derived,
+          updatedBy: lastEditors.get(documentName) ?? null,
         })
       } catch (error) {
         metrics.storeFailures++

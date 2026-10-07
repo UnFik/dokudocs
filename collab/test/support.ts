@@ -16,11 +16,11 @@ export function freePort(): Promise<number> {
 
 /** An in-memory stand-in for the Go API: the boundary the service talks to. */
 export class FakeBackend implements BackendApi {
-  tokens = new Map<string, { userID: string; access: Access }>()
+  tokens = new Map<string, { userID: string; access: Access & { documentType?: string } }>()
   documents = new Map<string, LoadedDocument>()
   stores: StoredDocument[] = []
 
-  grant(token: string, userID: string, access: Partial<Access> = {}) {
+  grant(token: string, userID: string, access: Partial<Access & { documentType: string }> = {}) {
     this.tokens.set(token, {
       userID,
       access: { canRead: true, canEdit: true, canSuggest: true, ...access },
