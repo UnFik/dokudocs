@@ -45,7 +45,7 @@ A conversation attached to a selected range in a document, with replies and a re
 _Avoid_: Comment when referring to the full conversation rather than one message
 
 **CommentAnchor**:
-The reference connecting a CommentThread to the text range it discusses. An anchor is a pair of Yjs relative positions, so it follows the text as it moves. It is orphaned when its text is removed or copied to new nodes (a split or join that is accepted); an orphaned thread stays readable with its quoted text, can still be replied to and resolved, and is listed last in the review rail.
+The reference connecting a CommentThread to what it discusses: a text range in a Markdown document, or an element (a node or Connection, by its id) on an Architecture canvas, where a thread whose element is removed stays readable. An anchor is a pair of Yjs relative positions, so it follows the text as it moves. It is orphaned when its text is removed or copied to new nodes (a split or join that is accepted); an orphaned thread stays readable with its quoted text, can still be replied to and resolved, and is listed last in the review rail.
 _Avoid_: Character offset as a durable identity
 
 **DocumentRevision**:

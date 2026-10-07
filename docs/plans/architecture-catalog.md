@@ -537,7 +537,7 @@ catalog_request_votes
 ```
 
 - A request with a `name_key` that already exists adds a vote instead of a new row, so the list shows demand ("Midtrans · 7 requests").
-- Platform admins (the existing `roles`) see the list sorted by votes. Adding an entry is still a migration; when it ships, the request is marked `added` with its slug and every voter gets an in-app notification.
+- Platform admins (users with the `superadmin` or `admin` role) see the list sorted by votes, from "Review requests" in the palette. Adding an entry is still a migration; when it ships, the request is marked `added` with its slug, or `declined` with a reason, and every voter gets an in-app notification (`notifications` table, `GET /api/v1/notifications`), shown under "Your requests" in the palette.
 - Declining records a short reason that voters see in the notification.
 - After the entry exists, a person changes a generic node's entry from the properties panel (catalog picker); name, links and position stay.
 - `POST /api/v1/catalog/requests` needs only a signed-in user; a user may have at most 20 open requests, so the form cannot be used to flood the list.
@@ -569,7 +569,7 @@ Logos are trademarks: they are shown only to name the product they belong to, un
 
 ### Coverage (measured 2026-10-07)
 
-Of the 265 Host and System entries, matched by name against Devicon (`devicon.json`, master) and Simple Icons 16.34.0:
+Of the 265 Host and System entries of the first seed (nine Google Cloud services joined later, for 274), matched by name against Devicon (`devicon.json`, master) and Simple Icons 16.34.0:
 
 | Where the icon comes from | Entries | Work |
 |---|---|---|
@@ -673,7 +673,7 @@ An entry written by hand in `catalog-icons.json` wins over detection.
 
 **At runtime.** One `CatalogIcon` component picks the file from the resolved theme (`.dark` on `<html>`, set by `theme-provider`) and the manifest, and swaps it when the theme changes. Palette, canvas, properties panel, "Used in" and public view all use it.
 
-**Export.** PNG and SVG export ask which theme to draw in (default: the current one) and embed that theme's icon files, so an exported diagram looks the same everywhere.
+**Export.** PNG and SVG are drawn in the theme on screen, with that theme's icon files embedded, so the file looks the same wherever it is opened; switch the theme first to export the other one.
 
 **Check.** The coverage test also fails when an icon is flagged faint for a theme and has no variant or tile for it.
 
