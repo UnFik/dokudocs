@@ -73,6 +73,8 @@ export function openCollabSession(input: {
   onCommentsChanged?: () => void
   /** The server replaced the document (a restored revision): this device's copy is stale. */
   onReloaded?: () => void
+  /** The server refused an update and closes the connection; sending it again would loop. */
+  onRefused?: (reason: string) => void
 }) {
   const name = roomName(input.workspaceID, input.documentID)
   const ydoc = new Y.Doc()
@@ -128,6 +130,8 @@ export function openCollabSession(input: {
         })
       else if (message.type === 'comments_changed') input.onCommentsChanged?.()
       else if (message.type === 'reloaded') input.onReloaded?.()
+      else if (message.type === 'refused')
+        input.onRefused?.(String((message as { reason?: unknown }).reason ?? ''))
       else if (message.type === 'pong')
         pongs.get(String((message as { id?: unknown }).id))?.()
     },

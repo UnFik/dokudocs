@@ -19,6 +19,7 @@ import { EditorHeader } from './editor-header'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
 import { RemoteMarkdownDocEditor } from './remote-markdown-doc-editor'
+import { ArchitectureDocEditor } from '@/features/architecture/components/architecture-editor'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
 export function DocEditor() {
@@ -37,6 +38,9 @@ export function DocEditor() {
     (typeof navigator !== 'undefined' && !navigator.onLine)
   const cachedMarkdown =
     cachedDocument?.type === 'markdown' ? cachedDocument : undefined
+  // A canvas opens offline from this device's copy of its room, like Markdown.
+  const cachedCanvas =
+    cachedDocument?.type === 'architecture' ? cachedDocument : undefined
   const isRemoteID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       docId
@@ -45,7 +49,7 @@ export function DocEditor() {
     queryKey: ['document', workspaceID, docId, scope.userId],
     queryFn: async ({ signal }) => {
       const document = await getDocument(workspaceID, docId, signal)
-      if (document.type === 'markdown')
+      if (document.type === 'markdown' || document.type === 'architecture')
         useDokudocsStore.getState().upsertDocument({
           ...document,
           content: '',
@@ -62,6 +66,16 @@ export function DocEditor() {
   if (!isRemoteID)
     return (
       <ScopedDocEditor key={`${scope.generation}:${docId}`} docId={docId} />
+    )
+
+  if (offline && cachedCanvas?.workspaceId)
+    return (
+      <ArchitectureDocEditor
+        key={`${scope.generation}:${docId}`}
+        document={cachedCanvas}
+        workspaceID={cachedCanvas.workspaceId}
+        userID={scope.userId ?? ''}
+      />
     )
 
   if (offline) {
@@ -103,6 +117,17 @@ export function DocEditor() {
     return (
       <RemoteMarkdownDocEditor
         key={`${scope.generation}:${docId}:${citationNodeID ?? ''}`}
+        document={documentQuery.data}
+        workspaceID={workspaceID}
+        userID={scope.userId ?? auth.user?.id ?? ''}
+        focusNodeID={citationNodeID}
+      />
+    )
+
+  if (documentQuery.data.type === 'architecture')
+    return (
+      <ArchitectureDocEditor
+        key={`${scope.generation}:${docId}`}
         document={documentQuery.data}
         workspaceID={workspaceID}
         userID={scope.userId ?? auth.user?.id ?? ''}

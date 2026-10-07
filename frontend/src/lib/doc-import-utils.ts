@@ -66,7 +66,11 @@ export function parseProperCaseTitle(fileName: string): string {
 export function detectDocTypeAndContent(
   fileName: string,
   rawContent: string
-): { type: DocType; content: string; detectedReason: string } {
+): {
+  type: Exclude<DocType, 'architecture'>
+  content: string
+  detectedReason: string
+} {
   const extMatch = fileName.match(/\.([a-zA-Z0-9]+)$/)
   const ext = extMatch ? extMatch[1].toLowerCase() : ''
   const trimmed = rawContent.trim()

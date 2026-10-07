@@ -33,7 +33,7 @@ export type NewContainer = {
   id?: string
 }
 
-function addNode(doc: Y.Doc, fields: Record<string, unknown>, id = crypto.randomUUID()) {
+function addNode(doc: Y.Doc, fields: Record<string, unknown>, id: string = crypto.randomUUID()) {
   doc.transact(() => {
     const m = new Y.Map<unknown>()
     nodesOf(doc).set(id, m)
