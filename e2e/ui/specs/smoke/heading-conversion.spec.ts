@@ -90,7 +90,8 @@ test("@live @smoke: slash Heading 2 and Ctrl+Alt shortcuts convert blocks, rende
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),

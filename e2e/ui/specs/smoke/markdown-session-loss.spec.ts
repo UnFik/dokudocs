@@ -116,7 +116,8 @@ async function createDocument(owner: { token: string }, workspaceName: string) {
 
 async function openEditor(page: Page, documentID: string, workspaceID: string) {
   await page.goto(`/docs/${documentID}?workspaceId=${workspaceID}`);
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status").first()).toContainText("Synced");

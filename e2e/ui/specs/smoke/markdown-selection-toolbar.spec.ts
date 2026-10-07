@@ -77,7 +77,8 @@ test("@live @smoke: floating selection toolbar applies bold and a link", async (
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
 
 
   const toolbar = page.getByRole("toolbar", { name: "Format selection" });

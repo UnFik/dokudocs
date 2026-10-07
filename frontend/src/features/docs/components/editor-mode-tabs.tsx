@@ -1,12 +1,14 @@
-import type { KeyboardEvent } from 'react'
-import { Edit3, Eye, FilePenLine } from 'lucide-react'
+import { useRef } from 'react'
+import { ChevronDown, Edit3, Eye, FilePenLine } from 'lucide-react'
 import type { MarkdownPreviewMode } from '@/stores/editor-preference-store'
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export type EditorMode = MarkdownPreviewMode
 
@@ -60,6 +62,7 @@ const tabs: { mode: EditorMode; label: string; icon: typeof Eye }[] = [
   { mode: 'suggest', label: 'Suggest', icon: FilePenLine },
 ]
 
+/** The current mode on a button; the menu lists all three and says why one is unavailable. */
 export function EditorModeTabs({
   mode,
   states,
@@ -69,64 +72,68 @@ export function EditorModeTabs({
   states: ModeTabStates
   onChange: (mode: EditorMode) => void
 }) {
-  const move = (event: KeyboardEvent<HTMLDivElement>) => {
-    const step =
-      event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
-    if (!step) return
-    const enabled = tabs.filter((tab) => !states[tab.mode].disabledReason)
-    const index = enabled.findIndex((tab) => tab.mode === mode)
-    const next = enabled[(index + step + enabled.length) % enabled.length]
-    if (!next) return
-    event.preventDefault()
-    onChange(next.mode)
-    event.currentTarget
-      .querySelector<HTMLElement>(`[data-mode="${next.mode}"]`)
-      ?.focus()
-  }
-
+  const current = tabs.find((tab) => tab.mode === mode) ?? tabs[0]!
+  const CurrentIcon = current.icon
+  const chose = useRef(false)
   return (
-    <div
-      role='tablist'
-      aria-label='Editor mode'
-      onKeyDown={move}
-      className='inline-flex items-center rounded-sm border border-input p-0.5'
-    >
-      {tabs.map(({ mode: tabMode, label, icon: Icon }) => {
-        const selected = tabMode === mode
-        const reason = states[tabMode].disabledReason
-        const button = (
-          <button
-            type='button'
-            role='tab'
-            data-mode={tabMode}
-            aria-selected={selected}
-            aria-disabled={reason ? true : undefined}
-            tabIndex={selected || reason ? 0 : -1}
-            onClick={() => {
-              if (!reason) onChange(tabMode)
-            }}
-            className={cn(
-              'inline-flex min-h-11 items-center gap-1.5 rounded-xs px-3 text-[13px] font-medium transition-colors md:min-h-8',
-              'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none',
-              selected
-                ? 'bg-secondary text-foreground'
-                : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
-              reason && 'cursor-not-allowed opacity-60 hover:bg-transparent'
-            )}
-          >
-            <Icon className='size-3.5' aria-hidden />
-            {label}
-          </button>
-        )
-        return reason ? (
-          <Tooltip key={tabMode}>
-            <TooltipTrigger asChild>{button}</TooltipTrigger>
-            <TooltipContent>{reason}</TooltipContent>
-          </Tooltip>
-        ) : (
-          <span key={tabMode}>{button}</span>
-        )
-      })}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type='button'
+          variant='outline'
+          size='sm'
+          aria-label={`Editor mode: ${current.label}`}
+          className='h-11 gap-1.5 text-[13px] md:h-8'
+        >
+          <CurrentIcon className='size-3.5' aria-hidden />
+          {current.label}
+          <ChevronDown className='size-3.5 opacity-60' aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align='start'
+        className='w-64'
+        // After a choice the page takes focus back (the editor), not this button.
+        onCloseAutoFocus={(event) => {
+          if (chose.current) event.preventDefault()
+          chose.current = false
+        }}
+      >
+        <DropdownMenuRadioGroup
+          value={mode}
+          onValueChange={(value) => {
+            chose.current = true
+            onChange(value as EditorMode)
+          }}
+        >
+          {tabs.map(({ mode: tabMode, label, icon: Icon }) => {
+            const reason = states[tabMode].disabledReason
+            return (
+              <DropdownMenuRadioItem
+                key={tabMode}
+                value={tabMode}
+                disabled={Boolean(reason)}
+                aria-label={label}
+                aria-describedby={reason ? `mode-${tabMode}-reason` : undefined}
+                className='min-h-11 flex-col items-start gap-0 md:min-h-8'
+              >
+                <span className='flex items-center gap-2'>
+                  <Icon className='size-3.5' aria-hidden />
+                  {label}
+                </span>
+                {reason ? (
+                  <span
+                    id={`mode-${tabMode}-reason`}
+                    className='text-xs text-muted-foreground'
+                  >
+                    {reason}
+                  </span>
+                ) : null}
+              </DropdownMenuRadioItem>
+            )
+          })}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

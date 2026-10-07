@@ -164,11 +164,12 @@ test("@live @smoke @suggestlive: a commenter's typing is a suggestion in the doc
     const commenterEditor = commenter.locator(".ProseMirror");
     await expect(commenterEditor).toContainText("Original phrase");
 
-    const tab = (name: string) =>
-      commenter.getByRole("tab", { name, exact: true });
-    await expect(tab("Edit")).toHaveAttribute("aria-disabled", "true");
-    await expect(tab("Suggest")).not.toHaveAttribute("aria-disabled", "true");
-    await tab("Suggest").click();
+    const mode = (name: string) =>
+      commenter.getByRole("menuitemradio", { name, exact: true });
+    await commenter.getByRole("button", { name: /^Editor mode/ }).click();
+    await expect(mode("Edit")).toHaveAttribute("aria-disabled", "true");
+    await expect(mode("Suggest")).not.toHaveAttribute("aria-disabled", "true");
+    await mode("Suggest").click();
     await expect(commenterEditor).toHaveAttribute("contenteditable", "true");
     await expect(commenter.getByRole("status")).toContainText("Synced");
     await commenter

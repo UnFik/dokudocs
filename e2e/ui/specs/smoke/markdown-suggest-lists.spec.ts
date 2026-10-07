@@ -217,7 +217,8 @@ test("@live @smoke @suggestlists: a commenter's Enter opens a list item or a quo
     await commenter.goto(`/docs/${documentID}`);
     const commenterEditor = commenter.locator(".ProseMirror");
     await expect(commenterEditor).toContainText("Apples");
-    await commenter.getByRole("tab", { name: "Suggest", exact: true }).click();
+    await commenter.getByRole("button", { name: /^Editor mode/ }).click();
+  await commenter.getByRole("menuitemradio", { name: "Suggest", exact: true }).click();
     await expect(commenter.getByRole("status")).toContainText("Synced");
 
     await page.goto(`/docs/${documentID}`);

@@ -90,7 +90,8 @@ async function prepareDocument(page: Page) {
 
   await page.goto(`/docs/${documentID}?workspaceId=${workspaceID}`);
   await expect(page.getByRole("status").first()).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   return editor;

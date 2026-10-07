@@ -160,7 +160,8 @@ export async function openMarkdownDocument(
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible({ timeout: 20000 });
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
   return { editor, documentURL: page.url() };
 }
 

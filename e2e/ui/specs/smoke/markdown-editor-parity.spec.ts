@@ -82,7 +82,8 @@ test("@live @smoke: table edits converge across two clients and persist", async 
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
@@ -96,8 +97,8 @@ test("@live @smoke: table edits converge across two clients and persist", async 
   await expect(secondPage.getByRole("status")).toContainText("Synced");
 
   // Client one inserts a table from the block menu and fills the first cells with Tab.
-  await page.getByText("Start", { exact: true }).click();
-  await page.keyboard.press("End");
+  // Click past the end of the line so the caret is at its end.
+  await editor.locator("p").first().click({ position: { x: 400, y: 5 } });
   await page.keyboard.press("Enter");
   await page.keyboard.press("/");
   await page.getByRole("combobox", { name: "Insert block" }).fill("table");
@@ -218,7 +219,8 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
   const editor = page.locator('.ProseMirror[contenteditable="true"]');
   await expect(editor).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Synced");
-  await page.getByRole("tab", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: /^Editor mode/ }).click();
+  await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
 
   const secondContext = await browser.newContext({
     storageState: await page.context().storageState(),
