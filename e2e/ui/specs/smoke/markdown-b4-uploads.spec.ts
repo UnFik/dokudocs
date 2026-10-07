@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { documentJSON, openMarkdownDocument, pastePlainText } from "../../helpers/markdown-document";
+import {
+  documentJSON,
+  openMarkdownDocument,
+  pastePlainText,
+  settleSelection,
+} from "../../helpers/markdown-document";
 
 // A 1x1 PNG.
 const png = Buffer.from(
@@ -157,9 +162,15 @@ test("@live @smoke @comments: selecting text offers an Add comment icon that ope
   page,
 }) => {
   const { editor } = await openMarkdownDocument(page, ["comment on these words"]);
-  await editor.locator("p").first().click();
-  await page.keyboard.press("Home");
-  await page.keyboard.press("Shift+End");
+  await expect(async () => {
+    await editor.locator("p").first().click();
+    await settleSelection(page, { collapsed: true });
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Shift+End");
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
+      "comment on these words",
+    );
+  }).toPass({ timeout: 15_000 });
   await page.getByRole("toolbar", { name: "Format selection" }).getByRole("button", { name: "Add comment" }).click();
   const draft = page.locator("li[data-new-comment]");
   await expect(draft).toContainText("comment on these words");

@@ -100,6 +100,9 @@ test("@live @smoke: table edits converge across two clients and persist", async 
   // Click past the end of the line so the caret is at its end.
   await editor.locator("p").first().click({ position: { x: 400, y: 5 } });
   await page.keyboard.press("Enter");
+  // The block menu reads the editor's own selection, which reaches the new
+  // line a moment after Enter; the empty line is marked once it has.
+  await expect(editor.locator(".dd-empty-line")).toHaveCount(1);
   await page.keyboard.press("/");
   await page.keyboard.type("table");
   await page.getByRole("option", { name: /Table/ }).first().click();
