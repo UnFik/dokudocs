@@ -146,8 +146,19 @@ export function toProseMirrorName(bodyType: string) {
   return bodyType.replaceAll('-', '_').replaceAll('.', '_')
 }
 
+/** Blocks that hold source text: Enter adds a line and whitespace is kept as typed. */
+const sourceTextTypes = new Set([
+  'code-block',
+  'math-block',
+  'diagram',
+  'frontmatter',
+  'html-block',
+  'link-reference-definition',
+])
+
 function nodeSpec(bodyType: string, definition: NodeDefinition): NodeSpec {
   return {
+    ...(sourceTextTypes.has(bodyType) && { code: true }),
     ...(definition.content && { content: definition.content }),
     ...(definition.group && { group: definition.group }),
     ...(definition.group === 'inline' && { inline: true }),
@@ -177,6 +188,23 @@ function headingTag(bodyAttributes: unknown) {
     // Invalid attributes fall back to h1; the server validates the real value.
   }
   return `h${level}`
+}
+
+/** A stretched column or row: the cell or row keeps its size as pixels in bodyAttributes. */
+function sizeStyle(bodyType: string, bodyAttributes: unknown) {
+  try {
+    const parsed = JSON.parse(String(bodyAttributes ?? '{}')) as {
+      width?: unknown
+      height?: unknown
+    }
+    if (bodyType === 'table.cell' && typeof parsed.width === 'number')
+      return `width:${parsed.width}px;min-width:${parsed.width}px;max-width:${parsed.width}px`
+    if (bodyType === 'table.row' && typeof parsed.height === 'number')
+      return `height:${parsed.height}px`
+  } catch {
+    // Attributes the editor wrote are always JSON; anything else has no size.
+  }
+  return null
 }
 
 const noticeVariants = new Set(['info', 'success', 'warning', 'tip'])
@@ -218,9 +246,17 @@ function nodeDOM(
     ]
   }
   if (bodyType === 'embed')
-    return ['div', { ...idAttrs, class: 'dd-embed', contenteditable: 'false' }, '[embed]']
+    return [
+      'div',
+      { ...idAttrs, class: 'dd-embed', contenteditable: 'false' },
+      '[embed]',
+    ]
   if (bodyType === 'attachment')
-    return ['div', { ...idAttrs, class: 'dd-attachment', contenteditable: 'false' }, '[file]']
+    return [
+      'div',
+      { ...idAttrs, class: 'dd-attachment', contenteditable: 'false' },
+      '[file]',
+    ]
   if (bodyType === 'page-break')
     return ['hr', { ...idAttrs, class: 'dd-page-break' }]
   if (bodyType === 'thematic-break')
@@ -252,7 +288,11 @@ function nodeDOM(
     let id = ''
     try {
       id = String(
-        (JSON.parse(String(node.attrs.bodyAttributes ?? '{}')) as { id?: unknown }).id ?? ''
+        (
+          JSON.parse(String(node.attrs.bodyAttributes ?? '{}')) as {
+            id?: unknown
+          }
+        ).id ?? ''
       )
     } catch {
       // The chip then has no link.
@@ -275,6 +315,10 @@ function nodeDOM(
       },
       kind === 'person' ? `@${label}` : label,
     ]
+  }
+  if (bodyType === 'table.cell' || bodyType === 'table.row') {
+    const style = sizeStyle(bodyType, node.attrs.bodyAttributes)
+    return [definition.tag, style ? { ...idAttrs, style } : idAttrs, 0]
   }
   if (bodyType === 'line-break') return ['br', idAttrs]
   if (bodyType === 'code-block') return ['pre', idAttrs, ['code', 0]]

@@ -101,7 +101,7 @@ test("@live @smoke: table edits converge across two clients and persist", async 
   await editor.locator("p").first().click({ position: { x: 400, y: 5 } });
   await page.keyboard.press("Enter");
   await page.keyboard.press("/");
-  await page.getByRole("combobox", { name: "Insert block" }).fill("table");
+  await page.keyboard.type("table");
   await page.getByRole("option", { name: /Table/ }).first().click();
   await page.keyboard.type("alpha");
   await page.keyboard.press("Tab");
@@ -113,7 +113,8 @@ test("@live @smoke: table edits converge across two clients and persist", async 
 
   // Client two appends a row and writes into it.
   await secondEditor.locator("table td").nth(1).click();
-  await secondPage.getByRole("button", { name: "Add table row below" }).click();
+  await secondPage.getByRole("button", { name: "Row 1", exact: true }).click();
+  await secondPage.getByRole("menuitem", { name: "Insert 1 row below" }).click();
   await secondPage.keyboard.type("gamma");
   await expect(editor.locator("table tr")).toHaveCount(4);
   await expect(editor.locator("table td").nth(3)).toHaveText("gamma");
