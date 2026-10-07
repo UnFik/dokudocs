@@ -61,19 +61,52 @@ describe('filterBlockItems', () => {
   })
 })
 
+function typeText(view: EditorView, text: string) {
+  view.dispatch(view.state.tr.insertText(text))
+}
+
+const combobox = (el: HTMLElement) =>
+  el.querySelector<HTMLElement>('[role="combobox"]')
+
 describe('block menu', () => {
-  it('opens on / in an empty paragraph without typing the slash', () => {
+  it('opens on / in an empty paragraph and writes the slash into the line', () => {
     const { view, mountEl } = mount()
     view.focus()
     const event = press(view.dom, '/')
     expect(event.defaultPrevented).toBe(true)
-    const input = mountEl.querySelector<HTMLInputElement>('[role="combobox"]')!
-    expect(input.getAttribute('aria-expanded')).toBe('true')
-    expect(input.getAttribute('aria-label')).toBe('Insert block')
+    const editor = combobox(mountEl)!
+    expect(editor).toBe(view.dom)
+    expect(editor.getAttribute('aria-expanded')).toBe('true')
+    expect(editor.getAttribute('aria-label')).toBe('Insert block')
     expect(mountEl.querySelectorAll('[role="option"]').length).toBeGreaterThan(
       5
     )
-    expect(view.state.doc.textContent).toBe('')
+    expect(view.state.doc.textContent).toBe('/')
+    expect(mountEl.querySelector('input')).toBeNull()
+  })
+
+  it('gives every entry an icon or its heading level', () => {
+    const { view, mountEl } = mount()
+    view.focus()
+    press(view.dom, '/')
+    const options = [...mountEl.querySelectorAll('[role="option"]')]
+    expect(options[0]?.querySelector('.dd-slash-level')?.textContent).toBe('H1')
+    for (const option of options.slice(4))
+      expect(option.querySelector('svg')).not.toBeNull()
+  })
+
+  it('shows a hint in the empty line, and another once the slash is typed', () => {
+    const { view } = mount()
+    view.focus()
+    expect(
+      view.dom.querySelector('.dd-empty-line')?.getAttribute('data-hint')
+    ).toBe("Type '/' to insert…")
+    press(view.dom, '/')
+    expect(
+      view.dom.querySelector('.dd-hint-line')?.getAttribute('data-hint')
+    ).toBe('Keep typing to filter…')
+    typeText(view, 'h')
+    expect(view.dom.querySelector('.dd-hint-line')).toBeNull()
   })
 
   it('opens on / in a paragraph that only holds an empty run', () => {
@@ -91,47 +124,61 @@ describe('block menu', () => {
     expect(view.state.selection.$from.parent.type.name).toBe('run')
     view.focus()
     expect(press(view.dom, '/').defaultPrevented).toBe(true)
-    expect(mountEl.querySelector('[role="combobox"]')).not.toBeNull()
+    expect(combobox(mountEl)).not.toBeNull()
   })
 
   it('does not open inside a paragraph that has text', () => {
     const { view, mountEl } = mount('hello')
     view.focus()
     expect(press(view.dom, '/').defaultPrevented).toBe(false)
-    expect(mountEl.querySelector('[role="combobox"]')).toBeNull()
+    expect(combobox(mountEl)).toBeNull()
   })
 
-  it('filters, navigates with arrows and inserts the chosen block on Enter', () => {
+  it('filters as you type, navigates with arrows and inserts the chosen block on Enter', () => {
     const { view, mountEl } = mount()
     view.focus()
     press(view.dom, '/')
-    const input = mountEl.querySelector<HTMLInputElement>('[role="combobox"]')!
-    input.value = 'heading'
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-    press(input, 'ArrowDown')
-    const active = input.getAttribute('aria-activedescendant')!
+    typeText(view, 'heading')
+    expect(view.state.doc.textContent).toBe('/heading')
+    press(view.dom, 'ArrowDown')
+    const active = view.dom.getAttribute('aria-activedescendant')!
     expect(mountEl.querySelector(`#${active}`)?.textContent).toContain(
       'Heading 2'
     )
-    press(input, 'Enter')
+    press(view.dom, 'Enter')
     const heading = bodyOf(view.state.doc).find(
       (n) => n.type === 'atx-heading'
     )!
     expect(heading.attributes).toEqual({ level: 2 })
-    expect(mountEl.querySelector('[role="combobox"]')).toBeNull()
+    expect(heading.content).toBe('')
+    expect(combobox(mountEl)).toBeNull()
   })
 
-  it('closes on Escape and leaves the document unchanged', () => {
+  it('closes when nothing matches and keeps what was typed', () => {
     const { view, mountEl } = mount()
     view.focus()
     press(view.dom, '/')
-    const input = mountEl.querySelector<HTMLInputElement>('[role="combobox"]')!
-    press(input, 'Escape')
-    expect(mountEl.querySelector('[role="combobox"]')).toBeNull()
-    expect(bodyOf(view.state.doc).map((n) => n.type)).toEqual([
-      'document',
-      'paragraph',
-    ])
+    typeText(view, 'zzzz')
+    expect(combobox(mountEl)).toBeNull()
+    expect(view.state.doc.textContent).toBe('/zzzz')
+  })
+
+  it('closes when the slash is deleted', () => {
+    const { view, mountEl } = mount()
+    view.focus()
+    press(view.dom, '/')
+    view.dispatch(view.state.tr.delete(2, 3))
+    expect(combobox(mountEl)).toBeNull()
+  })
+
+  it('closes on Escape and leaves the typed text in the line', () => {
+    const { view, mountEl } = mount()
+    view.focus()
+    press(view.dom, '/')
+    press(view.dom, 'Escape')
+    expect(combobox(mountEl)).toBeNull()
+    expect(view.dom.getAttribute('role')).not.toBe('combobox')
+    expect(view.state.doc.textContent).toBe('/')
   })
 
   it('does not trigger while an IME composition is active', () => {
@@ -144,7 +191,7 @@ describe('block menu', () => {
       cancelable: true,
     })
     view.dom.dispatchEvent(event)
-    expect(mountEl.querySelector('[role="combobox"]')).toBeNull()
+    expect(combobox(mountEl)).toBeNull()
   })
 })
 
