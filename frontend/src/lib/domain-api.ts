@@ -46,8 +46,9 @@ const documentSchema = z.object({
   projectId: z.string().min(1).nullable().optional(),
   projectName: z.string().optional().default(''),
   title: z.string(),
-  type: z.enum(['markdown', 'dbdiagram', 'mermaid']),
+  type: z.enum(['markdown', 'dbdiagram', 'mermaid', 'architecture']),
   content: z.string(),
+  contentJSON: z.unknown().optional(),
   authorId: z.string().min(1),
   author: z.object({
     id: z.string().min(1),
@@ -92,6 +93,7 @@ const documentRevisionSchema = z.object({
   versionNumber: z.number().int().positive(),
   title: z.string().optional().default(''),
   content: z.string(),
+  contentJSON: z.unknown().optional(),
   isNamed: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -230,8 +232,13 @@ type CreateDocumentFields = {
 
 export type CreateDocumentInput =
   | (CreateDocumentFields & {
-      type: Exclude<DocType, 'markdown'>
+      type: Exclude<DocType, 'markdown' | 'architecture'>
       content?: string
+    })
+  | (CreateDocumentFields & {
+      type: 'architecture'
+      /** The canvas; the API starts an empty one when this is left out. */
+      contentJSON?: unknown
     })
   | (CreateDocumentFields & {
       type: 'markdown'
@@ -274,6 +281,7 @@ function toDocument(value: unknown): DocumentItem {
     title: doc.title,
     type: doc.type,
     content: doc.content,
+    contentJSON: doc.contentJSON,
     projectId: doc.projectId ?? null,
     projectName: doc.projectName || null,
     category: doc.category || doc.categories[0] || null,
@@ -299,7 +307,7 @@ function toDocument(value: unknown): DocumentItem {
   }
 }
 
-function workspaceHeaders(workspaceId: string): HeadersInit {
+export function workspaceHeaders(workspaceId: string): HeadersInit {
   return { 'X-Workspace-Id': workspaceId }
 }
 

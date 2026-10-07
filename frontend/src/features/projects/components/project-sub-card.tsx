@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { DocumentItem } from '@/types/dokudocs'
-import { Database, FileText, GitFork } from 'lucide-react'
+import { Database, FileText, GitFork, Network } from 'lucide-react'
 import { DocThumbnailPreview } from '@/features/docs/components/doc-thumbnail-preview'
 
 interface ProjectSubCardProps {
@@ -12,6 +12,7 @@ export function ProjectSubCard({ document }: ProjectSubCardProps) {
     markdown: FileText,
     dbdiagram: Database,
     mermaid: GitFork,
+    architecture: Network,
   }
 
   const colors = {
@@ -21,6 +22,7 @@ export function ProjectSubCard({ document }: ProjectSubCardProps) {
       'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
     mermaid:
       'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+    architecture: 'bg-muted text-foreground border-border',
   }
 
   const Icon = icons[document.type] || FileText
