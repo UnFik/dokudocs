@@ -72,38 +72,43 @@ func (r *Repository) CreateNamedDocumentRevision(ctx context.Context, documentID
 		if !policy.CanEditDocument(doc, access) {
 			return constant.ErrForbidden
 		}
-		var content string
-		var contentJSON []byte
-		var bodyVersion int64
-		if err := tx.QueryRowContext(ctx, `
-			SELECT content, content_json, body_version
-			FROM documents WHERE id = $1 AND workspace_id = $2
-		`, documentID, workspaceID).Scan(&content, &contentJSON, &bodyVersion); err != nil {
-			return err
-		}
-		revision = model.DocumentRevision{
-			DocumentID: documentID, AuthorID: actorID, Title: title,
-			Content: content, IsNamed: true, BodyVersion: &bodyVersion,
-		}
-		if len(contentJSON) > 0 {
-			revision.ContentJSON = contentJSON
-		}
-		if err := tx.QueryRowContext(ctx, `
-			INSERT INTO document_revisions (
-				document_id, author_id, version_number, title, content, is_named, content_json, body_version
-			)
-			SELECT $1, $2, COALESCE(MAX(version_number), 0) + 1, $3, $4, TRUE, $5::jsonb, $6
-			FROM document_revisions WHERE document_id = $1
-			RETURNING id, version_number, created_at, updated_at
-		`, documentID, actorID, title, revision.Content, nullableJSON(contentJSON), bodyVersion).Scan(
-			&revision.ID, &revision.VersionNumber, &revision.CreatedAt, &revision.UpdatedAt,
-		); err != nil {
-			return err
-		}
-		return nil
+		revision, err = insertNamedRevision(ctx, tx, documentID, workspaceID, actorID, title)
+		return err
 	})
 	if err != nil {
 		return model.DocumentRevision{}, err
 	}
 	return revision, nil
+}
+
+// insertNamedRevision snapshots the document as it is now under a name. Named
+// revisions are never combined, so whatever points at one keeps it.
+func insertNamedRevision(ctx context.Context, tx database.Queryer, documentID, workspaceID, actorID uuid.UUID, title string) (model.DocumentRevision, error) {
+	var content string
+	var contentJSON []byte
+	var bodyVersion int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT content, content_json, body_version
+		FROM documents WHERE id = $1 AND workspace_id = $2
+	`, documentID, workspaceID).Scan(&content, &contentJSON, &bodyVersion); err != nil {
+		return model.DocumentRevision{}, err
+	}
+	revision := model.DocumentRevision{
+		DocumentID: documentID, AuthorID: actorID, Title: title,
+		Content: content, IsNamed: true, BodyVersion: &bodyVersion,
+	}
+	if len(contentJSON) > 0 {
+		revision.ContentJSON = contentJSON
+	}
+	err := tx.QueryRowContext(ctx, `
+		INSERT INTO document_revisions (
+			document_id, author_id, version_number, title, content, is_named, content_json, body_version
+		)
+		SELECT $1, $2, COALESCE(MAX(version_number), 0) + 1, $3, $4, TRUE, $5::jsonb, $6
+		FROM document_revisions WHERE document_id = $1
+		RETURNING id, version_number, created_at, updated_at
+	`, documentID, actorID, title, revision.Content, nullableJSON(contentJSON), bodyVersion).Scan(
+		&revision.ID, &revision.VersionNumber, &revision.CreatedAt, &revision.UpdatedAt,
+	)
+	return revision, err
 }
