@@ -137,17 +137,17 @@ test("@live @smoke @presentation: Ctrl+Alt+P shows the page as slides and Ctrl+S
   await expect(page.getByRole("dialog", { name: "Insights" })).toContainText("Views");
 });
 
-test("@live @smoke @split: Split view shows the page as it reads beside the editor and follows edits", async ({
+test("@live @smoke @split: the Markdown button shows the exported text beside the editor and follows edits", async ({
   page,
 }) => {
   const { editor } = await openMarkdownDocument(page, ["first"]);
-  await page.getByRole("button", { name: "Split view" }).click();
-  const preview = page.getByRole("complementary", { name: "Preview" });
-  await expect(preview).toContainText("first");
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("complementary", { name: "Markdown source" });
+  await expect(source).toContainText("first");
   await editor.locator("p").first().click();
   await page.keyboard.press("End");
   await page.keyboard.type(" and more");
-  await expect(preview).toContainText("first and more");
+  await expect(source).toContainText("first and more");
 });
 
 test("@live @smoke @revisions: the version list steps through the changes from the version before", async ({
@@ -232,18 +232,17 @@ test("@live @smoke @markdownpaste: Markdown pasted as text, or chosen as a .md f
   await expect(editor.locator(".dd-attachment-card")).toHaveCount(0);
 });
 
-test("@live @smoke @split: the preview draws notices, toggles and math, and pasted :::/+++ blocks become real blocks", async ({
+test("@live @smoke @split: pasted :::/+++ blocks become real blocks and show as markers in the Markdown pane", async ({
   page,
 }) => {
   const { editor } = await openMarkdownDocument(page, ["", ""]);
   await editor.locator("p").first().click();
-  await pastePlainText(page, ":::tip\nRemember this\n:::\n\n+++\nTitle line\nHidden body\n+++\n\nInline $E = mc^2$ here");
+  await pastePlainText(page, ":::tip\nRemember this\n:::\n\n+++\nTitle line\nHidden body\n+++");
   await expect(editor.locator(".dd-notice-tip")).toContainText("Remember this");
   await expect(editor.locator(".dd-toggle")).toContainText("Hidden body");
 
-  await page.getByRole("button", { name: "Split view" }).click();
-  const preview = page.getByRole("complementary", { name: "Preview" });
-  await expect(preview.locator(".dd-notice-tip")).toContainText("Remember this");
-  await expect(preview.locator("details summary")).toHaveText("Title line");
-  await expect(preview.locator(".katex")).toHaveCount(1);
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  const source = page.getByRole("complementary", { name: "Markdown source" });
+  await expect(source).toContainText(":::tip");
+  await expect(source).toContainText("+++");
 });
