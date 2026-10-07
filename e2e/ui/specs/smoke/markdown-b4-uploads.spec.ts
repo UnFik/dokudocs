@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { documentJSON, openMarkdownDocument } from "../../helpers/markdown-document";
+import { documentJSON, openMarkdownDocument, pastePlainText } from "../../helpers/markdown-document";
 
 // A 1x1 PNG.
 const png = Buffer.from(
@@ -209,4 +209,25 @@ test("@live @smoke @blockdelete: a block chosen with its handle is deleted with 
   await page.reload();
   await expect(page.locator(".ProseMirror")).not.toContainText("remove me");
   await expect(page.locator(".ProseMirror .dd-attachment-card")).toHaveCount(0);
+});
+
+test("@live @smoke @markdownpaste: Markdown pasted as text, or chosen as a .md file, becomes headings, lists and bold", async ({
+  page,
+}) => {
+  const { editor } = await openMarkdownDocument(page, ["", ""]);
+  await editor.locator("p").first().click();
+  await pastePlainText(page, "# Pasted title\n\n- one\n- two\n\nSome **bold** words");
+  await expect(editor.locator("h1")).toHaveText("Pasted title");
+  await expect(editor.locator("ul li")).toHaveCount(2);
+  await expect(editor.locator("strong")).toHaveText("bold");
+
+  await editor.locator("p").last().click();
+  await chooseFile(page, {
+    name: "notes.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("## From a file\n\n1. first\n2. second\n"),
+  });
+  await expect(editor.locator("h2")).toHaveText("From a file");
+  await expect(editor.locator("ol li")).toHaveCount(2);
+  await expect(editor.locator(".dd-attachment-card")).toHaveCount(0);
 });

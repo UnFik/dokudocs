@@ -6,6 +6,7 @@ import {
   type Transaction,
 } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
+import { markdownToSlice } from './clipboard'
 import { createNode, insertBlock, insertInline } from './insertBlock'
 
 export interface UploadedFile {
@@ -47,6 +48,15 @@ function place(view: EditorView, stored: UploadedFile) {
   )(state, (tr) => view.dispatch(tr))
 }
 
+const markdownFile = /\.(md|markdown|mdown)$/i
+
+/** A Markdown file is read into the page like pasted Markdown text. */
+async function importMarkdown(view: EditorView, file: File) {
+  const slice = await markdownToSlice(await file.text())
+  if (view.isDestroyed) return
+  view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView())
+}
+
 async function uploadAll(
   view: EditorView,
   files: File[],
@@ -55,6 +65,10 @@ async function uploadAll(
   // One after the other so the files land in the order they were given.
   for (const file of files) {
     try {
+      if (markdownFile.test(file.name) || file.type === 'text/markdown') {
+        await importMarkdown(view, file)
+        continue
+      }
       place(view, await options.upload(file))
     } catch (error) {
       options.onError(
