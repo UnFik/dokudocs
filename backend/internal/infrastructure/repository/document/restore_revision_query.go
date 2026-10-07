@@ -78,7 +78,7 @@ func (r *Repository) RestoreDocumentRevision(ctx context.Context, documentID, so
 		`, documentID, workspaceID).Scan(&documentType, &currentMarkdown, &currentJSON, &bodyVersion); err != nil {
 			return err
 		}
-		if documentType != "markdown" || len(sourceJSON) == 0 {
+		if !hasCollabBody(documentType) || len(sourceJSON) == 0 {
 			return constant.ErrDocumentConflict
 		}
 		if bodyVersion == math.MaxInt64 {
