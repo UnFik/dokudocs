@@ -113,3 +113,31 @@ func TestReadRoomHeadReportsNoAccessForATrashedOrForeignDocument(t *testing.T) {
 		t.Fatalf("trashed document head = %+v, want no read access", head)
 	}
 }
+
+func TestReadRoomHeadOpensMarkdownAndArchitectureRoomsOnly(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("pgx", integrationDatabaseURL(t))
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer db.Close()
+	workspaceID, documentID, ownerID, _, _, reader := seedRunDocument(t, ctx, db)
+	for _, tc := range []struct {
+		documentType string
+		read         bool
+	}{{"markdown", true}, {"architecture", true}, {"mermaid", false}, {"dbdiagram", false}} {
+		if _, err := db.ExecContext(ctx, `UPDATE documents SET type = $2::document_type WHERE id = $1`, documentID, tc.documentType); err != nil {
+			t.Fatalf("set type %s: %v", tc.documentType, err)
+		}
+		head, err := reader.ReadRoomHead(ctx, workspaceID, documentID, []uuid.UUID{ownerID})
+		if err != nil {
+			t.Fatalf("%s: ReadRoomHead(): %v", tc.documentType, err)
+		}
+		if head.Access[ownerID].CanRead != tc.read {
+			t.Fatalf("%s: owner can read = %v, want %v", tc.documentType, head.Access[ownerID].CanRead, tc.read)
+		}
+		if tc.read && head.DocumentType != tc.documentType {
+			t.Fatalf("%s: DocumentType = %q", tc.documentType, head.DocumentType)
+		}
+	}
+}

@@ -46,8 +46,9 @@ const documentSchema = z.object({
   projectId: z.string().min(1).nullable().optional(),
   projectName: z.string().optional().default(''),
   title: z.string(),
-  type: z.enum(['markdown', 'dbdiagram', 'mermaid']),
+  type: z.enum(['markdown', 'dbdiagram', 'mermaid', 'architecture']),
   content: z.string(),
+  contentJSON: z.unknown().optional(),
   authorId: z.string().min(1),
   author: z.object({
     id: z.string().min(1),
@@ -92,6 +93,7 @@ const documentRevisionSchema = z.object({
   versionNumber: z.number().int().positive(),
   title: z.string().optional().default(''),
   content: z.string(),
+  contentJSON: z.unknown().optional(),
   isNamed: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -133,6 +135,11 @@ const commentAnchorSchema = z.object({
   start: z.string().min(1),
   end: z.string().min(1),
 })
+// A comment on an Architecture canvas points at an element (a node or a Connection) instead of text.
+const elementAnchorSchema = z.object({
+  kind: z.literal('element'),
+  elementId: z.string().min(1),
+})
 const commentReplySchema = z.object({
   id: z.guid(),
   threadId: z.guid(),
@@ -150,13 +157,7 @@ const commentThreadSchema = z.object({
   selectedText: z.string().optional().default(''),
   content: z.string(),
   // Threads made before anchors existed have none; a malformed one is none too.
-  anchor: z
-    .unknown()
-    .optional()
-    .transform((value) => {
-      const parsed = commentAnchorSchema.safeParse(value)
-      return parsed.success ? parsed.data : null
-    }),
+  anchor: z.unknown().optional(),
   createdAt: z.string(),
   editedAt: z.string().nullable().optional(),
   resolvedAt: z.string().nullable().optional(),
@@ -165,7 +166,16 @@ const commentThreadSchema = z.object({
     .array(commentReplySchema)
     .nullish()
     .transform((v) => v ?? []),
+}).transform(({ anchor, ...thread }) => {
+  const text = commentAnchorSchema.safeParse(anchor)
+  const element = elementAnchorSchema.safeParse(anchor)
+  return {
+    ...thread,
+    anchor: text.success ? text.data : null,
+    ...(element.success ? { elementAnchor: element.data } : {}),
+  }
 })
+
 const shareTokenSchema = z.object({ shareToken: z.string().min(1) })
 const ragCitationSchema = z.object({
   chunkId: z.string().uuid().optional(),
@@ -230,8 +240,13 @@ type CreateDocumentFields = {
 
 export type CreateDocumentInput =
   | (CreateDocumentFields & {
-      type: Exclude<DocType, 'markdown'>
+      type: Exclude<DocType, 'markdown' | 'architecture'>
       content?: string
+    })
+  | (CreateDocumentFields & {
+      type: 'architecture'
+      /** The canvas; the API starts an empty one when this is left out. */
+      contentJSON?: unknown
     })
   | (CreateDocumentFields & {
       type: 'markdown'
@@ -254,6 +269,7 @@ export type DocumentRestoreResult = z.infer<typeof documentRestoreResultSchema>
 export type DocumentSuggestion = z.infer<typeof documentSuggestionSchema>
 export type SuggestionReply = z.infer<typeof suggestionReplySchema>
 export type CommentAnchor = z.infer<typeof commentAnchorSchema>
+export type ElementAnchor = z.infer<typeof elementAnchorSchema>
 export type CommentReply = z.infer<typeof commentReplySchema>
 export type CommentThread = z.infer<typeof commentThreadSchema>
 export type RAGCitation = z.infer<typeof ragCitationSchema>
@@ -274,6 +290,7 @@ function toDocument(value: unknown): DocumentItem {
     title: doc.title,
     type: doc.type,
     content: doc.content,
+    contentJSON: doc.contentJSON,
     projectId: doc.projectId ?? null,
     projectName: doc.projectName || null,
     category: doc.category || doc.categories[0] || null,
@@ -299,7 +316,7 @@ function toDocument(value: unknown): DocumentItem {
   }
 }
 
-function workspaceHeaders(workspaceId: string): HeadersInit {
+export function workspaceHeaders(workspaceId: string): HeadersInit {
   return { 'X-Workspace-Id': workspaceId }
 }
 
@@ -518,7 +535,7 @@ export async function createDocumentComment(
     threadID: string
     selectedText: string
     content: string
-    anchor?: CommentAnchor
+    anchor?: CommentAnchor | ElementAnchor
   }
 ): Promise<void> {
   await apiFetch<void>(`/api/v1/documents/${documentId}/comments`, {

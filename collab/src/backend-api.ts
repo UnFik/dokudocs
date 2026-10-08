@@ -5,7 +5,7 @@ export type Access = { canRead: boolean; canEdit: boolean; canSuggest: boolean }
 export type DocumentType = 'markdown' | 'architecture'
 
 /** `documentType` is absent from an API that predates Architecture documents; that means Markdown. */
-export type Authorized = Access & { userID: string; documentType?: DocumentType | string }
+export type Authorized = Access & { userID: string; documentType?: string }
 
 /** What is kept of a document: the Yjs state and the JSON derived from it. */
 export type StoredDocument = {

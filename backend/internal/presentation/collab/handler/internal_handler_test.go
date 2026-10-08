@@ -29,11 +29,12 @@ func (f fakeVerifier) VerifyToken(token string) (appauth.ResponseUser, error) {
 }
 
 type fakeAccess struct {
-	access map[uuid.UUID]collaboration.RoomAccess
+	access       map[uuid.UUID]collaboration.RoomAccess
+	documentType string
 }
 
 func (f fakeAccess) ReadRoomHead(_ context.Context, _, _ uuid.UUID, ids []uuid.UUID) (collaboration.RoomHead, error) {
-	head := collaboration.RoomHead{Access: map[uuid.UUID]collaboration.RoomAccess{}}
+	head := collaboration.RoomHead{Access: map[uuid.UUID]collaboration.RoomAccess{}, DocumentType: f.documentType}
 	for _, id := range ids {
 		if access, ok := f.access[id]; ok {
 			head.Access[id] = access
@@ -142,6 +143,22 @@ func TestAuthorizeReturnsWhatTheUserMayDo(t *testing.T) {
 	// 401 is reserved for a wrong service secret; a token that is not valid is 403.
 	if code, _ = ask("tok-unknown"); code != http.StatusForbidden {
 		t.Fatalf("an unknown token = %d, want 403", code)
+	}
+}
+
+func TestAuthorizeTellsTheServiceWhatKindOfDocumentTheRoomHolds(t *testing.T) {
+	h := NewInternalHandler(
+		fakeVerifier{users: map[string]string{"tok-editor": editorID.String()}},
+		fakeAccess{access: map[uuid.UUID]collaboration.RoomAccess{editorID: {CanRead: true, CanEdit: true}}, documentType: "architecture"},
+		&fakeStore{},
+		secret,
+	)
+	recorder := do(h, http.MethodPost, "/internal/collab/authorize",
+		map[string]string{"token": "tok-editor", "workspaceID": workspaceID.String(), "documentID": documentID.String()}, true)
+	var out map[string]any
+	_ = json.Unmarshal(recorder.Body.Bytes(), &out)
+	if recorder.Code != http.StatusOK || out["documentType"] != "architecture" {
+		t.Fatalf("authorize = %d %v, want 200 with documentType architecture", recorder.Code, out)
 	}
 }
 

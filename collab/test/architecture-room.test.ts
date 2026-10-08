@@ -71,7 +71,7 @@ describe('an Architecture room', () => {
     const commenter = connect(port, room, 'tok-c')
     await Promise.all([editor.synced, commenter.synced])
     await waitFor(() => commenter.statelessMessages.some((m: any) => m.type === 'access'))
-    expect(commenter.statelessMessages.find((m: any) => m.type === 'access')).toMatchObject({ canEdit: false, canSuggest: false })
+    expect(commenter.statelessMessages.find((m: any) => m.type === 'access')).toMatchObject({ canEdit: false, canSuggest: false, canComment: true })
 
     addSystem(commenter.doc, 'vandal')
     addSystem(editor.doc, 'real')
@@ -94,6 +94,17 @@ describe('an Architecture room', () => {
     expect(b.doc.getMap('nodes').size).toBe(architectureLimits.nodes)
     a.provider.destroy()
     b.provider.destroy()
+  })
+
+  it('tells the editor why its update was refused, so it can stop sending it', async () => {
+    const full = { version: 1, nodes: Array.from({ length: architectureLimits.nodes }, (_, i) => ({ id: `n${String(i).padStart(3, '0')}`, kind: 'system', name: `S${i}` })), connections: [] }
+    backend.documents.set(document, { state: seedArchitecture(full), content: full })
+    const a = connect(port, room, 'tok-a')
+    await a.synced
+    addSystem(a.doc, 'one-too-many')
+    await waitFor(() => a.statelessMessages.some((m: any) => m.type === 'refused'))
+    expect(a.statelessMessages.find((m: any) => m.type === 'refused')).toEqual({ type: 'refused', reason: 'too-many-elements' })
+    a.provider.destroy()
   })
 
   it('refuses DBML and Mermaid documents, which have no room', async () => {

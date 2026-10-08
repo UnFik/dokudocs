@@ -2,12 +2,13 @@
   // Only for running the service with tsx. The editor's schema is shared from the
   // frontend source, which would load its own prosemirror-model; two copies cannot
   // read each other's nodes, so it is pinned to the file y-prosemirror also loads.
+  // The Architecture canvas model is shared the same way, so Yjs is pinned too.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "paths": {
       "prosemirror-model": ["./node_modules/prosemirror-model/dist/index.js"],
       "y-prosemirror": ["./node_modules/y-prosemirror"],
-      "yjs": ["./node_modules/yjs"]
+      "yjs": ["./node_modules/yjs/dist/yjs.mjs"]
     }
   }
 }

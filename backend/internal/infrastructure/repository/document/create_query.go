@@ -155,6 +155,11 @@ func (r *Repository) create(
 			return err
 		}
 		doc.ID = insertedID
+		if doc.Type == "architecture" {
+			if err := projectArchitectureLinks(ctx, tx, doc.WorkspaceID, doc.ID, doc.ContentJSON); err != nil {
+				return err
+			}
+		}
 
 		if doc.ProjectID != nil {
 			for _, catName := range categoryNames {

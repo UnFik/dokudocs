@@ -25,9 +25,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { documentBodyToMarkdown } from '../lib/muya/state/documentBodyToMarkdown'
 import { changesBetween } from '../lib/revision-changes'
 import { RevisionChanges } from './revision-changes'
-import { documentBodyToMarkdown } from '../lib/muya/state/documentBodyToMarkdown'
 
 interface VersionHistorySidebarProps {
   docId: string
@@ -42,6 +42,8 @@ interface VersionHistorySidebarProps {
   isRestoring?: boolean
   onCreateSnapshot?: (title: string) => Promise<DocumentRevision>
   onRestoreRevision?: (revision: DocumentRevision) => void
+  /** Draws the selected revision instead of its text, for documents that are not Markdown. */
+  renderPreview?: (revision: DocumentRevision) => React.ReactNode
 }
 
 function revisionMarkdown(revision: DocumentRevision | null | undefined) {
@@ -77,6 +79,7 @@ export function VersionHistorySidebar({
   isRestoring = false,
   onCreateSnapshot,
   onRestoreRevision,
+  renderPreview,
 }: VersionHistorySidebarProps) {
   const revisionsMap = useDokudocsStore((s) => s.revisions)
   const restoreRevision = useDokudocsStore((s) => s.restoreRevision)
@@ -481,11 +484,17 @@ export function VersionHistorySidebar({
                 {selectedRevisionContent.length} chars
               </span>
             </div>
-            <RevisionChanges key={selectedRevision.id} changes={changes} />
-            <pre className='mt-2 max-h-36 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[10px] whitespace-pre-wrap text-muted-foreground select-all'>
-              {selectedRevisionContent.slice(0, 500)}
-              {selectedRevisionContent.length > 500 && '\n...'}
-            </pre>
+            {renderPreview ? (
+              renderPreview(selectedRevision)
+            ) : (
+              <>
+                <RevisionChanges key={selectedRevision.id} changes={changes} />
+                <pre className='mt-2 max-h-36 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[10px] whitespace-pre-wrap text-muted-foreground select-all'>
+                  {selectedRevisionContent.slice(0, 500)}
+                  {selectedRevisionContent.length > 500 && '\n...'}
+                </pre>
+              </>
+            )}
           </div>
         )}
       </div>

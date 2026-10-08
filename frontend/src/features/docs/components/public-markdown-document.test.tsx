@@ -57,3 +57,59 @@ it('keeps a successfully opened public link available to RAG for this tab sessio
     .toBeInTheDocument()
   expect(getOpenedPublicLinkTokens()).toEqual([shareToken])
 })
+
+it('draws a shared Architecture document from its canvas, read-only', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      jsonResponse({
+        id: documentID,
+        workspaceId: '149a8d07-8490-43ed-98fa-ebaa91b05e90',
+        projectId: null,
+        title: 'Prod',
+        type: 'architecture',
+        content: 'System "API".',
+        contentJSON: {
+          version: 1,
+          nodes: [
+            {
+              id: 'api',
+              kind: 'system',
+              name: 'Order API',
+              catalog: 'golang',
+              x: 0,
+              y: 0,
+            },
+          ],
+          connections: [],
+        },
+        authorId: documentID,
+        author: {
+          id: documentID,
+          name: 'Document owner',
+          email: 'owner@example.invalid',
+          avatar: '',
+        },
+        isDraft: false,
+        visibility: 'public_link',
+        isShared: true,
+        categories: [],
+        createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      })
+    )
+  )
+  const screen = await render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <PublicMarkdownDocument shareToken={shareToken} />
+    </QueryClientProvider>
+  )
+  await expect
+    .element(screen.getByRole('img', { name: 'Architecture diagram of Prod' }))
+    .toBeInTheDocument()
+  await expect.element(screen.getByText('Order API')).toBeInTheDocument()
+})

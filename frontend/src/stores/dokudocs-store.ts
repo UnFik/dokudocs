@@ -179,6 +179,9 @@ Table orders {
   Start([Start Process]) --> Check{Is Valid?}
   Check -- Yes --> Success[Proceed Success]
   Check -- No --> Error[Show Error State]`,
+
+  // An Architecture document's text is derived from its canvas.
+  architecture: '',
 }
 
 export function getDefaultDocumentContent(type: DocType) {

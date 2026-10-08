@@ -21,6 +21,8 @@ type RoomAccess struct {
 // RoomHead is each requested user's access to a document.
 type RoomHead struct {
 	Access map[uuid.UUID]RoomAccess
+	// DocumentType is the kind of document the room holds: markdown or architecture.
+	DocumentType string
 }
 
 // RoomReader evaluates access for many users with a fixed number of lock-free

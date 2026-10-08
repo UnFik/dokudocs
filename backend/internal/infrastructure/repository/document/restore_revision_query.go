@@ -78,7 +78,7 @@ func (r *Repository) RestoreDocumentRevision(ctx context.Context, documentID, so
 		`, documentID, workspaceID).Scan(&documentType, &currentMarkdown, &currentJSON, &bodyVersion); err != nil {
 			return err
 		}
-		if documentType != "markdown" || len(sourceJSON) == 0 {
+		if !hasCollabBody(documentType) || len(sourceJSON) == 0 {
 			return constant.ErrDocumentConflict
 		}
 		if bodyVersion == math.MaxInt64 {
@@ -106,6 +106,11 @@ func (r *Repository) RestoreDocumentRevision(ctx context.Context, documentID, so
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM document_collab_states WHERE document_id = $1`, documentID); err != nil {
 			return err
+		}
+		if documentType == "architecture" {
+			if err := projectArchitectureLinks(ctx, tx, workspaceID, documentID, sourceJSON); err != nil {
+				return err
+			}
 		}
 
 		var restoredRevision model.DocumentRevision

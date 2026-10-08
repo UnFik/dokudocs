@@ -45,9 +45,10 @@ func (r *Repository) ReadRoomHead(ctx context.Context, workspaceID, documentID u
 		if err != nil {
 			return err
 		}
-		if deletedAt.Valid || documentType != "markdown" {
-			return nil // nobody may read a trashed or non-Markdown document
+		if deletedAt.Valid || (documentType != "markdown" && documentType != "architecture") {
+			return nil // nobody may open a room for a trashed document, or a DBML or Mermaid one
 		}
+		head.DocumentType = documentType
 
 		workspaceRoles, err := scanUserRoles(ctx, tx, `
 			SELECT user_id, role::text FROM workspace_members WHERE workspace_id = $1 AND user_id = ANY($2::uuid[])
