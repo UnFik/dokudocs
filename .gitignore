@@ -2,3 +2,7 @@
 # Uploaded files written by a local backend run (ADR 0030)
 /data/
 /backend/data/
+.env
+.env.*
+!.env.example
+!.env.*.example
