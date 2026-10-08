@@ -1,0 +1,134 @@
+.welcome-heading {
+  font-size: clamp(2.75rem, 5.8vw, 5.25rem);
+  line-height: 1.06;
+  letter-spacing: -0.055em;
+}
+.welcome-schema {
+  min-width: 0;
+}
+.welcome-schema svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.schema-node rect {
+  fill: var(--card);
+  stroke: var(--input);
+  stroke-width: 1;
+}
+.schema-node path {
+  stroke: var(--border);
+}
+.schema-name {
+  fill: var(--foreground);
+  font: 16px var(--font-mono);
+}
+.schema-field {
+  fill: var(--muted-foreground);
+  font: 14px var(--font-mono);
+}
+.schema-links {
+  color: var(--signal);
+}
+.schema-links path {
+  animation: welcome-connect 900ms ease-out both;
+}
+.schema-node {
+  animation: welcome-appear 450ms ease-out both;
+}
+.schema-node-2 {
+  animation-delay: 100ms;
+}
+.schema-node-3 {
+  animation-delay: 200ms;
+}
+.schema-node-4 {
+  animation-delay: 300ms;
+}
+.welcome-preview {
+  animation: welcome-appear 240ms ease-out;
+}
+.welcome-preview[data-format='mermaid'] {
+  position: relative;
+  aspect-ratio: 1280 / 460;
+}
+.welcome-preview[data-format='mermaid'] img {
+  position: absolute;
+  top: -54.56%;
+}
+.welcome-link,
+.welcome-primary,
+.welcome-format {
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+.welcome-link:hover {
+  color: var(--signal);
+}
+.welcome-primary:hover {
+  background-color: color-mix(in srgb, var(--signal) 88%, var(--foreground));
+}
+.welcome-format:hover {
+  background: var(--muted);
+}
+.welcome-format[aria-pressed='true'] {
+  color: var(--primary-foreground);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.welcome-format[aria-pressed='true'] span {
+  color: inherit;
+}
+.welcome-page :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.welcome-skip {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  padding: 12px 16px;
+  color: var(--foreground);
+  background: var(--card);
+  transform: translateY(-160%);
+}
+.welcome-skip:focus {
+  transform: translateY(0);
+}
+@keyframes welcome-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes welcome-connect {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+@media (max-width: 480px) {
+  .schema-name {
+    font-size: 19px;
+  }
+  .schema-field {
+    font-size: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome-page *,
+  .welcome-page *::before,
+  .welcome-page *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
