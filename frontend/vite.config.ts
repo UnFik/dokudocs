@@ -131,6 +131,9 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, './src'),
         '@muyajs/core': path.resolve(__dirname, './src/features/docs/lib/muya'),
+        // y-monaco imports a pre-0.55 path that monaco-editor's exports map no
+        // longer resolves; point it at the same instance the app uses.
+        'monaco-editor/esm/vs/editor/editor.api.js': 'monaco-editor',
       },
     },
     test: {

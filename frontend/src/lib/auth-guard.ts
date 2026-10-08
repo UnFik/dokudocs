@@ -105,16 +105,22 @@ async function restoreCachedDocument(documentID: string) {
   const document = useDokudocsStore
     .getState()
     .documents.find((item) => item.id === documentID)
+  // A DBML or Mermaid copy is of one record; only the record last opened here counts.
+  const isSource =
+    document?.type === 'dbdiagram' || document?.type === 'mermaid'
   if (
     !document ||
-    document.type !== 'markdown' ||
+    (document.type !== 'markdown' && !isSource) ||
+    (isSource && !document.replacementId) ||
     !document.workspaceId ||
     document.deletedAt
   )
     return false
 
   try {
-    if (!(await hasLocalCopy(document.workspaceId, documentID))) return false
+    const record = isSource ? document.replacementId : undefined
+    if (!(await hasLocalCopy(document.workspaceId, documentID, record)))
+      return false
   } catch {
     return false
   }

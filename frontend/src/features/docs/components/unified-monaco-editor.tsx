@@ -17,6 +17,8 @@ import {
 } from 'lucide-react'
 import * as monaco from 'monaco-editor'
 import { toast } from 'sonner'
+import type { Awareness } from 'y-protocols/awareness'
+import type * as Y from 'yjs'
 import {
   type EditorViewMode,
   type MarkdownPreviewMode,
@@ -36,6 +38,7 @@ import {
 import { registerEditorWidgetFlush } from '../lib/editor-flush'
 import { runDiagnostics } from '../lib/monaco-diagnostics'
 import { setupMonaco } from '../lib/monaco-setup'
+import { bindSourceEditor, type SourceBinding } from '../lib/source-binding'
 
 export type ViewMode = EditorViewMode
 
@@ -45,8 +48,21 @@ export interface PreviewSlotProps {
   navigateToSource?: (tableName: string, columnName?: string) => void
 }
 
+/**
+ * A DBML or Mermaid document edited together (ADR 0033): the editor is bound to
+ * the shared text, which is the only writer. `content` then only feeds the preview.
+ */
+export interface SourceCollab {
+  text: Y.Text
+  awareness: Awareness | null
+  readOnly: boolean
+  /** The binding of the editor now on screen, or null once it is gone. */
+  onBinding?: (binding: SourceBinding | null) => void
+}
+
 export interface UnifiedMonacoEditorProps {
   docId?: string
+  collab?: SourceCollab
   content: string
   onChange: (newContent: string) => void
   language: 'markdown' | 'dbml' | 'mermaid'
@@ -63,6 +79,7 @@ export interface UnifiedMonacoEditorProps {
 }
 
 export function UnifiedMonacoEditor({
+  collab,
   content,
   onChange,
   language,
@@ -110,6 +127,7 @@ export function UnifiedMonacoEditor({
   const syncScroll: boolean = userPreference?.syncScroll ?? true
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const bindingRef = useRef<SourceBinding | null>(null)
   const splitContainerRef = useRef<HTMLDivElement | null>(null)
   const previewScrollRef = useRef<HTMLDivElement | null>(null)
   const isUpdatingFromPropRef = useRef(false)
@@ -244,6 +262,10 @@ export function UnifiedMonacoEditor({
         if (editorRef.current) {
           const val = editorRef.current.getValue()
           if (val !== lastEmittedValueRef.current) flushChange(val)
+          // The binding goes first: it must not see the model being disposed.
+          bindingRef.current?.destroy()
+          bindingRef.current = null
+          collab?.onBinding?.(null)
           editorRef.current.dispose()
           editorRef.current = null
         }
@@ -254,7 +276,8 @@ export function UnifiedMonacoEditor({
       setupMonaco()
 
       const editor = monaco.editor.create(element, {
-        value: contentRef.current,
+        // A shared source fills the model from its text once bound.
+        value: collab ? '' : contentRef.current,
         language: language,
         theme: isDark ? 'dokudocs-dark' : 'dokudocs-light',
         minimap: { enabled: false },
@@ -289,6 +312,20 @@ export function UnifiedMonacoEditor({
 
       editorRef.current = editor
       lastEmittedValueRef.current = contentRef.current
+      if (collab) {
+        const binding = bindSourceEditor({
+          text: collab.text,
+          editor,
+          awareness: collab.awareness,
+          readOnly: collab.readOnly,
+        })
+        bindingRef.current = binding
+        binding.onHistoryChange(() => {
+          setMonacoCanUndo(binding.canUndo())
+          setMonacoCanRedo(binding.canRedo())
+        })
+        collab.onBinding?.(binding)
+      }
 
       scheduleDiagnostics(editor, language)
 
@@ -299,6 +336,8 @@ export function UnifiedMonacoEditor({
       })
 
       const updateHistoryState = () => {
+        // A shared source keeps its own history (see the binding above).
+        if (collab) return
         const model = editor.getModel()
         if (model) {
           const u =
@@ -513,6 +552,7 @@ export function UnifiedMonacoEditor({
       }
     },
     [
+      collab,
       isDark,
       scope,
       language,
@@ -529,7 +569,8 @@ export function UnifiedMonacoEditor({
     const themeName = isDark ? 'dokudocs-dark' : 'dokudocs-light'
     monaco.editor.setTheme(themeName)
 
-    if (content !== lastPropContentRef.current) {
+    // A shared source is written only through its binding, never from props.
+    if (!collab && content !== lastPropContentRef.current) {
       lastPropContentRef.current = content
       const editor = editorRef.current
       const model = editor.getModel()
@@ -560,6 +601,11 @@ export function UnifiedMonacoEditor({
   /* eslint-enable react-hooks/refs */
 
   const handleUndo = () => {
+    if (bindingRef.current) {
+      bindingRef.current.undo()
+      editorRef.current?.focus()
+      return
+    }
     editorRef.current?.trigger('toolbar', 'undo', null)
     editorRef.current?.focus()
     const model = editorRef.current?.getModel()
@@ -574,6 +620,11 @@ export function UnifiedMonacoEditor({
   }
 
   const handleRedo = () => {
+    if (bindingRef.current) {
+      bindingRef.current.redo()
+      editorRef.current?.focus()
+      return
+    }
     editorRef.current?.trigger('toolbar', 'redo', null)
     editorRef.current?.focus()
     const model = editorRef.current?.getModel()

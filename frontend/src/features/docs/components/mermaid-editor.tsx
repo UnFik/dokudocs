@@ -1,6 +1,16 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { LayoutTemplate } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,13 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import type { SourceBinding } from '../lib/source-binding'
 import { MermaidPreview } from './previews/mermaid-preview'
-import { UnifiedMonacoEditor } from './unified-monaco-editor'
+import { UnifiedMonacoEditor, type SourceCollab } from './unified-monaco-editor'
 
 interface MermaidEditorProps {
   docId?: string
   content: string
   onChange: (newContent: string) => void
+  /** Edited together: the editor writes the shared source, and `content` is its preview. */
+  collab?: SourceCollab
 }
 
 const MERMAID_TEMPLATES = [
@@ -126,13 +139,35 @@ export function MermaidEditor({
   docId,
   content,
   onChange,
+  collab,
 }: MermaidEditorProps) {
   const [showTemplatesModal, setShowTemplatesModal] = useState(false)
+  // A template waiting for the person to confirm it replaces the shared source.
+  const [pendingTemplate, setPendingTemplate] = useState<string | null>(null)
+  const bindingRef = useRef<SourceBinding | null>(null)
+  const shared = useMemo<SourceCollab | undefined>(
+    () =>
+      collab && {
+        ...collab,
+        onBinding: (binding) => {
+          bindingRef.current = binding
+          collab.onBinding?.(binding)
+        },
+      },
+    [collab]
+  )
+
+  const applyTemplate = (templateCode: string) => {
+    if (shared) bindingRef.current?.replace(templateCode)
+    else onChange(templateCode)
+    toast.success('Template loaded into editor')
+  }
 
   const handleSelectTemplate = (templateCode: string) => {
-    onChange(templateCode)
     setShowTemplatesModal(false)
-    toast.success('Template loaded into editor')
+    // Everyone editing sees the template replace the diagram, so ask first.
+    if (shared && shared.text.length > 0) setPendingTemplate(templateCode)
+    else applyTemplate(templateCode)
   }
 
   const customActions = (
@@ -141,6 +176,7 @@ export function MermaidEditor({
         variant='ghost'
         size='sm'
         onClick={() => setShowTemplatesModal(true)}
+        disabled={collab?.readOnly}
         className='h-6 gap-1 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground'
         title='Insert Mermaid Template'
       >
@@ -192,12 +228,39 @@ export function MermaidEditor({
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={pendingTemplate !== null}
+        onOpenChange={(open) => !open && setPendingTemplate(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace the diagram?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The template replaces the source for everyone editing this
+              document. You can undo it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep diagram</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingTemplate !== null) applyTemplate(pendingTemplate)
+                setPendingTemplate(null)
+              }}
+            >
+              Replace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 
   return (
     <UnifiedMonacoEditor
       docId={docId}
+      collab={shared}
       content={content}
       onChange={onChange}
       language='mermaid'

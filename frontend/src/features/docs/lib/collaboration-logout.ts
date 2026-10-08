@@ -58,12 +58,15 @@ async function flushClosedCopies(
     const room = name?.startsWith(localCopyPrefix)
       ? name.slice(localCopyPrefix.length).split('.')
       : []
-    const [workspaceID, documentID] = room
-    if (room.length !== 2 || !workspaceID || !documentID) continue
+    // A DBML or Mermaid copy also names its record: `{workspace}.{document}.{record}`.
+    const [workspaceID, documentID, record] = room
+    if (room.length < 2 || room.length > 3 || !workspaceID || !documentID)
+      continue
     if (openIDs.has(documentID)) continue
     const session = openCollabSession({
       workspaceID,
       documentID,
+      record,
       userID: options.userID,
       token: options.token,
     })
