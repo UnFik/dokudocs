@@ -49,6 +49,7 @@ const documentSchema = z.object({
   type: z.enum(['markdown', 'dbdiagram', 'mermaid', 'architecture']),
   content: z.string(),
   contentJSON: z.unknown().optional(),
+  replacementId: z.string().uuid().optional(),
   authorId: z.string().min(1),
   author: z.object({
     id: z.string().min(1),
@@ -103,6 +104,8 @@ const documentRestoreResultSchema = z.object({
   documentId: z.string().uuid(),
   revisionId: z.string().uuid(),
   sourceRevisionId: z.string().uuid(),
+  /** The record the restore made; DBML and Mermaid editors reopen on it. */
+  replacementId: z.string().uuid().optional(),
 })
 
 const suggestionReplySchema = z.object({
@@ -296,6 +299,7 @@ function toDocument(value: unknown): DocumentItem {
     type: doc.type,
     content: doc.content,
     contentJSON: doc.contentJSON,
+    replacementId: doc.replacementId,
     projectId: doc.projectId ?? null,
     projectName: doc.projectName || null,
     category: doc.category || doc.categories[0] || null,

@@ -21,8 +21,10 @@ export interface DocumentItem {
   title: string
   type: DocType
   content: string
-  /** The editor's own JSON: a ProseMirror document, or an Architecture canvas. Filled by the single-document read. */
+  /** The editor's own JSON: a ProseMirror document, an Architecture canvas, or `{ source }`. Filled by the single-document read. */
   contentJSON?: unknown
+  /** The record a DBML or Mermaid document's room holds; a restore replaces it. Filled by the single-document read. */
+  replacementId?: string
   projectId?: string | null
   projectName?: string | null
   category?: string | null
