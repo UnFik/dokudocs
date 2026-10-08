@@ -47,6 +47,7 @@ import { confirmationFor, type Selected } from '../lib/canvas-selection'
 import { protocolFamilies, suggestedProtocols } from '../lib/catalog'
 import type { PinAnchor } from '../lib/comment-pins'
 import { absoluteRect } from '../lib/layout'
+import { panelWidth, type SidePanel } from '../lib/panel-width'
 import { ArchitectureCanvas, type Selection } from './architecture-canvas'
 import { ArchitecturePreview, parseCanvas } from './architecture-preview'
 import { ArchitectureVersions } from './architecture-versions'
@@ -54,6 +55,7 @@ import { CatalogPalette } from './catalog-palette'
 import { CatalogRequests } from './catalog-requests'
 import { CommentPins } from './comment-pins'
 import { commentsKey } from './element-comments'
+import { PanelResizer } from './panel-resizer'
 import { PropertiesPanel } from './properties-panel'
 
 const WARN_AT = 0.8
@@ -158,6 +160,33 @@ function Editor({
     panels.palette ?? prefs.data?.architecture_palette_open !== false
   const propsOpen =
     panels.props ?? prefs.data?.architecture_props_open !== false
+  // Widths: dragged by the panel edge, remembered per person like the open state.
+  const [widths, setWidths] = useState<Partial<Record<SidePanel, number>>>({})
+  const [resizing, setResizing] = useState(false)
+  const paletteWidth =
+    widths.palette ??
+    panelWidth('palette', prefs.data?.architecture_palette_width)
+  const propsWidth =
+    widths.props ?? panelWidth('props', prefs.data?.architecture_props_width)
+  const resizePanel = (which: SidePanel) => (width: number) => {
+    setResizing(true)
+    setWidths((current) => ({ ...current, [which]: width }))
+  }
+  const commitWidth = (which: SidePanel) => (width: number) => {
+    setResizing(false)
+    setWidths((current) => ({ ...current, [which]: width }))
+    void writeEditorPref(
+      which === 'palette'
+        ? 'architecture_palette_width'
+        : 'architecture_props_width',
+      width
+    ).catch(() => {
+      toast.error(
+        'The panel width could not be saved; it lasts until you reload.'
+      )
+    })
+  }
+
   const togglePanel = (which: 'palette' | 'props') => {
     const next = which === 'palette' ? !paletteOpen : !propsOpen
     setPanels((current) => ({ ...current, [which]: next }))
@@ -431,18 +460,30 @@ function Editor({
       </div>
       <div
         className={cn(
-          'grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_480px_auto] overflow-y-auto transition-[grid-template-columns] duration-150 motion-reduce:transition-none md:grid-rows-1 md:overflow-hidden',
+          'grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_480px_auto] overflow-y-auto md:grid-rows-1 md:overflow-hidden',
+          // Opening and closing slides; dragging an edge follows the pointer at once.
+          !resizing &&
+            'transition-[grid-template-columns] duration-150 motion-reduce:transition-none',
           'md:grid-cols-[var(--palette)_minmax(0,1fr)_var(--props)]'
         )}
         style={{
-          ['--palette' as string]: paletteOpen ? '216px' : '40px',
-          ['--props' as string]: propsOpen ? '280px' : '40px',
+          ['--palette' as string]: paletteOpen ? `${paletteWidth}px` : '40px',
+          ['--props' as string]: propsOpen ? `${propsWidth}px` : '40px',
         }}
       >
         <aside
           aria-label='Palette'
-          className='flex flex-col gap-2 border-b border-border bg-background p-2 md:min-h-0 md:border-r md:border-b-0'
+          className='relative flex flex-col gap-2 border-b border-border bg-background p-2 md:min-h-0 md:border-r md:border-b-0'
         >
+          {paletteOpen && (
+            <PanelResizer
+              side='palette'
+              width={paletteWidth}
+              onResize={resizePanel('palette')}
+              onCommit={commitWidth('palette')}
+              className='absolute inset-y-0 -right-1 hidden md:block'
+            />
+          )}
           <div className='flex items-center justify-between'>
             {paletteOpen && (
               <span className='font-mono text-[11px] text-muted-foreground'>
@@ -618,8 +659,17 @@ function Editor({
         </main>
         <aside
           aria-label='Properties'
-          className='flex flex-col gap-2 border-t border-border bg-background p-3 md:min-h-0 md:overflow-y-auto md:border-t-0 md:border-l'
+          className='relative flex flex-col gap-2 border-t border-border bg-background p-3 md:min-h-0 md:overflow-y-auto md:border-t-0 md:border-l'
         >
+          {propsOpen && (
+            <PanelResizer
+              side='props'
+              width={propsWidth}
+              onResize={resizePanel('props')}
+              onCommit={commitWidth('props')}
+              className='absolute inset-y-0 -left-1 hidden md:block'
+            />
+          )}
           <div className='flex items-center justify-between'>
             <Button
               size='icon'
