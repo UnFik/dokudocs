@@ -7,6 +7,7 @@ import {
   type DragEvent,
 } from 'react'
 import {
+  applyNodeChanges,
   Background,
   BackgroundVariant,
   Controls,
@@ -163,14 +164,22 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   // The Yjs state is the record; local node state only runs ahead of it during a drag or resize.
   useEffect(() => {
     setNodes((current) => {
-      const next = toFlowNodes(canvas, selection, readOnly)
-      if (!dragging.current) return next
       const held = new Map(current.map((n) => [n.id, n]))
-      return next.map((n) =>
-        n.id === dragging.current && held.has(n.id)
-          ? { ...n, position: held.get(n.id)!.position }
-          : n
-      )
+      // Merge into the nodes React Flow already measured: a node without its
+      // measured size is hidden until it is measured again, so replacing them
+      // on every change (a drag writes every 50 ms) made the canvas blink.
+      return toFlowNodes(canvas, selection, readOnly).map((n) => {
+        const previous = held.get(n.id)
+        if (!previous) return n
+        return {
+          ...previous,
+          ...n,
+          measured: previous.measured,
+          dragging: previous.dragging,
+          // The element being dragged follows the pointer, not the echo of its own writes.
+          position: n.id === dragging.current ? previous.position : n.position,
+        }
+      })
     })
   }, [canvas, selection, readOnly])
 
@@ -283,22 +292,24 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((current) => {
-      const next = [...current]
-      for (const change of changes) {
-        if (change.type !== 'position' || !change.position) continue
-        const index = next.findIndex((n) => n.id === change.id)
-        if (index < 0) continue
-        const node = next[index]!
-        // Inside a container an element stops at the padding; it can only leave with "Take out".
-        const position = node.parentId
-          ? {
-              x: Math.max(PAD, change.position.x),
-              y: Math.max(LABEL, change.position.y),
-            }
-          : change.position
-        next[index] = { ...node, position }
-      }
-      return next
+      const parents = new Map(current.map((n) => [n.id, n.parentId]))
+      // Every change is applied (sizes React Flow measured included); selection
+      // and removal stay with the editor, which owns them.
+      const kept = changes
+        .filter((c) => c.type !== 'select' && c.type !== 'remove')
+        .map((c) =>
+          c.type === 'position' && c.position && parents.get(c.id)
+            ? {
+                ...c,
+                // Inside a container an element stops at the padding; it can only leave with "Take out".
+                position: {
+                  x: Math.max(PAD, c.position.x),
+                  y: Math.max(LABEL, c.position.y),
+                },
+              }
+            : c
+        )
+      return applyNodeChanges(kept, current)
     })
   }, [])
 

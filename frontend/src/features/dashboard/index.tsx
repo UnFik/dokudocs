@@ -1,26 +1,14 @@
 import { useState } from 'react'
 import type { DocType } from '@/types/dokudocs'
-import {
-  ChevronDown,
-  Database,
-  FileText,
-  GitFork,
-  Plus,
-  Upload,
-} from 'lucide-react'
+import { Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { CreateDocDialog } from '@/features/docs/components/create-doc-dialog'
 import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
 import { FilterTabs } from './components/filter-tabs'
+import { NewDocumentMenu } from './components/new-document-menu'
 import { ProjectsSection } from './components/projects-section'
 import { RecentSection } from './components/recent-section'
 
@@ -54,32 +42,7 @@ export function Dashboard() {
             <span>Import</span>
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size='sm'
-                className='h-8 gap-1.5 px-3 text-xs font-semibold'
-              >
-                <Plus className='size-3.5' />
-                <span>New</span>
-                <ChevronDown className='size-3 opacity-60' />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align='end' className='w-48'>
-              <DropdownMenuItem onClick={() => handleOpenCreate('markdown')}>
-                <FileText className='mr-2 size-3.5 text-muted-foreground' />
-                Markdown
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleOpenCreate('dbdiagram')}>
-                <Database className='mr-2 size-3.5 text-muted-foreground' />
-                DB Diagram
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleOpenCreate('mermaid')}>
-                <GitFork className='mr-2 size-3.5 text-muted-foreground' />
-                Flowchart / Diagram
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <NewDocumentMenu onCreate={(type) => handleOpenCreate(type)} />
         </div>
       </Header>
 
