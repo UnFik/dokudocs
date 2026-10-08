@@ -68,7 +68,7 @@ export async function requireAuth({
 }) {
   if (!(await restoreSession()))
     throw redirect({
-      to: '/sign-in',
+      to: '/welcome',
       search: { redirect: safeRedirect(location.href) },
       replace: true,
     })
