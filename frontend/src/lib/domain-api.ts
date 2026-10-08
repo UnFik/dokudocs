@@ -135,10 +135,13 @@ const commentAnchorSchema = z.object({
   start: z.string().min(1),
   end: z.string().min(1),
 })
-// A comment on an Architecture canvas points at an element (a node or a Connection) instead of text.
+// A comment on an Architecture canvas points at an element (a node or a Connection) instead of text,
+// and on a node at a point given as a share (0 to 1) of its box. Older threads have no point.
 const elementAnchorSchema = z.object({
   kind: z.literal('element'),
   elementId: z.string().min(1),
+  x: z.number().min(0).max(1).optional(),
+  y: z.number().min(0).max(1).optional(),
 })
 const commentReplySchema = z.object({
   id: z.guid(),

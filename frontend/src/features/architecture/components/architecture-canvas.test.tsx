@@ -25,7 +25,8 @@ function Harness({ doc }: { doc: Y.Doc }) {
         canvas={canvas}
         catalog={[]}
         readOnly={false}
-        selection={null}
+        selection={[]}
+        canComment
         onSelect={vi.fn()}
         peers={[]}
         onPointer={vi.fn()}

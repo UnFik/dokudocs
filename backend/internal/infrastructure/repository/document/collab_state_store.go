@@ -45,8 +45,8 @@ func (s *CollabStateStore) LoadDocument(ctx context.Context, workspaceID, docume
 	return state, content, err
 }
 
-// StoreState replaces the state, the JSON, the Markdown derived from it and the
-// suggestion index in one transaction. A document that is not in the workspace
+// StoreState replaces the state, the JSON, the Markdown derived from it, the
+// suggestion index and, for a canvas, its card drawing in one transaction. A document that is not in the workspace
 // is refused before anything is written.
 func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion, options ...collaboration.StoreOption) error {
 	applied := collaboration.ApplyStoreOptions(options)
@@ -79,6 +79,14 @@ func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, document
 		if documentType == "architecture" {
 			if err := projectArchitectureLinks(ctx, tx, workspaceID, documentID, content); err != nil {
 				return err
+			}
+			// The card drawing is derived from the canvas like the summary; only an
+			// architecture document has one, and a store without one leaves it.
+			if applied.Thumbnail != nil {
+				if _, err := tx.ExecContext(ctx, `UPDATE documents SET thumbnail_preview = NULLIF($2, '') WHERE id = $1`,
+					documentID, *applied.Thumbnail); err != nil {
+					return err
+				}
 			}
 		}
 		return storeAutoRevision(ctx, tx, documentID, authorID, markdown, content, bodyVersion, 0)

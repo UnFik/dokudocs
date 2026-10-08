@@ -170,17 +170,17 @@ export function applyPatches(doc: Y.Doc, patches: Patch[]) {
 }
 
 /**
- * Removes a node with everything inside it and every Connection touching them,
- * or one Connection. Linked documents are only referenced: they are counted,
- * never removed (plan: "Deleting never cascades to documents").
+ * Removes nodes with everything inside them and every Connection touching them,
+ * and Connections, as one change. Linked documents are only referenced: they
+ * are counted, never removed (plan: "Deleting never cascades to documents").
  */
-export function removeElement(doc: Y.Doc, id: string) {
+export function removeElement(doc: Y.Doc, ids: string | string[]) {
+  const named = new Set(typeof ids === 'string' ? [ids] : ids)
   const nodes = nodesOf(doc)
   const connections = connectionsOf(doc)
   const json = readCanvas(doc)
-  const removedNodes = new Set<string>()
-  if (nodes.has(id)) {
-    removedNodes.add(id)
+  const removedNodes = new Set([...named].filter((id) => nodes.has(id)))
+  if (removedNodes.size) {
     for (let grew = true; grew; ) {
       grew = false
       for (const n of json.nodes) {
@@ -197,7 +197,9 @@ export function removeElement(doc: Y.Doc, id: string) {
   }
   const removedConnections = json.connections.filter(
     (c) =>
-      c.id === id || removedNodes.has(c.source) || removedNodes.has(c.target)
+      named.has(c.id) ||
+      removedNodes.has(c.source) ||
+      removedNodes.has(c.target)
   )
   const documents = new Set<string>()
   for (const n of json.nodes)
