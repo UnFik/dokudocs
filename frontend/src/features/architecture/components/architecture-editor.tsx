@@ -43,18 +43,17 @@ import {
 } from '../lib/canvas-actions'
 import { createUndo, removeElement, updateConnection } from '../lib/canvas-doc'
 import { architectureLimits } from '../lib/canvas-model'
+import { confirmationFor, type Selected } from '../lib/canvas-selection'
 import { protocolFamilies, suggestedProtocols } from '../lib/catalog'
+import type { PinAnchor } from '../lib/comment-pins'
 import { absoluteRect } from '../lib/layout'
 import { ArchitectureCanvas, type Selection } from './architecture-canvas'
 import { ArchitecturePreview, parseCanvas } from './architecture-preview'
 import { ArchitectureVersions } from './architecture-versions'
 import { CatalogPalette } from './catalog-palette'
 import { CatalogRequests } from './catalog-requests'
-import {
-  commentsKey,
-  openThreadCounts,
-  useCanvasComments,
-} from './element-comments'
+import { CommentPins } from './comment-pins'
+import { commentsKey } from './element-comments'
 import { PropertiesPanel } from './properties-panel'
 
 const WARN_AT = 0.8
@@ -113,14 +112,16 @@ function Editor({
       }),
   })
   const catalog = useCatalog()
-  const [selection, setSelection] = useState<Selection>(null)
+  const [selection, setSelection] = useState<Selection>([])
   const lastPointerShare = useRef(0)
   const [pendingDelete, setPendingDelete] = useState<{
-    id: string
-    name: string
-    inside: number
-    links: number
+    elements: Selected[]
+    title: string
   } | null>(null)
+  // Comment pins: a thread being started, the one whose pin is open, and resolved ones shown or not.
+  const [draftPin, setDraftPin] = useState<PinAnchor | null>(null)
+  const [activeThread, setActiveThread] = useState<string | null>(null)
+  const [showResolved, setShowResolved] = useState(false)
   const [protocolFor, setProtocolFor] = useState<{
     id: string
     x: number
@@ -134,11 +135,6 @@ function Editor({
   // Commenters cannot change the canvas but may discuss its elements.
   const canComment = Boolean(
     session.access?.canComment ?? session.access?.canEdit
-  )
-  const comments = useCanvasComments(workspaceID, doc.id)
-  const commentCounts = useMemo(
-    () => openThreadCounts(comments.data),
-    [comments.data]
   )
   const readOnly = !canEdit
   const undo = useMemo(
@@ -196,9 +192,10 @@ function Editor({
     let at = point
     if (!at) {
       // Without a drag: into the selected container, or the middle of the view.
+      const only = selection.length === 1 ? selection[0] : undefined
       const selected =
-        selection?.kind === 'node'
-          ? session.canvas.nodes.find((n) => n.id === selection.id)
+        only?.kind === 'node'
+          ? session.canvas.nodes.find((n) => n.id === only.id)
           : undefined
       if (selected && selected.kind !== 'system') {
         const r = absoluteRect(toLayoutNodes(session.canvas), selected.id)
@@ -216,39 +213,44 @@ function Editor({
     gesture()
     const id = addFromPalette(session.doc, session.canvas, item, at)
     gesture()
-    setSelection({ kind: 'node', id })
+    select([{ kind: 'node', id }])
   }
 
-  const remove = (target: NonNullable<Selection>) => {
-    if (!session.doc || readOnly) return
-    if (target.kind === 'node') {
-      const node = session.canvas.nodes.find((n) => n.id === target.id)
-      if (!node) return
-      const inside = session.canvas.nodes.filter(
-        (n) => n.parentId === node.id
-      ).length
-      if (node.kind !== 'system' && inside > 0) {
-        setPendingDelete({ id: node.id, name: node.name, inside, links: 0 })
-        return
-      }
-    }
-    commitRemove(target.id)
+  const select = (next: Selection) => {
+    setSelection(next)
+    session.share(
+      'selection',
+      next.map((s) => s.id)
+    )
   }
-  const commitRemove = (id: string) => {
+
+  const remove = (elements: Selected[]) => {
+    if (!session.doc || readOnly || !elements.length) return
+    const question = confirmationFor(session.canvas, elements)
+    if (question) {
+      setPendingDelete({ elements, title: question.title })
+      return
+    }
+    commitRemove(elements)
+  }
+  const commitRemove = (elements: Selected[]) => {
     if (!session.doc) return
+    const ids = elements.map((e) => e.id)
     const name =
-      session.canvas.nodes.find((n) => n.id === id)?.name ??
-      (session.canvas.connections.some((c) => c.id === id)
-        ? 'Connection'
-        : 'Element')
+      elements.length > 1
+        ? `${elements.length} elements`
+        : (session.canvas.nodes.find((n) => n.id === ids[0])?.name ??
+          (session.canvas.connections.some((c) => c.id === ids[0])
+            ? 'Connection'
+            : 'Element'))
+    const named = session.canvas.nodes.filter((n) => ids.includes(n.id)).length
     gesture()
-    const removed = removeElement(session.doc, id)
+    const removed = removeElement(session.doc, ids)
     gesture()
-    setSelection(null)
+    select([])
+    const inside = removed.nodes - named
     const others =
-      removed.nodes > 1
-        ? ` and ${removed.nodes - 1} element${removed.nodes > 2 ? 's' : ''} inside it`
-        : ''
+      inside > 0 ? ` and ${inside} element${inside > 1 ? 's' : ''} inside` : ''
     toast.success(
       `${name}${others} deleted.${removed.linkedDocuments ? ` ${removed.linkedDocuments} linked document${removed.linkedDocuments === 1 ? '' : 's'} stay in the project; only the links went.` : ''}`
     )
@@ -494,11 +496,9 @@ function Editor({
             canvas={session.canvas}
             catalog={catalog.data}
             readOnly={readOnly}
+            canComment={canComment}
             selection={selection}
-            onSelect={(next) => {
-              setSelection(next)
-              session.share('selection', next?.id ?? null)
-            }}
+            onSelect={select}
             peers={session.peers}
             onPointer={(point) => {
               // Others see the pointer move; at most one update every 50 ms.
@@ -510,13 +510,33 @@ function Editor({
             onConnected={(id, screen) => setProtocolFor({ id, ...screen })}
             onAdd={(item, point) => add(item, point)}
             onDelete={remove}
+            onComment={(anchor) => {
+              setActiveThread(null)
+              setDraftPin(anchor)
+            }}
             onUndo={() => undo?.undo()}
             onRedo={() => undo?.redo()}
             onGesture={gesture}
             canAdd={!blocked}
-            commentCounts={commentCounts}
             focusNodeID={focusNodeID}
-          />
+          >
+            <CommentPins
+              workspaceID={workspaceID}
+              documentID={doc.id}
+              userID={userID}
+              canvas={session.canvas}
+              canComment={canComment}
+              showResolved={showResolved}
+              draft={draftPin}
+              onDraftDone={(threadID) => {
+                setDraftPin(null)
+                if (threadID) setActiveThread(threadID)
+              }}
+              active={activeThread}
+              onActive={setActiveThread}
+              onChanged={() => session.signalComments()}
+            />
+          </ArchitectureCanvas>
           {protocolConnection && !readOnly && (
             <div
               role='dialog'
@@ -637,6 +657,10 @@ function Editor({
                 documentID={doc.id}
                 canComment={canComment}
                 onCommentsChanged={() => session.signalComments()}
+                userID={userID}
+                onOpenThread={setActiveThread}
+                showResolved={showResolved}
+                onShowResolved={setShowResolved}
               />
             </div>
           ) : (
@@ -657,11 +681,7 @@ function Editor({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete {pendingDelete?.name || 'this container'} and the{' '}
-              {pendingDelete?.inside} element
-              {pendingDelete?.inside === 1 ? '' : 's'} in it?
-            </AlertDialogTitle>
+            <AlertDialogTitle>{pendingDelete?.title}</AlertDialogTitle>
             <AlertDialogDescription>
               Their Connections go too. Linked documents stay in the project;
               only the links are removed. You can undo this.
@@ -672,7 +692,7 @@ function Editor({
             <AlertDialogAction
               className='bg-destructive text-white hover:bg-destructive/90'
               onClick={() => {
-                if (pendingDelete) commitRemove(pendingDelete.id)
+                if (pendingDelete) commitRemove(pendingDelete.elements)
                 setPendingDelete(null)
               }}
             >
