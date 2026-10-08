@@ -31,7 +31,17 @@ export async function readEditorPrefs(signal?: AbortSignal) {
   return parseObject(settings.editorPrefs)
 }
 
-export async function writeEditorPref(key: string, value: unknown) {
+// Writes run one at a time: each reads the settings and sends them all back, so
+// two at once would let the later read lose the earlier key.
+let writing: Promise<unknown> = Promise.resolve()
+
+export function writeEditorPref(key: string, value: unknown) {
+  const write = writing.then(() => sendEditorPref(key, value))
+  writing = write.catch(() => undefined)
+  return write
+}
+
+async function sendEditorPref(key: string, value: unknown) {
   const settings = settingsSchema.parse(
     await apiFetch<unknown>('/api/v1/users/me/settings')
   )

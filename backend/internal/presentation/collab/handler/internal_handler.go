@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	appauth "backend/internal/application/auth/dto"
 	"backend/internal/application/collaboration"
@@ -22,6 +23,9 @@ const secretHeader = "X-Collab-Secret"
 // maxStateBytes bounds one stored state. Larger documents are refused instead of
 // filling the database.
 const maxStateBytes = 64 << 20
+
+// maxThumbnailBytes bounds the SVG drawn on an architecture document's card.
+const maxThumbnailBytes = 64 << 10
 
 type TokenVerifier interface {
 	VerifyToken(string) (appauth.ResponseUser, error)
@@ -156,6 +160,7 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 		Content     json.RawMessage `json:"content"`
 		Markdown    string          `json:"markdown"`
 		UpdatedBy   string          `json:"updatedBy"`
+		Thumbnail   *string         `json:"thumbnail"`
 		Suggestions []struct {
 			ID     string `json:"id"`
 			Author string `json:"author"`
@@ -175,6 +180,10 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "content must be a JSON object", http.StatusBadRequest)
 		return
 	}
+	if t := request.Thumbnail; t != nil && *t != "" && (len(*t) > maxThumbnailBytes || !strings.HasPrefix(*t, "<svg")) {
+		http.Error(w, "thumbnail must be an SVG of at most 64 KiB", http.StatusBadRequest)
+		return
+	}
 	suggestions := make([]collaboration.Suggestion, 0, len(request.Suggestions))
 	for _, item := range request.Suggestions {
 		id, err1 := uuid.Parse(item.ID)
@@ -186,6 +195,9 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 	var options []collaboration.StoreOption
 	if editor, err := uuid.Parse(request.UpdatedBy); err == nil {
 		options = append(options, collaboration.WithUpdatedBy(editor))
+	}
+	if request.Thumbnail != nil {
+		options = append(options, collaboration.WithThumbnail(*request.Thumbnail))
 	}
 	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content, request.Markdown, suggestions, options...); err != nil {
 		if errors.Is(err, ErrDocumentNotFound) {

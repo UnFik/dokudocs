@@ -10,6 +10,8 @@ COPY collab/tsconfig.run.json ./
 COPY frontend/src/features/docs/lib/prosemirror/documentSchema.ts /app/frontend/src/features/docs/lib/prosemirror/documentSchema.ts
 COPY frontend/src/features/docs/lib/author-color.ts /app/frontend/src/features/docs/lib/author-color.ts
 COPY frontend/src/features/architecture/lib/canvas-model.ts /app/frontend/src/features/architecture/lib/canvas-model.ts
+COPY frontend/src/features/architecture/lib/architecture-thumbnail.ts /app/frontend/src/features/architecture/lib/architecture-thumbnail.ts
+COPY frontend/src/features/architecture/lib/layout.ts /app/frontend/src/features/architecture/lib/layout.ts
 # Without a package.json there, Node reads those files as CommonJS and loads a second copy of prosemirror-model.
 RUN echo '{"type":"module"}' > /app/frontend/package.json
 ENV NODE_ENV=production

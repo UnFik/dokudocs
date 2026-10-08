@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import type * as Y from 'yjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
   fitElement,
@@ -11,6 +13,7 @@ import {
 } from '../lib/canvas-actions'
 import { updateConnection, updateNode } from '../lib/canvas-doc'
 import type { ArchitectureJSON, ArchitectureNode } from '../lib/canvas-model'
+import type { Selected } from '../lib/canvas-selection'
 import {
   HOST_SUBKINDS,
   protocolFamilies,
@@ -103,12 +106,19 @@ export type PropertiesPanelProps = {
   canEdit: boolean
   workspaceID: string
   projectID: string | null
-  onDelete: (selection: NonNullable<Selection>) => void
+  onDelete: (elements: Selected[]) => void
   onGesture: () => void
   documentID: string
   /** May start and answer comments: editors and commenters. */
   canComment: boolean
   onCommentsChanged: () => void
+  /** The person reading, whose own comments they may edit or delete. */
+  userID?: string
+  /** Opens a thread's pin on the canvas. */
+  onOpenThread?: (threadID: string) => void
+  /** Pins of resolved threads are shown on the canvas. */
+  showResolved?: boolean
+  onShowResolved?: (show: boolean) => void
 }
 
 export function PropertiesPanel(props: PropertiesPanelProps) {
@@ -117,12 +127,24 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
     () => new Map(canvas.nodes.map((n) => [n.id, n])),
     [canvas]
   )
-  if (!selection) {
+  if (!selection.length) {
     return (
       <div className='flex flex-col gap-3'>
         <p className='text-xs text-muted-foreground'>
           Select a Host, System or Connection to see and change its properties.
         </p>
+        {props.onShowResolved && (
+          <div className='flex items-center justify-between gap-2'>
+            <Label htmlFor='architecture-show-resolved' className='text-xs'>
+              Show resolved comments on the canvas
+            </Label>
+            <Switch
+              id='architecture-show-resolved'
+              checked={Boolean(props.showResolved)}
+              onCheckedChange={props.onShowResolved}
+            />
+          </div>
+        )}
         <OrphanedComments
           workspaceID={props.workspaceID}
           documentID={props.documentID}
@@ -136,8 +158,31 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
       </div>
     )
   }
-  if (selection.kind === 'edge') {
-    const connection = canvas.connections.find((c) => c.id === selection.id)
+  if (selection.length > 1) {
+    const count = `${selection.length} elements`
+    return (
+      <div className='flex flex-col gap-3'>
+        <p className='text-[13px] font-medium'>{count} selected</p>
+        <p className='text-xs text-muted-foreground'>
+          Move them together on the canvas, or delete them. Select one to change
+          its properties.
+        </p>
+        {props.canEdit && (
+          <Button
+            size='sm'
+            variant='outline'
+            className='self-start text-destructive hover:border-destructive'
+            onClick={() => props.onDelete(selection)}
+          >
+            Delete {count}
+          </Button>
+        )}
+      </div>
+    )
+  }
+  const only = selection[0]!
+  if (only.kind === 'edge') {
+    const connection = canvas.connections.find((c) => c.id === only.id)
     if (!connection) return null
     return (
       <ConnectionProperties
@@ -150,7 +195,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
       />
     )
   }
-  const node = byID.get(selection.id)
+  const node = byID.get(only.id)
   if (!node) return null
   return node.kind === 'system' ? (
     <SystemProperties {...props} node={node} byID={byID} />
@@ -298,7 +343,9 @@ function SystemProperties({
         elementID={node.id}
         elementName={node.name || 'this System'}
         canComment={props.canComment}
+        userID={props.userID}
         onChanged={props.onCommentsChanged}
+        onOpenThread={props.onOpenThread}
       />
       {canEdit && (
         <DeleteButton {...props} node={node} linkCount={node.links.length} />
@@ -377,7 +424,9 @@ function ConnectionProperties({
         elementID={connection.id}
         elementName={`${names[0] || 'Untitled'} → ${names[1] || 'Untitled'}`}
         canComment={props.canComment}
+        userID={props.userID}
         onChanged={props.onCommentsChanged}
+        onOpenThread={props.onOpenThread}
       />
       {canEdit && (
         <div className='flex flex-col gap-1'>
@@ -385,7 +434,9 @@ function ConnectionProperties({
             size='sm'
             variant='outline'
             className='self-start text-destructive hover:border-destructive'
-            onClick={() => props.onDelete({ kind: 'edge', id: connection.id })}
+            onClick={() =>
+              props.onDelete([{ kind: 'edge', id: connection.id }])
+            }
           >
             Delete connection
           </Button>
@@ -553,7 +604,9 @@ function ContainerProperties({
           node.name || (node.kind === 'group' ? 'this Group' : 'this Host')
         }
         canComment={props.canComment}
+        userID={props.userID}
         onChanged={props.onCommentsChanged}
+        onOpenThread={props.onOpenThread}
       />
       {canEdit && <DeleteButton {...props} node={node} linkCount={0} />}
     </div>
@@ -571,7 +624,7 @@ function DeleteButton({
         size='sm'
         variant='outline'
         className='self-start text-destructive hover:border-destructive'
-        onClick={() => onDelete({ kind: 'node', id: node.id })}
+        onClick={() => onDelete([{ kind: 'node', id: node.id }])}
       >
         Delete {node.kind}
       </Button>

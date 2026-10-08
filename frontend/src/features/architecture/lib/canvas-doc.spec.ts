@@ -253,3 +253,54 @@ describe('undo', () => {
     expect(architectureToJSON(doc).nodes).toEqual([])
   })
 })
+
+describe('removing several elements at once', () => {
+  it('removes them, with what they hold and their Connections, as one undo step', () => {
+    const doc = canvas()
+    const vps = addContainer(doc, {
+      kind: 'host',
+      catalog: 'vps',
+      name: 'VPS',
+      x: 0,
+      y: 0,
+      w: 320,
+      h: 206,
+      parentId: null,
+    })
+    const api = addSystem(doc, {
+      catalog: 'golang',
+      name: 'API',
+      x: 14,
+      y: 32,
+      parentId: vps,
+    })
+    const cache = addSystem(doc, {
+      catalog: 'redis',
+      name: 'Cache',
+      x: 400,
+      y: 0,
+      parentId: null,
+    })
+    const db = addSystem(doc, {
+      catalog: 'postgresql',
+      name: 'DB',
+      x: 400,
+      y: 200,
+      parentId: null,
+    })
+    addConnection(doc, { source: api, target: cache, protocol: 'redis' })
+    const undo = createUndo(doc)
+
+    // API is named as well as its Host; it is counted once.
+    expect(removeElement(doc, [vps, api, cache])).toEqual({
+      nodes: 3,
+      connections: 1,
+      linkedDocuments: 0,
+    })
+    expect(readCanvas(doc).nodes.map((n) => n.id)).toEqual([db])
+
+    undo.undo()
+    expect(readCanvas(doc).nodes).toHaveLength(4)
+    expect(readCanvas(doc).connections).toHaveLength(1)
+  })
+})

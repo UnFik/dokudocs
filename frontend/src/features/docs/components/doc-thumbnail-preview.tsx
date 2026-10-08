@@ -126,71 +126,71 @@ function ThumbnailSkeleton({
 }
 
 /**
- * A canvas in a list: lists carry the canvas's text (one line per element), not
- * its JSON, so the card shows a sketch and how many elements it holds.
+ * A stored SVG thumbnail, cleaned before it is put in the page: anyone who can
+ * edit a document can set one, so it may carry script.
+ */
+function cleanSvg(svg: string) {
+  // `vector-effect` keeps an architecture drawing's lines readable when shrunk.
+  return DOMPurify.sanitize(svg, {
+    USE_PROFILES: { svg: true },
+    ADD_ATTR: ['vector-effect'],
+  })
+}
+
+/**
+ * A canvas in a list: the drawing `collab/` keeps of it (theme colours, so it is
+ * shown inline) and how many elements it holds, counted from its text. Without
+ * a drawing yet (an empty canvas, or one not stored since drawings began) it
+ * shows an empty Host frame.
  */
 function ArchitectureThumbnail({
   content,
+  thumbnail,
   className,
 }: {
   content?: string
+  thumbnail?: string | null
   className?: string
 }) {
   const elements = (content ?? '')
     .split('\n')
     .filter((line) => /^(System|Host|Group) /.test(line)).length
+  const drawing = useMemo(
+    () => (thumbnail?.startsWith('<svg') ? cleanSvg(thumbnail) : ''),
+    [thumbnail]
+  )
   return (
     <div
       className={cn(
-        'flex h-full w-full flex-col justify-between bg-muted/20 p-2.5 select-none',
+        'flex h-full w-full flex-col justify-between gap-1 bg-muted/20 p-2.5 select-none',
         className
       )}
     >
-      <svg viewBox='0 0 120 50' className='h-3/4 w-full' aria-hidden>
-        <rect
-          x='4'
-          y='6'
-          width='52'
-          height='38'
-          rx='3'
-          fill='none'
-          stroke='var(--input)'
-          strokeDasharray='3 2'
+      {drawing ? (
+        <div
+          data-thumbnail='drawing'
+          className='min-h-0 flex-1 [&_svg]:h-full [&_svg]:w-full'
+          dangerouslySetInnerHTML={{ __html: drawing }}
         />
-        <rect
-          x='10'
-          y='16'
-          width='40'
-          height='11'
-          rx='2'
-          fill='var(--card)'
-          stroke='var(--input)'
-        />
-        <rect
-          x='10'
-          y='29'
-          width='40'
-          height='11'
-          rx='2'
-          fill='var(--card)'
-          stroke='var(--input)'
-        />
-        <rect
-          x='74'
-          y='22'
-          width='40'
-          height='11'
-          rx='2'
-          fill='var(--card)'
-          stroke='var(--input)'
-        />
-        <path
-          d='M50 21 C62 21 62 27 74 27'
-          fill='none'
-          stroke='var(--muted-foreground)'
-          strokeWidth='0.8'
-        />
-      </svg>
+      ) : (
+        <svg
+          data-thumbnail='placeholder'
+          viewBox='0 0 120 50'
+          className='min-h-0 w-full flex-1'
+          aria-hidden
+        >
+          <rect
+            x='34'
+            y='6'
+            width='52'
+            height='38'
+            rx='3'
+            fill='var(--muted)'
+            stroke='var(--input)'
+            strokeDasharray='3 2'
+          />
+        </svg>
+      )}
       <span className='font-mono text-[10px] text-muted-foreground'>
         {elements
           ? `${elements} element${elements === 1 ? '' : 's'}`
@@ -205,6 +205,7 @@ export function DocThumbnailPreview(props: DocThumbnailPreviewProps) {
     return (
       <ArchitectureThumbnail
         content={props.content}
+        thumbnail={props.thumbnail}
         className={props.className}
       />
     )
@@ -307,7 +308,7 @@ function ScopedDocThumbnailPreview({
   const dynamicSvg = useMemo(() => {
     if (!isVisible || isRasterImage) return null
     if (activeThumbnail && activeThumbnail.startsWith('<svg')) {
-      return activeThumbnail
+      return cleanSvg(activeThumbnail)
     }
     if (!content?.trim()) return null
 

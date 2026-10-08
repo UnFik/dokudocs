@@ -1,0 +1,17 @@
+/* React Flow's own box around a multiple selection would cover the elements and
+   take their clicks; each selected element shows its own outline instead. */
+.architecture-canvas .react-flow__nodesselection {
+  display: none;
+}
+
+/* The pointer says what a click will do with the active tool. */
+.architecture-canvas[data-tool='hand'] .react-flow__node,
+.architecture-canvas[data-tool='hand'] .react-flow__edge {
+  cursor: grab;
+}
+.architecture-canvas[data-tool='eraser'] .react-flow__node,
+.architecture-canvas[data-tool='eraser'] .react-flow__edge,
+.architecture-canvas[data-tool='comment'] .react-flow__node,
+.architecture-canvas[data-tool='comment'] .react-flow__edge {
+  cursor: crosshair;
+}
