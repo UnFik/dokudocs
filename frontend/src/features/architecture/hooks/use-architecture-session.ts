@@ -16,7 +16,8 @@ export type Peer = {
   userID: string
   name: string
   color: string
-  selection: string | null
+  /** Ids of the elements they have selected. */
+  selection: string[]
   pointer: { x: number; y: number } | null
 }
 
@@ -110,8 +111,14 @@ export function useArchitectureSession(input: {
           userID: user.userID,
           name: user.name ?? 'Someone',
           color: user.color ?? 'currentColor',
-          selection:
-            typeof state.selection === 'string' ? state.selection : null,
+          // A list since several elements can be selected; one id from older clients.
+          selection: Array.isArray(state.selection)
+            ? state.selection.filter(
+                (id): id is string => typeof id === 'string'
+              )
+            : typeof state.selection === 'string'
+              ? [state.selection]
+              : [],
           pointer: (state.pointer as Peer['pointer']) ?? null,
         })
       }
