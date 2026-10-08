@@ -204,7 +204,8 @@ test("@live @smoke: access revoked while offline discards the local copy on reco
 });
 
 async function startSignOut(page: Page) {
-  await page.goto("/");
+  // The app shell with its sidebar; / is the landing page.
+  await page.goto("/dashboard");
   await page.locator('[data-sidebar="footer"] button').last().click();
   await page.getByRole("menuitem", { name: /logout/i }).click();
   await page.getByRole("button", { name: /^sign out$/i }).click();
