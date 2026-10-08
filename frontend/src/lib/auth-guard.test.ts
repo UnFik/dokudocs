@@ -64,7 +64,7 @@ describe('session route guards', () => {
       '/auth/callback',
       '/unknown',
     ])
-      expect(safeRedirect(path)).toBe('/')
+      expect(safeRedirect(path)).toBe('/dashboard')
     expect(safeRedirect('/docs/one?mode=edit')).toBe('/docs/one?mode=edit')
   })
 })

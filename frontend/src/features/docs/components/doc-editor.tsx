@@ -175,7 +175,7 @@ function DocumentLoadError({ message }: { message: string }) {
         {message}
       </p>
       <Button asChild size='sm' className='mt-4 text-xs'>
-        <Link to='/'>Back to Dashboard</Link>
+        <Link to='/dashboard'>Back to Dashboard</Link>
       </Button>
     </div>
   )
@@ -224,7 +224,7 @@ function ScopedDocEditor({ docId }: { docId: string }) {
           The requested document does not exist or was moved to Trash.
         </p>
         <Button asChild size='sm' className='mt-4 text-xs'>
-          <Link to='/'>Back to Dashboard</Link>
+          <Link to='/dashboard'>Back to Dashboard</Link>
         </Button>
       </div>
     )

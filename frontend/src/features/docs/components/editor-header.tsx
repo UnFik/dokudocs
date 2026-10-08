@@ -124,7 +124,7 @@ export function EditorHeader({
         params: { projectId: activeProject.id },
       })
     } else {
-      navigate({ to: '/' })
+      navigate({ to: '/dashboard' })
     }
   }
 
