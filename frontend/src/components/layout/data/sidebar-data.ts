@@ -40,7 +40,7 @@ export const sidebarData: SidebarData = {
       items: [
         {
           title: 'Recent',
-          url: '/',
+          url: '/dashboard',
           icon: Clock,
         },
         {
