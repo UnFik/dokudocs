@@ -16,7 +16,7 @@ test('@live: public share route renders the canonical Markdown AST read-only', a
   await page.locator('input[name="email"]').fill('admin@example.com')
   await page.locator('input[name="password"]').fill('password123')
   await page.getByRole('button', { name: /sign in/i }).click()
-  await page.waitForURL((url) => url.pathname === '/')
+  await page.waitForURL((url) => url.pathname !== '/sign-in')
 
   await page.getByRole('button', { name: /workspace/i }).first().click()
   await page.getByRole('menuitem', { name: 'Create Workspace' }).click()
