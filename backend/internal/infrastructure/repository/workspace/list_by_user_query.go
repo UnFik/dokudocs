@@ -23,7 +23,7 @@ func (r *Repository) ListByUser(ctx context.Context, userID uuid.UUID) ([]model.
 	}
 	defer rows.Close()
 
-	var list []model.Workspace
+	list := make([]model.Workspace, 0)
 	for rows.Next() {
 		var w model.Workspace
 		if err := rows.Scan(
