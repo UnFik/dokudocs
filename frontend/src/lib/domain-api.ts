@@ -9,7 +9,6 @@ import type {
   SortOrder,
   WorkspaceItem,
 } from '@/types/dokudocs'
-import type { DocumentBodyNode } from '@/features/docs/lib/documentBody'
 import { apiFetch } from './api-client'
 
 const postgresUUIDSchema = z
@@ -47,8 +46,9 @@ const documentSchema = z.object({
   projectId: z.string().min(1).nullable().optional(),
   projectName: z.string().optional().default(''),
   title: z.string(),
-  type: z.enum(['markdown', 'dbdiagram', 'mermaid']),
+  type: z.enum(['markdown', 'dbdiagram', 'mermaid', 'architecture']),
   content: z.string(),
+  contentJSON: z.unknown().optional(),
   authorId: z.string().min(1),
   author: z.object({
     id: z.string().min(1),
@@ -56,6 +56,15 @@ const documentSchema = z.object({
     email: z.string(),
     avatar: z.string().optional().default(''),
   }),
+  updatedBy: z
+    .object({
+      id: z.string().min(1),
+      name: z.string(),
+      email: z.string(),
+      avatar: z.string().optional().default(''),
+    })
+    .nullable()
+    .optional(),
   tags: z.array(z.string()).optional().default([]),
   isDraft: z.boolean(),
   visibility: z.enum(['workspace', 'private', 'public_link', 'inherit']),
@@ -67,49 +76,12 @@ const documentSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   lastViewedAt: z.string().nullable().optional(),
+  viewCount: z.number().optional().default(0),
   deletedAt: z.string().nullable().optional(),
   thumbnail: z.string().optional().default(''),
   thumbnailDark: z.string().optional().default(''),
   thumbnailPreview: z.string().optional().default(''),
   thumbnailPreviewDark: z.string().optional().default(''),
-})
-
-const markdownBodySchema = z.object({
-  bodyVersion: z.number().int().positive(),
-  bodyEpoch: z.number().int().positive(),
-  bodySchemaVersion: z.number().int().positive(),
-  canEdit: z.boolean().default(false),
-  canSuggest: z.boolean().optional(),
-  rootNodeID: z.string().uuid(),
-  nodes: z.array(
-    z.object({
-      nodeID: z.string().uuid(),
-      parentID: z.string().uuid().nullable(),
-      siblingOrder: z.number().finite(),
-      type: z.string().min(1),
-      content: z.string(),
-      attributes: z.record(z.string(), z.unknown()),
-      version: z.number().int().positive(),
-    })
-  ),
-  encodedState: z.string().min(1),
-})
-
-const revisionNodeSchema = z.object({
-  nodeID: z.string().uuid(),
-  parentID: z.string().uuid().nullable(),
-  siblingOrder: z.number().finite(),
-  type: z.string().min(1),
-  content: z.string(),
-  attributes: z.record(z.string(), z.unknown()),
-  version: z.number().int().positive(),
-})
-
-const publicMarkdownBodySchema = z.object({
-  bodyVersion: z.number().int().positive(),
-  bodySchemaVersion: z.number().int().positive(),
-  rootNodeID: z.string().uuid(),
-  nodes: z.array(revisionNodeSchema),
 })
 
 const documentRevisionSchema = z.object({
@@ -121,16 +93,8 @@ const documentRevisionSchema = z.object({
   versionNumber: z.number().int().positive(),
   title: z.string().optional().default(''),
   content: z.string(),
+  contentJSON: z.unknown().optional(),
   isNamed: z.boolean(),
-  astSnapshot: z
-    .object({
-      documentID: z.string().uuid(),
-      rootNodeID: z.string().uuid(),
-      nodes: z.array(revisionNodeSchema),
-    })
-    .optional(),
-  bodyVersion: z.number().int().positive().optional(),
-  bodySchemaVersion: z.number().int().positive().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })
@@ -139,43 +103,79 @@ const documentRestoreResultSchema = z.object({
   documentId: z.string().uuid(),
   revisionId: z.string().uuid(),
   sourceRevisionId: z.string().uuid(),
-  bodyVersion: z.number().int().positive(),
-  bodyEpoch: z.number().int().positive(),
 })
 
-const deleteNodeResultSchema = z.object({
-  documentID: z.string().uuid(),
-  commandID: z.string().uuid(),
-  nodeID: z.string().uuid(),
-  bodyEpoch: z.number().int().positive(),
-  bodyVersion: z.number().int().positive(),
-  changed: z.boolean(),
-})
-
-const moveNodeResultSchema = z.object({
-  documentID: z.string().uuid(),
-  commandID: z.string().uuid(),
-  bodyEpoch: z.number().int().positive(),
-  bodyVersion: z.number().int().positive(),
-  changed: z.boolean(),
+const suggestionReplySchema = z.object({
+  replyId: z.guid(),
+  suggestionId: z.guid(),
+  authorId: z.guid(),
+  body: z.string(),
+  createdAt: z.string(),
 })
 const documentSuggestionSchema = z.object({
   documentId: z.guid(),
   suggestionId: z.guid(),
   proposerId: z.guid(),
+  proposerName: z.string().optional().default(''),
   deciderId: z.guid().nullable().optional(),
-  baseBodyVersion: z.number().int().positive(),
-  baseBodyEpoch: z.number().int().positive(),
-  operationSchemaVersion: z.number().int().positive(),
-  provenance: z.enum(['human', 'AI']),
-  operations: z.unknown(),
-  summary: z.string(),
-  reason: z.string(),
   conflictReason: z.string().optional().default(''),
-  status: z.enum(['pending', 'accepted', 'rejected', 'conflicted']),
+  status: z.enum(['pending', 'accepted', 'rejected', 'conflicted', 'closed']),
   createdAt: z.string(),
   decidedAt: z.string().nullable().optional(),
+  resolvedAt: z.string().nullable().optional(),
+  resolvedBy: z.guid().nullable().optional(),
+  replies: z
+    .array(suggestionReplySchema)
+    .nullish()
+    .transform((v) => v ?? []),
 })
+// Where a comment sits: the block and two Yjs relative positions, as base64.
+const commentAnchorSchema = z.object({
+  nodeID: z.string().min(1),
+  start: z.string().min(1),
+  end: z.string().min(1),
+})
+// A comment on an Architecture canvas points at an element (a node or a Connection) instead of text.
+const elementAnchorSchema = z.object({
+  kind: z.literal('element'),
+  elementId: z.string().min(1),
+})
+const commentReplySchema = z.object({
+  id: z.guid(),
+  threadId: z.guid(),
+  authorId: z.guid(),
+  authorName: z.string().optional().default(''),
+  content: z.string(),
+  createdAt: z.string(),
+  editedAt: z.string().nullable().optional(),
+})
+const commentThreadSchema = z.object({
+  id: z.guid(),
+  documentId: z.guid(),
+  authorId: z.guid(),
+  authorName: z.string().optional().default(''),
+  selectedText: z.string().optional().default(''),
+  content: z.string(),
+  // Threads made before anchors existed have none; a malformed one is none too.
+  anchor: z.unknown().optional(),
+  createdAt: z.string(),
+  editedAt: z.string().nullable().optional(),
+  resolvedAt: z.string().nullable().optional(),
+  resolvedBy: z.guid().nullable().optional(),
+  replies: z
+    .array(commentReplySchema)
+    .nullish()
+    .transform((v) => v ?? []),
+}).transform(({ anchor, ...thread }) => {
+  const text = commentAnchorSchema.safeParse(anchor)
+  const element = elementAnchorSchema.safeParse(anchor)
+  return {
+    ...thread,
+    anchor: text.success ? text.data : null,
+    ...(element.success ? { elementAnchor: element.data } : {}),
+  }
+})
+
 const shareTokenSchema = z.object({ shareToken: z.string().min(1) })
 const ragCitationSchema = z.object({
   chunkId: z.string().uuid().optional(),
@@ -238,31 +238,23 @@ type CreateDocumentFields = {
   projectId?: string | null
 }
 
-export type CreateMarkdownBodyInput = {
-  documentID: string
-  bodySchemaVersion: 1
-  rootNodeID: string
-  nodes: DocumentBodyNode[]
-}
-
 export type CreateDocumentInput =
   | (CreateDocumentFields & {
-      type: Exclude<DocType, 'markdown'>
+      type: Exclude<DocType, 'markdown' | 'architecture'>
       content?: string
     })
   | (CreateDocumentFields & {
-      type: 'markdown'
-      initialBody: CreateMarkdownBodyInput
-      content?: never
+      type: 'architecture'
+      /** The canvas; the API starts an empty one when this is left out. */
+      contentJSON?: unknown
     })
-
-export type InitializeMarkdownBodyInput = {
-  baseBodyVersion: number
-  bodySchemaVersion: number
-  sourceFingerprint: string
-  rootNodeID: string
-  nodes: DocumentBodyNode[]
-}
+  | (CreateDocumentFields & {
+      type: 'markdown'
+      /** The Markdown text, kept for previews and search. */
+      content?: string
+      /** The document as the editor reads it (ProseMirror JSON). */
+      contentJSON?: unknown
+    })
 
 export type UpdateDocumentMetadataInput = {
   title?: string
@@ -273,42 +265,18 @@ export type UpdateDocumentMetadataInput = {
   projectId?: string | null
 }
 
-export type MarkdownBodySnapshot = z.infer<typeof markdownBodySchema>
-export type PublicMarkdownBody = z.infer<typeof publicMarkdownBodySchema>
 export type DocumentRestoreResult = z.infer<typeof documentRestoreResultSchema>
-export type DeleteMarkdownNodeInput = {
-  commandID: string
-  bodyEpoch: number
-  bodySchemaVersion: number
-  nodeID: string
-}
-export type DeleteMarkdownNodeResult = z.infer<typeof deleteNodeResultSchema>
-export type MoveMarkdownNodeInput = {
-  commandID: string
-  bodyEpoch: number
-  bodySchemaVersion: number
-  nodeID: string
-  targetParentID: string
-  beforeNodeID: string | null
-}
-export type MoveMarkdownNodeResult = z.infer<typeof moveNodeResultSchema>
 export type DocumentSuggestion = z.infer<typeof documentSuggestionSchema>
+export type SuggestionReply = z.infer<typeof suggestionReplySchema>
+export type CommentAnchor = z.infer<typeof commentAnchorSchema>
+export type ElementAnchor = z.infer<typeof elementAnchorSchema>
+export type CommentReply = z.infer<typeof commentReplySchema>
+export type CommentThread = z.infer<typeof commentThreadSchema>
 export type RAGCitation = z.infer<typeof ragCitationSchema>
 export type RAGConversation = z.infer<typeof ragConversationSchema>
 export type RAGMessage = z.infer<typeof ragMessageSchema>
 export type RAGConversationHistory = z.infer<typeof ragHistorySchema>
 export type RAGAnswer = z.infer<typeof ragAnswerSchema>
-export type CreateDocumentSuggestionInput = {
-  suggestionID: string
-  baseBodyVersion: number
-  baseBodyEpoch: number
-  operationSchemaVersion: number
-  provenance: 'human' | 'AI'
-  operations: unknown
-  summary: string
-  reason?: string
-}
-
 export type CreateWorkspaceInput = {
   name: string
   plan?: string
@@ -322,6 +290,7 @@ function toDocument(value: unknown): DocumentItem {
     title: doc.title,
     type: doc.type,
     content: doc.content,
+    contentJSON: doc.contentJSON,
     projectId: doc.projectId ?? null,
     projectName: doc.projectName || null,
     category: doc.category || doc.categories[0] || null,
@@ -329,6 +298,7 @@ function toDocument(value: unknown): DocumentItem {
     workspaceId: doc.workspaceId,
     orgId: doc.workspaceId,
     author: doc.author,
+    updatedBy: doc.updatedBy,
     isStarred: doc.isStarred,
     starredAt: doc.starredAt,
     isShared: doc.isShared,
@@ -336,6 +306,7 @@ function toDocument(value: unknown): DocumentItem {
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
     lastViewedAt: doc.lastViewedAt,
+    viewCount: doc.viewCount,
     deletedAt: doc.deletedAt,
     thumbnail: doc.thumbnail,
     thumbnailDark: doc.thumbnailDark,
@@ -345,7 +316,7 @@ function toDocument(value: unknown): DocumentItem {
   }
 }
 
-function workspaceHeaders(workspaceId: string): HeadersInit {
+export function workspaceHeaders(workspaceId: string): HeadersInit {
   return { 'X-Workspace-Id': workspaceId }
 }
 
@@ -380,6 +351,33 @@ export async function createWorkspace(
     avatar: workspace.logoUrl,
     role: workspace.role,
   }
+}
+
+export type WorkspacePerson = { id: string; name: string; email: string }
+
+/** The people of a workspace, for naming one in a page. */
+export async function listWorkspaceMembers(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<WorkspacePerson[]> {
+  const rows = z
+    .array(
+      z.object({
+        userId: z.string().min(1),
+        email: z.string(),
+        fullName: z.string().optional().default(''),
+      })
+    )
+    .parse(
+      await apiFetch<unknown>(`/api/v1/workspaces/${workspaceId}/members`, {
+        signal,
+      })
+    )
+  return rows.map((row) => ({
+    id: row.userId,
+    name: row.fullName || row.email,
+    email: row.email,
+  }))
 }
 
 export async function listProjects(
@@ -469,71 +467,6 @@ export async function createDocumentShareToken(
   return result.shareToken
 }
 
-export async function initializeMarkdownBody(
-  workspaceId: string,
-  documentId: string,
-  input: InitializeMarkdownBodyInput
-): Promise<void> {
-  await apiFetch<void>(`/api/v1/documents/${documentId}/body/initialize`, {
-    method: 'POST',
-    headers: workspaceHeaders(workspaceId),
-    body: JSON.stringify(input),
-  })
-}
-
-export async function getMarkdownBody(
-  workspaceId: string,
-  documentId: string,
-  signal?: AbortSignal
-): Promise<MarkdownBodySnapshot> {
-  return markdownBodySchema.parse(
-    await apiFetch<unknown>(`/api/v1/documents/${documentId}/body`, {
-      headers: workspaceHeaders(workspaceId),
-      signal,
-    })
-  )
-}
-
-export async function getPublicMarkdownBody(
-  shareToken: string,
-  signal?: AbortSignal
-): Promise<PublicMarkdownBody> {
-  return publicMarkdownBodySchema.parse(
-    await apiFetch<unknown>(
-      `/api/v1/public/documents/${encodeURIComponent(shareToken)}/body`,
-      { authenticated: false, signal }
-    )
-  )
-}
-
-export async function deleteMarkdownNode(
-  workspaceId: string,
-  documentId: string,
-  input: DeleteMarkdownNodeInput
-): Promise<DeleteMarkdownNodeResult> {
-  return deleteNodeResultSchema.parse(
-    await apiFetch<unknown>(`/api/v1/documents/${documentId}/body/delete`, {
-      method: 'POST',
-      headers: workspaceHeaders(workspaceId),
-      body: JSON.stringify(input),
-    })
-  )
-}
-
-export async function moveMarkdownNode(
-  workspaceId: string,
-  documentId: string,
-  input: MoveMarkdownNodeInput
-): Promise<MoveMarkdownNodeResult> {
-  return moveNodeResultSchema.parse(
-    await apiFetch<unknown>(`/api/v1/documents/${documentId}/body/move`, {
-      method: 'POST',
-      headers: workspaceHeaders(workspaceId),
-      body: JSON.stringify(input),
-    })
-  )
-}
-
 export async function listDocumentSuggestions(
   workspaceId: string,
   documentId: string,
@@ -547,36 +480,151 @@ export async function listDocumentSuggestions(
   )
 }
 
-export async function createDocumentSuggestion(
+export const maxSuggestionReplyLength = 2000
+
+export async function replyToDocumentSuggestion(
   workspaceId: string,
   documentId: string,
-  input: CreateDocumentSuggestionInput
+  suggestionId: string,
+  input: { replyID: string; body: string }
 ): Promise<void> {
-  await apiFetch<void>(`/api/v1/documents/${documentId}/suggestions`, {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/suggestions/${suggestionId}/replies`,
+    {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceId),
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+/** Closes a suggestion's thread, or reopens it. The text is never touched. */
+export async function setDocumentSuggestionResolved(
+  workspaceId: string,
+  documentId: string,
+  suggestionId: string,
+  resolved: boolean
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/suggestions/${suggestionId}/${resolved ? 'resolve' : 'reopen'}`,
+    { method: 'POST', headers: workspaceHeaders(workspaceId) }
+  )
+}
+
+export const maxCommentLength = 2000
+export const maxCommentSelection = 500
+
+export async function listDocumentComments(
+  workspaceId: string,
+  documentId: string,
+  signal?: AbortSignal
+): Promise<CommentThread[]> {
+  return z.array(commentThreadSchema).parse(
+    await apiFetch<unknown>(`/api/v1/documents/${documentId}/comments`, {
+      headers: workspaceHeaders(workspaceId),
+      signal,
+    })
+  )
+}
+
+/** Starts a thread. The id is the client's, so sending it again changes nothing. */
+export async function createDocumentComment(
+  workspaceId: string,
+  documentId: string,
+  input: {
+    threadID: string
+    selectedText: string
+    content: string
+    anchor?: CommentAnchor | ElementAnchor
+  }
+): Promise<void> {
+  await apiFetch<void>(`/api/v1/documents/${documentId}/comments`, {
     method: 'POST',
     headers: workspaceHeaders(workspaceId),
     body: JSON.stringify(input),
   })
 }
 
-export async function acceptDocumentSuggestion(
+export async function replyToDocumentComment(
   workspaceId: string,
   documentId: string,
-  suggestionId: string
+  threadId: string,
+  input: { replyID: string; content: string }
 ): Promise<void> {
   await apiFetch<void>(
-    `/api/v1/documents/${documentId}/suggestions/${suggestionId}/accept`,
-    { method: 'POST', headers: workspaceHeaders(workspaceId) }
+    `/api/v1/documents/${documentId}/comments/${threadId}/replies`,
+    {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceId),
+      body: JSON.stringify(input),
+    }
   )
 }
 
-export async function rejectDocumentSuggestion(
+/** Changes the text of a thread's first message. Only its author may. */
+export async function editDocumentComment(
   workspaceId: string,
   documentId: string,
-  suggestionId: string
+  threadId: string,
+  content: string
+): Promise<void> {
+  await apiFetch<void>(`/api/v1/documents/${documentId}/comments/${threadId}`, {
+    method: 'PATCH',
+    headers: workspaceHeaders(workspaceId),
+    body: JSON.stringify({ content }),
+  })
+}
+
+/** Removes a thread with its replies. Its author or an editor may. */
+export async function deleteDocumentComment(
+  workspaceId: string,
+  documentId: string,
+  threadId: string
+): Promise<void> {
+  await apiFetch<void>(`/api/v1/documents/${documentId}/comments/${threadId}`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(workspaceId),
+  })
+}
+
+export async function editDocumentCommentReply(
+  workspaceId: string,
+  documentId: string,
+  threadId: string,
+  replyId: string,
+  content: string
 ): Promise<void> {
   await apiFetch<void>(
-    `/api/v1/documents/${documentId}/suggestions/${suggestionId}/reject`,
+    `/api/v1/documents/${documentId}/comments/${threadId}/replies/${replyId}`,
+    {
+      method: 'PATCH',
+      headers: workspaceHeaders(workspaceId),
+      body: JSON.stringify({ content }),
+    }
+  )
+}
+
+export async function deleteDocumentCommentReply(
+  workspaceId: string,
+  documentId: string,
+  threadId: string,
+  replyId: string
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/comments/${threadId}/replies/${replyId}`,
+    { method: 'DELETE', headers: workspaceHeaders(workspaceId) }
+  )
+}
+
+/** Closes a thread, or reopens it. A reply also reopens it. */
+export async function setDocumentCommentResolved(
+  workspaceId: string,
+  documentId: string,
+  threadId: string,
+  resolved: boolean
+): Promise<void> {
+  await apiFetch<void>(
+    `/api/v1/documents/${documentId}/comments/${threadId}/${resolved ? 'resolve' : 'reopen'}`,
     { method: 'POST', headers: workspaceHeaders(workspaceId) }
   )
 }
@@ -723,5 +771,15 @@ export async function updateDocumentMetadata(
       headers: workspaceHeaders(workspaceId),
       body: JSON.stringify(input),
     })
+  )
+}
+
+export async function listDocumentBacklinks(
+  workspaceId: string,
+  documentId: string
+): Promise<{ id: string; title: string }[]> {
+  return apiFetch<{ id: string; title: string }[]>(
+    `/api/v1/documents/${documentId}/backlinks`,
+    { headers: workspaceHeaders(workspaceId) }
   )
 }

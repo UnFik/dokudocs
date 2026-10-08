@@ -1,10 +1,7 @@
 import { EditorState } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
 import { documentBodyToProseMirror } from '../documentBody'
-import {
-  MoveNodeRequiredError,
-  prepareBodyTransaction,
-} from '../prepareBodyTransaction'
+import { prepareBodyTransaction } from '../prepareBodyTransaction'
 import { moveTopLevelBlock } from './moveBlock'
 import { bodyBuilder } from './testSupport'
 
@@ -24,29 +21,22 @@ function state() {
 }
 
 describe('moveTopLevelBlock', () => {
-  it('turns a drag into a MoveNode intent', () => {
+  it('moves a dragged block to the end', () => {
     const s = state()
-    const tr = moveTopLevelBlock(s.state, 0, 3)!
-    try {
-      prepareBodyTransaction(s.state, tr)
-      throw new Error('expected MoveNodeRequiredError')
-    } catch (error) {
-      expect(error).toBeInstanceOf(MoveNodeRequiredError)
-      const move = error as MoveNodeRequiredError
-      expect(move.nodeID).toBe(s.ids[0])
-      expect(move.targetParentID).toBe(s.root)
-      expect(move.beforeNodeID).toBeNull()
-    }
+    const tr = prepareBodyTransaction(
+      s.state,
+      moveTopLevelBlock(s.state, 0, 3)!
+    )
+    expect(tr.doc.textContent).toBe('bca')
   })
 
   it('moves before a given sibling', () => {
     const s = state()
-    const tr = moveTopLevelBlock(s.state, 2, 0)!
-    try {
-      prepareBodyTransaction(s.state, tr)
-    } catch (error) {
-      expect((error as MoveNodeRequiredError).beforeNodeID).toBe(s.ids[0])
-    }
+    const tr = prepareBodyTransaction(
+      s.state,
+      moveTopLevelBlock(s.state, 2, 0)!
+    )
+    expect(tr.doc.textContent).toBe('cab')
   })
 
   it('ignores moves that change nothing or are out of range', () => {

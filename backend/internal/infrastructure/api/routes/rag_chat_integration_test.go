@@ -18,9 +18,7 @@ import (
 	jwtmanager "backend/internal/application/jwt"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/config"
-	"backend/internal/domain/documentbody"
 	"backend/internal/domain/model"
-	"backend/internal/infrastructure/collaboration/yjs"
 	"backend/internal/infrastructure/database"
 	"backend/internal/infrastructure/logger"
 	documentrepo "backend/internal/infrastructure/repository/document"
@@ -160,25 +158,12 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO document_accesses (document_id, user_id, access_level) VALUES ($1, $2, 'owner')`, documentID, actorID); err != nil {
 		t.Fatalf("add document owner grant: %v", err)
 	}
-	rootID, headingID, paragraphID, runID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
-	body := documentbody.Body{DocumentID: documentID, RootNodeID: rootID, Nodes: []documentbody.Node{
-		{DocumentID: documentID, NodeID: rootID, Type: "document", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: documentID, NodeID: headingID, ParentID: &rootID, SiblingOrder: 0, Type: "atx-heading", Content: "Operational checks", Attributes: []byte(`{"level":1}`), Version: 1},
-		{DocumentID: documentID, NodeID: paragraphID, ParentID: &rootID, SiblingOrder: 1, Type: "paragraph", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: documentID, NodeID: runID, ParentID: &paragraphID, Type: "run", Content: "The service restarts after a failed health check.", Attributes: []byte(`{}`), Version: 1},
-	}}
-	encoded, err := yjs.EncodeBodyV1(body)
-	if err != nil {
-		t.Fatalf("encode canonical body: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_nodes (document_id, node_id, parent_id, sibling_order, node_type, content, attributes, version) VALUES ($1, $2, NULL, 0, 'document', '', '{}', 1), ($1, $3, $2, 0, 'atx-heading', 'Operational checks', '{"level":1}', 1), ($1, $4, $2, 1, 'paragraph', '', '{}', 1), ($1, $5, $4, 0, 'run', $6, '{}', 1)`, documentID, rootID, headingID, paragraphID, runID, body.Nodes[3].Content); err != nil {
-		t.Fatalf("insert canonical nodes: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `UPDATE documents SET root_node_id = $2 WHERE id = $1`, documentID, rootID); err != nil {
-		t.Fatalf("set canonical root: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_collab_states (document_id, encoded_state, schema_version) VALUES ($1, $2, 1)`, documentID, encoded); err != nil {
-		t.Fatalf("insert Yjs state: %v", err)
+	headingID, paragraphID := uuid.New(), uuid.New()
+	if _, err := db.ExecContext(ctx, `UPDATE documents SET content_json = $2::jsonb WHERE id = $1`, documentID, ragJSON(
+		ragBlock("atx_heading", headingID, `{"level":1}`, "Operational checks"),
+		ragBlock("paragraph", paragraphID, "", "The service restarts after a failed health check."),
+	)); err != nil {
+		t.Fatalf("set canonical content: %v", err)
 	}
 	databaseAccess := database.NewSQLDB(db)
 	repository := documentrepo.NewRepository(databaseAccess)
@@ -198,7 +183,7 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if !paragraphFoundBySection {
 		t.Fatalf("search by section breadcrumb returned %+v, want its paragraph source", sectionChunks)
 	}
-	publicDocumentID, publicProjectID, publicRootID, publicParagraphID, publicRunID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	publicDocumentID, publicProjectID, publicParagraphID := uuid.New(), uuid.New(), uuid.New()
 	publicToken := "rag-public-link-token-test"
 	if _, err := db.ExecContext(ctx, `INSERT INTO projects (id, workspace_id, name, visibility, created_by) VALUES ($1, $2, 'Private knowledge base', 'private', $3)`, publicProjectID, workspaceID, actorID); err != nil {
 		t.Fatalf("create private source project: %v", err)
@@ -209,23 +194,10 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO document_accesses (document_id, user_id, access_level) VALUES ($1, $2, 'view')`, publicDocumentID, actorID); err != nil {
 		t.Fatalf("grant direct read to public-link source: %v", err)
 	}
-	publicBody := documentbody.Body{DocumentID: publicDocumentID, RootNodeID: publicRootID, Nodes: []documentbody.Node{
-		{DocumentID: publicDocumentID, NodeID: publicRootID, Type: "document", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: publicDocumentID, NodeID: publicParagraphID, ParentID: &publicRootID, Type: "paragraph", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: publicDocumentID, NodeID: publicRunID, ParentID: &publicParagraphID, Type: "run", Content: "The lunar archive is stored in vault 314.", Attributes: []byte(`{}`), Version: 1},
-	}}
-	publicEncoded, err := yjs.EncodeBodyV1(publicBody)
-	if err != nil {
-		t.Fatalf("encode public-link body: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_nodes (document_id, node_id, parent_id, sibling_order, node_type, content, attributes, version) VALUES ($1, $2, NULL, 0, 'document', '', '{}', 1), ($1, $3, $2, 0, 'paragraph', '', '{}', 1), ($1, $4, $3, 0, 'run', $5, '{}', 1)`, publicDocumentID, publicRootID, publicParagraphID, publicRunID, publicBody.Nodes[2].Content); err != nil {
-		t.Fatalf("insert public-link nodes: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `UPDATE documents SET root_node_id = $2 WHERE id = $1`, publicDocumentID, publicRootID); err != nil {
-		t.Fatalf("set public-link body root: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_collab_states (document_id, encoded_state, schema_version) VALUES ($1, $2, 1)`, publicDocumentID, publicEncoded); err != nil {
-		t.Fatalf("insert public-link Yjs state: %v", err)
+	if _, err := db.ExecContext(ctx, `UPDATE documents SET content_json = $2::jsonb WHERE id = $1`, publicDocumentID, ragJSON(
+		ragBlock("paragraph", publicParagraphID, "", "The lunar archive is stored in vault 314."),
+	)); err != nil {
+		t.Fatalf("set public-link content: %v", err)
 	}
 	if _, err := repository.RebuildRAGIndex(ctx, publicDocumentID); err != nil {
 		t.Fatalf("index public-link body: %v", err)
@@ -294,8 +266,8 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	publicBodyRequest := httptest.NewRequest(http.MethodGet, "/api/v1/public/documents/"+publicToken+"/body", nil)
 	publicBodyResponse := httptest.NewRecorder()
 	api.ServeHTTP(publicBodyResponse, publicBodyRequest)
-	if publicBodyResponse.Code != http.StatusOK || !bytes.Contains(publicBodyResponse.Body.Bytes(), []byte(publicParagraphID.String())) || !bytes.Contains(publicBodyResponse.Body.Bytes(), []byte("The lunar archive is stored in vault 314.")) || bytes.Contains(publicBodyResponse.Body.Bytes(), []byte("encodedState")) {
-		t.Fatalf("public body response = %d %s, want canonical body nodes without CRDT state", publicBodyResponse.Code, publicBodyResponse.Body.String())
+	if publicBodyResponse.Code != http.StatusNotFound {
+		t.Fatalf("public body route = %d, want it gone (404)", publicBodyResponse.Code)
 	}
 
 	created := request(http.MethodPost, "/api/v1/rag/conversations", "{}", true)
@@ -310,23 +282,6 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if err := json.Unmarshal(createEnvelope.Data, &conversation); err != nil || conversation.ID == uuid.Nil {
 		t.Fatalf("conversation response = %+v, error = %v", conversation, err)
 	}
-	bodyResponse := request(http.MethodGet, "/api/v1/documents/"+documentID.String()+"/body", "", true)
-	var bodyEnvelope ragChatEnvelope
-	var bodySnapshot struct {
-		BodyVersion int64 `json:"bodyVersion"`
-		BodyEpoch   int64 `json:"bodyEpoch"`
-	}
-	if bodyResponse.Code != http.StatusOK || json.Unmarshal(bodyResponse.Body.Bytes(), &bodyEnvelope) != nil || json.Unmarshal(bodyEnvelope.Data, &bodySnapshot) != nil {
-		t.Fatalf("read canonical body for pending suggestion status = %d, body = %s", bodyResponse.Code, bodyResponse.Body.String())
-	}
-	pendingSuggestionID := uuid.New()
-	pendingSuggestion := fmt.Sprintf(`{"suggestionID":%q,"baseBodyVersion":%d,"baseBodyEpoch":%d,"operationSchemaVersion":1,"provenance":"human","operations":[{"op":"replace_text","nodeID":%q,"content":"The service restarts after a failed health check, and the recovery key is cobalt."}],"summary":"Add recovery key"}`,
-		pendingSuggestionID.String(), bodySnapshot.BodyVersion, bodySnapshot.BodyEpoch, runID.String())
-	proposed := request(http.MethodPost, "/api/v1/documents/"+documentID.String()+"/suggestions", pendingSuggestion, true)
-	if proposed.Code != http.StatusCreated {
-		t.Fatalf("propose pending RAG-excluded text status = %d, body = %s", proposed.Code, proposed.Body.String())
-	}
-
 	asked := request(http.MethodPost, "/api/v1/rag/conversations/"+conversation.ID.String()+"/messages", `{"question":"What happens after a failed health check?","language":"en"}`, true)
 	if asked.Code != http.StatusOK {
 		t.Fatalf("ask status = %d, body = %s", asked.Code, asked.Body.String())
@@ -490,30 +445,17 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if err := json.Unmarshal(translatedEnvelope.Data, &translatedAnswer); err != nil || len(translatedAnswer.Citations) != 1 || translatedAnswer.Citations[0].NodeID != paragraphID {
 		t.Fatalf("cross-language answer = %+v, error = %v, want English paragraph citation", translatedAnswer, err)
 	}
-	conflictDocumentID, conflictRootID, conflictParagraphID, conflictRunID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	conflictDocumentID, conflictParagraphID := uuid.New(), uuid.New()
 	if _, err := db.ExecContext(ctx, `INSERT INTO documents (id, workspace_id, title, type, author_id, visibility) VALUES ($1, $2, 'Incident guide', 'markdown', $3, 'workspace')`, conflictDocumentID, workspaceID, actorID); err != nil {
 		t.Fatalf("create conflicting source document: %v", err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO document_accesses (document_id, user_id, access_level) VALUES ($1, $2, 'owner')`, conflictDocumentID, actorID); err != nil {
 		t.Fatalf("add conflicting document owner grant: %v", err)
 	}
-	conflictBody := documentbody.Body{DocumentID: conflictDocumentID, RootNodeID: conflictRootID, Nodes: []documentbody.Node{
-		{DocumentID: conflictDocumentID, NodeID: conflictRootID, Type: "document", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: conflictDocumentID, NodeID: conflictParagraphID, ParentID: &conflictRootID, SiblingOrder: 0, Type: "paragraph", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: conflictDocumentID, NodeID: conflictRunID, ParentID: &conflictParagraphID, Type: "run", Content: "The service never restarts after a failed health check.", Attributes: []byte(`{}`), Version: 1},
-	}}
-	conflictEncoded, err := yjs.EncodeBodyV1(conflictBody)
-	if err != nil {
-		t.Fatalf("encode conflicting source body: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_nodes (document_id, node_id, parent_id, sibling_order, node_type, content, attributes, version) VALUES ($1, $2, NULL, 0, 'document', '', '{}', 1), ($1, $3, $2, 0, 'paragraph', '', '{}', 1), ($1, $4, $3, 0, 'run', $5, '{}', 1)`, conflictDocumentID, conflictRootID, conflictParagraphID, conflictRunID, conflictBody.Nodes[2].Content); err != nil {
-		t.Fatalf("insert conflicting source nodes: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `UPDATE documents SET root_node_id = $2 WHERE id = $1`, conflictDocumentID, conflictRootID); err != nil {
-		t.Fatalf("set conflicting source root: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_collab_states (document_id, encoded_state, schema_version) VALUES ($1, $2, 1)`, conflictDocumentID, conflictEncoded); err != nil {
-		t.Fatalf("insert conflicting source Yjs state: %v", err)
+	if _, err := db.ExecContext(ctx, `UPDATE documents SET content_json = $2::jsonb WHERE id = $1`, conflictDocumentID, ragJSON(
+		ragBlock("paragraph", conflictParagraphID, "", "The service never restarts after a failed health check."),
+	)); err != nil {
+		t.Fatalf("set conflicting source content: %v", err)
 	}
 	if _, err := repository.RebuildRAGIndex(ctx, conflictDocumentID); err != nil {
 		t.Fatalf("index conflicting source body: %v", err)
@@ -688,7 +630,7 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 		t.Fatalf("fake model calls/history = %d/%v, want prior user questions only and no historical answer evidence", modelCalls, modelHistories)
 	}
 
-	opaqueDocumentID, opaqueRootID, paragraphID2, runID2, opaqueInlineID, opaqueNodeID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	opaqueDocumentID, paragraphID2, opaqueInlineID, opaqueNodeID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	if _, err := db.ExecContext(ctx, `INSERT INTO documents (id, workspace_id, title, type, author_id, visibility) VALUES ($1, $2, 'Opaque coverage fixture', 'markdown', $3, 'workspace')`, opaqueDocumentID, workspaceID, actorID); err != nil {
 		t.Fatalf("create opaque coverage fixture: %v", err)
 	}
@@ -697,25 +639,11 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	}
 	opaqueMarker := "rareopalquartz99173"
 	opaqueInlineMarker := "rareopalinline48102"
-	opaqueBody := documentbody.Body{DocumentID: opaqueDocumentID, RootNodeID: opaqueRootID, Nodes: []documentbody.Node{
-		{DocumentID: opaqueDocumentID, NodeID: opaqueRootID, Type: "document", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: opaqueDocumentID, NodeID: paragraphID2, ParentID: &opaqueRootID, SiblingOrder: 0, Type: "paragraph", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: opaqueDocumentID, NodeID: runID2, ParentID: &paragraphID2, Type: "run", Content: "The quartz valve opens after two minutes of cooling.", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: opaqueDocumentID, NodeID: opaqueInlineID, ParentID: &paragraphID2, SiblingOrder: 1, Type: "opaque-inline", Content: opaqueInlineMarker, Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: opaqueDocumentID, NodeID: opaqueNodeID, ParentID: &opaqueRootID, SiblingOrder: 1, Type: "opaque", Content: "Unsupported syntax: " + opaqueMarker, Attributes: []byte(`{}`), Version: 1},
-	}}
-	opaqueEncoded, err := yjs.EncodeBodyV1(opaqueBody)
-	if err != nil {
-		t.Fatalf("encode opaque coverage body: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_nodes (document_id, node_id, parent_id, sibling_order, node_type, content, attributes, version) VALUES ($1, $2, NULL, 0, 'document', '', '{}', 1), ($1, $3, $2, 0, 'paragraph', '', '{}', 1), ($1, $4, $3, 0, 'run', $5, '{}', 1), ($1, $6, $3, 1, 'opaque-inline', $7, '{}', 1), ($1, $8, $2, 1, 'opaque', $9, '{}', 1)`, opaqueDocumentID, opaqueRootID, paragraphID2, runID2, opaqueBody.Nodes[2].Content, opaqueInlineID, opaqueBody.Nodes[3].Content, opaqueNodeID, opaqueBody.Nodes[4].Content); err != nil {
-		t.Fatalf("insert opaque coverage nodes: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `UPDATE documents SET root_node_id = $2 WHERE id = $1`, opaqueDocumentID, opaqueRootID); err != nil {
-		t.Fatalf("set opaque coverage body root: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_collab_states (document_id, encoded_state, schema_version) VALUES ($1, $2, 1)`, opaqueDocumentID, opaqueEncoded); err != nil {
-		t.Fatalf("insert opaque coverage Yjs state: %v", err)
+	if _, err := db.ExecContext(ctx, `UPDATE documents SET content_json = $2::jsonb WHERE id = $1`, opaqueDocumentID, ragJSON(
+		ragBlock("paragraph", paragraphID2, "", "The quartz valve opens after two minutes of cooling.", ragInline("opaque_inline", opaqueInlineID, opaqueInlineMarker)),
+		ragBlock("opaque", opaqueNodeID, "", "Unsupported syntax: "+opaqueMarker),
+	)); err != nil {
+		t.Fatalf("set opaque coverage content: %v", err)
 	}
 	if _, err := repository.RebuildRAGIndex(ctx, opaqueDocumentID); err != nil {
 		t.Fatalf("index opaque coverage body: %v", err)
@@ -1003,27 +931,14 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if err := json.Unmarshal(historyEnvelope.Data, &history); err != nil || len(history.Messages) != 10 || !bytes.Contains([]byte(history.Messages[1].Content), []byte("service restarts after a failed health check")) || len(history.Messages[1].Citations) != 0 {
 		t.Fatalf("history after source deletion = %+v, error = %v, want answer text retained and its source citation removed", history, err)
 	}
-	inheritedDocumentID, inheritedRootID, inheritedParagraphID, inheritedRunID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	inheritedDocumentID, inheritedParagraphID := uuid.New(), uuid.New()
 	if _, err := db.ExecContext(ctx, `INSERT INTO documents (id, workspace_id, title, type, author_id, visibility) VALUES ($1, $2, 'Workspace handbook', 'markdown', $3, 'inherit')`, inheritedDocumentID, workspaceID, otherUserID); err != nil {
 		t.Fatalf("create no-project inherited source document: %v", err)
 	}
-	inheritedBody := documentbody.Body{DocumentID: inheritedDocumentID, RootNodeID: inheritedRootID, Nodes: []documentbody.Node{
-		{DocumentID: inheritedDocumentID, NodeID: inheritedRootID, Type: "document", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: inheritedDocumentID, NodeID: inheritedParagraphID, ParentID: &inheritedRootID, Type: "paragraph", Attributes: []byte(`{}`), Version: 1},
-		{DocumentID: inheritedDocumentID, NodeID: inheritedRunID, ParentID: &inheritedParagraphID, Type: "run", Content: "The glacier protocol recovery code is stored in cabinet 27.", Attributes: []byte(`{}`), Version: 1},
-	}}
-	inheritedEncoded, err := yjs.EncodeBodyV1(inheritedBody)
-	if err != nil {
-		t.Fatalf("encode no-project inherited source body: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_nodes (document_id, node_id, parent_id, sibling_order, node_type, content, attributes, version) VALUES ($1, $2, NULL, 0, 'document', '', '{}', 1), ($1, $3, $2, 0, 'paragraph', '', '{}', 1), ($1, $4, $3, 0, 'run', $5, '{}', 1)`, inheritedDocumentID, inheritedRootID, inheritedParagraphID, inheritedRunID, inheritedBody.Nodes[2].Content); err != nil {
-		t.Fatalf("insert no-project inherited source nodes: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `UPDATE documents SET root_node_id = $2 WHERE id = $1`, inheritedDocumentID, inheritedRootID); err != nil {
-		t.Fatalf("set no-project inherited source root: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO document_collab_states (document_id, encoded_state, schema_version) VALUES ($1, $2, 1)`, inheritedDocumentID, inheritedEncoded); err != nil {
-		t.Fatalf("insert no-project inherited source Yjs state: %v", err)
+	if _, err := db.ExecContext(ctx, `UPDATE documents SET content_json = $2::jsonb WHERE id = $1`, inheritedDocumentID, ragJSON(
+		ragBlock("paragraph", inheritedParagraphID, "", "The glacier protocol recovery code is stored in cabinet 27."),
+	)); err != nil {
+		t.Fatalf("set no-project inherited source content: %v", err)
 	}
 	if _, err := repository.RebuildRAGIndex(ctx, inheritedDocumentID); err != nil {
 		t.Fatalf("index no-project inherited source: %v", err)
@@ -1115,4 +1030,32 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if remainingChats != 0 || remainingMessages != 0 {
 		t.Fatalf("workspace deletion left RAG data: conversations=%d messages=%d", remainingChats, remainingMessages)
 	}
+}
+
+// ragBlock is one block of the editor's JSON with a run holding text; extra inline nodes follow the run.
+func ragBlock(nodeType string, id uuid.UUID, bodyAttributes, text string, inline ...string) string {
+	if bodyAttributes == "" {
+		bodyAttributes = "{}"
+	}
+	attrs, _ := json.Marshal(map[string]string{"nodeID": id.String(), "bodyAttributes": bodyAttributes, "bodyContent": ""})
+	quoted, _ := json.Marshal(text)
+	content := ""
+	if nodeType == "opaque" {
+		attrs, _ = json.Marshal(map[string]string{"nodeID": id.String(), "bodyAttributes": bodyAttributes, "bodyContent": text})
+		return `{"type":"opaque","attrs":` + string(attrs) + `}`
+	}
+	content = `{"type":"run","content":[{"type":"text","text":` + string(quoted) + `}]}`
+	for _, node := range inline {
+		content += "," + node
+	}
+	return `{"type":"` + nodeType + `","attrs":` + string(attrs) + `,"content":[` + content + `]}`
+}
+
+func ragInline(nodeType string, id uuid.UUID, bodyContent string) string {
+	attrs, _ := json.Marshal(map[string]string{"nodeID": id.String(), "bodyAttributes": "{}", "bodyContent": bodyContent})
+	return `{"type":"` + nodeType + `","attrs":` + string(attrs) + `}`
+}
+
+func ragJSON(blocks ...string) string {
+	return `{"type":"doc","content":[{"type":"document","attrs":{"nodeID":"` + uuid.NewString() + `","bodyAttributes":"{}","bodyContent":""},"content":[` + strings.Join(blocks, ",") + `]}]}`
 }

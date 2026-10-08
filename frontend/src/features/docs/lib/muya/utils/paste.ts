@@ -1,3 +1,4 @@
+import { sanitize } from '.'
 import { PasteType } from '../clipboard/types'
 import {
   IMAGE_EXT_REG,
@@ -5,7 +6,6 @@ import {
   PREVIEW_DOMPURIFY_CONFIG,
   URL_REG,
 } from '../config'
-import { sanitize } from '.'
 
 const TIMEOUT = 1500
 

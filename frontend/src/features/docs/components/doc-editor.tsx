@@ -11,6 +11,8 @@ import { getLocalUserScope, subscribeLocalUser } from '@/lib/user-storage'
 import { useTheme } from '@/context/theme-provider'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
+import { ArchitectureDocEditor } from '@/features/architecture/components/architecture-editor'
+import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { useDocEditor } from '../hooks/use-doc-editor'
 import { DbmlEditor } from './dbml-editor'
@@ -37,6 +39,9 @@ export function DocEditor() {
     (typeof navigator !== 'undefined' && !navigator.onLine)
   const cachedMarkdown =
     cachedDocument?.type === 'markdown' ? cachedDocument : undefined
+  // A canvas opens offline from this device's copy of its room, like Markdown.
+  const cachedCanvas =
+    cachedDocument?.type === 'architecture' ? cachedDocument : undefined
   const isRemoteID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       docId
@@ -45,7 +50,7 @@ export function DocEditor() {
     queryKey: ['document', workspaceID, docId, scope.userId],
     queryFn: async ({ signal }) => {
       const document = await getDocument(workspaceID, docId, signal)
-      if (document.type === 'markdown')
+      if (document.type === 'markdown' || document.type === 'architecture')
         useDokudocsStore.getState().upsertDocument({
           ...document,
           content: '',
@@ -55,11 +60,23 @@ export function DocEditor() {
     enabled:
       isRemoteID && Boolean(workspaceID) && auth.status === 'authenticated',
     retry: false,
+    // Keeps "updated by" under the title current while others edit.
+    refetchInterval: 30_000,
   })
 
   if (!isRemoteID)
     return (
       <ScopedDocEditor key={`${scope.generation}:${docId}`} docId={docId} />
+    )
+
+  if (offline && cachedCanvas?.workspaceId)
+    return (
+      <ArchitectureDocEditor
+        key={`${scope.generation}:${docId}`}
+        document={cachedCanvas}
+        workspaceID={cachedCanvas.workspaceId}
+        userID={scope.userId ?? ''}
+      />
     )
 
   if (offline) {
@@ -108,6 +125,17 @@ export function DocEditor() {
       />
     )
 
+  if (documentQuery.data.type === 'architecture')
+    return (
+      <ArchitectureDocEditor
+        key={`${scope.generation}:${docId}`}
+        document={documentQuery.data}
+        workspaceID={workspaceID}
+        userID={scope.userId ?? auth.user?.id ?? ''}
+        focusNodeID={citationNodeID}
+      />
+    )
+
   return (
     <HydrateLegacyDocument
       key={`${scope.generation}:${docId}`}
@@ -147,7 +175,7 @@ function DocumentLoadError({ message }: { message: string }) {
         {message}
       </p>
       <Button asChild size='sm' className='mt-4 text-xs'>
-        <Link to='/'>Back to Dashboard</Link>
+        <Link to='/dashboard'>Back to Dashboard</Link>
       </Button>
     </div>
   )
@@ -196,7 +224,7 @@ function ScopedDocEditor({ docId }: { docId: string }) {
           The requested document does not exist or was moved to Trash.
         </p>
         <Button asChild size='sm' className='mt-4 text-xs'>
-          <Link to='/'>Back to Dashboard</Link>
+          <Link to='/dashboard'>Back to Dashboard</Link>
         </Button>
       </div>
     )
@@ -311,6 +339,13 @@ function ScopedDocEditor({ docId }: { docId: string }) {
         isStarred={doc.isStarred}
         onToggleStar={handleToggleStar}
       />
+      {doc.workspaceId && (
+        <ArchitectureUses
+          workspaceID={doc.workspaceId}
+          documentID={doc.id}
+          className='border-b border-border px-4 py-1.5'
+        />
+      )}
 
       <div className='flex-1 overflow-hidden'>
         {doc.type === 'markdown' && (

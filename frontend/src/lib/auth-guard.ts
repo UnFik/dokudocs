@@ -1,12 +1,12 @@
 import { redirect } from '@tanstack/react-router'
 import { synchronizeSession, useAuthStore } from '@/stores/auth-store'
+import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { currentUserApi } from '@/features/auth/api/auth-api'
 import { readTokenClaims } from '@/features/auth/api/auth-schema'
+import { hasLocalCopy } from '@/features/docs/lib/collab-session'
 import { ApiError } from './api-client'
 import { switchLocalUser } from './local-user-data'
 import { queryClient } from './query-client'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
-import { hasOfflineMarkdownBody } from '@/features/docs/lib/collaboration-store'
 
 export function safeRedirect(value?: string) {
   if (
@@ -15,14 +15,14 @@ export function safeRedirect(value?: string) {
     /[\\%\s]/.test(value) ||
     value.startsWith('//')
   )
-    return '/'
+    return '/dashboard'
   const url = new URL(value, window.location.origin)
   if (
-    !/^\/(?:$|account\/?$|projects(?:\/[^/]+)?\/?$|docs\/[^/]+\/?$|drafts\/?$|trash\/?$|users\/?$|settings(?:\/(?:account|appearance|display|notifications))?\/?$|help-center\/?$)/.test(
+    !/^\/(?:$|dashboard\/?$|account\/?$|projects(?:\/[^/]+)?\/?$|docs\/[^/]+\/?$|drafts\/?$|trash\/?$|users\/?$|settings(?:\/(?:account|appearance|display|notifications))?\/?$|help-center\/?$)/.test(
       url.pathname
     )
   )
-    return '/'
+    return '/dashboard'
   return `${url.pathname}${url.search}${url.hash}`
 }
 
@@ -68,7 +68,7 @@ export async function requireAuth({
 }) {
   if (!(await restoreSession()))
     throw redirect({
-      to: '/sign-in',
+      to: '/',
       search: { redirect: safeRedirect(location.href) },
       replace: true,
     })
@@ -114,13 +114,7 @@ async function restoreCachedDocument(documentID: string) {
     return false
 
   try {
-    if (
-      !(await hasOfflineMarkdownBody({
-        userID: claims.sub,
-        documentID,
-      }))
-    )
-      return false
+    if (!(await hasLocalCopy(document.workspaceId, documentID))) return false
   } catch {
     return false
   }
@@ -128,5 +122,6 @@ async function restoreCachedDocument(documentID: string) {
 }
 
 export async function requireGuest() {
-  if (await restoreSession()) throw redirect({ to: '/', replace: true })
+  if (await restoreSession())
+    throw redirect({ to: '/dashboard', replace: true })
 }

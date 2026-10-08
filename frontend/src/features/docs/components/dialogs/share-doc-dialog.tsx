@@ -1,14 +1,9 @@
 import { useState, useMemo } from 'react'
-import {
-  Copy,
-  Lock,
-  Mail,
-  Share2,
-  Trash2,
-} from 'lucide-react'
+import type { DocumentAccessLevel, DocumentItem } from '@/types/dokudocs'
+import { Copy, Lock, Mail, Share2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
-import type { DocumentAccessLevel, DocumentItem } from '@/types/dokudocs'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -18,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -25,8 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 interface ShareDocDialogProps {
   open: boolean
@@ -50,9 +44,10 @@ export function ShareDocDialog({
     return documentAccessesMap[doc.id] || []
   }, [documentAccessesMap, doc.id])
 
-  const shareUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/docs/${doc.id}`
-    : `/docs/${doc.id}`
+  const shareUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/docs/${doc.id}`
+      : `/docs/${doc.id}`
 
   const handleCopyLink = () => {
     toast.info('Document sharing is not available yet')
@@ -70,7 +65,11 @@ export function ShareDocDialog({
     toast.success(`Access granted to ${trimmed}`)
   }
 
-  const handleRoleChange = (_accessId: string, email: string, role: DocumentAccessLevel) => {
+  const handleRoleChange = (
+    _accessId: string,
+    email: string,
+    role: DocumentAccessLevel
+  ) => {
     setDocumentAccess(doc.id, email, role)
     toast.success(`Updated access for ${email}`)
   }
@@ -156,9 +155,15 @@ export function ShareDocDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value='view' className='text-xs'>Can view</SelectItem>
-                <SelectItem value='comment' className='text-xs'>Can comment</SelectItem>
-                <SelectItem value='edit' className='text-xs'>Can edit</SelectItem>
+                <SelectItem value='view' className='text-xs'>
+                  Can view
+                </SelectItem>
+                <SelectItem value='comment' className='text-xs'>
+                  Can comment
+                </SelectItem>
+                <SelectItem value='edit' className='text-xs'>
+                  Can edit
+                </SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -189,7 +194,10 @@ export function ShareDocDialog({
               <div className='flex items-center justify-between rounded-lg border border-border/50 bg-card/60 p-2 text-xs'>
                 <div className='flex items-center gap-2.5'>
                   <Avatar className='size-7'>
-                    <AvatarImage src={doc.author.avatar} alt={doc.author.name} />
+                    <AvatarImage
+                      src={doc.author.avatar}
+                      alt={doc.author.name}
+                    />
                     <AvatarFallback className='text-[10px]'>
                       {doc.author.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
@@ -216,7 +224,10 @@ export function ShareDocDialog({
                 >
                   <div className='flex items-center gap-2.5'>
                     <Avatar className='size-7'>
-                      <AvatarImage src={access.user.avatar} alt={access.user.name} />
+                      <AvatarImage
+                        src={access.user.avatar}
+                        alt={access.user.name}
+                      />
                       <AvatarFallback className='text-[10px]'>
                         {access.user.name.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
@@ -236,16 +247,26 @@ export function ShareDocDialog({
                       disabled
                       value={access.accessLevel}
                       onValueChange={(val) =>
-                        handleRoleChange(access.id, access.user.email, val as DocumentAccessLevel)
+                        handleRoleChange(
+                          access.id,
+                          access.user.email,
+                          val as DocumentAccessLevel
+                        )
                       }
                     >
                       <SelectTrigger className='h-7 w-24 text-[11px]'>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent align='end'>
-                        <SelectItem value='view' className='text-xs'>Viewer</SelectItem>
-                        <SelectItem value='comment' className='text-xs'>Commenter</SelectItem>
-                        <SelectItem value='edit' className='text-xs'>Editor</SelectItem>
+                        <SelectItem value='view' className='text-xs'>
+                          Viewer
+                        </SelectItem>
+                        <SelectItem value='comment' className='text-xs'>
+                          Commenter
+                        </SelectItem>
+                        <SelectItem value='edit' className='text-xs'>
+                          Editor
+                        </SelectItem>
                       </SelectContent>
                     </Select>
 

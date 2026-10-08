@@ -60,3 +60,9 @@ func WorkspaceFromContext(ctx context.Context) (uuid.UUID, string, bool) {
 	role, ok2 := ctx.Value(workspaceRoleContextKey).(string)
 	return wsID, role, ok1 && ok2
 }
+
+// ContextWithWorkspace sets what RequireWorkspace would, for handlers tested without it.
+func ContextWithWorkspace(ctx context.Context, workspaceID uuid.UUID, role string) context.Context {
+	ctx = context.WithValue(ctx, workspaceIDContextKey, workspaceID)
+	return context.WithValue(ctx, workspaceRoleContextKey, role)
+}

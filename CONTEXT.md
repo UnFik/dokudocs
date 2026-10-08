@@ -25,24 +25,12 @@ Authorized users can edit the same Markdown document together, including while t
 _Avoid_: Live sync when referring only to local autosave
 
 **DocumentBody**:
-The canonical structured content of a Markdown document. Markdown is a way to import or export it.
-_Avoid_: Markdown text when referring to the canonical stored representation
+The content of a Markdown document: its Yjs state, with the ProseMirror JSON (`content_json`) and the Markdown text derived from it each time it is stored. Markdown is a way to import, export, search and preview it.
+_Avoid_: Markdown text when referring to the stored representation of record
 
 **DocumentNode**:
-A stable-identity block, container, or inline run within a DocumentBody.
+A block, container, or inline run within a DocumentBody, carrying a stable `nodeID` in the editor's schema.
 _Avoid_: Word node
-
-**OpaqueNode**:
-A DocumentNode for Markdown syntax the editor cannot safely interpret. Its source must be preserved, and users cannot edit, move, reorder, or delete it.
-_Avoid_: Editable raw block
-
-**MoveNode**:
-An operation that changes the parent or sibling position of an existing DocumentNode while preserving that node's identity. It must be valid against the current DocumentBody; a no-op does not change the document.
-_Avoid_: Direct shared-tree mutation
-
-**DeleteNode**:
-A structural command that deletes an existing DocumentNode, commits the AST/Yjs rebuild with a durable receipt, and starts a new BodyEpoch when the tree changes.
-_Avoid_: Deleting an existing node through an ordinary Yjs update
 
 **DocumentOwner**:
 A User holding a current owner grant for a Document, independent of who originally authored it.
@@ -52,20 +40,12 @@ _Avoid_: Author when referring to current ownership
 The access a User has to a Document after workspace, project, document visibility, grants, draft status, and lifecycle are considered together.
 _Avoid_: Document grant when referring to the final access decision
 
-**NodePath**:
-The ordered chain of ancestors that locates a DocumentNode within a DocumentBody.
-_Avoid_: Canonical hierarchy
-
-**BodySchemaVersion**:
-The marker for the structural rules used to interpret a DocumentBody. A change based on incompatible rules needs review before it can be applied.
-_Avoid_: BodyEpoch, BodyVersion
-
 **CommentThread**:
-A conversation attached to a selected range in a document, with replies and a resolution state.
+A conversation attached to a selected range in a document, with replies and a resolution state. Anyone who can read the document sees every thread; a User with comment or edit access may start one, reply, and resolve. The author may edit their own comment or reply; the author or an editor may delete one. It is not part of the DocumentBody, so a Suggestion or an accept never touches it.
 _Avoid_: Comment when referring to the full conversation rather than one message
 
 **CommentAnchor**:
-The reference connecting a CommentThread to the text range it discusses. An anchor may become orphaned if its referenced content is removed.
+The reference connecting a CommentThread to what it discusses: a text range in a Markdown document, or an element (a node or Connection, by its id) on an Architecture canvas, where a thread whose element is removed stays readable. An anchor is a pair of Yjs relative positions, so it follows the text as it moves. It is orphaned when its text is removed or copied to new nodes (a split or join that is accepted); an orphaned thread stays readable with its quoted text, can still be replied to and resolved, and is listed last in the review rail.
 _Avoid_: Character offset as a durable identity
 
 **DocumentRevision**:
@@ -73,28 +53,33 @@ A historical snapshot of a document. Named revisions are immutable; routine auto
 _Avoid_: Current document state when referring to a historical snapshot
 
 **CollaborativeSession**:
-A period when authorized Users work together on one Markdown document.
+A period when authorized Users work together on one Markdown document: a room in the collaboration service (`collab/`) and the editors connected to it, each keeping a local copy on its device.
 _Avoid_: WebSocket connection when referring to the whole editing session
 
-**PendingOfflineEdit**:
-A change made while disconnected that has not yet become part of the canonical DocumentBody. If it cannot safely be applied to the current body, it stays available for User review.
-_Avoid_: Synced edit when referring to a device-local change
+**LocalCopy**:
+The device's own copy of a document (y-indexeddb). It lets the document open offline and keeps edits made while disconnected; the room merges them in when the connection returns. It is cleared at sign-out once the server has everything, and dropped when the server replaces the document (a restored revision).
+_Avoid_: Cache when referring to unsynced edits
 
-**BodyVersion**:
-The document's monotonically increasing identifier for each newly accepted state of its DocumentBody. Repeating the same accepted change does not represent a new version.
-_Avoid_: CRDT causal clock
-
-**BodyEpoch**:
-The boundary between generations of collaborative edits. Changes from an earlier generation may require User review before they can be applied.
-_Avoid_: BodyVersion, CRDT state vector
+**Seamless Edit**:
+An edit a User makes with an ordinary gesture (typing, deleting a character, a word, a line, several lines, a separator, everything; undo and redo) that never shows an internal error, a pause, a lost caret, or a request to review. Deleting and moving blocks are ordinary edits made by the editor, the only writer; there is no command to wait for. A gesture the editor cannot perform does the closest sensible thing or nothing; it never shows machine text.
+_Avoid_: Showing an internal error, a queued-command message, or a review prompt for a normal gesture
 
 **Accepted Edit**:
-A validated change that becomes part of the canonical DocumentBody.
+A change that has reached the room and is stored with the document.
 _Avoid_: Received update when referring to a durable change
 
 **Suggestion**:
-A proposed text, formatting, or structural change to a DocumentBody. One `suggestion_id` is one atomic change set; a User with comment access may propose it, and only an editor or owner may accept or reject the whole set. Until accepted, it is not part of the canonical body or chatbot evidence.
+A proposed change to a DocumentBody that lives in the body itself, marked with its author, until an editor accepts or rejects it. It is not part of the derived Markdown, so search, chatbot evidence, revisions, and public links never include it. Everyone who can read the document sees every Suggestion; a User with comment access may make one, and only an editor or owner may accept or reject it. The author may withdraw their own.
 _Avoid_: Accepted Edit when referring to a pending proposal
+
+**Suggestion card**:
+How a Suggestion is shown in the review rail, with a title worked out from what it contains: Add (only inserted text), Delete (only deleted text), Replace (deleted and inserted text that touch), plus Format, Split paragraph, Join paragraphs, Insert block, and Delete block.
+
+**Suggestion thread**:
+The replies on one Suggestion, which can be resolved without deciding the Suggestion itself.
+
+**Review rail**:
+The right-hand column that lists Suggestion cards and CommentThreads in document order (orphaned threads last), with accept, reject, and resolve actions, and the preview of the body as if everything were accepted or rejected.
 
 **KnowledgeSource**:
 An active Markdown document, including a draft, that a User is allowed to read and that may support a chatbot answer within its workspace. Access is checked for each question; a `public_link` document without an internal grant requires a valid token proven in the current chat session. Its title and project name aid discovery; its body supplies evidence for an answer.

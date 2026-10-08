@@ -1,0 +1,259 @@
+import { NodeSelection, TextSelection } from 'prosemirror-state'
+import { describe, expect, it } from 'vitest'
+import { userEvent } from 'vitest/browser'
+import type { DocumentBodyNode } from '../documentBody'
+import {
+  mountTestEditor,
+  paragraphsBody,
+  trackRemovedBlocks,
+} from './editorTestKit'
+
+// Real key presses on a focused editor: the browser's own deletion is ignored
+// for selections that cross blocks, so these gestures are handled explicitly.
+
+function withSeparator(): DocumentBodyNode[] {
+  return [
+    ...paragraphsBody('first', 'second'),
+    {
+      nodeID: 'hr',
+      parentID: 'root',
+      siblingOrder: 2,
+      type: 'thematic-break',
+      content: '',
+      attributes: {},
+    },
+    {
+      nodeID: 'p9',
+      parentID: 'root',
+      siblingOrder: 3,
+      type: 'paragraph',
+      content: '',
+      attributes: {},
+    },
+    {
+      nodeID: 'r9',
+      parentID: 'p9',
+      siblingOrder: 0,
+      type: 'run',
+      content: 'after',
+      attributes: {},
+    },
+  ]
+}
+
+function mount(body: DocumentBodyNode[]) {
+  const { batches, onBodyChange } = trackRemovedBlocks(body)
+  const errors: unknown[] = []
+  const mounted = mountTestEditor(body, {
+    onBodyChange,
+    onTransactionError: (error) => errors.push(error),
+  })
+  mounted.editor.view.focus()
+  const runStart = (text: string) => {
+    let found = -1
+    mounted.editor.view.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'run' && node.textContent === text) found = pos + 1
+      return found < 0
+    })
+    return found
+  }
+  return { ...mounted, batches, errors, runStart }
+}
+
+describe('delete gestures with a real keyboard', () => {
+  for (const key of ['Delete', 'Backspace']) {
+    it(`Ctrl+A then ${key} deletes every block as one batch`, async () => {
+      const { editor, batches, errors, cleanup } = mount(
+        paragraphsBody('a', 'b', 'c')
+      )
+      try {
+        await userEvent.keyboard(`{Control>}a{/Control}{${key}}`)
+        expect(errors).toEqual([])
+        expect(batches).toEqual([['p0', 'p1', 'p2']])
+        // One empty line is left to type on.
+        expect(editor.getBody()).toHaveLength(2)
+      } finally {
+        cleanup()
+      }
+    })
+  }
+
+  it('deletes a selected separator', async () => {
+    const { editor, batches, errors, cleanup } = mount(withSeparator())
+    try {
+      const { view } = editor
+      let separator = -1
+      view.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'thematic_break') separator = pos
+        return separator < 0
+      })
+      view.dispatch(
+        view.state.tr.setSelection(
+          NodeSelection.create(view.state.doc, separator)
+        )
+      )
+      await userEvent.keyboard('{Delete}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('removes a separator from a caret inside the last run, not just between runs', async () => {
+    const { editor, batches, errors, runStart, cleanup } =
+      mount(withSeparator())
+    try {
+      const { view } = editor
+      // Inside the run's text, one position before the paragraph's own end.
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, runStart('second') + 6)
+        )
+      )
+      expect(view.state.selection.$from.parent.type.name).toBe('run')
+      await userEvent.keyboard('{Delete}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('removes a separator before the caret with Backspace from inside the first run', async () => {
+    const { editor, batches, errors, runStart, cleanup } =
+      mount(withSeparator())
+    try {
+      const { view } = editor
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, runStart('after'))
+        )
+      )
+      expect(view.state.selection.$from.parent.type.name).toBe('run')
+      await userEvent.keyboard('{Backspace}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('uses the caret the browser just moved, before the editor has read it', async () => {
+    const { editor, batches, errors, host, cleanup } = mount(withSeparator())
+    try {
+      const { view } = editor
+      // Park the editor's own selection mid-word, as a click would.
+      let secondRun: HTMLElement | null = null
+      host.querySelectorAll('span[data-node-id]').forEach((span) => {
+        if (span.textContent === 'second') secondRun = span as HTMLElement
+      })
+      const text = secondRun!.firstChild!
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, view.posAtDOM(text, 2))
+        )
+      )
+      // The browser moves the caret to the end (End key), and the next key
+      // arrives before the selectionchange event has been handled.
+      const selection = window.getSelection()!
+      selection.collapse(text, text.textContent!.length)
+      view.dom.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Delete',
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+      await Promise.resolve()
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+      expect(view.state.doc.textContent).toContain('second')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('selects a separator when it is clicked, so Delete removes it', async () => {
+    const { editor, batches, errors, host, cleanup } = mount(withSeparator())
+    try {
+      const separator = host.querySelector('hr')!
+      separator.style.height = '20px'
+      await userEvent.click(separator)
+      expect(editor.view.state.selection).toBeInstanceOf(NodeSelection)
+      await userEvent.keyboard('{Delete}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('deletes a separator with Delete from the end of the paragraph before it', async () => {
+    const { editor, batches, errors, runStart, cleanup } =
+      mount(withSeparator())
+    try {
+      const { view } = editor
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(view.state.doc, runStart('second') + 6)
+        )
+      )
+      await userEvent.keyboard('{Delete}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('trims the text at both ends and deletes the separator between when text across blocks is deleted', async () => {
+    const { editor, batches, errors, runStart, cleanup } =
+      mount(withSeparator())
+    try {
+      const { view } = editor
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(
+            view.state.doc,
+            runStart('second') + 3,
+            runStart('after') + 2
+          )
+        )
+      )
+      await userEvent.keyboard('{Backspace}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([['hr']])
+      expect(editor.getBody().map((node) => node.content)).toContain('sec')
+      expect(editor.getBody().map((node) => node.content)).toContain('ter')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('leaves a delete inside one paragraph to the browser', async () => {
+    const { editor, batches, errors, runStart, cleanup } = mount(
+      paragraphsBody('hello', 'world')
+    )
+    try {
+      const { view } = editor
+      view.dispatch(
+        view.state.tr.setSelection(
+          TextSelection.create(
+            view.state.doc,
+            runStart('hello') + 1,
+            runStart('hello') + 3
+          )
+        )
+      )
+      await userEvent.keyboard('{Backspace}')
+      expect(errors).toEqual([])
+      expect(batches).toEqual([])
+      expect(
+        editor.getBody().find((node) => node.nodeID === 'r0')?.content
+      ).toBe('hlo')
+    } finally {
+      cleanup()
+    }
+  })
+})

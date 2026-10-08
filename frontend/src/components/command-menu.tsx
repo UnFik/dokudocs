@@ -277,7 +277,7 @@ export function CommandMenu() {
               <CommandItem
                 key='nav-goto-recent'
                 value='nav-goto-recent-documents'
-                onSelect={() => runCommand(() => navigate({ to: '/' }))}
+                onSelect={() => runCommand(() => navigate({ to: '/dashboard' }))}
               >
                 <Clock className='size-3.5 text-muted-foreground' />
                 <span>Recent Documents</span>

@@ -10,6 +10,7 @@ import {
   Database,
   FileText,
   GitBranch,
+  Network,
   Plus,
   Tag,
   X,
@@ -51,11 +52,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
-import { markdownToDocumentBody } from '../lib/muya/state/markdownToDocumentBody'
+import { markdownToDocumentJSON } from '../lib/markdown-to-document-json'
 
 const createDocSchema = z.object({
   title: z.string().min(1, 'Please enter a document title'),
-  type: z.enum(['markdown', 'dbdiagram', 'mermaid']),
+  type: z.enum(['markdown', 'dbdiagram', 'mermaid', 'architecture']),
   projectId: z.string(),
   categories: z.array(z.string()),
 })
@@ -215,18 +216,14 @@ function CreateDocDialogForm({
 
     if (values.type === 'markdown') {
       try {
-        const body = await markdownToDocumentBody(documentID, content)
+        const contentJSON = await markdownToDocumentJSON(content)
         createMutation.mutate({
           requestID,
           input: {
             ...common,
             type: 'markdown',
-            initialBody: {
-              documentID,
-              bodySchemaVersion: 1,
-              rootNodeID: body.rootNodeID,
-              nodes: body.nodes,
-            },
+            content: content,
+            contentJSON,
           },
         })
       } catch (error) {
@@ -234,6 +231,15 @@ function CreateDocDialogForm({
           error instanceof Error ? error.message : 'Could not parse Markdown'
         )
       }
+      return
+    }
+
+    if (values.type === 'architecture') {
+      // The API starts an empty canvas; its text is derived from the canvas.
+      createMutation.mutate({
+        requestID,
+        input: { ...common, type: 'architecture' },
+      })
       return
     }
 
@@ -258,9 +264,15 @@ function CreateDocDialogForm({
     },
     {
       value: 'mermaid',
-      label: 'Architecture / Flow',
-      description: 'Sequence diagrams & system graphs',
+      label: 'Mermaid diagram',
+      description: 'Flowcharts & sequence diagrams as text',
       icon: GitBranch,
+    },
+    {
+      value: 'architecture',
+      label: 'Architecture',
+      description: 'Hosts, systems and how they connect, edited together',
+      icon: Network,
     },
   ]
 

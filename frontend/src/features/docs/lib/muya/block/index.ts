@@ -1,4 +1,3 @@
-import Frontmatter from './extra/frontmatter'
 import AtxHeading from './commonMark/atxHeading'
 // container block
 import BlockQuote from './commonMark/blockQuote'
@@ -27,6 +26,7 @@ import DiagramBlock from './extra/diagram'
 import DiagramContainer from './extra/diagram/diagramContainer'
 import DiagramPreview from './extra/diagram/diagramPreview'
 import Footnote from './extra/footnote'
+import Frontmatter from './extra/frontmatter'
 import MathBlock from './extra/math'
 import MathContainer from './extra/math/mathContainer'
 import MathPreview from './extra/math/mathPreview'

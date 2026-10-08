@@ -1,24 +1,13 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import type { PresenceUser } from '../lib/collaboration-socket'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { authorColor } from '../lib/author-color'
+import type { PresenceUser } from '../lib/collab-session'
 
 const maxVisible = 4
-
-const palette = [
-  'bg-rose-500',
-  'bg-amber-500',
-  'bg-emerald-500',
-  'bg-sky-500',
-  'bg-violet-500',
-  'bg-fuchsia-500',
-  'bg-teal-500',
-  'bg-orange-500',
-]
-
-function colorFor(userID: string) {
-  let hash = 0
-  for (const char of userID) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return palette[hash % palette.length]
-}
 
 function initials(name: string | undefined) {
   const words = name?.trim().split(/\s+/).filter(Boolean) ?? []
@@ -32,9 +21,14 @@ function initials(name: string | undefined) {
 export function PresenceAvatars({
   users,
   currentUserID,
+  followedID = null,
+  onFollow,
 }: {
   users: PresenceUser[]
   currentUserID: string
+  followedID?: string | null
+  /** Called with a person's id to follow them, or null to stop. */
+  onFollow?: (userID: string | null) => void
 }) {
   if (!users.length) return null
   const visible = users.slice(0, maxVisible)
@@ -46,28 +40,61 @@ export function PresenceAvatars({
     >
       {visible.map((user) => {
         const label = `${user.name || 'Anonymous'}${user.userID === currentUserID ? ' (you)' : ''}`
+        const name = user.name || 'Anonymous'
+        const avatar = (
+          <Avatar
+            className='size-6 border-2 ring-2 ring-background'
+            style={{ borderColor: authorColor(user.userID) }}
+          >
+            {user.avatarURL ? (
+              <AvatarImage src={user.avatarURL} alt='' />
+            ) : null}
+            <AvatarFallback className='bg-muted text-[10px] leading-none font-semibold text-foreground'>
+              {initials(user.name)}
+            </AvatarFallback>
+          </Avatar>
+        )
+        const followable = onFollow && user.userID !== currentUserID
+        const following = followedID === user.userID
         return (
-          <li key={user.userID} aria-label={label} title={label}>
-            <Avatar className='size-6 ring-2 ring-background'>
-              {user.avatarURL ? (
-                <AvatarImage src={user.avatarURL} alt='' />
-              ) : null}
-              <AvatarFallback
-                className={`${colorFor(user.userID)} text-[10px] font-semibold text-white`}
-              >
-                {initials(user.name)}
-              </AvatarFallback>
-            </Avatar>
+          <li key={user.userID} aria-label={label} className='flex'>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {followable ? (
+                  <button
+                    type='button'
+                    aria-label={`${following ? 'Stop following' : 'Follow'} ${name}`}
+                    aria-pressed={following}
+                    className='rounded-full focus-visible:ring-2'
+                    onClick={() => onFollow(following ? null : user.userID)}
+                  >
+                    {avatar}
+                  </button>
+                ) : (
+                  <span className='inline-flex rounded-full'>{avatar}</span>
+                )}
+              </TooltipTrigger>
+              <TooltipContent>{label}</TooltipContent>
+            </Tooltip>
           </li>
         )
       })}
       {hidden > 0 ? (
         <li
           aria-label={`${hidden} more people`}
-          title={`${hidden} more people`}
           className='z-10 flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground ring-2 ring-background'
         >
-          +{hidden}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>+{hidden}</span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {users
+                .slice(maxVisible)
+                .map((user) => user.name || 'Anonymous')
+                .join(', ')}
+            </TooltipContent>
+          </Tooltip>
         </li>
       ) : null}
     </ul>

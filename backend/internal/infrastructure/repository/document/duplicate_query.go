@@ -8,10 +8,7 @@ import (
 	"errors"
 
 	"backend/constant"
-	"backend/internal/application/collaboration"
-	"backend/internal/domain/documentbody"
 	"backend/internal/domain/model"
-	"backend/internal/infrastructure/collaboration/yjs"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
@@ -40,63 +37,6 @@ func (r *Repository) DuplicateAuthorized(ctx context.Context, docID, workspaceID
 			return err
 		}
 
-		var documentType string
-		var rootIDText sql.NullString
-		var bodySchemaVersion int
-		if err := tx.QueryRowContext(ctx, `
-			SELECT type::text, root_node_id::text, body_schema_version
-			FROM documents WHERE id = $1 AND workspace_id = $2
-		`, docID, workspaceID).Scan(&documentType, &rootIDText, &bodySchemaVersion); err != nil {
-			return err
-		}
-		var duplicateBody *documentbody.Body
-		var duplicateState []byte
-		if rootIDText.Valid {
-			if documentType != "markdown" || bodySchemaVersion != yjs.BodySchemaVersionV1 {
-				return collaboration.ErrBodySchemaMismatch
-			}
-			rootID, err := uuid.Parse(rootIDText.String)
-			if err != nil {
-				return err
-			}
-			sourceBody, err := loadDocumentBody(ctx, tx, docID, rootID)
-			if err != nil {
-				return err
-			}
-			var sourceState []byte
-			var stateSchemaVersion int
-			if err := tx.QueryRowContext(ctx, `
-				SELECT encoded_state, schema_version FROM document_collab_states WHERE document_id = $1
-				`, docID).Scan(&sourceState, &stateSchemaVersion); err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return collaboration.ErrBodyNotInitialized
-				}
-				return err
-			}
-			if stateSchemaVersion != bodySchemaVersion {
-				return collaboration.ErrBodySchemaMismatch
-			}
-			projected, err := yjs.ProjectV1(sourceState, docID)
-			if err != nil {
-				return err
-			}
-			if err := setNodeVersions(sourceBody, &projected); err != nil {
-				return err
-			}
-			if !sameBody(sourceBody, projected) {
-				return constant.ErrDocumentConflict
-			}
-			copiedBody, err := documentbody.CloneForDocument(sourceBody, duplicateID)
-			if err != nil {
-				return err
-			}
-			duplicateState, err = yjs.EncodeBodyV1(copiedBody)
-			if err != nil {
-				return err
-			}
-			duplicateBody = &copiedBody
-		}
-
 		var projectID sql.NullString
 		if err := tx.QueryRowContext(ctx, `SELECT project_id::text FROM documents WHERE id = $1`, docID).Scan(&projectID); err != nil {
 			return err
@@ -123,11 +63,11 @@ func (r *Repository) DuplicateAuthorized(ctx context.Context, docID, workspaceID
 		err = tx.QueryRowContext(ctx, `
 			INSERT INTO documents (
 				id, workspace_id, project_id, title, type, content, author_id, tags, is_draft, visibility,
-				creation_request_kind, creation_request_id, creation_request_hash
+				creation_request_kind, creation_request_id, creation_request_hash, content_json
 			)
 			SELECT $1, d.workspace_id, d.project_id, 'Copy of ' || d.title, d.type,
-			       CASE WHEN d.type = 'markdown' AND d.root_node_id IS NOT NULL THEN '' ELSE d.content END,
-			       $2, d.tags, d.is_draft, d.visibility, 'duplicate', $5, $6
+			       d.content,
+			       $2, d.tags, d.is_draft, d.visibility, 'duplicate', $5, $6, d.content_json
 			FROM documents d
 			WHERE d.id = $3 AND d.workspace_id = $4 AND d.deleted_at IS NULL
 			ON CONFLICT (author_id, creation_request_kind, creation_request_id)
@@ -156,31 +96,12 @@ func (r *Repository) DuplicateAuthorized(ctx context.Context, docID, workspaceID
 		if duplicateID == uuid.Nil {
 			return constant.ErrDocumentNotFound
 		}
-		if duplicateBody != nil {
-			if err := insertDocumentNodes(ctx, tx, *duplicateBody); err != nil {
-				return err
-			}
-			result, err := tx.ExecContext(ctx, `
-				UPDATE documents SET root_node_id = $2, body_version = 1, body_epoch = 1, body_schema_version = $3
-				WHERE id = $1 AND workspace_id = $4
-			`, duplicateID, duplicateBody.RootNodeID, yjs.BodySchemaVersionV1, workspaceID)
-			if err != nil {
-				return err
-			}
-			if rows, err := result.RowsAffected(); err != nil {
-				return err
-			} else if rows != 1 {
-				return constant.ErrDocumentConflict
-			}
-			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO document_collab_states (document_id, encoded_state, schema_version)
-				VALUES ($1, $2, $3)
-			`, duplicateID, duplicateState, yjs.BodySchemaVersionV1); err != nil {
-				return err
-			}
-			if err := storeAutoRevision(ctx, tx, duplicateID, actorID, *duplicateBody, 1, yjs.BodySchemaVersionV1, 0); err != nil {
-				return err
-			}
+		// A copied canvas links to the same documents as its source.
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO architecture_document_links (architecture_id, element_id, element_kind, element_name, document_id)
+			SELECT $1, element_id, element_kind, element_name, document_id FROM architecture_document_links WHERE architecture_id = $2
+		`, duplicateID, docID); err != nil {
+			return err
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO document_category_mappings (document_id, category_id)

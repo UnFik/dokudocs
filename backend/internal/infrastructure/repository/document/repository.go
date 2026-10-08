@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"backend/internal/infrastructure/database"
 
@@ -12,16 +11,12 @@ import (
 )
 
 type Repository struct {
-	db      database.Queryer
-	tx      database.DB
-	commits *commitCache
-	// revisionDebounce limits how often a collaborative commit rewrites the
-	// rolling auto revision; structural commands always write it.
-	revisionDebounce time.Duration
+	db database.Queryer
+	tx database.DB
 }
 
 func NewRepository(db database.DB) *Repository {
-	return &Repository{db: db, tx: db, commits: newCommitCache(32), revisionDebounce: 10 * time.Second}
+	return &Repository{db: db, tx: db}
 }
 
 func (r *Repository) fetchCategoriesForDocuments(ctx context.Context, docIDs []uuid.UUID, actorID uuid.UUID) (map[uuid.UUID][]string, error) {

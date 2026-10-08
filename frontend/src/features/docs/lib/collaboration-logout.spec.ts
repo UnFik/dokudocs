@@ -1,77 +1,101 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { registerOpenDocument } from './collab-registry'
 import {
   discardLocalEdits,
+  exportUnsyncedDocuments,
   flushLocalEditsForLogout,
 } from './collaboration-logout'
-import { IndexedDBCollaborationStore } from './collaboration-store'
 
-const snapshot = {
-  bodyVersion: 1,
-  bodyEpoch: 1,
-  bodySchemaVersion: 1,
-  canEdit: true,
-  encodedState: new Uint8Array([1]),
-}
-const pendingUpdate = {
-  updateID: 'pending-1',
-  bodyEpoch: 1,
-  bodySchemaVersion: 1,
-  update: new Uint8Array([9]),
-}
+const stops: Array<() => void> = []
+afterEach(() => stops.splice(0).forEach((stop) => stop()))
 
-describe('logout and local collaboration data', () => {
-  it('clears cached bodies with nothing pending and reports nothing unsynced', async () => {
-    const store = new IndexedDBCollaborationStore()
-    const userID = `user-${crypto.randomUUID()}`
-    await store.saveSnapshot({ userID, documentID: 'doc-1' }, snapshot)
-
-    const result = await flushLocalEditsForLogout({
-      userID,
-      token: () => 'jwt',
-      workspaceOf: () => 'workspace-1',
+function open(input: {
+  userID: string
+  documentID: string
+  unsynced?: number
+  drains?: boolean
+}) {
+  let destroyed = false
+  stops.push(
+    registerOpenDocument({
+      userID: input.userID,
+      documentID: input.documentID,
+      workspaceID: 'workspace-1',
+      unsyncedChanges: () => input.unsynced ?? 0,
+      drained: async () => input.drains ?? (input.unsynced ?? 0) === 0,
+      markdown: () => `# ${input.documentID}`,
+      destroy: () => {
+        destroyed = true
+      },
     })
+  )
+  return { wasDestroyed: () => destroyed }
+}
+
+async function localDatabases() {
+  return (await indexedDB.databases()).map((database) => database.name)
+}
+
+async function createLocalCopy(name: string) {
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open(name)
+    request.onsuccess = () => {
+      request.result.close()
+      resolve()
+    }
+    request.onerror = () => reject(request.error)
+  })
+}
+
+describe('logout and local document data', () => {
+  it('clears this device’s copies when everything is synced', async () => {
+    const userID = `user-${crypto.randomUUID()}`
+    await createLocalCopy('dokudocs:ws.doc-1')
+    open({ userID, documentID: 'doc-1' })
+
+    const result = await flushLocalEditsForLogout({ userID })
 
     expect(result.unsynced).toEqual([])
-    expect(
-      (await store.load({ userID, documentID: 'doc-1' })).snapshot
-    ).toBeNull()
+    expect(await localDatabases()).not.toContain('dokudocs:ws.doc-1')
   })
 
   it('keeps edits it cannot send and names the documents', async () => {
-    const store = new IndexedDBCollaborationStore()
     const userID = `user-${crypto.randomUUID()}`
-    await store.saveUpdate(
-      { userID, documentID: 'doc-1' },
-      snapshot,
-      pendingUpdate
-    )
+    await createLocalCopy('dokudocs:ws.doc-2')
+    open({ userID, documentID: 'doc-2', unsynced: 3, drains: false })
 
-    const result = await flushLocalEditsForLogout({
-      userID,
-      token: () => 'jwt',
-      workspaceOf: () => undefined,
-    })
+    const result = await flushLocalEditsForLogout({ userID, timeoutMs: 20 })
 
     expect(result.unsynced).toEqual([
-      { documentID: 'doc-1', count: 1, workspaceID: undefined },
+      { documentID: 'doc-2', count: 3, workspaceID: 'workspace-1' },
     ])
-    expect(
-      (await store.load({ userID, documentID: 'doc-1' })).updates
-    ).toHaveLength(1)
-    await store.clearUser(userID)
+    expect(await localDatabases()).toContain('dokudocs:ws.doc-2')
   })
 
-  it('discards everything the user holds only when asked to', async () => {
-    const store = new IndexedDBCollaborationStore()
+  it('discards local copies and stops open editors on request', async () => {
     const userID = `user-${crypto.randomUUID()}`
-    await store.saveUpdate(
-      { userID, documentID: 'doc-1' },
-      snapshot,
-      pendingUpdate
-    )
+    await createLocalCopy('dokudocs:ws.doc-3')
+    const doc = open({
+      userID,
+      documentID: 'doc-3',
+      unsynced: 1,
+      drains: false,
+    })
 
     await discardLocalEdits(userID)
 
-    expect(await store.listPendingDocuments(userID)).toEqual([])
+    expect(doc.wasDestroyed()).toBe(true)
+    expect(await localDatabases()).not.toContain('dokudocs:ws.doc-3')
+  })
+
+  it('exports an unsynced document as Markdown', async () => {
+    const userID = `user-${crypto.randomUUID()}`
+    open({ userID, documentID: 'doc-4', unsynced: 2, drains: false })
+
+    const exported = await exportUnsyncedDocuments(userID, [
+      { documentID: 'doc-4', count: 2, workspaceID: 'workspace-1' },
+    ])
+
+    expect(exported).toBe(1)
   })
 })

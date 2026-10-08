@@ -13,8 +13,8 @@ const { atx_heading, paragraph, run, list_item, task_list_item } =
 /** Depth of the paragraph or ATX heading that holds the cursor, or null. */
 function textBlockDepth(state: EditorState) {
   const { $from, $to } = state.selection
-  if (!$from.sameParent($to) && $from.depth !== $to.depth) return null
-  for (let depth = $from.depth; depth > 0; depth--) {
+  // A selection can start inside a run and end beside it, in the same block.
+  for (let depth = $from.sharedDepth($to.pos); depth > 0; depth--) {
     const type = $from.node(depth).type
     if (type === paragraph || type === atx_heading) return depth
     if (type !== run) return null
@@ -85,8 +85,7 @@ export const headingInputRule = new InputRule(
       $start.parent.type !== run ||
       $start.node(-1).type !== paragraph ||
       $start.index(-1) !== 0 ||
-      start !== $start.start() ||
-      $start.parent.content.size <= end - start
+      start !== $start.start()
     )
       return null
     const level = match[1]!.length as 1 | 2 | 3 | 4 | 5 | 6
@@ -100,6 +99,14 @@ export const headingInputRule = new InputRule(
     )
   }
 )
+
+/** Enter in a code, math or diagram block adds a line to its source. */
+export const newlineInSource: Command = (state, dispatch) => {
+  const { $from } = state.selection
+  if (!$from.parent.type.spec.code) return false
+  dispatch?.(state.tr.insertText('\n').scrollIntoView())
+  return true
+}
 
 /**
  * Enter in a paragraph, heading or list item. Every node created by the split
@@ -137,13 +144,22 @@ export const splitTextBlock: Command = (state, dispatch) => {
       })
     else types.unshift({ type: node.type, attrs })
   }
+  // The server rejects an empty run, so a split at the end of a run starts the
+  // new block without one; typing wraps the first text in a fresh run.
+  const atRunEnd =
+    state.selection.empty &&
+    $from.parent.type === run &&
+    $from.parentOffset === $from.parent.content.size
   if (dispatch) {
     const tr = state.tr.deleteSelection()
-    dispatch(
-      tr
-        .split(tr.mapping.map(state.selection.from), levels, types)
-        .scrollIntoView()
-    )
+    const from = tr.mapping.map(state.selection.from)
+    if (atRunEnd) {
+      tr.split(from + 1, levels - 1, types.slice(0, -1))
+      tr.setSelection(
+        TextSelection.near(tr.doc.resolve(tr.mapping.map(from + 1, 1)), 1)
+      )
+    } else tr.split(from, levels, types)
+    dispatch(tr.scrollIntoView())
   }
   return true
 }

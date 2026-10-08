@@ -1,4 +1,4 @@
-export type DocType = 'markdown' | 'dbdiagram' | 'mermaid'
+export type DocType = 'markdown' | 'dbdiagram' | 'mermaid' | 'architecture'
 
 export type DocFilterTab = 'all' | 'created_by_me' | 'shared' | 'starred'
 
@@ -16,10 +16,13 @@ export interface UserAuthor {
 }
 
 export interface DocumentItem {
+  viewCount?: number
   id: string
   title: string
   type: DocType
   content: string
+  /** The editor's own JSON: a ProseMirror document, or an Architecture canvas. Filled by the single-document read. */
+  contentJSON?: unknown
   projectId?: string | null
   projectName?: string | null
   category?: string | null
@@ -27,6 +30,8 @@ export interface DocumentItem {
   workspaceId?: string
   orgId: string
   author: UserAuthor
+  /** Whose edit was stored last; absent before the first edit. */
+  updatedBy?: UserAuthor | null
   isStarred: boolean
   starredAt?: string | null
   isShared: boolean
@@ -93,6 +98,8 @@ export interface DocumentRevision {
   title?: string | null
   isNamed?: boolean
   content: string
+  /** The editor's JSON at that revision: an Architecture canvas, or a ProseMirror document. */
+  contentJSON?: unknown
   astSnapshot?: {
     documentID: string
     rootNodeID: string

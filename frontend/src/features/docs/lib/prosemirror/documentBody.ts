@@ -1,193 +1,21 @@
-import {
-  Schema,
-  type DOMOutputSpec,
-  type Mark,
-  type Node as ProseMirrorNode,
-  type NodeSpec,
-} from 'prosemirror-model'
+import { type Mark, type Node as ProseMirrorNode } from 'prosemirror-model'
 import { indexDocumentBody, type DocumentBodyNode } from '../documentBody'
+import {
+  documentBodySchema,
+  definitions,
+  inlineParents,
+  textContentTypes,
+  bodyContentTypes,
+  emptyContentTypes,
+  requiredContentTypes,
+  markNames,
+  bodyTypeByProseMirrorName,
+  toProseMirrorName,
+  isInserted,
+  isInsertSuggestion,
+} from './documentSchema'
 
-type NodeDefinition = {
-  content?: string
-  group?: string
-  tag: string
-  bodyContent?: boolean
-  atom?: boolean
-}
-
-const definitions: Record<string, NodeDefinition> = {
-  document: { content: 'block*', tag: 'div' },
-  paragraph: { content: 'inline*', group: 'block', tag: 'p' },
-  'atx-heading': { content: 'inline*', group: 'block', tag: 'h1' },
-  'setext-heading': { content: 'inline*', group: 'block', tag: 'h2' },
-  'thematic-break': {
-    group: 'block',
-    tag: 'hr',
-    bodyContent: true,
-    atom: true,
-  },
-  'code-block': { content: 'text*', group: 'block', tag: 'pre' },
-  'html-block': { content: 'text*', group: 'block', tag: 'div' },
-  'link-reference-definition': {
-    content: 'text*',
-    group: 'block',
-    tag: 'div',
-  },
-  'block-quote': { content: 'block*', group: 'block', tag: 'blockquote' },
-  'order-list': { content: 'list_item+', group: 'block', tag: 'ol' },
-  'bullet-list': { content: 'list_item+', group: 'block', tag: 'ul' },
-  'task-list': { content: 'task_list_item+', group: 'block', tag: 'ul' },
-  'list-item': { content: 'block+', group: 'list_item', tag: 'li' },
-  'task-list-item': {
-    content: 'block+',
-    group: 'task_list_item',
-    tag: 'li',
-  },
-  table: { content: 'table_row+', group: 'block', tag: 'table' },
-  'table.row': { content: 'table_cell+', group: 'table_row', tag: 'tr' },
-  'table.cell': { content: 'inline*', group: 'table_cell', tag: 'td' },
-  'math-block': { content: 'text*', group: 'block', tag: 'pre' },
-  frontmatter: { content: 'text*', group: 'block', tag: 'pre' },
-  diagram: { content: 'text*', group: 'block', tag: 'pre' },
-  footnote: { content: 'block*', group: 'block', tag: 'section' },
-  opaque: {
-    group: 'block',
-    tag: 'pre',
-    bodyContent: true,
-    atom: true,
-  },
-  run: { content: 'text*', group: 'inline', tag: 'span' },
-  image: { group: 'inline', tag: 'span', atom: true },
-  math: { content: 'text*', group: 'inline', tag: 'span' },
-  'line-break': { group: 'inline', tag: 'br', atom: true },
-  'opaque-inline': {
-    group: 'inline',
-    tag: 'span',
-    bodyContent: true,
-    atom: true,
-  },
-}
-
-const inlineParents = new Set([
-  'paragraph',
-  'atx-heading',
-  'setext-heading',
-  'table.cell',
-])
-const textContentTypes = new Set([
-  'code-block',
-  'html-block',
-  'link-reference-definition',
-  'math-block',
-  'frontmatter',
-  'diagram',
-  'run',
-  'math',
-])
-const bodyContentTypes = new Set(['opaque', 'opaque-inline', 'thematic-break'])
-const emptyContentTypes = new Set([
-  'document',
-  'block-quote',
-  'order-list',
-  'bullet-list',
-  'task-list',
-  'list-item',
-  'task-list-item',
-  'table',
-  'table.row',
-  'footnote',
-  'image',
-  'line-break',
-])
-const requiredContentTypes = new Set(['run', 'math', 'opaque-inline'])
-const markNames = [
-  ['bold', 'strong'],
-  ['italic', 'em'],
-  ['strike', 'strike'],
-  ['code', 'code'],
-] as const
-const bodyTypeByProseMirrorName = new Map(
-  Object.keys(definitions).map((bodyType) => [
-    toProseMirrorName(bodyType),
-    bodyType,
-  ])
-)
-
-const bodyAttributes = {
-  nodeID: { default: null },
-  bodyAttributes: { default: '{}' },
-  bodyContent: { default: '' },
-}
-
-function toProseMirrorName(bodyType: string) {
-  return bodyType.replaceAll('-', '_').replaceAll('.', '_')
-}
-
-function nodeSpec(bodyType: string, definition: NodeDefinition): NodeSpec {
-  return {
-    ...(definition.content && { content: definition.content }),
-    ...(definition.group && { group: definition.group }),
-    ...(definition.group === 'inline' && { inline: true }),
-    ...(textContentTypes.has(bodyType) && bodyType !== 'run' && { marks: '' }),
-    attrs: bodyAttributes,
-    ...(definition.atom && {
-      atom: true,
-      selectable: false,
-      draggable: false,
-      isolating: true,
-    }),
-    toDOM: (node) => nodeDOM(bodyType, definition, node),
-  }
-}
-
-function nodeDOM(
-  bodyType: string,
-  definition: NodeDefinition,
-  node: ProseMirrorNode
-): DOMOutputSpec {
-  const idAttrs = {
-    id: `node-${node.attrs.nodeID}`,
-    'data-node-id': node.attrs.nodeID,
-  }
-  if (bodyType === 'thematic-break')
-    return [
-      definition.tag,
-      { ...idAttrs, 'data-source': node.attrs.bodyContent },
-    ]
-  if (bodyType === 'opaque' || bodyType === 'opaque-inline')
-    return [
-      definition.tag,
-      { ...idAttrs, contenteditable: 'false' },
-      node.attrs.bodyContent,
-    ]
-  if (bodyType === 'image')
-    return ['span', { ...idAttrs, contenteditable: 'false' }, '[image]']
-  if (bodyType === 'line-break') return ['br', idAttrs]
-  if (bodyType === 'code-block') return ['pre', idAttrs, ['code', 0]]
-  return [definition.tag, idAttrs, ...(definition.content ? [0] : [])]
-}
-
-const nodes: Record<string, NodeSpec> = {
-  doc: { content: 'document' },
-  text: { group: 'inline' },
-}
-for (const [bodyType, definition] of Object.entries(definitions))
-  nodes[toProseMirrorName(bodyType)] = nodeSpec(bodyType, definition)
-
-export const documentBodySchema = new Schema({
-  nodes,
-  marks: {
-    strong: { toDOM: () => ['strong', 0] },
-    em: { toDOM: () => ['em', 0] },
-    strike: { toDOM: () => ['s', 0] },
-    code: { toDOM: () => ['code', 0] },
-    link: {
-      attrs: { href: {}, title: { default: null } },
-      inclusive: false,
-      toDOM: (mark) => ['span', { 'data-link-href': mark.attrs.href }, 0],
-    },
-  },
-})
+export { documentBodySchema }
 
 export function documentBodyToProseMirror(
   nodes: DocumentBodyNode[]
@@ -252,11 +80,13 @@ export function prosemirrorToDocumentBody(
 
   const rows: DocumentBodyNode[] = []
   const ids = new Set<string>()
+  // Reports whether the node is canonical; a suggested insertion is not, and
+  // neither is anything under it.
   const visit = (
     node: ProseMirrorNode,
     parentID: string | null,
     siblingOrder: number
-  ) => {
+  ): boolean => {
     const type = bodyTypeByProseMirrorName.get(node.type.name)
     if (!type) throw new Error(`unsupported ProseMirror node ${node.type.name}`)
     const nodeID = node.attrs.nodeID
@@ -269,6 +99,9 @@ export function prosemirrorToDocumentBody(
     ids.add(nodeID)
 
     let attributes = parseAttributes(node.attrs.bodyAttributes, nodeID)
+    const nodeSuggestion = attributes.suggestion
+    delete attributes.suggestion
+    if (isInsertSuggestion(nodeSuggestion)) return false
     let content = ''
     let astChildren: ProseMirrorNode[] = []
     if (inlineParents.has(type)) {
@@ -288,7 +121,7 @@ export function prosemirrorToDocumentBody(
     } else if (bodyContentTypes.has(type)) {
       content = node.attrs.bodyContent
     } else if (textContentTypes.has(type)) {
-      content = node.textContent
+      content = canonicalText(node)
       if (type === 'run') attributes = attributesForRun(node, attributes)
     } else {
       astChildren = Array.from({ length: node.childCount }, (_, i) =>
@@ -296,14 +129,27 @@ export function prosemirrorToDocumentBody(
       )
     }
 
-    if ((type === 'run' || type === 'math') && content.length === 0) return
+    if ((type === 'run' || type === 'math') && content.length === 0)
+      return false
 
     rows.push({ nodeID, parentID, siblingOrder, type, content, attributes })
-    astChildren.forEach((child, index) => visit(child, nodeID, index))
+    let kept = 0
+    for (const child of astChildren) if (visit(child, nodeID, kept)) kept++
+    return true
   }
 
   visit(doc.child(0), null, 0)
   return rows
+}
+
+function canonicalText(node: ProseMirrorNode) {
+  let text = ''
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i)
+    if (child.isText && !isInserted(child)) text += child.text ?? ''
+    else if (!child.isText) text += child.textContent
+  }
+  return text
 }
 
 function marksForRun(attributes: Record<string, unknown>): Mark[] {

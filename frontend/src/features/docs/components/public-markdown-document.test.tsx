@@ -7,7 +7,6 @@ import { PublicMarkdownDocument } from './public-markdown-document'
 
 const shareToken = 'valid-public-link-token'
 const documentID = 'b1f973dd-b554-4540-95c0-4697726ad6e1'
-const nodeID = 'd2bd52f1-e274-4119-af61-737b0e8c80a9'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -24,7 +23,7 @@ it('keeps a successfully opened public link available to RAG for this tab sessio
         projectId: null,
         title: 'Shared Markdown',
         type: 'markdown',
-        content: '',
+        content: 'Shared source text',
         authorId: documentID,
         author: {
           id: documentID,
@@ -38,32 +37,6 @@ it('keeps a successfully opened public link available to RAG for this tab sessio
         categories: [],
         createdAt: '2026-10-01T00:00:00.000Z',
         updatedAt: '2026-10-01T00:00:00.000Z',
-      })
-    if (path.endsWith(`/public/documents/${shareToken}/body`))
-      return jsonResponse({
-        bodyVersion: 1,
-        bodySchemaVersion: 1,
-        rootNodeID: documentID,
-        nodes: [
-          {
-            nodeID: documentID,
-            parentID: null,
-            siblingOrder: 0,
-            type: 'document',
-            content: '',
-            attributes: {},
-            version: 1,
-          },
-          {
-            nodeID,
-            parentID: documentID,
-            siblingOrder: 0,
-            type: 'paragraph',
-            content: 'Shared source text',
-            attributes: {},
-            version: 1,
-          },
-        ],
       })
     throw new Error(`Unexpected request: ${path}`)
   })
@@ -83,4 +56,60 @@ it('keeps a successfully opened public link available to RAG for this tab sessio
     .element(screen.getByText('Shared source text'))
     .toBeInTheDocument()
   expect(getOpenedPublicLinkTokens()).toEqual([shareToken])
+})
+
+it('draws a shared Architecture document from its canvas, read-only', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      jsonResponse({
+        id: documentID,
+        workspaceId: '149a8d07-8490-43ed-98fa-ebaa91b05e90',
+        projectId: null,
+        title: 'Prod',
+        type: 'architecture',
+        content: 'System "API".',
+        contentJSON: {
+          version: 1,
+          nodes: [
+            {
+              id: 'api',
+              kind: 'system',
+              name: 'Order API',
+              catalog: 'golang',
+              x: 0,
+              y: 0,
+            },
+          ],
+          connections: [],
+        },
+        authorId: documentID,
+        author: {
+          id: documentID,
+          name: 'Document owner',
+          email: 'owner@example.invalid',
+          avatar: '',
+        },
+        isDraft: false,
+        visibility: 'public_link',
+        isShared: true,
+        categories: [],
+        createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      })
+    )
+  )
+  const screen = await render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <PublicMarkdownDocument shareToken={shareToken} />
+    </QueryClientProvider>
+  )
+  await expect
+    .element(screen.getByRole('img', { name: 'Architecture diagram of Prod' }))
+    .toBeInTheDocument()
+  await expect.element(screen.getByText('Order API')).toBeInTheDocument()
 })
