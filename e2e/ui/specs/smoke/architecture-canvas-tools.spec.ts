@@ -49,6 +49,27 @@ test("@live @smoke: canvas tools, comment pins and selecting several elements", 
   await expect(tools.getByRole("button", { name: "Cursor" })).toHaveAttribute("aria-pressed", "true");
   const node = (name: string) => page.locator(".react-flow__node").filter({ hasText: name }).first();
 
+  // The palette edge drags wider, and the width is kept for next time.
+  // The width is remembered per person, so start (and end) at the default.
+  const palette = page.getByRole("complementary", { name: "Palette" });
+  const paletteEdge = page.getByRole("separator", { name: "Resize the palette" });
+  await paletteEdge.dblclick();
+  await expect(paletteEdge).toHaveAttribute("aria-valuenow", "216");
+  const paletteWidth = (await palette.boundingBox())!.width;
+  const edge = (await paletteEdge.boundingBox())!;
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(edge.x + edge.width / 2 + 80, edge.y + 200, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => Math.round((await palette.boundingBox())!.width)).toBe(Math.round(paletteWidth + 80));
+  await page.waitForTimeout(800);
+  await page.reload();
+  await expect(page.getByText("Editing together")).toBeVisible({ timeout: 20000 });
+  await expect.poll(async () => Math.round((await palette.boundingBox())!.width)).toBe(Math.round(paletteWidth + 80));
+  await paletteEdge.dblclick();
+  await expect(paletteEdge).toHaveAttribute("aria-valuenow", "216");
+  await page.waitForTimeout(800);
+
   // Comment: C, a click on Cache, then the new thread shows as a pin with a preview.
   await page.keyboard.press("c");
   await node("Cache").click({ position: { x: 30, y: 20 } });
@@ -69,9 +90,11 @@ test("@live @smoke: canvas tools, comment pins and selecting several elements", 
   await page.mouse.move(queueBox.x + queueBox.width + 20, queueBox.y + queueBox.height + 20, { steps: 8 });
   await page.mouse.up();
   await expect(page.locator("#architecture-properties")).toContainText("2 elements selected");
-  await page.mouse.move(cacheBox.x + 40, cacheBox.y + 20);
+  // Pressed in the middle of Cache, clear of its comment pin and its connection handle.
+  const middle = { x: cacheBox.x + cacheBox.width / 2, y: cacheBox.y + cacheBox.height / 2 };
+  await page.mouse.move(middle.x, middle.y);
   await page.mouse.down();
-  await page.mouse.move(cacheBox.x + 40, cacheBox.y + 120, { steps: 8 });
+  await page.mouse.move(middle.x, middle.y + 100, { steps: 8 });
   await page.mouse.up();
   const after = (await node("Queue").boundingBox())!;
   expect(after.y - queueBox.y).toBeGreaterThan(60);
