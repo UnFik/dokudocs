@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { z } from 'zod'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { ProjectItem } from '@/types/dokudocs'
 import { UploadCloud, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { createProject, type CreateProjectInput } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,9 +26,10 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 
 const createProjectSchema = z.object({
-  name: z.string().min(1, 'Please enter a project name'),
+  name: z.string().trim().min(1, 'Please enter a project name'),
   description: z.string().optional(),
   logoUrl: z.string().optional(),
   categories: z.string().optional(),
@@ -39,11 +42,43 @@ interface CreateProjectDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-export function CreateProjectDialog({
-  open,
+export function CreateProjectDialog(props: CreateProjectDialogProps) {
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent className='sm:max-w-md'>
+        {props.open && (
+          <CreateProjectDialogForm onOpenChange={props.onOpenChange} />
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function CreateProjectDialogForm({
   onOpenChange,
-}: CreateProjectDialogProps) {
-  const { createProject } = useDokudocsStore()
+}: Pick<CreateProjectDialogProps, 'onOpenChange'>) {
+  const { activeWorkspaceId } = useWorkspaces()
+  const queryClient = useQueryClient()
+  const createMutation = useMutation({
+    mutationFn: ({
+      workspaceId,
+      input,
+    }: {
+      workspaceId: string
+      input: CreateProjectInput
+    }) => createProject(workspaceId, input),
+    onSuccess: async (project, { workspaceId }) => {
+      const queryKey = ['projects', workspaceId]
+      queryClient.setQueryData<ProjectItem[]>(queryKey, (projects = []) => [
+        project,
+        ...projects,
+      ])
+      await queryClient.invalidateQueries({ queryKey })
+      toast.success(`Project "${project.name}" created successfully`)
+      onOpenChange(false)
+    },
+    onError: (error) => toast.error(error.message),
+  })
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -57,18 +92,7 @@ export function CreateProjectDialog({
     },
   })
 
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: '',
-        description: '',
-        logoUrl: '',
-        categories: '',
-      })
-    }
-  }, [open, form])
-
-  const logoUrl = form.watch('logoUrl')
+  const logoUrl = useWatch({ control: form.control, name: 'logoUrl' })
 
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -126,165 +150,168 @@ export function CreateProjectDialog({
   }
 
   const onSubmit = (values: CreateProjectFormValues) => {
-    const parsedCategories = values.categories
-      ? values.categories
-          .split(',')
-          .map((c) => c.trim())
-          .filter(Boolean)
-      : []
-
-    const newProject = createProject(
-      values.name.trim(),
-      values.description?.trim(),
-      values.logoUrl || undefined,
-      parsedCategories
-    )
-    toast.success(`Project "${newProject.name}" created successfully`)
-    onOpenChange(false)
+    if (!activeWorkspaceId || createMutation.isPending) return
+    createMutation.mutate({
+      workspaceId: activeWorkspaceId,
+      input: {
+        name: values.name,
+        description: values.description?.trim(),
+        logoUrl: values.logoUrl || undefined,
+        categories: [
+          ...new Set(
+            (values.categories ?? '')
+              .split(',')
+              .map((category) => category.trim())
+              .filter(Boolean)
+          ),
+        ],
+      },
+    })
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='sm:max-w-md'>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader>
-              <DialogTitle>Create New Project</DialogTitle>
-              <DialogDescription>
-                Organize your documents and architecture diagrams in a dedicated
-                project.
-              </DialogDescription>
-            </DialogHeader>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <DialogHeader>
+          <DialogTitle>Create New Project</DialogTitle>
+          <DialogDescription>
+            Organize your documents and architecture diagrams in a dedicated
+            project.
+          </DialogDescription>
+        </DialogHeader>
 
-            <div className='grid gap-4 py-4'>
-              <FormField
-                control={form.control}
-                name='name'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Project Name</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder='e.g. Payment Gateway Service'
-                        {...field}
-                        autoFocus
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
+        <div className='grid gap-4 py-4'>
+          <FormField
+            control={form.control}
+            name='name'
+            render={({ field }) => (
               <FormItem>
-                <FormLabel>Project Logo</FormLabel>
-                <input
-                  ref={fileInputRef}
-                  type='file'
-                  accept='image/*'
-                  className='hidden'
-                  onChange={handleInputChange}
-                />
-
-                {logoUrl ? (
-                  <div className='relative flex items-center gap-3 rounded-lg border border-border/80 bg-muted/20 p-3'>
-                    <img
-                      src={logoUrl}
-                      alt='Project Logo Preview'
-                      className='size-12 rounded-lg border border-border object-cover'
-                    />
-                    <div className='min-w-0 flex-1'>
-                      <p className='truncate text-xs font-medium text-foreground'>
-                        Project Logo Selected
-                      </p>
-                      <p className='text-[10px] text-muted-foreground'>
-                        Image ready to be assigned to this project
-                      </p>
-                    </div>
-                    <Button
-                      type='button'
-                      variant='ghost'
-                      size='icon'
-                      onClick={handleRemoveLogo}
-                      className='size-7 text-muted-foreground hover:text-destructive'
-                    >
-                      <X className='size-4' />
-                    </Button>
-                  </div>
-                ) : (
-                  <div
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
-                      isDragging
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border/80 hover:border-primary/50 hover:bg-muted/30'
-                    }`}
-                  >
-                    <div className='mb-2 flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground'>
-                      <UploadCloud className='size-5' />
-                    </div>
-                    <p className='text-xs font-medium text-foreground'>
-                      Drag & drop logo image here, or{' '}
-                      <span className='text-primary underline'>browse</span>
-                    </p>
-                    <p className='mt-0.5 text-[10px] text-muted-foreground'>
-                      Supports PNG, JPG, SVG, WebP (Max 3MB)
-                    </p>
-                  </div>
-                )}
+                <FormLabel>Project Name</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder='e.g. Payment Gateway Service'
+                    {...field}
+                    autoFocus
+                  />
+                </FormControl>
+                <FormMessage />
               </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name='categories'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Categories / Tags (Optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder='e.g. Auth, Checkout, Ledger, Core API (comma separated)'
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormItem>
+            <FormLabel>Project Logo</FormLabel>
+            <input
+              ref={fileInputRef}
+              type='file'
+              accept='image/*'
+              className='hidden'
+              onChange={handleInputChange}
+            />
 
-              <FormField
-                control={form.control}
-                name='description'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description (Optional)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder='Brief description of this project scope and architecture'
-                        rows={2}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <DialogFooter>
-              <Button
-                type='button'
-                variant='outline'
-                onClick={() => onOpenChange(false)}
+            {logoUrl ? (
+              <div className='relative flex items-center gap-3 rounded-lg border border-border/80 bg-muted/20 p-3'>
+                <img
+                  src={logoUrl}
+                  alt='Project Logo Preview'
+                  className='size-12 rounded-lg border border-border object-cover'
+                />
+                <div className='min-w-0 flex-1'>
+                  <p className='truncate text-xs font-medium text-foreground'>
+                    Project Logo Selected
+                  </p>
+                  <p className='text-[10px] text-muted-foreground'>
+                    Image ready to be assigned to this project
+                  </p>
+                </div>
+                <Button
+                  type='button'
+                  variant='ghost'
+                  size='icon'
+                  onClick={handleRemoveLogo}
+                  className='size-7 text-muted-foreground hover:text-destructive'
+                >
+                  <X className='size-4' />
+                </Button>
+              </div>
+            ) : (
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
+                  isDragging
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border/80 hover:border-primary/50 hover:bg-muted/30'
+                }`}
               >
-                Cancel
-              </Button>
-              <Button type='submit'>Create Project</Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+                <div className='mb-2 flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground'>
+                  <UploadCloud className='size-5' />
+                </div>
+                <p className='text-xs font-medium text-foreground'>
+                  Drag & drop logo image here, or{' '}
+                  <span className='text-primary underline'>browse</span>
+                </p>
+                <p className='mt-0.5 text-[10px] text-muted-foreground'>
+                  Supports PNG, JPG, SVG, WebP (Max 3MB)
+                </p>
+              </div>
+            )}
+          </FormItem>
+
+          <FormField
+            control={form.control}
+            name='categories'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Categories / Tags (Optional)</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder='e.g. Auth, Checkout, Ledger, Core API (comma separated)'
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='description'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description (Optional)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder='Brief description of this project scope and architecture'
+                    rows={2}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button
+            type='button'
+            variant='outline'
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type='submit'
+            disabled={!activeWorkspaceId || createMutation.isPending}
+          >
+            {createMutation.isPending ? 'Creating…' : 'Create Project'}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Form>
   )
 }
