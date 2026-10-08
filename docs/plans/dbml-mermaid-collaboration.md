@@ -1,6 +1,6 @@
 # DBML and Mermaid collaboration
 
-Status: agreed on 2026-10-08; ready for implementation. Product and technical choices were confirmed by the user. Implementation, database reset and deployment have not started.
+Status: agreed on 2026-10-08; implemented on 2026-10-09 (see Implementation notes). The development database reset and deployment have not been done.
 
 ## Goal
 
@@ -109,6 +109,27 @@ No performance benchmark has been run. Retain existing service connection/rate/p
 Measure representative repository sources and larger fixtures: caret/preview responsiveness, update and encoded-state sizes, database write count/time to durable acknowledgement, and client/room memory during edit/restore/reconnect cycles followed by disposal. Debounce rendering independently of source sync. Group Format/template operations in one transaction; the [Y.Doc API](https://docs.yjs.dev/api/y.doc) documents batching as a way to reduce event calls.
 
 State replacement avoids the proposed source-diff restore and actor-owned restore Undo machinery. It still incurs persistence, reseeding/reopening and preview work; it is not proven cheaper without measurement. Cross-type restore redesign, persistent Undo history, shared DBML layout, comments and Suggest mode are outside this release.
+
+## Implementation notes
+
+Decisions made while implementing, within the agreed contract:
+
+- **Line endings.** The `y-monaco` spike showed Monaco normalizes mixed line endings, so editor offsets would drift from the shared text. Source is normalized to LF on create, import and seed; the binding sets the model to LF. The user chose this on 2026-10-09.
+- **`y-monaco` 0.1.6.** Its import path predates the `monaco-editor` 0.55 exports map; a Vite alias points it at the app's own Monaco instance. Its `destroy()` leaves a selection listener behind, so the binding wraps awareness and the editor is always disposed with the binding.
+- **Replacement identity.** `documents.body_replacement_id` changes only on restore. A source room is named `{workspace}.{document}.{record}`, so the record also names the device copy. The service refuses a connection to another record with reason `replaced` before taking any update; the API answers 409 to a store for another record, and the service then closes that room. Restore receipts keep the record they made (`document_revisions.restore_replacement_id`).
+- **Saved means stored.** The editor sends `flush`; the service stores the room at once and answers `stored` with `ok`. "Saved" and named versions wait for it; `drained()` alone is not used for either.
+- **Recovery copies.** Edits not confirmed as stored are marked per copy in user-scoped storage, so the mark survives a cold offline start. On `replaced`, a marked copy's source becomes a RecoveryCopy (user-scoped, outside the `dokudocs:` prefix that sign-out clears); the notice offers copy, download and discard.
+- **Access on open connections.** A source-room connection asks the API again every 30 seconds: lost access closes it, and an editor who became a viewer gets a read-only connection.
+- **Documents saved before rooms.** A DBML or Mermaid document with no `content_json` loads its text as source, so its room never opens empty over it.
+
+Measured on 2026-10-09 (collab `COLLAB_LOAD=1 test/source-load.test.ts`, browser `source-binding.browser.test.ts`; a laptop, not a capacity claim):
+
+| Source | Keystroke update | Format update | State after 2000 edits | Derive on store | Flush to stored (median) |
+| --- | --- | --- | --- | --- | --- |
+| 2.5 KB | 24 B | 4.5 KB | 37 KB | 0.02 ms | |
+| 253 KB | 25 B | 267 KB (whole-text worst case) | 310 KB | 0.03 ms | 20 ms |
+
+In the browser, a 193 KB source took 0.6 ms per local keystroke and 0.1 ms to apply a remote edit. The service heap grew 2.9 MB over 10 open, edit, flush and close cycles of the 253 KB source.
 
 ## Documentation and approval
 

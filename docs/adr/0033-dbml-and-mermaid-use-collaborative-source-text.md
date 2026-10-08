@@ -17,8 +17,10 @@ DBML and Mermaid documents need simultaneous source editing and database-backed 
 
 - Retain the existing `dbdiagram` and `mermaid` document types. DBML preview layout remains device-local; first-release collaboration applies to source, with editor/owner writes and viewer/commenter reads.
 - The collaborative source is the only body writer. Existing REST metadata operations remain; full-body REST updates must not overwrite source. Parser diagnostics and previews are derived, not stored authority.
+- Line endings are normalized to LF when source is created, imported or seeded. Monaco cannot hold mixed line endings, and offsets would drift between the editor and the shared text (found in the `y-monaco` compatibility spike). Everything else in the source is kept as written.
 - This development instance may reset its database; legacy documents, revisions and device-only edits do not need a migration path. Fresh create/import/duplicate and empty-source initialization still require exact-source preservation.
 - Restore replaces the active record and does not enter editor Undo. Historical revisions stay immutable, and pending edits from the old record are retained separately for nonblocking recovery rather than merged into the replacement.
+- The replacement identity is `documents.body_replacement_id`, carried in the room name (`{workspace}.{document}.{record}`) and so in the device copy's name. The service refuses a connection to another record before taking its updates, and the API refuses a store for another record.
 - A durable replacement identity must be checked before synchronization and persistence; transient reload notifications alone cannot protect against disconnected clients or stale room stores. Normal edit version increments are not replacement identities.
 - Markdown and Architecture keep their current restore semantics in this feature. Shared-helper changes still require regression coverage for them.
 - Reusing the session does not by itself establish PostgreSQL durability acknowledgement. Persisted source/revisions must not be described as saved solely because the room acknowledged receiving updates.
