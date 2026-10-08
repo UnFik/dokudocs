@@ -7,11 +7,11 @@ export const Route = createFileRoute('/')({
   validateSearch: z.object({ redirect: z.string().optional() }),
   head: () => ({
     meta: [
-      { title: 'Dokudocs — Dokumen teknis untuk tim' },
+      { title: 'Dokudocs | A workspace for notes and diagrams' },
       {
         name: 'description',
         content:
-          'Tulis catatan Markdown, skema DBML, dan diagram Mermaid bersama dalam satu workspace.',
+          'Write Markdown notes, DBML schemas, and Mermaid diagrams together in one workspace.',
       },
     ],
   }),
