@@ -21,7 +21,7 @@ An external provider identity linked to one User.
 _Avoid_: Social login account, provider user
 
 **Collaborative editing**:
-Authorized users can edit the same Markdown document together, including while temporarily disconnected. Offline editing applies to existing documents the User has previously opened; DBML and Mermaid documents are outside this collaboration model.
+Authorized Users can edit the same Markdown, Architecture, DBML or Mermaid document together, including while temporarily disconnected. Offline editing applies to existing documents the User has previously opened; collaborative source editing does not require the source to form a valid diagram at every moment.
 _Avoid_: Live sync when referring only to local autosave
 
 **DocumentBody**:
@@ -53,8 +53,24 @@ A historical snapshot of a document. Named revisions are immutable; routine auto
 _Avoid_: Current document state when referring to a historical snapshot
 
 **CollaborativeSession**:
-A period when authorized Users work together on one Markdown document: a room in the collaboration service (`collab/`) and the editors connected to it, each keeping a local copy on its device.
+A period when authorized Users work together on one document, each keeping a LocalCopy on their device. Presence and remote cursors show who is participating and where they are working.
 _Avoid_: WebSocket connection when referring to the whole editing session
+
+**DBML document**:
+A Document whose DiagramSource describes a database schema in DBML. Its diagram is a preview of that source, and an unfinished or invalid schema is still document content.
+_Avoid_: Database when referring to the documentation rather than the running database
+
+**Mermaid document**:
+A Document whose DiagramSource describes a diagram in Mermaid. It is distinct from a Mermaid block inside a Markdown DocumentBody.
+_Avoid_: Flow, flow document
+
+**DiagramSource**:
+The exact text that forms the body of a DBML or Mermaid document, including formatting and temporarily invalid syntax. A rendered diagram is a preview of this source rather than a replacement for it.
+_Avoid_: Diagram when referring to the editable source text
+
+**RecoveryCopy**:
+A User's device-retained DiagramSource containing unsynced edits displaced by a DBML or Mermaid revision restore. It is available to that User for recovery and is separate from the restored active document, so it never merges back automatically.
+_Avoid_: Pending edit when referring to source retained from a replaced document
 
 **LocalCopy**:
 The device's own copy of a document (y-indexeddb). It lets the document open offline and keeps edits made while disconnected; the room merges them in when the connection returns. It is cleared at sign-out once the server has everything, and dropped when the server replaces the document (a restored revision).
