@@ -6,6 +6,7 @@ import type { CollabContext } from './server'
 import type { Metrics } from './operations'
 import { validateSuggesterChange } from './suggestion-validator'
 import { architectureLimits, countElements } from './architecture'
+import { isSourceType } from './backend-api'
 
 const messageSync = 0
 const syncStep2 = 1
@@ -29,6 +30,8 @@ export function permissions(fragmentName: string, metrics?: Metrics): Extension<
   return {
     extensionName: 'permissions',
     async beforeHandleMessage({ update, document, context, connection }) {
+      // A source has no suggest mode: anyone but an editor has a read-only connection.
+      if (isSourceType(context.documentType)) return
       if (context.documentType === 'architecture') {
         try {
           return checkArchitecture(update, document, context)

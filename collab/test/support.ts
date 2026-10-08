@@ -1,7 +1,7 @@
 import { createServer } from 'node:net'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import * as Y from 'yjs'
-import type { BackendApi, Access, LoadedDocument, StoredDocument } from '../src/backend-api'
+import { ReplacedError, type BackendApi, type Access, type LoadedDocument, type StoredDocument } from '../src/backend-api'
 
 export function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -19,6 +19,8 @@ export class FakeBackend implements BackendApi {
   tokens = new Map<string, { userID: string; access: Access & { documentType?: string } }>()
   documents = new Map<string, LoadedDocument>()
   stores: StoredDocument[] = []
+  /** The record each document holds now; a restore gives it a new one. */
+  replacements = new Map<string, string>()
 
   grant(token: string, userID: string, access: Partial<Access & { documentType: string }> = {}) {
     this.tokens.set(token, {
@@ -27,10 +29,10 @@ export class FakeBackend implements BackendApi {
     })
   }
 
-  async authorize(token: string, _workspaceID: string, _documentID: string) {
+  async authorize(token: string, _workspaceID: string, documentID: string) {
     const found = this.tokens.get(token)
     if (!found) return null
-    return { userID: found.userID, ...found.access }
+    return { userID: found.userID, ...found.access, replacementID: this.replacements.get(documentID) }
   }
 
   async loadDocument(_workspaceID: string, documentID: string): Promise<LoadedDocument> {
@@ -38,6 +40,8 @@ export class FakeBackend implements BackendApi {
   }
 
   async storeState(document: StoredDocument) {
+    const current = this.replacements.get(document.documentID)
+    if (document.replacementID && current && document.replacementID !== current) throw new ReplacedError()
     this.stores.push(document)
     this.documents.set(document.documentID, { state: document.state, content: document.content })
   }

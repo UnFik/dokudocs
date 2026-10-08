@@ -17,7 +17,7 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 		SELECT d.id, d.workspace_id, d.project_id,
 		       CASE WHEN p.id IS NOT NULL AND ` + projectMetadataPredicate("$2", "p") + ` THEN p.name ELSE '' END,
 		       d.title, d.type::text,
-		       d.content, d.content_json,
+		       d.content, d.content_json, d.body_replacement_id,
 		       d.author_id, u.full_name, u.email, COALESCE(u.avatar_url, ''),
 		       COALESCE(array_to_string(d.tags, ','), ''), d.is_draft, d.visibility::text,
 		       COALESCE(d.thumbnail, ''), COALESCE(d.thumbnail_dark, ''),
@@ -39,11 +39,12 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 	var d model.Document
 	var tagsStr string
 	var contentJSON []byte
+	var replacementID uuid.UUID
 	var editorID uuid.NullUUID
 	var editor model.UserAuthor
 	err := r.db.QueryRowContext(ctx, query, id, userID).Scan(
 		&d.ID, &d.WorkspaceID, &d.ProjectID, &d.ProjectName, &d.Title, &d.Type,
-		&d.Content, &contentJSON, &d.AuthorID, &d.Author.Name, &d.Author.Email, &d.Author.Avatar,
+		&d.Content, &contentJSON, &replacementID, &d.AuthorID, &d.Author.Name, &d.Author.Email, &d.Author.Avatar,
 		&tagsStr, &d.IsDraft, &d.Visibility,
 		&d.Thumbnail, &d.ThumbnailDark,
 		&d.ThumbnailPreview, &d.ThumbnailPreviewDark,
@@ -62,6 +63,7 @@ func (r *Repository) GetByID(ctx context.Context, id, userID uuid.UUID) (model.D
 	if hasCollabBody(d.Type) && len(contentJSON) > 0 {
 		d.ContentJSON = contentJSON
 	}
+	d.ReplacementID = &replacementID
 	if editorID.Valid {
 		editor.ID = editorID.UUID
 		d.UpdatedBy = &editor

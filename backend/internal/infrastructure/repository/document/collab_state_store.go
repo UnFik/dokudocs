@@ -16,6 +16,12 @@ import (
 // ErrCollabDocumentNotFound is the application's error for a document that is not in the workspace.
 var ErrCollabDocumentNotFound = collaboration.ErrCollabDocumentNotFound
 
+// ErrInvalidCollabContent is the application's error for JSON that does not fit the document type.
+var ErrInvalidCollabContent = collaboration.ErrInvalidCollabContent
+
+// ErrCollabReplaced is the application's error for a store made for a record a restore replaced.
+var ErrCollabReplaced = collaboration.ErrCollabReplaced
+
 // CollabStateStore keeps what the collaboration service sends: the Yjs state of a
 // document and the JSON derived from it, written together.
 type CollabStateStore struct {
@@ -30,12 +36,19 @@ func NewCollabStateStore(db database.DB) *CollabStateStore {
 // document has none; a document outside the workspace is not found.
 func (s *CollabStateStore) LoadDocument(ctx context.Context, workspaceID, documentID uuid.UUID) ([]byte, json.RawMessage, error) {
 	var content []byte
-	err := s.db.QueryRowContext(ctx, `SELECT content_json FROM documents WHERE id = $1 AND workspace_id = $2`, documentID, workspaceID).Scan(&content)
+	var documentType, text string
+	err := s.db.QueryRowContext(ctx, `SELECT content_json, type::text, content FROM documents WHERE id = $1 AND workspace_id = $2`,
+		documentID, workspaceID).Scan(&content, &documentType, &text)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, ErrCollabDocumentNotFound
 	}
 	if err != nil {
 		return nil, nil, err
+	}
+	// A DBML or Mermaid document saved before it had a room has its text only;
+	// without this the room would open empty and store that over the text.
+	if len(content) == 0 && isSourceDocument(documentType) {
+		content, _ = json.Marshal(map[string]string{"source": text})
 	}
 	var state []byte
 	err = s.db.QueryRowContext(ctx, `SELECT encoded_state FROM document_collab_states WHERE document_id = $1`, documentID).Scan(&state)
@@ -47,14 +60,35 @@ func (s *CollabStateStore) LoadDocument(ctx context.Context, workspaceID, docume
 
 // StoreState replaces the state, the JSON, the Markdown derived from it, the
 // suggestion index and, for a canvas, its card drawing in one transaction. A document that is not in the workspace
-// is refused before anything is written.
+// is refused before anything is written. For a DBML or Mermaid document the
+// text is its source, read from the JSON rather than taken from markdown.
 func (s *CollabStateStore) StoreState(ctx context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion, options ...collaboration.StoreOption) error {
 	applied := collaboration.ApplyStoreOptions(options)
 	return s.db.WithTransaction(ctx, func(tx database.Queryer) error {
+		var documentType string
+		var replacementID uuid.UUID
+		err := tx.QueryRowContext(ctx, `SELECT type::text, body_replacement_id FROM documents WHERE id = $1 AND workspace_id = $2 FOR UPDATE`,
+			documentID, workspaceID).Scan(&documentType, &replacementID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrCollabDocumentNotFound
+		}
+		if err != nil {
+			return err
+		}
+		// The row lock orders this against a restore: one that committed first is seen here.
+		if applied.ReplacementID != nil && *applied.ReplacementID != replacementID {
+			return ErrCollabReplaced
+		}
+		if isSourceDocument(documentType) {
+			source, ok := sourceFromJSON(content)
+			if !ok {
+				return ErrInvalidCollabContent
+			}
+			markdown = source
+		}
 		var authorID uuid.UUID
 		var bodyVersion int64
-		var documentType string
-		err := tx.QueryRowContext(ctx, `
+		err = tx.QueryRowContext(ctx, `
 			UPDATE documents SET content_json = $3, content = $4, body_version = body_version + 1, updated_at = NOW(),
 			    updated_by = COALESCE($5, updated_by)
 			WHERE id = $1 AND workspace_id = $2
