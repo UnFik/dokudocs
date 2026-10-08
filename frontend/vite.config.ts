@@ -6,7 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import { playwright } from '@vitest/browser-playwright'
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
 
 function serviceWorkerPrecache(): Plugin {
   let assets: string[] = []
@@ -38,6 +38,7 @@ function serviceWorkerPrecache(): Plugin {
             JSON.stringify(assets.map((fileName) => `/${fileName}`))
           )
       )
+      chmodSync(workerPath, 0o644)
     },
   }
 }
