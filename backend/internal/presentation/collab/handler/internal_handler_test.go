@@ -30,12 +30,13 @@ func (f fakeVerifier) VerifyToken(token string) (appauth.ResponseUser, error) {
 }
 
 type fakeAccess struct {
-	access       map[uuid.UUID]collaboration.RoomAccess
-	documentType string
+	access        map[uuid.UUID]collaboration.RoomAccess
+	documentType  string
+	replacementID uuid.UUID
 }
 
 func (f fakeAccess) ReadRoomHead(_ context.Context, _, _ uuid.UUID, ids []uuid.UUID) (collaboration.RoomHead, error) {
-	head := collaboration.RoomHead{Access: map[uuid.UUID]collaboration.RoomAccess{}, DocumentType: f.documentType}
+	head := collaboration.RoomHead{Access: map[uuid.UUID]collaboration.RoomAccess{}, DocumentType: f.documentType, ReplacementID: f.replacementID}
 	for _, id := range ids {
 		if access, ok := f.access[id]; ok {
 			head.Access[id] = access
@@ -52,6 +53,7 @@ type storedState struct {
 	suggestions             []collaboration.Suggestion
 	updatedBy               *uuid.UUID
 	thumbnail               *string
+	replacementID           *uuid.UUID
 }
 
 type fakeStore struct {
@@ -59,6 +61,8 @@ type fakeStore struct {
 	contents map[uuid.UUID]json.RawMessage
 	missing  map[uuid.UUID]bool
 	stored   []storedState
+	// refuse is returned by StoreState instead of storing.
+	refuse error
 }
 
 func (f *fakeStore) LoadDocument(_ context.Context, _, documentID uuid.UUID) ([]byte, json.RawMessage, error) {
@@ -69,8 +73,11 @@ func (f *fakeStore) LoadDocument(_ context.Context, _, documentID uuid.UUID) ([]
 }
 
 func (f *fakeStore) StoreState(_ context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion, options ...collaboration.StoreOption) error {
+	if f.refuse != nil {
+		return f.refuse
+	}
 	applied := collaboration.ApplyStoreOptions(options)
-	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content, markdown, suggestions, applied.UpdatedBy, applied.Thumbnail})
+	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content, markdown, suggestions, applied.UpdatedBy, applied.Thumbnail, applied.ReplacementID})
 	f.states[documentID] = state
 	f.contents[documentID] = content
 	return nil
@@ -232,6 +239,52 @@ func TestStoreRefusesWhatIsNotAStateAndContent(t *testing.T) {
 	}
 	if got := do(h, http.MethodPut, "/internal/collab/document?workspaceID=x&documentID=y", map[string]any{}, true).Code; got != http.StatusBadRequest {
 		t.Fatalf("bad ids = %d, want 400", got)
+	}
+}
+
+func TestAuthorizeTellsTheServiceWhichRecordTheRoomMustHold(t *testing.T) {
+	record := uuid.MustParse("66666666-6666-4666-8666-666666666666")
+	h := NewInternalHandler(
+		fakeVerifier{users: map[string]string{"tok-editor": editorID.String()}},
+		fakeAccess{access: map[uuid.UUID]collaboration.RoomAccess{editorID: {CanRead: true, CanEdit: true}}, documentType: "mermaid", replacementID: record},
+		&fakeStore{},
+		secret,
+	)
+	recorder := do(h, http.MethodPost, "/internal/collab/authorize",
+		map[string]string{"token": "tok-editor", "workspaceID": workspaceID.String(), "documentID": documentID.String()}, true)
+	var out map[string]any
+	_ = json.Unmarshal(recorder.Body.Bytes(), &out)
+	if recorder.Code != http.StatusOK || out["replacementID"] != record.String() {
+		t.Fatalf("authorize = %d %v, want 200 with replacementID %s", recorder.Code, out, record)
+	}
+}
+
+func TestStoreIsForTheRecordTheRoomWasOpenedOn(t *testing.T) {
+	h, store := newHandler(t)
+	record := uuid.MustParse("66666666-6666-4666-8666-666666666666")
+	target := "/internal/collab/document?workspaceID=" + workspaceID.String() + "&documentID=" + documentID.String()
+	body := map[string]any{"state": "AQID", "content": map[string]any{"source": "x"}, "replacementID": record.String()}
+	if got := do(h, http.MethodPut, target, body, true).Code; got != http.StatusNoContent {
+		t.Fatalf("store = %d, want 204", got)
+	}
+	if got := store.stored[0].replacementID; got == nil || *got != record {
+		t.Fatalf("store replacementID = %v, want %s", got, record)
+	}
+	// A restore replaced the record since: the room is stale, which sending again will not change.
+	store.refuse = collaboration.ErrCollabReplaced
+	if got := do(h, http.MethodPut, target, body, true).Code; got != http.StatusConflict {
+		t.Fatalf("store for a replaced record = %d, want 409", got)
+	}
+}
+
+func TestStoreRefusesContentThatDoesNotFitTheDocumentType(t *testing.T) {
+	h, store := newHandler(t)
+	store.refuse = collaboration.ErrInvalidCollabContent
+	target := "/internal/collab/document?workspaceID=" + workspaceID.String() + "&documentID=" + documentID.String()
+	// Not a 503: sending the same content again would be refused again.
+	got := do(h, http.MethodPut, target, map[string]any{"state": "AQID", "content": map[string]any{"type": "doc"}}, true)
+	if got.Code != http.StatusBadRequest {
+		t.Fatalf("store of content that does not fit = %d, want 400", got.Code)
 	}
 }
 

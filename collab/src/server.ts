@@ -1,14 +1,15 @@
 import { Redis } from '@hocuspocus/extension-redis'
-import { Server, type Extension } from '@hocuspocus/server'
+import { Server, type Document, type Extension } from '@hocuspocus/server'
 import * as Y from 'yjs'
 import { yDocToProsemirrorJSON } from 'y-prosemirror'
 import { architectureSummary, architectureThumbnail, architectureToJSON, seedArchitecture } from './architecture'
-import type { Authorized, BackendApi, DocumentType } from './backend-api'
+import { documentTypes, isSourceType, ReplacedError, type Authorized, type BackendApi, type DocumentType } from './backend-api'
 import { toMarkdown } from './markdown'
 import { instrumentation, log, Metrics } from './operations'
 import { permissions } from './permissions'
 import { parseRoom } from './room'
 import { seedFromJSON } from './seed'
+import { seedSource, sourceToJSON } from './source'
 import { suggestionsIn } from './suggestions'
 
 // The editor binds its document to this fragment.
@@ -20,6 +21,10 @@ export type CollabContext = {
   workspaceID: string
   documentID: string
   documentType: DocumentType
+  /** A source room only: the record it holds. */
+  replacementID?: string
+  /** The token the connection signed in with, to ask again what it may do. */
+  token: string
 }
 
 /** The kind of each open room, set when it loads; the store hook has no connection to ask. */
@@ -44,16 +49,33 @@ export type CollabOptions = {
   maxPayloadBytes?: number
   /** Messages one connection may send in a second. */
   maxMessagesPerSecond?: number
+  /** How often an open source-room connection asks the API again what it may do. */
+  accessRecheckMs?: number
 }
 
 /** What the provider shows as the reason a connection was refused. */
-function refusal(reason: 'unauthorized' | 'forbidden' | 'busy', metrics: Metrics) {
+function refusal(reason: 'unauthorized' | 'forbidden' | 'busy' | 'replaced', metrics: Metrics) {
   metrics.refuse(reason)
   log('connection_refused', { reason })
   return Object.assign(new Error(reason), { reason })
 }
 
-function authentication(backend: BackendApi, metrics: Metrics, maxConnections: number): Extension<CollabContext> {
+const accessMessage = (context: CollabContext, access: Authorized) =>
+  JSON.stringify({
+    type: 'access',
+    canEdit: access.canEdit,
+    canSuggest: context.documentType === 'markdown' ? access.canSuggest : false,
+    // Someone who may suggest on Markdown may comment; on a canvas that is all they may do.
+    // A source has no comments in this release.
+    canComment: isSourceType(context.documentType) ? false : access.canEdit || access.canSuggest,
+  })
+
+function authentication(
+  backend: BackendApi,
+  metrics: Metrics,
+  maxConnections: number,
+  accessRecheckMs: number
+): Extension<CollabContext> {
   return {
     extensionName: 'authentication',
     async onAuthenticate({ token, documentName, connectionConfig }) {
@@ -64,24 +86,43 @@ function authentication(backend: BackendApi, metrics: Metrics, maxConnections: n
       // A token that is not valid means signing in again; no access means asking for it.
       if (!access) throw refusal('unauthorized', metrics)
       if (!access.canRead) throw refusal('forbidden', metrics)
-      const documentType = access.documentType ?? 'markdown'
-      if (documentType !== 'markdown' && documentType !== 'architecture') throw refusal('forbidden', metrics)
+      const documentType = (access.documentType ?? 'markdown') as DocumentType
+      if (!documentTypes.includes(documentType)) throw refusal('forbidden', metrics)
+      // A device opening a record a restore replaced must not send what it holds: the editor
+      // keeps its unsent edits as a recovery copy and opens the current record instead.
+      if (isSourceType(documentType) && (!room.replacementID || room.replacementID !== access.replacementID))
+        throw refusal('replaced', metrics)
       // A viewer only reads. On Markdown someone who can suggest still writes; what they may
-      // write is checked per message. A canvas has no suggest mode: only an editor writes.
-      connectionConfig.readOnly = documentType === 'architecture' ? !access.canEdit : !access.canEdit && !access.canSuggest
-      return { userID: access.userID, access, ...room, documentType }
+      // write is checked per message. A canvas or a source has no suggest mode: only an editor writes.
+      connectionConfig.readOnly = documentType === 'markdown' ? !access.canEdit && !access.canSuggest : !access.canEdit
+      return { userID: access.userID, access, ...room, documentType, token }
     },
     // The editor needs to know what it may do; the connection itself only says read or write.
     async connected({ connection, context }) {
-      connection.sendStateless(
-        JSON.stringify({
-          type: 'access',
-          canEdit: context.access.canEdit,
-          canSuggest: context.documentType === 'architecture' ? false : context.access.canSuggest,
-          // Someone who may suggest on Markdown may comment; on a canvas that is all they may do.
-          canComment: context.access.canEdit || context.access.canSuggest,
-        })
-      )
+      connection.sendStateless(accessMessage(context, context.access))
+      if (!isSourceType(context.documentType)) return
+      // Access can be taken away while the room is open: ask again, and close or narrow the connection.
+      let last = context.access
+      const recheck = setInterval(async () => {
+        let access: Authorized | null
+        try {
+          access = await backend.authorize(context.token, context.workspaceID, context.documentID)
+        } catch {
+          return // the API is unreachable; the connection keeps what it had until it answers
+        }
+        const reason = !access ? 'unauthorized' : !access.canRead ? 'forbidden' : access.replacementID !== context.replacementID ? 'replaced' : null
+        if (reason || !access) {
+          clearInterval(recheck)
+          metrics.refuse(reason ?? 'forbidden')
+          connection.sendStateless(JSON.stringify({ type: 'refused', reason }))
+          connection.close()
+          return
+        }
+        connection.readOnly = !access.canEdit
+        if (access.canEdit !== last.canEdit) connection.sendStateless(accessMessage(context, access))
+        last = access
+      }, accessRecheckMs)
+      connection.onClose(() => clearInterval(recheck))
     },
   }
 }
@@ -111,6 +152,13 @@ function signals(): Extension<CollabContext> {
 /** Rooms the API asked to drop: what they hold is stale and must not be stored. */
 const droppedRooms = new Set<string>()
 
+/** Closes a room whose record was replaced: its editors reopen the document, and it is never stored. */
+function dropRoom(document: { name: string; broadcastStateless(payload: string): void; getConnections(): { close(): void }[] }) {
+  droppedRooms.add(document.name)
+  document.broadcastStateless(JSON.stringify({ type: 'reloaded' }))
+  for (const connection of document.getConnections()) connection.close()
+}
+
 /** The user who made the latest change in each open room. */
 const lastEditors = new Map<string, string>()
 
@@ -131,12 +179,11 @@ function http(secret: string | null, metrics: Metrics): Extension {
         if (!secret || sent !== secret) {
           response.writeHead(401).end()
         } else {
+          // The API names the document; a source room also names its record, so close every room of it.
           const name = url.searchParams.get('room') ?? ''
-          const open = instance.documents.get(name)
-          if (open) {
-            droppedRooms.add(name)
-            open.broadcastStateless(JSON.stringify({ type: 'reloaded' }))
-            instance.closeConnections(name)
+          for (const [open, document] of instance.documents) {
+            if (open !== name && !open.startsWith(`${name}.`)) continue
+            dropRoom(document)
           }
           response.writeHead(204).end()
         }
@@ -163,7 +210,14 @@ function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabCon
         Y.applyUpdate(document, state)
       } else if (content) {
         // A document made from JSON alone (a seed, an import, a restore): build its state once.
-        Y.applyUpdate(document, documentType === 'architecture' ? seedArchitecture(content) : seedFromJSON(content))
+        Y.applyUpdate(
+          document,
+          documentType === 'architecture'
+            ? seedArchitecture(content)
+            : isSourceType(documentType)
+              ? seedSource(content)
+              : seedFromJSON(content)
+        )
       }
     },
     async onChange({ documentName, context }) {
@@ -175,37 +229,66 @@ function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabCon
       lastEditors.delete(documentName)
       roomTypes.delete(documentName)
     },
-    async onStoreDocument({ document, documentName }) {
-      const room = parseRoom(documentName)
-      if (!room || droppedRooms.has(documentName)) return
-      const derived =
-        roomType(documentName) === 'architecture'
-          ? (() => {
-              const content = architectureToJSON(document)
-              return {
-                content,
-                markdown: architectureSummary(content),
-                suggestions: [],
-                thumbnail: architectureThumbnail(content),
-              }
-            })()
-          : (() => {
-              const content = yDocToProsemirrorJSON(document, fragmentName)
-              return { content, markdown: toMarkdown(content), suggestions: suggestionsIn(content) }
-            })()
+    onStoreDocument: ({ document, documentName }) => store(document, documentName),
+    // An editor asks for its changes to be in the database now, before it says "saved" or names a version.
+    // Messages on a connection are handled in order, so the store holds everything sent before the question.
+    async onStateless({ payload, document, connection }) {
+      let message: { type?: unknown; id?: unknown }
       try {
-        await backend.storeState({
-          ...room,
-          state: Y.encodeStateAsUpdate(document),
-          ...derived,
-          updatedBy: lastEditors.get(documentName) ?? null,
-        })
-      } catch (error) {
-        metrics.storeFailures++
-        log('store_failed', { room: documentName, error: String(error) })
+        message = JSON.parse(payload)
+      } catch {
+        return
+      }
+      if (message.type !== 'flush') return
+      const ok = await document.saveMutex.runExclusive(() => store(document, document.name)).then(
+        () => true,
+        () => false
+      )
+      connection.sendStateless(JSON.stringify({ type: 'stored', id: message.id, ok }))
+    },
+  }
+
+  async function store(document: Document, documentName: string) {
+    const room = parseRoom(documentName)
+    if (!room || droppedRooms.has(documentName)) return
+    const type = roomType(documentName)
+    const derived = isSourceType(type)
+      ? (() => {
+          const content = sourceToJSON(document)
+          return { content, markdown: content.source, suggestions: [] }
+        })()
+      : type === 'architecture'
+        ? (() => {
+            const content = architectureToJSON(document)
+            return {
+              content,
+              markdown: architectureSummary(content),
+              suggestions: [],
+              thumbnail: architectureThumbnail(content),
+            }
+          })()
+        : (() => {
+            const content = yDocToProsemirrorJSON(document, fragmentName)
+            return { content, markdown: toMarkdown(content), suggestions: suggestionsIn(content) }
+          })()
+    try {
+      await backend.storeState({
+        ...room,
+        state: Y.encodeStateAsUpdate(document),
+        ...derived,
+        updatedBy: lastEditors.get(documentName) ?? null,
+      })
+    } catch (error) {
+      if (error instanceof ReplacedError) {
+        // A restore committed before the API closed this room: what it holds is stale.
+        log('store_replaced', { room: documentName })
+        dropRoom(document)
         throw error
       }
-    },
+      metrics.storeFailures++
+      log('store_failed', { room: documentName, error: String(error) })
+      throw error
+    }
   }
 }
 
@@ -229,7 +312,7 @@ export async function createCollabServer(options: CollabOptions): Promise<Collab
     extensions: [
       http(options.serviceSecret ?? null, metrics),
       instrumentation(metrics, options.maxMessagesPerSecond ?? 500),
-      authentication(options.backend, metrics, options.maxConnections ?? 1000),
+      authentication(options.backend, metrics, options.maxConnections ?? 1000, options.accessRecheckMs ?? 30_000),
       permissions(fragmentName, metrics),
       signals(),
       persistence(options.backend, metrics),
