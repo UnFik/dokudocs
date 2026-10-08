@@ -14,7 +14,7 @@ test("@live @smoke: floating selection toolbar applies bold and a link", async (
   await page.locator('input[name="email"]').fill("admin@example.com");
   await page.locator('input[name="password"]').fill("password123");
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => url.pathname === "/");
+  await page.waitForURL((url) => url.pathname !== "/sign-in");
 
   await page
     .getByRole("button", { name: /workspace/i })

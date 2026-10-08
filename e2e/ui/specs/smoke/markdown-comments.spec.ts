@@ -23,7 +23,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
   await page.locator('input[name="email"]').fill("admin@example.com");
   await page.locator('input[name="password"]').fill("password123");
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => url.pathname === "/");
+  await page.waitForURL((url) => url.pathname !== "/sign-in");
   await page
     .getByRole("button", { name: /workspace/i })
     .first()
@@ -174,7 +174,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
       await next.locator('input[name="email"]').fill(email);
       await next.locator('input[name="password"]').fill(password);
       await next.getByRole("button", { name: /sign in/i }).click();
-      await next.waitForURL((url) => url.pathname === "/");
+      await next.waitForURL((url) => url.pathname !== "/sign-in");
       await next.goto(`/docs/${documentID}`);
       return next;
     };
