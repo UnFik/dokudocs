@@ -1,10 +1,8 @@
 import { z } from 'zod'
 import { createFileRoute } from '@tanstack/react-router'
-import { requireGuest } from '@/lib/auth-guard'
 import { WelcomePage } from '@/features/welcome'
 
-export const Route = createFileRoute('/welcome')({
-  beforeLoad: requireGuest,
+export const Route = createFileRoute('/')({
   component: WelcomePage,
   validateSearch: z.object({ redirect: z.string().optional() }),
   head: () => ({

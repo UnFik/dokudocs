@@ -49,7 +49,7 @@ function ProductImage({
 }
 
 export function WelcomePage() {
-  const { redirect } = useSearch({ from: '/welcome' })
+  const { redirect } = useSearch({ from: '/' })
 
   return (
     <main lang='id' className='min-h-svh bg-background text-foreground'>
@@ -59,7 +59,7 @@ export function WelcomePage() {
           className='mx-auto flex min-h-16 max-w-6xl items-center justify-between px-5 sm:px-8'
         >
           <Link
-            to='/welcome'
+            to='/'
             aria-label='DokuDocs, halaman awal'
             className='inline-flex min-h-11 items-center gap-2 rounded-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
           >
@@ -200,7 +200,7 @@ export function WelcomePage() {
       <footer className='border-t border-border'>
         <div className='mx-auto flex max-w-6xl flex-col gap-4 px-5 py-7 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-8'>
           <Link
-            to='/welcome'
+            to='/'
             className='inline-flex min-h-11 items-center gap-2 rounded-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
           >
             <Logo className='size-5' />
