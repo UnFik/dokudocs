@@ -13,8 +13,6 @@ import {
   Upload,
   Users,
 } from 'lucide-react'
-import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getDocCategories } from '@/lib/doc-category-utils'
 import { formatRelativeTime } from '@/lib/time-utils'
 import { Button } from '@/components/ui/button'
@@ -26,6 +24,7 @@ import { CreateDocDialog } from '@/features/docs/components/create-doc-dialog'
 import { DocCard } from '@/features/docs/components/doc-card'
 import { DocListRow } from '@/features/docs/components/doc-list-row'
 import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
+import { useToggleProjectStar } from '../hooks/use-toggle-project-star'
 import { EditProjectDialog } from './edit-project-dialog'
 import { ProjectCategoryFilter } from './project-category-filter'
 import { ProjectMembersDialog } from './project-members-dialog'
@@ -38,7 +37,7 @@ export function ProjectDetailView() {
   const navigate = route.useNavigate()
 
   const { projectsWithDocs } = useDokudocs()
-  const toggleStarProject = useDokudocsStore((s) => s.toggleStarProject)
+  const starMutation = useToggleProjectStar()
 
   const project = projectsWithDocs.find((p) => p.id === projectId)
   const [createDocOpen, setCreateDocOpen] = useState(false)
@@ -92,12 +91,7 @@ export function ProjectDetailView() {
 
   const handleToggleStar = () => {
     if (!project) return
-    toggleStarProject(project.id)
-    toast.success(
-      project.isStarred
-        ? `Unstarred "${project.name}"`
-        : `Starred "${project.name}"`
-    )
+    if (!starMutation.isPending) starMutation.mutate(project)
   }
 
   const docCountsByCategory = useMemo(() => {
@@ -168,6 +162,7 @@ export function ProjectDetailView() {
             variant='outline'
             size='sm'
             onClick={handleToggleStar}
+            disabled={starMutation.isPending}
             className='h-8 gap-1.5 px-2.5 text-xs font-medium'
             title={project.isStarred ? 'Unstar Project' : 'Star Project'}
           >
