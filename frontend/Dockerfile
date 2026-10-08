@@ -9,7 +9,9 @@ COPY . .
 
 EXPOSE 5173
 
-CMD ["bun", "run", "dev", "--host"]
+# With the source bind-mounted, node_modules is a volume that outlives the image;
+# install first so a dependency added to bun.lock after the build is there too.
+CMD ["sh", "-c", "bun install --frozen-lockfile && exec bun run dev --host"]
 
 FROM oven/bun:1 AS builder
 
@@ -22,7 +24,7 @@ COPY . .
 
 RUN bun run build
 
-FROM nginx:alpine AS prod
+FROM nginx:1.28-alpine AS prod
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf

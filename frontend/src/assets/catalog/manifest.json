@@ -1,0 +1,1631 @@
+{
+ "active-directory": {
+  "dark": "active-directory.dark.svg",
+  "fallback": true,
+  "light": "active-directory.svg",
+  "source": "lucide"
+ },
+ "activemq": {
+  "dark": "activemq.dark.svg",
+  "fallback": true,
+  "light": "activemq.svg",
+  "source": "lucide"
+ },
+ "actix-web": {
+  "dark": "actix-web.dark.svg",
+  "light": "actix-web.svg",
+  "source": "simple-icons"
+ },
+ "adonisjs": {
+  "dark": "adonisjs.svg",
+  "light": "adonisjs.svg",
+  "source": "devicon"
+ },
+ "algolia": {
+  "dark": "algolia.svg",
+  "light": "algolia.svg",
+  "source": "devicon"
+ },
+ "alibaba-cloud-ecs": {
+  "dark": "alibaba-cloud-ecs.svg",
+  "light": "alibaba-cloud-ecs.svg",
+  "source": "simple-icons"
+ },
+ "android": {
+  "dark": "android.svg",
+  "light": "android.svg",
+  "source": "devicon"
+ },
+ "angular": {
+  "dark": "angular.svg",
+  "light": "angular.svg",
+  "source": "devicon"
+ },
+ "anthropic": {
+  "dark": "anthropic.dark.svg",
+  "light": "anthropic.svg",
+  "source": "simple-icons"
+ },
+ "apache-httpd": {
+  "dark": "apache-httpd.svg",
+  "light": "apache-httpd.svg",
+  "source": "devicon"
+ },
+ "apisix": {
+  "dark": "apisix.dark.svg",
+  "fallback": true,
+  "light": "apisix.svg",
+  "source": "lucide"
+ },
+ "aspnet-core": {
+  "dark": "aspnet-core.svg",
+  "light": "aspnet-core.svg",
+  "source": "devicon"
+ },
+ "astro": {
+  "dark": "astro.svg",
+  "light": "astro.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "auth0": {
+  "dark": "auth0.svg",
+  "light": "auth0.svg",
+  "source": "simple-icons"
+ },
+ "authentik": {
+  "dark": "authentik.svg",
+  "light": "authentik.svg",
+  "source": "simple-icons"
+ },
+ "availability-zone": {
+  "dark": "availability-zone.dark.svg",
+  "light": "availability-zone.svg",
+  "source": "lucide"
+ },
+ "aws-alb": {
+  "dark": "aws-alb.dark.svg",
+  "fallback": true,
+  "light": "aws-alb.svg",
+  "source": "lucide"
+ },
+ "aws-amplify": {
+  "dark": "aws-amplify.dark.svg",
+  "fallback": true,
+  "light": "aws-amplify.svg",
+  "source": "lucide"
+ },
+ "aws-api-gateway": {
+  "dark": "aws-api-gateway.dark.svg",
+  "fallback": true,
+  "light": "aws-api-gateway.svg",
+  "source": "lucide"
+ },
+ "aws-aurora": {
+  "dark": "aws-aurora.dark.svg",
+  "fallback": true,
+  "light": "aws-aurora.svg",
+  "source": "lucide"
+ },
+ "aws-cognito": {
+  "dark": "aws-cognito.dark.svg",
+  "fallback": true,
+  "light": "aws-cognito.svg",
+  "source": "lucide"
+ },
+ "aws-ec2": {
+  "dark": "aws-ec2.dark.svg",
+  "fallback": true,
+  "light": "aws-ec2.svg",
+  "source": "lucide"
+ },
+ "aws-ecs": {
+  "dark": "aws-ecs.dark.svg",
+  "fallback": true,
+  "light": "aws-ecs.svg",
+  "source": "lucide"
+ },
+ "aws-eks": {
+  "dark": "aws-eks.dark.svg",
+  "fallback": true,
+  "light": "aws-eks.svg",
+  "source": "lucide"
+ },
+ "aws-elastic-beanstalk": {
+  "dark": "aws-elastic-beanstalk.dark.svg",
+  "fallback": true,
+  "light": "aws-elastic-beanstalk.svg",
+  "source": "lucide"
+ },
+ "aws-elasticache": {
+  "dark": "aws-elasticache.dark.svg",
+  "fallback": true,
+  "light": "aws-elasticache.svg",
+  "source": "lucide"
+ },
+ "aws-eventbridge": {
+  "dark": "aws-eventbridge.dark.svg",
+  "fallback": true,
+  "light": "aws-eventbridge.svg",
+  "source": "lucide"
+ },
+ "aws-fargate": {
+  "dark": "aws-fargate.dark.svg",
+  "fallback": true,
+  "light": "aws-fargate.svg",
+  "source": "lucide"
+ },
+ "aws-lambda": {
+  "dark": "aws-lambda.dark.svg",
+  "fallback": true,
+  "light": "aws-lambda.svg",
+  "source": "lucide"
+ },
+ "aws-lightsail": {
+  "dark": "aws-lightsail.dark.svg",
+  "fallback": true,
+  "light": "aws-lightsail.svg",
+  "source": "lucide"
+ },
+ "aws-msk": {
+  "dark": "aws-msk.dark.svg",
+  "fallback": true,
+  "light": "aws-msk.svg",
+  "source": "lucide"
+ },
+ "aws-opensearch": {
+  "dark": "aws-opensearch.dark.svg",
+  "fallback": true,
+  "light": "aws-opensearch.svg",
+  "source": "lucide"
+ },
+ "aws-rds": {
+  "dark": "aws-rds.dark.svg",
+  "fallback": true,
+  "light": "aws-rds.svg",
+  "source": "lucide"
+ },
+ "aws-s3": {
+  "dark": "aws-s3.dark.svg",
+  "fallback": true,
+  "light": "aws-s3.svg",
+  "source": "lucide"
+ },
+ "aws-ses": {
+  "dark": "aws-ses.dark.svg",
+  "fallback": true,
+  "light": "aws-ses.svg",
+  "source": "lucide"
+ },
+ "aws-sns": {
+  "dark": "aws-sns.dark.svg",
+  "fallback": true,
+  "light": "aws-sns.svg",
+  "source": "lucide"
+ },
+ "aws-sqs": {
+  "dark": "aws-sqs.dark.svg",
+  "fallback": true,
+  "light": "aws-sqs.svg",
+  "source": "lucide"
+ },
+ "axum": {
+  "dark": "axum.dark.svg",
+  "fallback": true,
+  "light": "axum.svg",
+  "source": "lucide"
+ },
+ "azure-aks": {
+  "dark": "azure-aks.dark.svg",
+  "fallback": true,
+  "light": "azure-aks.svg",
+  "source": "lucide"
+ },
+ "azure-app-service": {
+  "dark": "azure-app-service.dark.svg",
+  "fallback": true,
+  "light": "azure-app-service.svg",
+  "source": "lucide"
+ },
+ "azure-blob": {
+  "dark": "azure-blob.dark.svg",
+  "fallback": true,
+  "light": "azure-blob.svg",
+  "source": "lucide"
+ },
+ "azure-cache-redis": {
+  "dark": "azure-cache-redis.dark.svg",
+  "fallback": true,
+  "light": "azure-cache-redis.svg",
+  "source": "lucide"
+ },
+ "azure-container-apps": {
+  "dark": "azure-container-apps.dark.svg",
+  "fallback": true,
+  "light": "azure-container-apps.svg",
+  "source": "lucide"
+ },
+ "azure-database-postgresql": {
+  "dark": "azure-database-postgresql.dark.svg",
+  "fallback": true,
+  "light": "azure-database-postgresql.svg",
+  "source": "lucide"
+ },
+ "azure-functions": {
+  "dark": "azure-functions.dark.svg",
+  "fallback": true,
+  "light": "azure-functions.svg",
+  "source": "lucide"
+ },
+ "azure-service-bus": {
+  "dark": "azure-service-bus.dark.svg",
+  "fallback": true,
+  "light": "azure-service-bus.svg",
+  "source": "lucide"
+ },
+ "azure-sql": {
+  "dark": "azure-sql.dark.svg",
+  "fallback": true,
+  "light": "azure-sql.svg",
+  "source": "lucide"
+ },
+ "azure-vm": {
+  "dark": "azure-vm.dark.svg",
+  "fallback": true,
+  "light": "azure-vm.svg",
+  "source": "lucide"
+ },
+ "bare-metal": {
+  "dark": "bare-metal.dark.svg",
+  "light": "bare-metal.svg",
+  "source": "lucide"
+ },
+ "batch-job": {
+  "dark": "batch-job.dark.svg",
+  "light": "batch-job.svg",
+  "source": "lucide"
+ },
+ "biznet-gio": {
+  "dark": "biznet-gio.dark.svg",
+  "fallback": true,
+  "light": "biznet-gio.svg",
+  "source": "lucide"
+ },
+ "browser": {
+  "dark": "browser.dark.svg",
+  "light": "browser.svg",
+  "source": "lucide"
+ },
+ "bun": {
+  "dark": "bun.svg",
+  "light": "bun.svg",
+  "source": "devicon",
+  "tile": {
+   "light": true
+  }
+ },
+ "c": {
+  "dark": "c.svg",
+  "light": "c.svg",
+  "source": "devicon"
+ },
+ "caddy": {
+  "dark": "caddy.svg",
+  "light": "caddy.svg",
+  "source": "simple-icons"
+ },
+ "cassandra": {
+  "dark": "cassandra.svg",
+  "light": "cassandra.svg",
+  "source": "devicon"
+ },
+ "ceph": {
+  "dark": "ceph.svg",
+  "light": "ceph.svg",
+  "source": "simple-icons"
+ },
+ "chi": {
+  "dark": "chi.dark.svg",
+  "fallback": true,
+  "light": "chi.svg",
+  "source": "lucide"
+ },
+ "chroma": {
+  "dark": "chroma.dark.svg",
+  "fallback": true,
+  "light": "chroma.svg",
+  "source": "lucide"
+ },
+ "clerk": {
+  "dark": "clerk.svg",
+  "light": "clerk.svg",
+  "source": "simple-icons"
+ },
+ "cli": {
+  "dark": "cli.dark.svg",
+  "light": "cli.svg",
+  "source": "lucide"
+ },
+ "clickhouse": {
+  "dark": "clickhouse.svg",
+  "light": "clickhouse.svg",
+  "source": "devicon",
+  "tile": {
+   "light": true
+  }
+ },
+ "cloudflare": {
+  "dark": "cloudflare.svg",
+  "light": "cloudflare.svg",
+  "source": "devicon"
+ },
+ "cloudflare-pages": {
+  "dark": "cloudflare-pages.svg",
+  "light": "cloudflare-pages.svg",
+  "source": "simple-icons"
+ },
+ "cloudflare-r2": {
+  "dark": "cloudflare-r2.dark.svg",
+  "fallback": true,
+  "light": "cloudflare-r2.svg",
+  "source": "lucide"
+ },
+ "cloudflare-workers": {
+  "dark": "cloudflare-workers.svg",
+  "light": "cloudflare-workers.svg",
+  "source": "devicon"
+ },
+ "cloudfront": {
+  "dark": "cloudfront.dark.svg",
+  "fallback": true,
+  "light": "cloudfront.svg",
+  "source": "lucide"
+ },
+ "cockroachdb": {
+  "dark": "cockroachdb.dark.svg",
+  "fallback": true,
+  "light": "cockroachdb.svg",
+  "source": "lucide"
+ },
+ "confluent-cloud": {
+  "dark": "confluent-cloud.dark.svg",
+  "fallback": true,
+  "light": "confluent-cloud.svg",
+  "source": "lucide"
+ },
+ "container": {
+  "dark": "container.dark.svg",
+  "light": "container.svg",
+  "source": "lucide"
+ },
+ "couchdb": {
+  "dark": "couchdb.svg",
+  "light": "couchdb.svg",
+  "source": "devicon"
+ },
+ "cpp": {
+  "dark": "cpp.svg",
+  "light": "cpp.svg",
+  "source": "devicon"
+ },
+ "csharp": {
+  "dark": "csharp.svg",
+  "light": "csharp.svg",
+  "source": "devicon"
+ },
+ "dart": {
+  "dark": "dart.svg",
+  "light": "dart.svg",
+  "source": "devicon"
+ },
+ "datadog": {
+  "dark": "datadog.svg",
+  "light": "datadog.svg",
+  "source": "devicon"
+ },
+ "deno": {
+  "dark": "deno.dark.svg",
+  "light": "deno.svg",
+  "source": "simple-icons"
+ },
+ "desktop": {
+  "dark": "desktop.dark.svg",
+  "light": "desktop.svg",
+  "source": "lucide"
+ },
+ "digitalocean-app-platform": {
+  "dark": "digitalocean-app-platform.svg",
+  "light": "digitalocean-app-platform.svg",
+  "source": "devicon"
+ },
+ "digitalocean-droplet": {
+  "dark": "digitalocean-droplet.svg",
+  "light": "digitalocean-droplet.svg",
+  "source": "devicon"
+ },
+ "digitalocean-managed-db": {
+  "dark": "digitalocean-managed-db.svg",
+  "light": "digitalocean-managed-db.svg",
+  "source": "devicon"
+ },
+ "django": {
+  "dark": "django.dark.svg",
+  "light": "django.svg",
+  "source": "simple-icons"
+ },
+ "dmz": {
+  "dark": "dmz.dark.svg",
+  "light": "dmz.svg",
+  "source": "lucide"
+ },
+ "docker-host": {
+  "dark": "docker-host.svg",
+  "light": "docker-host.svg",
+  "source": "devicon"
+ },
+ "docker-swarm": {
+  "dark": "docker-swarm.svg",
+  "light": "docker-swarm.svg",
+  "source": "devicon"
+ },
+ "dragonfly": {
+  "dark": "dragonfly.dark.svg",
+  "fallback": true,
+  "light": "dragonfly.svg",
+  "source": "lucide"
+ },
+ "duckdb": {
+  "dark": "duckdb.svg",
+  "light": "duckdb.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "dynamodb": {
+  "dark": "dynamodb.dark.svg",
+  "fallback": true,
+  "light": "dynamodb.svg",
+  "source": "lucide"
+ },
+ "echo": {
+  "dark": "echo.dark.svg",
+  "fallback": true,
+  "light": "echo.svg",
+  "source": "lucide"
+ },
+ "elastic-apm": {
+  "dark": "elastic-apm.dark.svg",
+  "fallback": true,
+  "light": "elastic-apm.svg",
+  "source": "lucide"
+ },
+ "elasticsearch": {
+  "dark": "elasticsearch.svg",
+  "light": "elasticsearch.svg",
+  "source": "devicon"
+ },
+ "electron": {
+  "dark": "electron.svg",
+  "light": "electron.svg",
+  "source": "devicon"
+ },
+ "elixir": {
+  "dark": "elixir.svg",
+  "light": "elixir.svg",
+  "source": "devicon"
+ },
+ "emqx": {
+  "dark": "emqx.dark.svg",
+  "fallback": true,
+  "light": "emqx.svg",
+  "source": "lucide"
+ },
+ "envoy": {
+  "dark": "envoy.svg",
+  "light": "envoy.svg",
+  "source": "devicon"
+ },
+ "expo": {
+  "dark": "expo.svg",
+  "light": "expo.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "express": {
+  "dark": "express.svg",
+  "light": "express.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "fastapi": {
+  "dark": "fastapi.svg",
+  "light": "fastapi.svg",
+  "source": "devicon"
+ },
+ "fastify": {
+  "dark": "fastify.svg",
+  "light": "fastify.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "fiber": {
+  "dark": "fiber.svg",
+  "light": "fiber.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "firebase-auth": {
+  "dark": "firebase-auth.svg",
+  "light": "firebase-auth.svg",
+  "source": "devicon"
+ },
+ "firebase-cloud-messaging": {
+  "dark": "firebase-cloud-messaging.svg",
+  "light": "firebase-cloud-messaging.svg",
+  "source": "devicon"
+ },
+ "firebase-hosting": {
+  "dark": "firebase-hosting.svg",
+  "light": "firebase-hosting.svg",
+  "source": "devicon"
+ },
+ "firestore": {
+  "dark": "firestore.svg",
+  "light": "firestore.svg",
+  "source": "google-cloud"
+ },
+ "flask": {
+  "dark": "flask.svg",
+  "light": "flask.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "fluent-bit": {
+  "dark": "fluent-bit.svg",
+  "light": "fluent-bit.svg",
+  "source": "simple-icons"
+ },
+ "flutter": {
+  "dark": "flutter.svg",
+  "light": "flutter.svg",
+  "source": "devicon"
+ },
+ "fly-io": {
+  "dark": "fly-io.dark.svg",
+  "light": "fly-io.svg",
+  "source": "simple-icons"
+ },
+ "gcp-api-gateway": {
+  "dark": "gcp-api-gateway.svg",
+  "light": "gcp-api-gateway.svg",
+  "source": "google-cloud"
+ },
+ "gcp-app-engine": {
+  "dark": "gcp-app-engine.svg",
+  "light": "gcp-app-engine.svg",
+  "source": "google-cloud"
+ },
+ "gcp-bigquery": {
+  "dark": "gcp-bigquery.svg",
+  "light": "gcp-bigquery.svg",
+  "source": "google-cloud"
+ },
+ "gcp-bigtable": {
+  "dark": "gcp-bigtable.svg",
+  "light": "gcp-bigtable.svg",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-cdn": {
+  "dark": "gcp-cloud-cdn.svg",
+  "light": "gcp-cloud-cdn.svg",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-functions": {
+  "dark": "gcp-cloud-functions.svg",
+  "light": "gcp-cloud-functions.svg",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-run": {
+  "dark": "gcp-cloud-run.svg",
+  "light": "gcp-cloud-run.svg",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-scheduler": {
+  "dark": "gcp-cloud-scheduler.svg",
+  "light": "gcp-cloud-scheduler.svg",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-sql": {
+  "dark": "gcp-cloud-sql.svg",
+  "light": "gcp-cloud-sql.svg",
+  "source": "google-cloud"
+ },
+ "gcp-cloud-tasks": {
+  "dark": "gcp-cloud-tasks.svg",
+  "light": "gcp-cloud-tasks.svg",
+  "source": "google-cloud"
+ },
+ "gcp-compute-engine": {
+  "dark": "gcp-compute-engine.svg",
+  "light": "gcp-compute-engine.svg",
+  "source": "google-cloud"
+ },
+ "gcp-gke": {
+  "dark": "gcp-gke.svg",
+  "light": "gcp-gke.svg",
+  "source": "google-cloud"
+ },
+ "gcp-identity-platform": {
+  "dark": "gcp-identity-platform.svg",
+  "light": "gcp-identity-platform.svg",
+  "source": "google-cloud"
+ },
+ "gcp-load-balancing": {
+  "dark": "gcp-load-balancing.svg",
+  "light": "gcp-load-balancing.svg",
+  "source": "google-cloud"
+ },
+ "gcp-memorystore": {
+  "dark": "gcp-memorystore.svg",
+  "light": "gcp-memorystore.svg",
+  "source": "google-cloud"
+ },
+ "gcp-pubsub": {
+  "dark": "gcp-pubsub.svg",
+  "light": "gcp-pubsub.svg",
+  "source": "google-cloud"
+ },
+ "gcp-spanner": {
+  "dark": "gcp-spanner.svg",
+  "light": "gcp-spanner.svg",
+  "source": "google-cloud"
+ },
+ "gcs": {
+  "dark": "gcs.svg",
+  "light": "gcs.svg",
+  "source": "google-cloud"
+ },
+ "gin": {
+  "dark": "gin.svg",
+  "light": "gin.svg",
+  "source": "simple-icons"
+ },
+ "github": {
+  "dark": "github.svg",
+  "light": "github.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "gitlab": {
+  "dark": "gitlab.svg",
+  "light": "gitlab.svg",
+  "source": "devicon"
+ },
+ "go-net-http": {
+  "dark": "go-net-http.svg",
+  "light": "go-net-http.svg",
+  "source": "devicon"
+ },
+ "golang": {
+  "dark": "golang.svg",
+  "light": "golang.svg",
+  "source": "devicon"
+ },
+ "google-gemini": {
+  "dark": "google-gemini.svg",
+  "light": "google-gemini.svg",
+  "source": "simple-icons"
+ },
+ "google-maps": {
+  "dark": "google-maps.svg",
+  "light": "google-maps.svg",
+  "source": "simple-icons"
+ },
+ "google-oauth": {
+  "dark": "google-oauth.svg",
+  "light": "google-oauth.svg",
+  "source": "devicon"
+ },
+ "grafana": {
+  "dark": "grafana.svg",
+  "light": "grafana.svg",
+  "source": "devicon"
+ },
+ "haproxy": {
+  "dark": "haproxy.dark.svg",
+  "fallback": true,
+  "light": "haproxy.svg",
+  "source": "lucide"
+ },
+ "heroku": {
+  "dark": "heroku.svg",
+  "light": "heroku.svg",
+  "source": "devicon"
+ },
+ "hono": {
+  "dark": "hono.svg",
+  "light": "hono.svg",
+  "source": "simple-icons"
+ },
+ "htmx": {
+  "dark": "htmx.svg",
+  "light": "htmx.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "idcloudhost": {
+  "dark": "idcloudhost.dark.svg",
+  "fallback": true,
+  "light": "idcloudhost.svg",
+  "source": "lucide"
+ },
+ "influxdb": {
+  "dark": "influxdb.svg",
+  "light": "influxdb.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "ionic": {
+  "dark": "ionic.svg",
+  "light": "ionic.svg",
+  "source": "devicon"
+ },
+ "ios": {
+  "dark": "ios.dark.svg",
+  "light": "ios.svg",
+  "source": "simple-icons"
+ },
+ "iot-device": {
+  "dark": "iot-device.dark.svg",
+  "light": "iot-device.svg",
+  "source": "lucide"
+ },
+ "istio": {
+  "dark": "istio.svg",
+  "light": "istio.svg",
+  "source": "simple-icons"
+ },
+ "jaeger": {
+  "dark": "jaeger.svg",
+  "light": "jaeger.svg",
+  "source": "devicon"
+ },
+ "java": {
+  "dark": "java.svg",
+  "light": "java.svg",
+  "source": "devicon"
+ },
+ "javascript": {
+  "dark": "javascript.svg",
+  "light": "javascript.svg",
+  "source": "devicon",
+  "tile": {
+   "light": true
+  }
+ },
+ "jetpack-compose": {
+  "dark": "jetpack-compose.svg",
+  "light": "jetpack-compose.svg",
+  "source": "devicon"
+ },
+ "kafka": {
+  "dark": "kafka.svg",
+  "light": "kafka.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "keycloak": {
+  "dark": "keycloak.svg",
+  "light": "keycloak.svg",
+  "source": "simple-icons"
+ },
+ "keydb": {
+  "dark": "keydb.dark.svg",
+  "fallback": true,
+  "light": "keydb.svg",
+  "source": "lucide"
+ },
+ "kibana": {
+  "dark": "kibana.svg",
+  "light": "kibana.svg",
+  "source": "devicon"
+ },
+ "koa": {
+  "dark": "koa.dark.svg",
+  "light": "koa.svg",
+  "source": "simple-icons"
+ },
+ "kong": {
+  "dark": "kong.dark.svg",
+  "light": "kong.svg",
+  "source": "simple-icons"
+ },
+ "kotlin": {
+  "dark": "kotlin.svg",
+  "light": "kotlin.svg",
+  "source": "devicon"
+ },
+ "kotlin-multiplatform": {
+  "dark": "kotlin-multiplatform.svg",
+  "light": "kotlin-multiplatform.svg",
+  "source": "devicon"
+ },
+ "ktor": {
+  "dark": "ktor.svg",
+  "light": "ktor.svg",
+  "source": "devicon"
+ },
+ "kubernetes": {
+  "dark": "kubernetes.svg",
+  "light": "kubernetes.svg",
+  "source": "devicon"
+ },
+ "kubernetes-namespace": {
+  "dark": "kubernetes-namespace.svg",
+  "light": "kubernetes-namespace.svg",
+  "source": "devicon"
+ },
+ "kubernetes-node": {
+  "dark": "kubernetes-node.svg",
+  "light": "kubernetes-node.svg",
+  "source": "devicon"
+ },
+ "kubernetes-pod": {
+  "dark": "kubernetes-pod.svg",
+  "light": "kubernetes-pod.svg",
+  "source": "devicon"
+ },
+ "laptop": {
+  "dark": "laptop.dark.svg",
+  "light": "laptop.svg",
+  "source": "lucide"
+ },
+ "laravel": {
+  "dark": "laravel.svg",
+  "light": "laravel.svg",
+  "source": "devicon"
+ },
+ "llama-cpp": {
+  "dark": "llama-cpp.dark.svg",
+  "fallback": true,
+  "light": "llama-cpp.svg",
+  "source": "lucide"
+ },
+ "local-disk": {
+  "dark": "local-disk.dark.svg",
+  "light": "local-disk.svg",
+  "source": "lucide"
+ },
+ "logstash": {
+  "dark": "logstash.svg",
+  "light": "logstash.svg",
+  "source": "devicon"
+ },
+ "loki": {
+  "dark": "loki.svg",
+  "light": "loki.svg",
+  "source": "devicon"
+ },
+ "lua": {
+  "dark": "lua.svg",
+  "light": "lua.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "lucide-activity": {
+  "dark": "lucide-activity.dark.svg",
+  "fallback": true,
+  "light": "lucide-activity.svg",
+  "source": "lucide"
+ },
+ "lucide-app-window": {
+  "dark": "lucide-app-window.dark.svg",
+  "fallback": true,
+  "light": "lucide-app-window.svg",
+  "source": "lucide"
+ },
+ "lucide-brain-circuit": {
+  "dark": "lucide-brain-circuit.dark.svg",
+  "fallback": true,
+  "light": "lucide-brain-circuit.svg",
+  "source": "lucide"
+ },
+ "lucide-cloud": {
+  "dark": "lucide-cloud.dark.svg",
+  "fallback": true,
+  "light": "lucide-cloud.svg",
+  "source": "lucide"
+ },
+ "lucide-code-xml": {
+  "dark": "lucide-code-xml.dark.svg",
+  "fallback": true,
+  "light": "lucide-code-xml.svg",
+  "source": "lucide"
+ },
+ "lucide-cog": {
+  "dark": "lucide-cog.dark.svg",
+  "fallback": true,
+  "light": "lucide-cog.svg",
+  "source": "lucide"
+ },
+ "lucide-database": {
+  "dark": "lucide-database.dark.svg",
+  "fallback": true,
+  "light": "lucide-database.svg",
+  "source": "lucide"
+ },
+ "lucide-hard-drive": {
+  "dark": "lucide-hard-drive.dark.svg",
+  "fallback": true,
+  "light": "lucide-hard-drive.svg",
+  "source": "lucide"
+ },
+ "lucide-layers": {
+  "dark": "lucide-layers.dark.svg",
+  "fallback": true,
+  "light": "lucide-layers.svg",
+  "source": "lucide"
+ },
+ "lucide-lock": {
+  "dark": "lucide-lock.dark.svg",
+  "fallback": true,
+  "light": "lucide-lock.svg",
+  "source": "lucide"
+ },
+ "lucide-mail": {
+  "dark": "lucide-mail.dark.svg",
+  "fallback": true,
+  "light": "lucide-mail.svg",
+  "source": "lucide"
+ },
+ "lucide-monitor": {
+  "dark": "lucide-monitor.dark.svg",
+  "fallback": true,
+  "light": "lucide-monitor.svg",
+  "source": "lucide"
+ },
+ "lucide-network": {
+  "dark": "lucide-network.dark.svg",
+  "fallback": true,
+  "light": "lucide-network.svg",
+  "source": "lucide"
+ },
+ "lucide-plug": {
+  "dark": "lucide-plug.dark.svg",
+  "fallback": true,
+  "light": "lucide-plug.svg",
+  "source": "lucide"
+ },
+ "lucide-route": {
+  "dark": "lucide-route.dark.svg",
+  "fallback": true,
+  "light": "lucide-route.svg",
+  "source": "lucide"
+ },
+ "lucide-search": {
+  "dark": "lucide-search.dark.svg",
+  "fallback": true,
+  "light": "lucide-search.svg",
+  "source": "lucide"
+ },
+ "lucide-server": {
+  "dark": "lucide-server.dark.svg",
+  "fallback": true,
+  "light": "lucide-server.svg",
+  "source": "lucide"
+ },
+ "lucide-smartphone": {
+  "dark": "lucide-smartphone.dark.svg",
+  "fallback": true,
+  "light": "lucide-smartphone.svg",
+  "source": "lucide"
+ },
+ "lucide-square-dashed": {
+  "dark": "lucide-square-dashed.dark.svg",
+  "fallback": false,
+  "light": "lucide-square-dashed.svg",
+  "source": "lucide"
+ },
+ "lucide-zap": {
+  "dark": "lucide-zap.dark.svg",
+  "fallback": true,
+  "light": "lucide-zap.svg",
+  "source": "lucide"
+ },
+ "mailgun": {
+  "dark": "mailgun.svg",
+  "light": "mailgun.svg",
+  "source": "simple-icons"
+ },
+ "mariadb": {
+  "dark": "mariadb.svg",
+  "light": "mariadb.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "meilisearch": {
+  "dark": "meilisearch.svg",
+  "light": "meilisearch.svg",
+  "source": "simple-icons"
+ },
+ "memcached": {
+  "dark": "memcached.svg",
+  "light": "memcached.svg",
+  "source": "devicon"
+ },
+ "micronaut": {
+  "dark": "micronaut.dark.svg",
+  "fallback": true,
+  "light": "micronaut.svg",
+  "source": "lucide"
+ },
+ "midtrans": {
+  "dark": "midtrans.dark.svg",
+  "fallback": true,
+  "light": "midtrans.svg",
+  "source": "lucide"
+ },
+ "milvus": {
+  "dark": "milvus.svg",
+  "light": "milvus.svg",
+  "source": "simple-icons"
+ },
+ "minio": {
+  "dark": "minio.svg",
+  "light": "minio.svg",
+  "source": "simple-icons"
+ },
+ "mongodb": {
+  "dark": "mongodb.svg",
+  "light": "mongodb.svg",
+  "source": "devicon"
+ },
+ "mongodb-atlas": {
+  "dark": "mongodb-atlas.svg",
+  "light": "mongodb-atlas.svg",
+  "source": "devicon"
+ },
+ "mosquitto": {
+  "dark": "mosquitto.svg",
+  "light": "mosquitto.svg",
+  "source": "simple-icons"
+ },
+ "mysql": {
+  "dark": "mysql.svg",
+  "light": "mysql.svg",
+  "source": "devicon"
+ },
+ "nats": {
+  "dark": "nats.svg",
+  "light": "nats.svg",
+  "source": "devicon"
+ },
+ "neo4j": {
+  "dark": "neo4j.svg",
+  "light": "neo4j.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "neon": {
+  "dark": "neon.svg",
+  "light": "neon.svg",
+  "source": "simple-icons"
+ },
+ "nestjs": {
+  "dark": "nestjs.svg",
+  "light": "nestjs.svg",
+  "source": "devicon"
+ },
+ "netlify": {
+  "dark": "netlify.svg",
+  "light": "netlify.svg",
+  "source": "devicon"
+ },
+ "new-relic": {
+  "dark": "new-relic.svg",
+  "light": "new-relic.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "nextjs": {
+  "dark": "nextjs.svg",
+  "light": "nextjs.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "nfs": {
+  "dark": "nfs.dark.svg",
+  "light": "nfs.svg",
+  "source": "lucide"
+ },
+ "nginx": {
+  "dark": "nginx.svg",
+  "light": "nginx.svg",
+  "source": "devicon"
+ },
+ "nodejs": {
+  "dark": "nodejs.svg",
+  "light": "nodejs.svg",
+  "source": "devicon"
+ },
+ "nomad": {
+  "dark": "nomad.svg",
+  "light": "nomad.svg",
+  "source": "devicon"
+ },
+ "nuxt": {
+  "dark": "nuxt.svg",
+  "light": "nuxt.svg",
+  "source": "devicon"
+ },
+ "ollama": {
+  "dark": "ollama.dark.svg",
+  "light": "ollama.svg",
+  "source": "simple-icons"
+ },
+ "on-premise": {
+  "dark": "on-premise.dark.svg",
+  "light": "on-premise.svg",
+  "source": "lucide"
+ },
+ "onesignal": {
+  "dark": "onesignal.dark.svg",
+  "fallback": true,
+  "light": "onesignal.svg",
+  "source": "lucide"
+ },
+ "openai": {
+  "dark": "openai.dark.svg",
+  "fallback": true,
+  "light": "openai.svg",
+  "source": "lucide"
+ },
+ "openldap": {
+  "dark": "openldap.dark.svg",
+  "fallback": true,
+  "light": "openldap.svg",
+  "source": "lucide"
+ },
+ "opensearch": {
+  "dark": "opensearch.svg",
+  "light": "opensearch.svg",
+  "source": "simple-icons"
+ },
+ "opentelemetry-collector": {
+  "dark": "opentelemetry-collector.svg",
+  "light": "opentelemetry-collector.svg",
+  "source": "devicon"
+ },
+ "oracle": {
+  "dark": "oracle.svg",
+  "light": "oracle.svg",
+  "source": "devicon"
+ },
+ "ory": {
+  "dark": "ory.svg",
+  "light": "ory.svg",
+  "source": "devicon"
+ },
+ "paypal": {
+  "dark": "paypal.dark.svg",
+  "light": "paypal.svg",
+  "source": "simple-icons"
+ },
+ "phoenix": {
+  "dark": "phoenix.svg",
+  "light": "phoenix.svg",
+  "source": "devicon"
+ },
+ "php": {
+  "dark": "php.svg",
+  "light": "php.svg",
+  "source": "devicon"
+ },
+ "pinecone": {
+  "dark": "pinecone.dark.svg",
+  "fallback": true,
+  "light": "pinecone.svg",
+  "source": "lucide"
+ },
+ "planetscale": {
+  "dark": "planetscale.dark.svg",
+  "light": "planetscale.svg",
+  "source": "simple-icons"
+ },
+ "postgresql": {
+  "dark": "postgresql.svg",
+  "light": "postgresql.svg",
+  "source": "devicon"
+ },
+ "preact": {
+  "dark": "preact.svg",
+  "light": "preact.svg",
+  "source": "simple-icons"
+ },
+ "prometheus": {
+  "dark": "prometheus.svg",
+  "light": "prometheus.svg",
+  "source": "devicon"
+ },
+ "pulsar": {
+  "dark": "pulsar.svg",
+  "light": "pulsar.svg",
+  "source": "devicon"
+ },
+ "python": {
+  "dark": "python.svg",
+  "light": "python.svg",
+  "source": "devicon"
+ },
+ "qdrant": {
+  "dark": "qdrant.svg",
+  "light": "qdrant.svg",
+  "source": "simple-icons"
+ },
+ "quarkus": {
+  "dark": "quarkus.svg",
+  "light": "quarkus.svg",
+  "source": "devicon"
+ },
+ "qwik": {
+  "dark": "qwik.svg",
+  "light": "qwik.svg",
+  "source": "devicon"
+ },
+ "rabbitmq": {
+  "dark": "rabbitmq.svg",
+  "light": "rabbitmq.svg",
+  "source": "devicon"
+ },
+ "rails": {
+  "dark": "rails.svg",
+  "light": "rails.svg",
+  "source": "simple-icons"
+ },
+ "railway": {
+  "dark": "railway.svg",
+  "light": "railway.svg",
+  "source": "devicon",
+  "tile": {
+   "light": true
+  }
+ },
+ "react": {
+  "dark": "react.svg",
+  "light": "react.svg",
+  "source": "devicon"
+ },
+ "react-native": {
+  "dark": "react-native.svg",
+  "light": "react-native.svg",
+  "source": "devicon"
+ },
+ "redis": {
+  "dark": "redis.svg",
+  "light": "redis.svg",
+  "source": "devicon"
+ },
+ "redis-streams": {
+  "dark": "redis-streams.svg",
+  "light": "redis-streams.svg",
+  "source": "devicon"
+ },
+ "redpanda": {
+  "dark": "redpanda.dark.svg",
+  "fallback": true,
+  "light": "redpanda.svg",
+  "source": "lucide"
+ },
+ "region": {
+  "dark": "region.dark.svg",
+  "light": "region.svg",
+  "source": "lucide"
+ },
+ "remix": {
+  "dark": "remix.svg",
+  "light": "remix.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "render": {
+  "dark": "render.dark.svg",
+  "light": "render.svg",
+  "source": "simple-icons"
+ },
+ "resend": {
+  "dark": "resend.dark.svg",
+  "light": "resend.svg",
+  "source": "simple-icons"
+ },
+ "ruby": {
+  "dark": "ruby.svg",
+  "light": "ruby.svg",
+  "source": "devicon"
+ },
+ "rust": {
+  "dark": "rust.svg",
+  "light": "rust.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "saas": {
+  "dark": "saas.dark.svg",
+  "light": "saas.svg",
+  "source": "lucide"
+ },
+ "scala": {
+  "dark": "scala.svg",
+  "light": "scala.svg",
+  "source": "devicon"
+ },
+ "scheduled-job": {
+  "dark": "scheduled-job.dark.svg",
+  "light": "scheduled-job.svg",
+  "source": "lucide"
+ },
+ "scylladb": {
+  "dark": "scylladb.svg",
+  "light": "scylladb.svg",
+  "source": "simple-icons"
+ },
+ "sendgrid": {
+  "dark": "sendgrid.dark.svg",
+  "fallback": true,
+  "light": "sendgrid.svg",
+  "source": "lucide"
+ },
+ "sentry": {
+  "dark": "sentry.svg",
+  "light": "sentry.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "service": {
+  "dark": "service.dark.svg",
+  "light": "service.svg",
+  "source": "lucide"
+ },
+ "slack": {
+  "dark": "slack.svg",
+  "light": "slack.svg",
+  "source": "devicon"
+ },
+ "solid": {
+  "dark": "solid.svg",
+  "light": "solid.svg",
+  "source": "devicon"
+ },
+ "solr": {
+  "dark": "solr.svg",
+  "light": "solr.svg",
+  "source": "simple-icons"
+ },
+ "spring-boot": {
+  "dark": "spring-boot.svg",
+  "light": "spring-boot.svg",
+  "source": "simple-icons"
+ },
+ "sql-server": {
+  "dark": "sql-server.svg",
+  "light": "sql-server.svg",
+  "source": "devicon"
+ },
+ "sqlite": {
+  "dark": "sqlite.svg",
+  "light": "sqlite.svg",
+  "source": "devicon"
+ },
+ "static-site": {
+  "dark": "static-site.dark.svg",
+  "light": "static-site.svg",
+  "source": "lucide"
+ },
+ "stripe": {
+  "dark": "stripe.svg",
+  "light": "stripe.svg",
+  "source": "simple-icons"
+ },
+ "subnet": {
+  "dark": "subnet.dark.svg",
+  "light": "subnet.svg",
+  "source": "lucide"
+ },
+ "supabase": {
+  "dark": "supabase.svg",
+  "light": "supabase.svg",
+  "source": "devicon"
+ },
+ "supabase-auth": {
+  "dark": "supabase-auth.svg",
+  "light": "supabase-auth.svg",
+  "source": "devicon"
+ },
+ "svelte": {
+  "dark": "svelte.svg",
+  "light": "svelte.svg",
+  "source": "devicon"
+ },
+ "sveltekit": {
+  "dark": "sveltekit.svg",
+  "light": "sveltekit.svg",
+  "source": "devicon"
+ },
+ "swift": {
+  "dark": "swift.svg",
+  "light": "swift.svg",
+  "source": "devicon"
+ },
+ "swiftui": {
+  "dark": "swiftui.svg",
+  "light": "swiftui.svg",
+  "source": "devicon"
+ },
+ "symfony": {
+  "dark": "symfony.svg",
+  "light": "symfony.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "tanstack-start": {
+  "dark": "tanstack-start.dark.svg",
+  "light": "tanstack-start.svg",
+  "source": "simple-icons"
+ },
+ "tauri": {
+  "dark": "tauri.svg",
+  "light": "tauri.svg",
+  "source": "devicon"
+ },
+ "tempo": {
+  "dark": "tempo.svg",
+  "light": "tempo.svg",
+  "source": "devicon"
+ },
+ "text-embeddings-inference": {
+  "dark": "text-embeddings-inference.dark.svg",
+  "fallback": true,
+  "light": "text-embeddings-inference.svg",
+  "source": "lucide"
+ },
+ "tidb": {
+  "dark": "tidb.svg",
+  "light": "tidb.svg",
+  "source": "simple-icons"
+ },
+ "timescaledb": {
+  "dark": "timescaledb.svg",
+  "light": "timescaledb.svg",
+  "source": "simple-icons"
+ },
+ "traefik": {
+  "dark": "traefik.svg",
+  "light": "traefik.svg",
+  "source": "devicon"
+ },
+ "twilio": {
+  "dark": "twilio.svg",
+  "light": "twilio.svg",
+  "source": "devicon"
+ },
+ "typescript": {
+  "dark": "typescript.svg",
+  "light": "typescript.svg",
+  "source": "devicon"
+ },
+ "typesense": {
+  "dark": "typesense.dark.svg",
+  "fallback": true,
+  "light": "typesense.svg",
+  "source": "lucide"
+ },
+ "upstash": {
+  "dark": "upstash.svg",
+  "light": "upstash.svg",
+  "source": "simple-icons"
+ },
+ "valkey": {
+  "dark": "valkey.dark.svg",
+  "fallback": true,
+  "light": "valkey.svg",
+  "source": "lucide"
+ },
+ "vercel": {
+  "dark": "vercel.svg",
+  "light": "vercel.svg",
+  "source": "devicon",
+  "tile": {
+   "dark": true
+  }
+ },
+ "vllm": {
+  "dark": "vllm.svg",
+  "light": "vllm.svg",
+  "source": "simple-icons"
+ },
+ "vm": {
+  "dark": "vm.dark.svg",
+  "light": "vm.svg",
+  "source": "lucide"
+ },
+ "vpc": {
+  "dark": "vpc.dark.svg",
+  "light": "vpc.svg",
+  "source": "lucide"
+ },
+ "vps": {
+  "dark": "vps.dark.svg",
+  "light": "vps.svg",
+  "source": "lucide"
+ },
+ "vue": {
+  "dark": "vue.svg",
+  "light": "vue.svg",
+  "source": "devicon"
+ },
+ "weaviate": {
+  "dark": "weaviate.dark.svg",
+  "fallback": true,
+  "light": "weaviate.svg",
+  "source": "lucide"
+ },
+ "whatsapp-business": {
+  "dark": "whatsapp-business.svg",
+  "light": "whatsapp-business.svg",
+  "source": "simple-icons"
+ },
+ "worker": {
+  "dark": "worker.dark.svg",
+  "light": "worker.svg",
+  "source": "lucide"
+ },
+ "xendit": {
+  "dark": "xendit.svg",
+  "light": "xendit.svg",
+  "source": "simple-icons"
+ },
+ "zitadel": {
+  "dark": "zitadel.dark.svg",
+  "fallback": true,
+  "light": "zitadel.svg",
+  "source": "lucide"
+ }
+}

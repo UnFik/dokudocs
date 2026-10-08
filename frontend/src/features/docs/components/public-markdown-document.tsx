@@ -2,6 +2,10 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getPublicDocument } from '@/lib/domain-api'
 import { rememberOpenedPublicLink } from '@/lib/public-link-session'
+import {
+  ArchitecturePreview,
+  parseCanvas,
+} from '@/features/architecture/components/architecture-preview'
 import '../lib/prosemirror/blocks/blocks.css'
 import { drawDiagrams, renderMarkdown } from '../lib/render-markdown'
 import './markdown-body.css'
@@ -53,6 +57,12 @@ export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
       >
         {document.type === 'markdown' ? (
           <div dangerouslySetInnerHTML={{ __html: html }} />
+        ) : document.type === 'architecture' ? (
+          <ArchitecturePreview
+            canvas={parseCanvas(document.contentJSON)}
+            label={`Architecture diagram of ${document.title}`}
+            className='rounded-[6px] border border-border'
+          />
         ) : (
           <pre className='whitespace-pre-wrap'>{document.content}</pre>
         )}

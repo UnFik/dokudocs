@@ -48,15 +48,15 @@ func (r *Repository) RebuildRAGIndex(ctx context.Context, documentID uuid.UUID) 
 			return nil
 		}
 		var contentJSON []byte
-		var title, projectName string
+		var title, projectName, documentType string
 		var projectIDText sql.NullString
 		var bodyVersion int64
 		if err := tx.QueryRowContext(ctx, `
-			SELECT d.content_json, d.title, COALESCE(p.name, ''), d.body_version, d.project_id::text
+			SELECT d.content_json, d.title, COALESCE(p.name, ''), d.body_version, d.project_id::text, d.type::text
 			FROM documents d
 			LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
-			WHERE d.id = $1 AND d.type = 'markdown' AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
-		`, documentID).Scan(&contentJSON, &title, &projectName, &bodyVersion, &projectIDText); err != nil {
+			WHERE d.id = $1 AND d.type IN ('markdown', 'architecture') AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
+		`, documentID).Scan(&contentJSON, &title, &projectName, &bodyVersion, &projectIDText, &documentType); err != nil {
 			return err
 		}
 		var projectID *uuid.UUID
@@ -72,6 +72,9 @@ func (r *Repository) RebuildRAGIndex(ctx context.Context, documentID uuid.UUID) 
 			return err
 		}
 		chunks, skipped := renderRAGJSON(contentJSON)
+		if documentType == "architecture" {
+			chunks, skipped = renderArchitectureRAG(contentJSON), 0
+		}
 		for chunkCount, chunk := range chunks {
 			if _, err := tx.ExecContext(ctx, `
 			INSERT INTO rag_chunks (document_id, node_id, ordinal, body_version, source_fingerprint, text, title, project_name, breadcrumb)
@@ -114,7 +117,7 @@ func (r *Repository) RebuildStaleRAGIndexes(ctx context.Context, limit int) (int
 		FROM documents d
 		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 		LEFT JOIN rag_document_indexes ri ON ri.document_id = d.id
-		WHERE d.type = 'markdown' AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
+		WHERE d.type IN ('markdown', 'architecture') AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
 		  AND (
 			ri.document_id IS NULL
 			OR ri.indexed_body_version <> d.body_version

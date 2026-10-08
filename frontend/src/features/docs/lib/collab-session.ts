@@ -10,7 +10,8 @@ export type CollabStatus =
   | 'unauthorized'
   | 'forbidden'
 
-export type CollabAccess = { canEdit: boolean; canSuggest: boolean }
+/** canComment is absent from a service that predates it; then suggesting implies commenting. */
+export type CollabAccess = { canEdit: boolean; canSuggest: boolean; canComment?: boolean }
 
 /** A collaborator's selection. Only name and color are shared, never contact data. */
 export type RemoteCursor = {
@@ -73,6 +74,8 @@ export function openCollabSession(input: {
   onCommentsChanged?: () => void
   /** The server replaced the document (a restored revision): this device's copy is stale. */
   onReloaded?: () => void
+  /** The server refused an update and closes the connection; sending it again would loop. */
+  onRefused?: (reason: string) => void
 }) {
   const name = roomName(input.workspaceID, input.documentID)
   const ydoc = new Y.Doc()
@@ -125,9 +128,15 @@ export function openCollabSession(input: {
         input.onAccess?.({
           canEdit: Boolean(message.canEdit),
           canSuggest: Boolean(message.canSuggest),
+          canComment:
+            message.canComment === undefined
+              ? Boolean(message.canEdit || message.canSuggest)
+              : Boolean(message.canComment),
         })
       else if (message.type === 'comments_changed') input.onCommentsChanged?.()
       else if (message.type === 'reloaded') input.onReloaded?.()
+      else if (message.type === 'refused')
+        input.onRefused?.(String((message as { reason?: unknown }).reason ?? ''))
       else if (message.type === 'pong')
         pongs.get(String((message as { id?: unknown }).id))?.()
     },

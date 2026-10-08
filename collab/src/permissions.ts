@@ -3,6 +3,7 @@ import * as decoding from 'lib0/decoding'
 import * as Y from 'yjs'
 import { yDocToProsemirrorJSON } from 'y-prosemirror'
 import type { CollabContext } from './server'
+import type { Metrics } from './operations'
 import { validateSuggesterChange } from './suggestion-validator'
 import { architectureLimits, countElements } from './architecture'
 
@@ -24,11 +25,21 @@ export function updateOf(raw: Uint8Array): Uint8Array | null {
  * Someone who may only suggest still writes to the document; what they write is
  * checked here, before it is applied, so it can only be suggestions of their own.
  */
-export function permissions(fragmentName: string): Extension<CollabContext> {
+export function permissions(fragmentName: string, metrics?: Metrics): Extension<CollabContext> {
   return {
     extensionName: 'permissions',
-    async beforeHandleMessage({ update, document, context }) {
-      if (context.documentType === 'architecture') return checkArchitecture(update, document, context)
+    async beforeHandleMessage({ update, document, context, connection }) {
+      if (context.documentType === 'architecture') {
+        try {
+          return checkArchitecture(update, document, context)
+        } catch (error) {
+          // The connection closes; without the reason the editor would reconnect and send the update again.
+          const reason = (error as { reason?: string }).reason ?? 'refused'
+          metrics?.refuse(reason)
+          connection.sendStateless(JSON.stringify({ type: 'refused', reason }))
+          throw error
+        }
+      }
       if (context.access.canEdit) return
       const incoming = updateOf(update)
       if (!incoming) return

@@ -1,23 +1,17 @@
 name: dokudocs
 
-# Every ${VAR:-default} can be overridden from the shell or a root .env file.
-# Secrets (GOOGLE_*, OPENAI_API_KEY) default to empty; JWT_SECRET and COLLAB_SERVICE_SECRET are dev-only values.
-#
-#   docker compose up --build      # db, redis, migrate, api, collab, frontend
-#   open http://localhost:5173
-#
-# The browser only talks to the frontend (:5173): it proxies /api to the API and /collab to the collaboration service.
+# Production stack behind Cloudflare Tunnel: http://127.0.0.1:8088.
+# Copy .env.production.example to .env and fill in the required values.
+# Development: docker compose -f docker-compose.dev.yaml up --build -d
 
 services:
   db:
     image: pgvector/pgvector:pg16
-    container_name: dokudocs-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dokudocs}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    ports:
-      - "${POSTGRES_PORT:-15432}:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -28,9 +22,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: dokudocs-redis
-    ports:
-      - "${REDIS_PORT:-16379}:6379"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -40,38 +32,36 @@ services:
   migrate:
     build:
       context: ./backend
-    container_name: dokudocs-migrate
+      target: prod
     working_dir: /app
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-dokudocs}?sslmode=disable
-    volumes:
-      - ./backend:/app
-      - go_cache:/go/pkg/mod
-      - go_build_cache:/root/.cache/go-build
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-dokudocs}?sslmode=disable
     depends_on:
       db:
         condition: service_healthy
-    command: go run ./cmd/migrate up
+    command: migrate up
     restart: "no"
 
   api:
     build:
       context: ./backend
-    container_name: dokudocs-api
+      target: prod
+    restart: unless-stopped
+    stop_grace_period: 30s
     working_dir: /app
     environment:
-      APP_ADDR: ${APP_ADDR:-:8080}
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-dokudocs}?sslmode=disable
+      APP_ADDR: :8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-dokudocs}?sslmode=disable
       REDIS_URL: redis://redis:6379/0
-      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:5173}
-      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:5173}
+      ALLOWED_ORIGIN: ${PUBLIC_APP_URL:?Set PUBLIC_APP_URL in .env}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:?Set PUBLIC_APP_URL in .env}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-text-embedding-3-small}
       RAG_ANSWER_MODEL: ${RAG_ANSWER_MODEL:-gpt-5-mini}
       RAG_REQUEST_TIMEOUT: ${RAG_REQUEST_TIMEOUT:-120s}
-      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-24h}
       # Uploaded files live in their own volume, not in the bind-mounted source tree.
       ASSET_DIR: /var/lib/dokudocs/assets
@@ -79,15 +69,15 @@ services:
       WRITE_TIMEOUT: ${WRITE_TIMEOUT:-10s}
       IDLE_TIMEOUT: ${IDLE_TIMEOUT:-60s}
       SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10s}
-      COLLAB_SERVICE_SECRET: ${COLLAB_SERVICE_SECRET:-dev-collab-secret}
+      COLLAB_SERVICE_SECRET: ${COLLAB_SERVICE_SECRET:?Set COLLAB_SERVICE_SECRET in .env}
       COLLAB_SERVICE_URL: http://collab:1234
-    ports:
-      - "${API_PORT:-8080}:8080"
     volumes:
-      - ./backend:/app
       - assets:/var/lib/dokudocs/assets
-      - go_cache:/go/pkg/mod
-      - go_build_cache:/root/.cache/go-build
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     depends_on:
       db:
         condition: service_healthy
@@ -95,53 +85,44 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    command: go run ./cmd/server
 
   collab:
     build:
       context: .
       dockerfile: collab/Dockerfile
-    container_name: dokudocs-collab
+    stop_grace_period: 30s
     restart: unless-stopped
     environment:
       COLLAB_BACKEND_URL: http://api:8080
-      COLLAB_SERVICE_SECRET: ${COLLAB_SERVICE_SECRET:-dev-collab-secret}
+      COLLAB_SERVICE_SECRET: ${COLLAB_SERVICE_SECRET:?Set COLLAB_SERVICE_SECRET in .env}
       COLLAB_PORT: "1234"
       REDIS_URL: redis://redis:6379/1
-    ports:
-      - "${COLLAB_PORT:-1234}:1234"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:1234/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     depends_on:
       redis:
         condition: service_healthy
       api:
-        condition: service_started
+        condition: service_healthy
 
   frontend:
     build:
       context: ./frontend
-      target: dev
-    container_name: dokudocs-frontend
+      target: prod
     restart: unless-stopped
-    working_dir: /app
-    environment:
-      API_PROXY_TARGET: ${API_PROXY_TARGET:-http://api:8080}
-      COLLAB_PROXY_TARGET: ${COLLAB_PROXY_TARGET:-http://collab:1234}
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "127.0.0.1:${FRONTEND_PORT:-8088}:80"
     depends_on:
-      - api
-      - collab
-    command: bun run dev --host
+      api:
+        condition: service_healthy
+      collab:
+        condition: service_healthy
 
 # Reuse the volumes created by backend/docker-compose.yaml so existing dev data carries over.
 volumes:
   assets:
   postgres_data:
     name: backend_postgres_data
-  go_cache:
-    name: backend_go_cache
-  go_build_cache:
-    name: backend_go_build_cache

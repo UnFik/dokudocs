@@ -11,6 +11,7 @@ const LABELS: Record<DocType, string> = {
   markdown: 'Markdown',
   dbdiagram: 'DBML',
   mermaid: 'Mermaid',
+  architecture: 'Architecture',
 }
 
 // Document type is named by label, never by hue (DESIGN.md: tags).

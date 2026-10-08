@@ -10,6 +10,7 @@ import {
   Database,
   FileText,
   GitBranch,
+  Network,
   Plus,
   Tag,
   X,
@@ -55,7 +56,7 @@ import { markdownToDocumentJSON } from '../lib/markdown-to-document-json'
 
 const createDocSchema = z.object({
   title: z.string().min(1, 'Please enter a document title'),
-  type: z.enum(['markdown', 'dbdiagram', 'mermaid']),
+  type: z.enum(['markdown', 'dbdiagram', 'mermaid', 'architecture']),
   projectId: z.string(),
   categories: z.array(z.string()),
 })
@@ -233,6 +234,15 @@ function CreateDocDialogForm({
       return
     }
 
+    if (values.type === 'architecture') {
+      // The API starts an empty canvas; its text is derived from the canvas.
+      createMutation.mutate({
+        requestID,
+        input: { ...common, type: 'architecture' },
+      })
+      return
+    }
+
     createMutation.mutate({
       requestID,
       input: { ...common, type: values.type, content },
@@ -254,9 +264,15 @@ function CreateDocDialogForm({
     },
     {
       value: 'mermaid',
-      label: 'Architecture / Flow',
-      description: 'Sequence diagrams & system graphs',
+      label: 'Mermaid diagram',
+      description: 'Flowcharts & sequence diagrams as text',
       icon: GitBranch,
+    },
+    {
+      value: 'architecture',
+      label: 'Architecture',
+      description: 'Hosts, systems and how they connect, edited together',
+      icon: Network,
     },
   ]
 

@@ -1,6 +1,6 @@
 # Plan: Architecture documents
 
-Status: agreed in a design session on 2026-10-07; nothing is built. Terms follow `GLOSSARY.md` (section Architecture). The storage decision is [ADR 0031](../adr/0031-architecture-canvas-is-yjs-state.md).
+Status: agreed in a design session on 2026-10-07; built on 2026-10-08, all phases in one pull request (branch `feat/architecture-docs-collaborator`, epic #110). Terms follow `GLOSSARY.md` (section Architecture). The storage decision is [ADR 0031](../adr/0031-architecture-canvas-is-yjs-state.md).
 
 ## Why
 
@@ -44,7 +44,7 @@ Deleting a Host deletes everything inside it and their Connections, after a conf
 
 **Fit to contents.** When a Host or Group is selected, the properties panel offers "Fit to contents". It sets the container to the smallest box that holds every element directly inside it, with the same padding as auto-grow (room for the label on top). It may shrink or grow the container and moves its top-left corner if needed; the elements inside do not move. Parents then grow if they have to, as with any drop. Nested Hosts keep their own size. The action is disabled with a short reason when the container is empty or already fits, and it is one undo step.
 
-**Manual resize.** A selected Host or Group shows resize handles on its four corners and four edges (React Flow's `NodeResizer`). It cannot be made smaller than the box its contents need, so a resize never cuts through an element inside it; an empty one stops at 160 × 90. Resizing does not move or reparent the elements inside, and parents grow if the container outgrows them. With the keyboard, a focused handle moves 8 px per arrow press, 32 px with Shift. The new size is shown in the properties panel while dragging, and one resize is one undo step.
+**Manual resize.** A selected Host or Group shows resize handles on its four corners and four edges (React Flow's `NodeResizer`). It cannot be made smaller than the box its contents need, so a resize never cuts through an element inside it; an empty one stops at 160 × 90. Resizing does not move or reparent the elements inside, and parents grow if the container outgrows them. Without a pointer, the properties panel has width and height fields (steps of 8 px, never below what the contents need), which also show the size as it changes. One resize is one undo step.
 
 Environment and version are not properties: Prod and Staging are separate Architecture documents.
 
@@ -186,7 +186,7 @@ Rules:
 1. **Canvas.** `architecture` in `document_type`; catalog table, seed, endpoint, icons; catalog requests stored; `collab/` loads and stores architecture rooms (state ↔ `content_json`); canvas with palette, containers (slot, take out, resize, fit), connections, properties, delete, collapsible panels, undo, presence; element limits with warnings; revisions and restore; JSON export. Split into five pull requests in [the phase 1 spec](../specs/architecture-document-phase-1.md#9-delivery-order).
 2. **Document links.** Links in the panel, create-and-link, `architecture_document_links` projection, locked cards, "Used in" section on document pages with jump-to-node.
 3. **Versions and reach.** Architecture versions (tag, pins, open read-only, restore canvas, label edit, owner delete); visual diff between two versions (added, removed and changed elements coloured); text summary for search and RAG; PNG and SVG export; public link view; admin list of catalog requests with notifications.
-4. **Later.** CommentThreads anchored to a node or Connection (needs an anchor type besides text ranges).
+4. **Comments on elements.** A CommentThread anchors to a node or Connection by its id (`{"kind":"element","elementId":…}`); the comment endpoints take any anchor object, so no schema changed. Commenters, who cannot change a canvas, can discuss it. Nodes show their open threads; threads of removed elements stay readable in the panel when nothing is selected.
 
 ## Out of scope
 

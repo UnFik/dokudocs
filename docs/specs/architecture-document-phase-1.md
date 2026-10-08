@@ -1,6 +1,6 @@
 # Architecture documents: phase 1 technical specification
 
-Status: ready for implementation, 2026-10-07. Product behaviour is in [the plan](../plans/architecture-document.md) and [the catalog](../plans/architecture-catalog.md); storage is [ADR 0031](../adr/0031-architecture-canvas-is-yjs-state.md). This document says what phase 1 builds, where, and how it is tested. Terms follow `GLOSSARY.md`.
+Status: implemented 2026-10-08, together with phases 2 and 3 and comments on elements, in one pull request instead of the five slices of §9 (owner's choice). §11 lists where the build differs from this text. Product behaviour is in [the plan](../plans/architecture-document.md) and [the catalog](../plans/architecture-catalog.md); storage is [ADR 0031](../adr/0031-architecture-canvas-is-yjs-state.md). This document says what phase 1 builds, where, and how it is tested. Terms follow `GLOSSARY.md`.
 
 ## 1. Scope
 
@@ -175,7 +175,7 @@ New feature folder `frontend/src/features/architecture/`. Dependency: `@xyflow/r
 - First entry into a container (from the palette or from the top level): placeholder in the nearest free cell (`slotFor`), container grows while it shows; drop places the element there and sets `parentId`. A Host or Group entering goes in the band below the contents (`bandFor`).
 - Inside a container: React Flow `extent: 'parent'` is not used (it would stop at the right and bottom too). Instead the drag is clamped at left padding and label band, and the container (and its parents) grows on the right and bottom (`growToFit`). Dropping over another container changes nothing.
 - "Take out": moves the element one level up, into the parent's next free cell or band, or at the top level to the first free spot right of the old container with no overlap. One undo step. Keyboard reachable.
-- Resize: never below the contents' box; empty stops at 160 × 90; parents grow. Arrow keys 8 px, Shift 32 px on a focused handle.
+- Resize: never below the contents' box; empty stops at 160 × 90; parents grow. Keyboard: width and height fields in the properties panel (step 8 px), since React Flow's resize handles take no keys.
 - "Fit to contents": tight box around direct children; disabled with a reason when empty or already tight.
 - The geometry functions (`slotFor`, `bandFor`, `growToFit`, `tightBox`, `freeSpotBeside`) are pure and live in `features/architecture/lib/layout.ts`, ported from the mock.
 
@@ -239,3 +239,16 @@ Each slice is a pull request that leaves `main` working.
 - Legal clearance of AWS and Azure icons (until then: Lucide `cloud`).
 - Who reviews catalog requests and how they are notified (needed before the admin list, not for phase 1).
 - Shared type module location between `collab/` and `frontend/` (a file under `frontend/src/features/architecture/lib/` imported by `collab/`, as `schema.ts` does today, is the default).
+
+## 11. As built
+
+- **Catalog**: 274 Hosts and Systems and 30 protocols (304 entries). The first count of "35 protocols" counted the five rows of the line-style table; the seed script skips them. Nine Google Cloud services were added (Spanner, BigQuery, Bigtable, Load Balancing, CDN, API Gateway, Identity Platform, Cloud Tasks, Cloud Scheduler).
+- **Migrations**: `20261008000001` document type, `…02` catalog and requests, `…03` seed (generated), `…04` `architecture_document_links`, `…05` versions and pins, `…06` notifications.
+- **API added beyond §4**: `GET /documents/{id}/architecture-uses`; `GET|POST /documents/{id}/architecture-versions`, `PATCH|DELETE …/{versionID}` (delete by an owner); `GET /catalog/requests` and `PATCH /catalog/requests/{id}` for platform admins (`superadmin`, `admin` role), `GET /catalog/requests/mine`; `GET /notifications`, `POST /notifications/read`. A public link to a canvas carries its `contentJSON`.
+- **Search and RAG** index a canvas one element at a time (`renderArchitectureRAG`), keyed by the element id.
+- **collab/**: the `access` message also carries `canComment`. The canvas model lives in `frontend/src/features/architecture/lib/canvas-model.ts`, imported by `collab/` with Yjs pinned to one copy (vitest alias, `tsconfig.run.json`, Dockerfile copies the file).
+- **Icons**: `scripts/catalog-icons/build.py` (Python) writes 294 files: 120 Devicon, 48 Simple Icons, 19 Google Cloud, Lucide for generic entries, AWS and Azure (terms not cleared) and logos not sourced yet, plus 20 subkind fallbacks. The faint test uses 50%.
+- **Resize by keyboard**: width and height fields in the properties panel, not arrow keys on a handle.
+- **Export**: PNG and SVG in the theme on screen.
+- **Comments on elements**: threads anchored `{"kind":"element","elementId":…}`; no schema change.
+- **Tests**: collab 80; Go handler, usecase and PostgreSQL integration tests for every new query; frontend unit (layout, canvas changes, actions, catalog, icons, diff) and browser tests (palette, requests, comments, Used in, public view, create dialog); two live Playwright smoke specs (`architecture-canvas`, `architecture-links-versions`).
