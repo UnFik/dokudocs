@@ -23,7 +23,7 @@ ps:
 
 # Admin user and mock documents, inside the running api container.
 seed-docker:
-	$(DOCKER_COMPOSE) exec api go run ./cmd/seeder
+	$(DOCKER_COMPOSE) exec api seeder
 
 # Stops the stack and deletes its database volume.
 reset:

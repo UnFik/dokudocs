@@ -30,6 +30,7 @@ services:
   api:
     build:
       context: .
+      target: dev
     container_name: dokudocs-api
     working_dir: /app
     env_file:
