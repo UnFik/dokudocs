@@ -21,7 +21,7 @@ export function TrashEmptyState() {
         size='sm'
         className='mt-6 gap-1.5 text-xs'
       >
-        <Link to='/'>
+        <Link to='/dashboard'>
           <ArrowLeft className='size-3.5' />
           <span>Back to Recents</span>
         </Link>

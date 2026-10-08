@@ -73,7 +73,7 @@ export function useRegisterMutation(options?: UseRegisterOptions) {
       toast.success(
         `Account created successfully! Welcome, ${data.user.email}!`
       )
-      navigate({ to: '/', replace: true })
+      navigate({ to: '/dashboard', replace: true })
       options?.onSuccess?.(data)
     },
     onError: (error: unknown) => {
