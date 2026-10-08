@@ -17,11 +17,11 @@ func TestCreateRequestHashTracksPayloadAndNormalizesEmptyCategories(t *testing.T
 		AuthorID:    uuid.New(),
 		Tags:        []string{},
 	}
-	withoutCategories, err := createRequestHash(doc, nil, nil, 1)
+	withoutCategories, err := createRequestHash(doc, nil)
 	if err != nil {
 		t.Fatalf("createRequestHash(nil categories): %v", err)
 	}
-	withEmptyCategories, err := createRequestHash(doc, []string{}, nil, 1)
+	withEmptyCategories, err := createRequestHash(doc, []string{})
 	if err != nil {
 		t.Fatalf("createRequestHash(empty categories): %v", err)
 	}
@@ -30,7 +30,7 @@ func TestCreateRequestHashTracksPayloadAndNormalizesEmptyCategories(t *testing.T
 	}
 
 	doc.Content = "# Changed"
-	changedPayload, err := createRequestHash(doc, nil, nil, 1)
+	changedPayload, err := createRequestHash(doc, nil)
 	if err != nil {
 		t.Fatalf("createRequestHash(changed payload): %v", err)
 	}

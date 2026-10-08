@@ -11,40 +11,22 @@ import (
 	"strings"
 
 	"backend/constant"
-	"backend/internal/application/collaboration"
-	contractrepo "backend/internal/domain/contract/repository"
-	"backend/internal/domain/documentbody"
 	"backend/internal/domain/model"
 	"backend/internal/domain/policy"
-	"backend/internal/infrastructure/collaboration/yjs"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
 )
 
 func (r *Repository) Create(ctx context.Context, doc model.Document, categoryNames []string) (model.Document, error) {
-	return r.create(ctx, doc, categoryNames, uuid.Nil, nil, 0)
+	return r.create(ctx, doc, categoryNames, uuid.Nil)
 }
 
 func (r *Repository) CreateIdempotent(ctx context.Context, doc model.Document, categoryNames []string, requestID uuid.UUID) (model.Document, error) {
 	if requestID == uuid.Nil {
 		return model.Document{}, constant.ErrInvalidIdempotencyKey
 	}
-	return r.create(ctx, doc, categoryNames, requestID, nil, 0)
-}
-
-func (r *Repository) CreateMarkdownIdempotent(ctx context.Context, input contractrepo.MarkdownDocumentCreate) (model.Document, error) {
-	if input.RequestID == uuid.Nil {
-		return model.Document{}, constant.ErrInvalidIdempotencyKey
-	}
-	if input.Document.ID == uuid.Nil || input.Document.Type != "markdown" || input.Document.Content != "" ||
-		input.Body.DocumentID != input.Document.ID {
-		return model.Document{}, collaboration.ErrInvalidBodyInitialization
-	}
-	if input.BodySchemaVersion != yjs.BodySchemaVersionV1 {
-		return model.Document{}, collaboration.ErrBodySchemaMismatch
-	}
-	return r.create(ctx, input.Document, input.Categories, input.RequestID, &input.Body, input.BodySchemaVersion)
+	return r.create(ctx, doc, categoryNames, requestID)
 }
 
 func (r *Repository) create(
@@ -52,8 +34,6 @@ func (r *Repository) create(
 	doc model.Document,
 	categoryNames []string,
 	requestID uuid.UUID,
-	initialBody *documentbody.Body,
-	bodySchemaVersion int,
 ) (model.Document, error) {
 	if doc.ID == uuid.Nil {
 		doc.ID = uuid.New()
@@ -64,29 +44,13 @@ func (r *Repository) create(
 	if doc.Tags == nil {
 		doc.Tags = make([]string, 0)
 	}
-	var encodedBody []byte
-	if initialBody != nil {
-		if doc.Type != "markdown" || doc.Content != "" || initialBody.DocumentID != doc.ID {
-			return model.Document{}, collaboration.ErrInvalidBodyInitialization
-		}
-		if bodySchemaVersion != yjs.BodySchemaVersionV1 {
-			return model.Document{}, collaboration.ErrBodySchemaMismatch
-		}
-		normalized := documentbody.NormalizeSiblingOrder(*initialBody)
-		initialBody = &normalized
-		var err error
-		encodedBody, err = yjs.EncodeBodyV1(*initialBody)
-		if err != nil {
-			return model.Document{}, collaboration.ErrInvalidBodyInitialization
-		}
-	}
 	var requestHash [sha256.Size]byte
 	var requestKind any
 	var storedRequestID any
 	var storedRequestHash any
 	if requestID != uuid.Nil {
 		var err error
-		requestHash, err = createRequestHash(doc, categoryNames, initialBody, bodySchemaVersion)
+		requestHash, err = createRequestHash(doc, categoryNames)
 		if err != nil {
 			return model.Document{}, err
 		}
@@ -156,9 +120,9 @@ func (r *Repository) create(
 		const insertQuery = `
 			INSERT INTO documents (
 				id, workspace_id, project_id, title, type, content, author_id, tags, is_draft, visibility,
-				creation_request_kind, creation_request_id, creation_request_hash
+				creation_request_kind, creation_request_id, creation_request_hash, content_json
 			) VALUES (
-				$1, $2, $3, $4, $5::document_type, $6, $7, $8, $9, $10::document_visibility, $11, $12, $13
+				$1, $2, $3, $4, $5::document_type, $6, $7, $8, $9, $10::document_visibility, $11, $12, $13, $14
 			)
 			ON CONFLICT (author_id, creation_request_kind, creation_request_id)
 			WHERE creation_request_id IS NOT NULL DO NOTHING
@@ -168,7 +132,7 @@ func (r *Repository) create(
 		err := tx.QueryRowContext(
 			ctx, insertQuery,
 			doc.ID, doc.WorkspaceID, doc.ProjectID, doc.Title, doc.Type, doc.Content,
-			doc.AuthorID, tagsSQL, doc.IsDraft, doc.Visibility, requestKind, storedRequestID, storedRequestHash,
+			doc.AuthorID, tagsSQL, doc.IsDraft, doc.Visibility, requestKind, storedRequestID, storedRequestHash, nullableJSON(doc.ContentJSON),
 		).Scan(&insertedID, &doc.CreatedAt, &doc.UpdatedAt)
 		if errors.Is(err, sql.ErrNoRows) && requestID != uuid.Nil {
 			var existingHash []byte
@@ -191,6 +155,11 @@ func (r *Repository) create(
 			return err
 		}
 		doc.ID = insertedID
+		if doc.Type == "architecture" {
+			if err := projectArchitectureLinks(ctx, tx, doc.WorkspaceID, doc.ID, doc.ContentJSON); err != nil {
+				return err
+			}
+		}
 
 		if doc.ProjectID != nil {
 			for _, catName := range categoryNames {
@@ -218,33 +187,7 @@ func (r *Repository) create(
 		if err != nil {
 			return err
 		}
-		if initialBody == nil {
-			return nil
-		}
-		if err := insertDocumentNodes(ctx, tx, *initialBody); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO document_collab_states (document_id, encoded_state, schema_version)
-			VALUES ($1, $2, $3)
-		`, doc.ID, encodedBody, bodySchemaVersion); err != nil {
-			return err
-		}
-		result, err := tx.ExecContext(ctx, `
-			UPDATE documents SET root_node_id = $2
-			WHERE id = $1 AND root_node_id IS NULL
-		`, doc.ID, initialBody.RootNodeID)
-		if err != nil {
-			return err
-		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if rows != 1 {
-			return constant.ErrDocumentConflict
-		}
-		return storeAutoRevision(ctx, tx, doc.ID, doc.AuthorID, *initialBody, 1, bodySchemaVersion, 0)
+		return nil
 	})
 	if err != nil {
 		return doc, err
@@ -253,39 +196,45 @@ func (r *Repository) create(
 	return r.GetByID(ctx, doc.ID, doc.AuthorID)
 }
 
-func createRequestHash(doc model.Document, categoryNames []string, initialBody *documentbody.Body, bodySchemaVersion int) ([sha256.Size]byte, error) {
+func createRequestHash(doc model.Document, categoryNames []string) ([sha256.Size]byte, error) {
 	if categoryNames == nil {
 		categoryNames = []string{}
 	}
 	payload, err := json.Marshal(struct {
-		WorkspaceID       uuid.UUID
-		ProjectID         *uuid.UUID
-		Title             string
-		Type              string
-		Content           string
-		AuthorID          uuid.UUID
-		Tags              []string
-		IsDraft           bool
-		Visibility        string
-		Categories        []string
-		InitialBody       *documentbody.Body `json:",omitempty"`
-		BodySchemaVersion int                `json:",omitempty"`
+		WorkspaceID uuid.UUID
+		ProjectID   *uuid.UUID
+		Title       string
+		Type        string
+		Content     string
+		AuthorID    uuid.UUID
+		Tags        []string
+		IsDraft     bool
+		Visibility  string
+		Categories  []string
+		ContentJSON json.RawMessage `json:",omitempty"`
 	}{
-		WorkspaceID:       doc.WorkspaceID,
-		ProjectID:         doc.ProjectID,
-		Title:             doc.Title,
-		Type:              doc.Type,
-		Content:           doc.Content,
-		AuthorID:          doc.AuthorID,
-		Tags:              doc.Tags,
-		IsDraft:           doc.IsDraft,
-		Visibility:        doc.Visibility,
-		Categories:        categoryNames,
-		InitialBody:       initialBody,
-		BodySchemaVersion: bodySchemaVersion,
+		WorkspaceID: doc.WorkspaceID,
+		ProjectID:   doc.ProjectID,
+		Title:       doc.Title,
+		Type:        doc.Type,
+		Content:     doc.Content,
+		AuthorID:    doc.AuthorID,
+		Tags:        doc.Tags,
+		IsDraft:     doc.IsDraft,
+		Visibility:  doc.Visibility,
+		Categories:  categoryNames,
+		ContentJSON: doc.ContentJSON,
 	})
 	if err != nil {
 		return [sha256.Size]byte{}, err
 	}
 	return sha256.Sum256(payload), nil
+}
+
+// nullableJSON is nil for no JSON, so the column stays NULL.
+func nullableJSON(value json.RawMessage) any {
+	if len(value) == 0 {
+		return nil
+	}
+	return string(value)
 }

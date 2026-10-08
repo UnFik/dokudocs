@@ -1,0 +1,18 @@
+---
+
+> Superseded by [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md): the AST, epochs and structural commands no longer exist.
+status: accepted
+---
+
+# A structural command in place keeps older updates mergeable
+
+DeleteNode and MoveNode edit the stored Yjs state in place, so its history continues, yet each still starts a new BodyEpoch, and the server rejects an update from the old epoch as `stale_epoch`. A collaborator who types before the room's next check then loses their unsent suggestions to the canonical rebase. We keep the epoch bump (restore and other rebuilds need it) and add a CompatibleEpoch: the server stores the oldest epoch whose history still continues, accepts an update from someone who can suggest but not edit whose epoch lies between it and the current one, and sends `compatEpoch` with `ready` and `resync` so the client can adopt the new epoch, merge the state, and resend what is pending, without a rebase. Restore moves the CompatibleEpoch up to the new epoch, so older updates still go to review.
+
+Considered: letting the client compare state vectors and adopt the new epoch when the history dominates its own. Rejected because the server already knows whether it rebuilt the state, and a client guess that is wrong merges two unrelated histories into duplicated text.
+
+Editors are left out on purpose. An editor's update can aim at text in a block the structural command deleted, or be an edit made offline, and a merge would make it vanish without a word; for them a stale epoch still sends the edit to review. A suggestion that lands in a deleted block costs less, and a commenter has no review path to fall back on.
+
+Consequence: one more column and one more frame field, and every writer of `body_epoch` must say whether it rebuilt the state.
+
+Follow-up (issue #99): because the history continues, the client that ran a DeleteNode merges the server's state into its live document instead of rebuilding the editor. The caret, scroll and focus stay, and nothing flashes. The undo history from before the command is dropped, as the rebuild used to do, since undoing an edit to a block the command removed would delete nodes outside any command. A frame for the new epoch that reaches the room while the command is in flight is left to the command's own result, and the client catches up once afterwards. MoveNode still rebuilds.
+

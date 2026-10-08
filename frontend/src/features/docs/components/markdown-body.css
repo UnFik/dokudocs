@@ -84,11 +84,19 @@
   border-left: 0.25em solid var(--border);
 }
 
+/* The rule stays one pixel; the box around it is tall enough to click, so a
+   separator can be selected and deleted. */
 .markdown-body hr {
-  height: 1px;
-  margin: 1.5rem 0;
+  height: 1.25rem;
+  margin: 0.9rem 0;
   border: 0;
-  background-color: var(--border);
+  background: linear-gradient(var(--border), var(--border)) center / 100% 1px
+    no-repeat;
+}
+
+.markdown-body hr.ProseMirror-selectednode {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
 }
 
 .markdown-body code {
@@ -160,6 +168,17 @@
   pointer-events: none;
 }
 
+/* A 2px line needs 3:1 against the page. On the dark surface the saturated
+   collaborator colors fall to about 2.7 to 3.1, so the line (not the label,
+   which keeps its own text contrast) is lightened toward white. */
+.dark .markdown-body .remote-cursor {
+  border-left-color: color-mix(
+    in srgb,
+    var(--cursor-color, var(--signal)) 70%,
+    white
+  );
+}
+
 .markdown-body .remote-cursor::after {
   content: attr(data-name);
   position: absolute;
@@ -174,4 +193,191 @@
   line-height: 16px;
   white-space: nowrap;
   user-select: none;
+}
+
+/* Suggestions (ADR 0027). The author's color (--suggest-color, set per author)
+   marks the line and the tint, never the text color, so the text keeps its
+   contrast. Inserted text is underlined, deleted text is struck through, a
+   proposed format change is dashed under. A whole block is tinted and outlined,
+   not given a colored stripe. */
+.markdown-body .suggest-ins,
+.markdown-body .suggest-del,
+.markdown-body .suggest-fmt {
+  --suggest-color: var(--signal);
+  text-decoration-color: var(--suggest-color);
+  text-decoration-thickness: 2px;
+  background-color: color-mix(in srgb, var(--suggest-color) 12%, transparent);
+}
+
+.markdown-body .suggest-ins {
+  text-decoration-line: underline;
+  text-underline-offset: 3px;
+}
+
+.markdown-body .suggest-del {
+  text-decoration-line: line-through;
+}
+
+.markdown-body .suggest-fmt {
+  border-bottom: 1px dashed var(--suggest-color);
+}
+
+.markdown-body .suggestion-focus {
+  background-color: color-mix(
+    in srgb,
+    var(--suggest-color, var(--signal)) 24%,
+    transparent
+  );
+  outline: 1px solid var(--suggest-color, var(--signal));
+  outline-offset: 2px;
+}
+
+.markdown-body .suggest-block-ins,
+.markdown-body .suggest-block-del {
+  --suggest-color: var(--signal);
+  background-color: color-mix(in srgb, var(--suggest-color) 10%, transparent);
+  outline: 1px dashed var(--suggest-color);
+  outline-offset: 2px;
+}
+
+.markdown-body .suggest-block-del {
+  text-decoration: line-through;
+  text-decoration-color: var(--suggest-color);
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-del,
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-del,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-ins,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-block-ins {
+  display: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-ins,
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-ins,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-del,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-block-del {
+  background: none;
+  outline: none;
+  text-decoration: none;
+}
+
+/* A format suggestion keeps the text as it is; the previews show the result. */
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-fmt {
+  background: none;
+  border-bottom: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-bold {
+  font-weight: 700;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-no-bold {
+  font-weight: 400;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-italic {
+  font-style: italic;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-no-italic {
+  font-style: normal;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-strike {
+  text-decoration: line-through;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-no-strike {
+  text-decoration: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-code {
+  font-family: var(--font-mono, monospace);
+}
+
+/* Text under a comment thread. `--warn` marks it: a status marker, so it is
+   allowed outside the neutral palette, and it reads clearly on both themes while
+   the text stays well above 4.5:1. Author colors mean a suggestion. A comment
+   changes nothing in the text. */
+.markdown-body .comment-mark {
+  background-color: color-mix(in srgb, var(--warn) 20%, transparent);
+  border-bottom: 2px solid var(--warn);
+  cursor: pointer;
+}
+
+.markdown-body .comment-focus {
+  background-color: color-mix(in srgb, var(--warn) 38%, transparent);
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .comment-mark,
+.markdown-body[data-suggestion-preview='rejected'] .comment-mark {
+  background: none;
+  border-bottom: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-href {
+  color: var(--signal);
+  text-decoration: underline;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-fmt-no-href {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* A block-type suggestion: the block keeps its type, a small label names the
+   proposed one, and Preview accepted shows the block as that type. */
+.markdown-body .suggest-block-fmt {
+  background-color: color-mix(in srgb, var(--suggest-color) 10%, transparent);
+  outline: 1px dashed var(--suggest-color);
+  outline-offset: 2px;
+}
+
+.markdown-body .suggest-block-fmt::before {
+  content: attr(data-suggest-label);
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-fmt,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-block-fmt {
+  background: none;
+  outline: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-fmt::before,
+.markdown-body[data-suggestion-preview='rejected'] .suggest-block-fmt::before {
+  content: none;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-p {
+  font-size: 1em;
+  font-weight: 400;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h1 {
+  font-size: 2em;
+  font-weight: 700;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h2 {
+  font-size: 1.5em;
+  font-weight: 700;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h3 {
+  font-size: 1.25em;
+  font-weight: 700;
+}
+
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h4,
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h5,
+.markdown-body[data-suggestion-preview='accepted'] .suggest-block-to-h6 {
+  font-size: 1.05em;
+  font-weight: 700;
 }

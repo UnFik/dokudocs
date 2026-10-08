@@ -38,6 +38,8 @@ services:
       APP_ADDR: :8080
       DATABASE_URL: postgres://postgres:postgres@db:5432/dokudocs?sslmode=disable
       REDIS_URL: redis://redis:6379/0
+      COLLAB_SERVICE_SECRET: ${COLLAB_SERVICE_SECRET:-dev-collab-secret}
+      COLLAB_SERVICE_URL: http://collab:1234
     ports:
       - "8080:8080"
     volumes:
@@ -50,6 +52,21 @@ services:
       redis:
         condition: service_healthy
     command: go run ./cmd/server
+
+  collab:
+    build:
+      context: ..
+      dockerfile: collab/Dockerfile
+    container_name: dokudocs-collab
+    environment:
+      COLLAB_BACKEND_URL: http://api:8080
+      COLLAB_SERVICE_SECRET: ${COLLAB_SERVICE_SECRET:-dev-collab-secret}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "${COLLAB_PORT:-1234}:1234"
+    depends_on:
+      - api
+      - redis
 
 volumes:
   postgres_data:

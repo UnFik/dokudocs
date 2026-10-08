@@ -26,6 +26,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { documentBodyToMarkdown } from '../lib/muya/state/documentBodyToMarkdown'
+import { changesBetween } from '../lib/revision-changes'
+import { RevisionChanges } from './revision-changes'
 
 interface VersionHistorySidebarProps {
   docId: string
@@ -40,6 +42,18 @@ interface VersionHistorySidebarProps {
   isRestoring?: boolean
   onCreateSnapshot?: (title: string) => Promise<DocumentRevision>
   onRestoreRevision?: (revision: DocumentRevision) => void
+  /** Draws the selected revision instead of its text, for documents that are not Markdown. */
+  renderPreview?: (revision: DocumentRevision) => React.ReactNode
+}
+
+function revisionMarkdown(revision: DocumentRevision | null | undefined) {
+  if (!revision) return ''
+  if (!revision.astSnapshot) return revision.content
+  try {
+    return documentBodyToMarkdown(revision.astSnapshot.nodes)
+  } catch {
+    return 'This revision cannot be previewed with the current Markdown renderer.'
+  }
 }
 
 function formatRevisionTime(dateStr: string) {
@@ -65,6 +79,7 @@ export function VersionHistorySidebar({
   isRestoring = false,
   onCreateSnapshot,
   onRestoreRevision,
+  renderPreview,
 }: VersionHistorySidebarProps) {
   const revisionsMap = useDokudocsStore((s) => s.revisions)
   const restoreRevision = useDokudocsStore((s) => s.restoreRevision)
@@ -106,15 +121,19 @@ export function VersionHistorySidebar({
     }
     return displayedRevisions[0]
   }, [displayedRevisions, selectedRevisionId])
-  const selectedRevisionContent = useMemo(() => {
-    if (!selectedRevision) return ''
-    if (!selectedRevision.astSnapshot) return selectedRevision.content
-    try {
-      return documentBodyToMarkdown(selectedRevision.astSnapshot.nodes)
-    } catch {
-      return 'This revision cannot be previewed with the current Markdown renderer.'
-    }
-  }, [selectedRevision])
+  const selectedRevisionContent = useMemo(
+    () => revisionMarkdown(selectedRevision),
+    [selectedRevision]
+  )
+  // The list is newest first, so the version before is the next one down.
+  const changes = useMemo(() => {
+    if (!selectedRevision) return []
+    const index = docRevisions.findIndex((r) => r.id === selectedRevision.id)
+    return changesBetween(
+      revisionMarkdown(docRevisions[index + 1] ?? null),
+      selectedRevisionContent
+    )
+  }, [docRevisions, selectedRevision, selectedRevisionContent])
 
   if (!isOpen) return null
 
@@ -465,10 +484,17 @@ export function VersionHistorySidebar({
                 {selectedRevisionContent.length} chars
               </span>
             </div>
-            <pre className='max-h-36 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[10px] whitespace-pre-wrap text-muted-foreground select-all'>
-              {selectedRevisionContent.slice(0, 500)}
-              {selectedRevisionContent.length > 500 && '\n...'}
-            </pre>
+            {renderPreview ? (
+              renderPreview(selectedRevision)
+            ) : (
+              <>
+                <RevisionChanges key={selectedRevision.id} changes={changes} />
+                <pre className='mt-2 max-h-36 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[10px] whitespace-pre-wrap text-muted-foreground select-all'>
+                  {selectedRevisionContent.slice(0, 500)}
+                  {selectedRevisionContent.length > 500 && '\n...'}
+                </pre>
+              </>
+            )}
           </div>
         )}
       </div>

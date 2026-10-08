@@ -28,7 +28,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import type { PresenceUser } from '../lib/collab-session'
 import { DocTypeBadge } from './doc-type-badge'
+import { PresenceAvatars } from './presence-avatars'
 import { ProjectDocsHoverCard } from './project-docs-hover-card'
 
 interface EditorHeaderProps {
@@ -57,6 +59,10 @@ interface EditorHeaderProps {
   onOpenShare?: () => void
   isStarred?: boolean
   onToggleStar?: () => void
+  presenceUsers?: PresenceUser[]
+  followedUserID?: string | null
+  onFollowUser?: (userID: string | null) => void
+  currentUserID?: string
 }
 
 export function EditorHeader({
@@ -85,6 +91,10 @@ export function EditorHeader({
   onOpenShare,
   isStarred,
   onToggleStar,
+  presenceUsers,
+  followedUserID,
+  onFollowUser,
+  currentUserID = '',
 }: EditorHeaderProps) {
   const navigate = useNavigate()
   const { projects } = useDokudocsStore()
@@ -114,7 +124,7 @@ export function EditorHeader({
         params: { projectId: activeProject.id },
       })
     } else {
-      navigate({ to: '/' })
+      navigate({ to: '/dashboard' })
     }
   }
 
@@ -174,7 +184,10 @@ export function EditorHeader({
             </span>
           ) : isDirty ? (
             <span className='flex items-center gap-1.5 text-warn'>
-              <i className='size-1.5 rounded-[1px] bg-warn' aria-hidden='true' />
+              <i
+                className='size-1.5 rounded-[1px] bg-warn'
+                aria-hidden='true'
+              />
               Unsaved
             </span>
           ) : (
@@ -194,6 +207,16 @@ export function EditorHeader({
       </div>
 
       <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+        {presenceUsers?.length ? (
+          <div className='hidden md:flex'>
+            <PresenceAvatars
+              users={presenceUsers}
+              currentUserID={currentUserID}
+              followedID={followedUserID}
+              onFollow={onFollowUser}
+            />
+          </div>
+        ) : null}
         {activeProject ? (
           <ProjectDocsHoverCard
             projectId={activeProject.id}

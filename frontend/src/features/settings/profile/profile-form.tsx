@@ -111,7 +111,7 @@ export function ProfileForm() {
               </Select>
               <FormDescription>
                 You can manage verified email addresses in your{' '}
-                <Link to='/'>email settings</Link>.
+                <Link to='/settings/account'>email settings</Link>.
               </FormDescription>
               <FormMessage />
             </FormItem>

@@ -39,8 +39,8 @@ func (r *Repository) ListRAGChunksMissingEmbeddings(ctx context.Context, provide
 		JOIN rag_document_indexes ri ON ri.document_id = d.id
 		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 		LEFT JOIN rag_embeddings e ON e.chunk_id = c.chunk_id AND e.provider = $1 AND e.model = $2
-		WHERE d.type = 'markdown' AND d.deleted_at IS NULL
-		  AND ri.indexed_body_version = d.body_version AND ri.indexed_body_epoch = d.body_epoch
+		WHERE d.type IN ('markdown', 'architecture') AND d.deleted_at IS NULL
+		  AND ri.indexed_body_version = d.body_version
 		  AND ri.source_fingerprint = c.source_fingerprint AND ri.indexed_title = d.title
 		  AND ri.indexed_project_id IS NOT DISTINCT FROM d.project_id
 		  AND ri.indexed_project_name = COALESCE(p.name, '') AND ri.renderer_version = 2
@@ -90,8 +90,8 @@ func (r *Repository) StoreRAGChunkEmbeddings(ctx context.Context, provider, embe
 				JOIN rag_document_indexes ri ON ri.document_id = d.id
 				LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 				WHERE c.chunk_id = $1 AND c.document_id = $2 AND c.body_version = $3
-				  AND c.source_fingerprint = $4 AND d.type = 'markdown' AND d.deleted_at IS NULL
-				  AND ri.indexed_body_version = d.body_version AND ri.indexed_body_epoch = d.body_epoch
+				  AND c.source_fingerprint = $4 AND d.type IN ('markdown', 'architecture') AND d.deleted_at IS NULL
+				  AND ri.indexed_body_version = d.body_version
 				  AND ri.source_fingerprint = c.source_fingerprint AND ri.indexed_title = d.title
 				  AND ri.indexed_project_id IS NOT DISTINCT FROM d.project_id
 				  AND ri.indexed_project_name = COALESCE(p.name, '') AND ri.renderer_version = 2

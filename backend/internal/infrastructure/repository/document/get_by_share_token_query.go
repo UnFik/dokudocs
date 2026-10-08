@@ -13,12 +13,13 @@ import (
 func (r *Repository) GetByShareToken(ctx context.Context, token string) (model.Document, error) {
 	const query = `
 		SELECT d.id, d.workspace_id, d.project_id, ''::text, d.title, d.type::text,
-		       CASE WHEN d.type = 'markdown' AND d.root_node_id IS NOT NULL THEN '' ELSE d.content END,
+		       d.content,
 		       d.author_id, u.full_name, u.email, COALESCE(u.avatar_url, ''),
 		       COALESCE(array_to_string(d.tags, ','), ''), d.is_draft, d.visibility::text,
 		       COALESCE(d.thumbnail, ''), COALESCE(d.thumbnail_dark, ''),
 		       COALESCE(d.thumbnail_preview, ''), COALESCE(d.thumbnail_preview_dark, ''),
-		       d.created_at, d.updated_at
+		       d.created_at, d.updated_at,
+		       CASE WHEN d.type = 'architecture' THEN d.content_json END
 		FROM documents d
 		JOIN users u ON u.id = d.author_id
 		WHERE d.share_token = $1
@@ -28,19 +29,24 @@ func (r *Repository) GetByShareToken(ctx context.Context, token string) (model.D
 	`
 	var d model.Document
 	var tagsStr string
+	var canvas []byte
 	err := r.db.QueryRowContext(ctx, query, token).Scan(
 		&d.ID, &d.WorkspaceID, &d.ProjectID, &d.ProjectName, &d.Title, &d.Type,
 		&d.Content, &d.AuthorID, &d.Author.Name, &d.Author.Email, &d.Author.Avatar,
 		&tagsStr, &d.IsDraft, &d.Visibility,
 		&d.Thumbnail, &d.ThumbnailDark,
 		&d.ThumbnailPreview, &d.ThumbnailPreviewDark,
-		&d.CreatedAt, &d.UpdatedAt,
+		&d.CreatedAt, &d.UpdatedAt, &canvas,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, constant.ErrDocumentNotFound
 	}
 	if err != nil {
 		return d, err
+	}
+	// A shared canvas is drawn from its JSON; Markdown keeps sharing its text only.
+	if len(canvas) > 0 {
+		d.ContentJSON = canvas
 	}
 	d.Author.ID = d.AuthorID
 	if tagsStr != "" {

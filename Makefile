@@ -1,6 +1,35 @@
 DOCKER_COMPOSE ?= docker compose
 
-.PHONY: test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
+# Whole stack in Docker (docker-compose.yaml): db, redis, migrate, api, collab, frontend.
+# The app is at http://localhost:5173; the browser only talks to the frontend.
+up:
+	$(DOCKER_COMPOSE) up --build -d
+	@echo "Frontend http://localhost:5173  API http://localhost:8080  Collab http://localhost:1234 (health /health, metrics /metrics)"
+
+down:
+	$(DOCKER_COMPOSE) down
+
+restart: down up
+
+rebuild:
+	$(DOCKER_COMPOSE) build --no-cache
+	$(DOCKER_COMPOSE) up -d
+
+logs:
+	$(DOCKER_COMPOSE) logs -f --tail=100 $(SERVICE)
+
+ps:
+	$(DOCKER_COMPOSE) ps
+
+# Admin user and mock documents, inside the running api container.
+seed-docker:
+	$(DOCKER_COMPOSE) exec api go run ./cmd/seeder
+
+# Stops the stack and deletes its database volume.
+reset:
+	$(DOCKER_COMPOSE) down --volumes
+
+.PHONY: up down restart rebuild logs ps seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
 
 test-e2e: test-e2e-api
 
@@ -23,7 +52,9 @@ test-e2e-with-backend:
 		compose="$(DOCKER_COMPOSE) -p $$project -f backend/docker-compose.test.yaml"; \
 		tmpdir=$$(mktemp -d); \
 		backend_pid=""; \
+		collab_pid=""; \
 		cleanup() { \
+			if [ -n "$$collab_pid" ]; then kill "$$collab_pid" 2>/dev/null || true; wait "$$collab_pid" 2>/dev/null || true; fi; \
 			if [ -n "$$backend_pid" ]; then kill "$$backend_pid" 2>/dev/null || true; wait "$$backend_pid" 2>/dev/null || true; fi; \
 			$$compose down --volumes --remove-orphans >/dev/null 2>&1 || true; \
 			rm -rf "$$tmpdir"; \
@@ -35,8 +66,11 @@ test-e2e-with-backend:
 		(cd backend && DATABASE_URL="$$database_url" go run ./cmd/migrate up && TEST_DATABASE_URL="$$database_url" go run ./cmd/testseed); \
 		api_port=$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'); \
 		api_url="http://127.0.0.1:$$api_port"; \
+		collab_port=$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'); \
+		collab_url="http://127.0.0.1:$$collab_port"; \
+		collab_secret=test-collab-secret; \
 		(cd backend && go build -o "$$tmpdir/server" ./cmd/server); \
-		DATABASE_URL="$$database_url" JWT_SECRET=test-secret ALLOWED_ORIGIN=http://127.0.0.1:4173 APP_ADDR="127.0.0.1:$$api_port" "$$tmpdir/server" >"$$tmpdir/backend.log" 2>&1 & \
+		DATABASE_URL="$$database_url" JWT_SECRET=test-secret ALLOWED_ORIGIN=http://127.0.0.1:4173 APP_ADDR="127.0.0.1:$$api_port" COLLAB_SERVICE_SECRET="$$collab_secret" COLLAB_SERVICE_URL="$$collab_url" "$$tmpdir/server" >"$$tmpdir/backend.log" 2>&1 & \
 		backend_pid=$$!; \
 		ready=0; \
 		for attempt in $$(seq 1 60); do \
@@ -44,8 +78,27 @@ test-e2e-with-backend:
 			sleep 1; \
 		done; \
 		if [ "$$ready" -ne 1 ]; then cat "$$tmpdir/backend.log"; exit 1; fi; \
+		(cd collab && [ -d node_modules ] || npm ci); \
+		(cd collab && COLLAB_BACKEND_URL="$$api_url" COLLAB_SERVICE_SECRET="$$collab_secret" COLLAB_PORT="$$collab_port" COLLAB_DEBOUNCE_MS=300 COLLAB_MAX_DEBOUNCE_MS=1500 ./node_modules/.bin/tsx --tsconfig tsconfig.run.json src/main.ts >"$$tmpdir/collab.log" 2>&1 & echo $$! >"$$tmpdir/collab.pid"); \
+		collab_pid=$$(cat "$$tmpdir/collab.pid"); \
+		ready=0; \
+		for attempt in $$(seq 1 60); do \
+			if curl -fsS "$$collab_url/health" >/dev/null; then ready=1; break; fi; \
+			sleep 1; \
+		done; \
+		if [ "$$ready" -ne 1 ]; then cat "$$tmpdir/collab.log"; exit 1; fi; \
 		(cd frontend && bun run build); \
-		(cd e2e && API_URL="$$api_url" API_PROXY_TARGET="$$api_url" CI=1 bunx playwright test $$E2E_ARGS)
+		(cd e2e && API_URL="$$api_url" API_PROXY_TARGET="$$api_url" COLLAB_PROXY_TARGET="$$collab_url" CI=1 bunx playwright test $$E2E_ARGS)
+
+# Includes the two-instance Redis test, with a throwaway Redis.
+test-collab:
+	@set -eu; \
+		name="collab-redis-test-$$$$"; \
+		trap 'docker stop "$$name" >/dev/null 2>&1 || true' EXIT INT TERM; \
+		docker run -d --rm --name "$$name" -p 127.0.0.1::6379 redis:7-alpine >/dev/null; \
+		port=$$(docker port "$$name" 6379 | head -n 1 | sed 's/.*://'); \
+		sleep 2; \
+		cd collab && TEST_REDIS_URL="redis://127.0.0.1:$$port" npm test
 
 test-backend-unit:
 	cd backend && $(MAKE) test-unit

@@ -24,7 +24,12 @@ import { renderMermaidSvgDirect } from '../../hooks/use-mermaid-render'
 
 export type MermaidExportFormat = 'png' | 'svg' | 'pdf' | 'mmd'
 export type MermaidBackgroundType = 'transparent' | 'light' | 'dark' | 'custom'
-export type MermaidDiagramTheme = 'colorful' | 'default' | 'forest' | 'dark' | 'neutral'
+export type MermaidDiagramTheme =
+  | 'colorful'
+  | 'default'
+  | 'forest'
+  | 'dark'
+  | 'neutral'
 
 interface MermaidExportDialogProps {
   open: boolean
@@ -93,7 +98,9 @@ export function MermaidExportDialog({
   const [scale, setScale] = useState(2)
   const [isExporting, setIsExporting] = useState(false)
   const [hasCopied, setHasCopied] = useState(false)
-  const [renderedCustomSvg, setRenderedCustomSvg] = useState<string | null>(null)
+  const [renderedCustomSvg, setRenderedCustomSvg] = useState<string | null>(
+    null
+  )
 
   const activeSvg = renderedCustomSvg || svg
 
@@ -105,7 +112,11 @@ export function MermaidExportDialog({
   }, [bgType, customBgColor])
 
   const sanitizedFileName = useMemo(() => {
-    const base = docTitle.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'mermaid_diagram'
+    const base =
+      docTitle
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '_') || 'mermaid_diagram'
     return `${base}.${format}`
   }, [docTitle, format])
 
@@ -153,15 +164,23 @@ export function MermaidExportDialog({
     }
   }
 
-  const renderSvgToCanvas = async (multiplier: number): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> => {
+  const renderSvgToCanvas = async (
+    multiplier: number
+  ): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> => {
     const parser = new DOMParser()
     const doc = parser.parseFromString(activeSvg, 'image/svg+xml')
     const svgEl = doc.querySelector('svg')
     if (!svgEl) throw new Error('SVG not found')
 
     const viewBox = svgEl.viewBox?.baseVal
-    let baseWidth = viewBox && viewBox.width > 0 ? viewBox.width : parseFloat(svgEl.getAttribute('width') || '800')
-    let baseHeight = viewBox && viewBox.height > 0 ? viewBox.height : parseFloat(svgEl.getAttribute('height') || '600')
+    let baseWidth =
+      viewBox && viewBox.width > 0
+        ? viewBox.width
+        : parseFloat(svgEl.getAttribute('width') || '800')
+    let baseHeight =
+      viewBox && viewBox.height > 0
+        ? viewBox.height
+        : parseFloat(svgEl.getAttribute('height') || '600')
 
     if (!baseWidth || isNaN(baseWidth) || baseWidth <= 0) baseWidth = 800
     if (!baseHeight || isNaN(baseHeight) || baseHeight <= 0) baseHeight = 600
@@ -255,7 +274,9 @@ export function MermaidExportDialog({
       }
 
       if (format === 'pdf') {
-        const { canvas, width, height } = await renderSvgToCanvas(Math.max(scale, 2))
+        const { canvas, width, height } = await renderSvgToCanvas(
+          Math.max(scale, 2)
+        )
         const orientation = width > height ? 'landscape' : 'portrait'
         const { jsPDF } = await import('jspdf')
         const pdf = new jsPDF({
@@ -330,9 +351,9 @@ export function MermaidExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-2xl sm:max-w-3xl p-0 overflow-hidden max-h-[90vh] flex flex-col'>
+      <DialogContent className='flex max-h-[90vh] max-w-2xl flex-col overflow-hidden p-0 sm:max-w-3xl'>
         <DialogHeader className='border-b border-border/80 px-5 py-3.5'>
-          <DialogTitle className='flex items-center gap-2 text-sm sm:text-base font-bold'>
+          <DialogTitle className='flex items-center gap-2 text-sm font-bold sm:text-base'>
             <Download className='size-4 text-primary' />
             <span>Export Mermaid Diagram</span>
           </DialogTitle>
@@ -341,20 +362,22 @@ export function MermaidExportDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className='grid grid-cols-1 md:grid-cols-12 flex-1 min-h-0 overflow-hidden'>
-          <div className='md:col-span-5 flex flex-col justify-between border-b md:border-b-0 md:border-r border-border/80 p-4 sm:p-5 bg-muted/10 space-y-4 overflow-y-auto'>
+        <div className='grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-12'>
+          <div className='flex flex-col justify-between space-y-4 overflow-y-auto border-b border-border/80 bg-muted/10 p-4 sm:p-5 md:col-span-5 md:border-r md:border-b-0'>
             <div className='space-y-3.5'>
               <div className='space-y-1.5'>
-                <Label className='text-[11px] font-semibold text-foreground'>Format</Label>
-                <div className='grid grid-cols-4 gap-1 p-0.5 rounded-lg border border-border/80 bg-background'>
+                <Label className='text-[11px] font-semibold text-foreground'>
+                  Format
+                </Label>
+                <div className='grid grid-cols-4 gap-1 rounded-lg border border-border/80 bg-background p-0.5'>
                   <Button
                     type='button'
                     variant={format === 'png' ? 'default' : 'ghost'}
                     size='sm'
                     onClick={() => setFormat('png')}
-                    className='h-7 text-xs font-medium px-1'
+                    className='h-7 px-1 text-xs font-medium'
                   >
-                    <ImageIcon className='size-3 mr-1' />
+                    <ImageIcon className='mr-1 size-3' />
                     PNG
                   </Button>
                   <Button
@@ -362,9 +385,9 @@ export function MermaidExportDialog({
                     variant={format === 'svg' ? 'default' : 'ghost'}
                     size='sm'
                     onClick={() => setFormat('svg')}
-                    className='h-7 text-xs font-medium px-1'
+                    className='h-7 px-1 text-xs font-medium'
                   >
-                    <FileCode className='size-3 mr-1' />
+                    <FileCode className='mr-1 size-3' />
                     SVG
                   </Button>
                   <Button
@@ -372,9 +395,9 @@ export function MermaidExportDialog({
                     variant={format === 'pdf' ? 'default' : 'ghost'}
                     size='sm'
                     onClick={() => setFormat('pdf')}
-                    className='h-7 text-xs font-medium px-1'
+                    className='h-7 px-1 text-xs font-medium'
                   >
-                    <FileText className='size-3 mr-1' />
+                    <FileText className='mr-1 size-3' />
                     PDF
                   </Button>
                   <Button
@@ -382,9 +405,9 @@ export function MermaidExportDialog({
                     variant={format === 'mmd' ? 'default' : 'ghost'}
                     size='sm'
                     onClick={() => setFormat('mmd')}
-                    className='h-7 text-xs font-medium px-1'
+                    className='h-7 px-1 text-xs font-medium'
                   >
-                    <Sparkles className='size-3 mr-1' />
+                    <Sparkles className='mr-1 size-3' />
                     MMD
                   </Button>
                 </div>
@@ -393,9 +416,11 @@ export function MermaidExportDialog({
               {format !== 'mmd' && (
                 <>
                   <div className='space-y-1.5'>
-                    <Label className='text-[11px] font-semibold text-foreground flex items-center justify-between'>
+                    <Label className='flex items-center justify-between text-[11px] font-semibold text-foreground'>
                       <span>Diagram Theme</span>
-                      <span className='text-[10px] font-mono text-muted-foreground capitalize'>{theme}</span>
+                      <span className='font-mono text-[10px] text-muted-foreground capitalize'>
+                        {theme}
+                      </span>
                     </Label>
                     <div className='grid grid-cols-5 gap-1'>
                       {THEME_OPTIONS.map((opt) => {
@@ -404,18 +429,22 @@ export function MermaidExportDialog({
                           <button
                             key={opt.id}
                             type='button'
-                            onClick={() => handleThemeChange(opt.id as MermaidDiagramTheme)}
-                            className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border text-xs font-medium transition-all ${
+                            onClick={() =>
+                              handleThemeChange(opt.id as MermaidDiagramTheme)
+                            }
+                            className={`flex flex-col items-center gap-1 rounded-lg border p-1.5 text-xs font-medium transition-all ${
                               isSelected
                                 ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary'
-                                : 'border-border/80 bg-background hover:bg-muted/50 text-muted-foreground'
+                                : 'border-border/80 bg-background text-muted-foreground hover:bg-muted/50'
                             }`}
                           >
                             <span
                               className='size-3 rounded-full border border-border/80'
                               style={{ backgroundColor: opt.color }}
                             />
-                            <span className='text-[10px] truncate w-full text-center'>{opt.label}</span>
+                            <span className='w-full truncate text-center text-[10px]'>
+                              {opt.label}
+                            </span>
                           </button>
                         )
                       })}
@@ -423,9 +452,11 @@ export function MermaidExportDialog({
                   </div>
 
                   <div className='space-y-1.5'>
-                    <Label className='text-[11px] font-semibold text-foreground flex items-center justify-between'>
+                    <Label className='flex items-center justify-between text-[11px] font-semibold text-foreground'>
                       <span>Background</span>
-                      <span className='text-[10px] font-mono text-muted-foreground uppercase'>{effectiveBgColor}</span>
+                      <span className='font-mono text-[10px] text-muted-foreground uppercase'>
+                        {effectiveBgColor}
+                      </span>
                     </Label>
                     <div className='grid grid-cols-4 gap-1.5'>
                       {BACKGROUND_PRESETS.map((preset) => {
@@ -434,41 +465,60 @@ export function MermaidExportDialog({
                           <button
                             key={preset.id}
                             type='button'
-                            onClick={() => handleBgTypeChange(preset.id as MermaidBackgroundType)}
-                            className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border text-xs font-medium transition-all ${
+                            onClick={() =>
+                              handleBgTypeChange(
+                                preset.id as MermaidBackgroundType
+                              )
+                            }
+                            className={`flex flex-col items-center gap-1 rounded-lg border p-1.5 text-xs font-medium transition-all ${
                               isSelected
                                 ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary'
-                                : 'border-border/80 bg-background hover:bg-muted/50 text-muted-foreground'
+                                : 'border-border/80 bg-background text-muted-foreground hover:bg-muted/50'
                             }`}
                           >
                             <div
                               className='size-4 rounded-full border border-border/80'
                               style={{
-                                backgroundColor: preset.id === 'custom' ? customBgColor : preset.color,
-                                backgroundImage: preset.id === 'transparent' ? CHECKERBOARD_BG : undefined,
-                                backgroundSize: preset.id === 'transparent' ? '6px 6px' : undefined,
+                                backgroundColor:
+                                  preset.id === 'custom'
+                                    ? customBgColor
+                                    : preset.color,
+                                backgroundImage:
+                                  preset.id === 'transparent'
+                                    ? CHECKERBOARD_BG
+                                    : undefined,
+                                backgroundSize:
+                                  preset.id === 'transparent'
+                                    ? '6px 6px'
+                                    : undefined,
                               }}
                             />
-                            <span className='text-[10px] truncate w-full text-center'>{preset.label}</span>
+                            <span className='w-full truncate text-center text-[10px]'>
+                              {preset.label}
+                            </span>
                           </button>
                         )
                       })}
                     </div>
 
                     {bgType === 'custom' && (
-                      <div className='flex items-center gap-2 mt-1.5 pt-1.5 border-t border-border/60'>
-                        <div className='relative flex items-center gap-1.5 flex-1'>
+                      <div className='mt-1.5 flex items-center gap-2 border-t border-border/60 pt-1.5'>
+                        <div className='relative flex flex-1 items-center gap-1.5'>
                           <input
                             type='color'
                             value={customBgColor}
-                            onChange={(e) => handleCustomColorChange(e.target.value)}
-                            className='size-6 rounded cursor-pointer border border-border/80 bg-transparent p-0.5'
+                            onChange={(e) =>
+                              handleCustomColorChange(e.target.value)
+                            }
+                            className='size-6 cursor-pointer rounded border border-border/80 bg-transparent p-0.5'
                           />
                           <Input
                             type='text'
                             value={customBgColor}
-                            onChange={(e) => handleCustomColorChange(e.target.value)}
-                            className='h-6 text-[11px] font-mono'
+                            onChange={(e) =>
+                              handleCustomColorChange(e.target.value)
+                            }
+                            className='h-6 font-mono text-[11px]'
                             placeholder='#1e293b'
                           />
                         </div>
@@ -481,7 +531,9 @@ export function MermaidExportDialog({
 
               {(format === 'png' || format === 'pdf') && (
                 <div className='space-y-1.5'>
-                  <Label className='text-[11px] font-semibold text-foreground'>Resolution / Scale</Label>
+                  <Label className='text-[11px] font-semibold text-foreground'>
+                    Resolution / Scale
+                  </Label>
                   <div className='grid grid-cols-4 gap-1'>
                     {SCALE_OPTIONS.map((opt) => (
                       <Button
@@ -490,7 +542,7 @@ export function MermaidExportDialog({
                         variant={scale === opt.value ? 'default' : 'outline'}
                         size='sm'
                         onClick={() => setScale(opt.value)}
-                        className='h-6 text-[10px] px-1 font-medium'
+                        className='h-6 px-1 text-[10px] font-medium'
                       >
                         {opt.label}
                       </Button>
@@ -500,22 +552,28 @@ export function MermaidExportDialog({
               )}
 
               <div className='space-y-1'>
-                <Label className='text-[10px] text-muted-foreground'>File Name</Label>
-                <div className='font-mono text-[11px] text-foreground truncate bg-background border border-border/70 rounded-md px-2 py-1'>
+                <Label className='text-[10px] text-muted-foreground'>
+                  File Name
+                </Label>
+                <div className='truncate rounded-md border border-border/70 bg-background px-2 py-1 font-mono text-[11px] text-foreground'>
                   {sanitizedFileName}
                 </div>
               </div>
             </div>
 
-            <div className='space-y-1.5 pt-3 border-t border-border/80'>
+            <div className='space-y-1.5 border-t border-border/80 pt-3'>
               <Button
                 type='button'
                 onClick={handleDownload}
                 disabled={isExporting}
-                className='w-full h-8 gap-1.5 text-xs font-semibold'
+                className='h-8 w-full gap-1.5 text-xs font-semibold'
               >
                 <Download className='size-3.5' />
-                <span>{isExporting ? 'Exporting...' : `Download ${format.toUpperCase()}`}</span>
+                <span>
+                  {isExporting
+                    ? 'Exporting...'
+                    : `Download ${format.toUpperCase()}`}
+                </span>
               </Button>
 
               {format !== 'pdf' && (
@@ -523,42 +581,57 @@ export function MermaidExportDialog({
                   type='button'
                   variant='outline'
                   onClick={handleCopyClipboard}
-                  className='w-full h-7 gap-1.5 text-xs font-medium'
+                  className='h-7 w-full gap-1.5 text-xs font-medium'
                 >
-                  {hasCopied ? <Check className='size-3.5 text-ok' /> : <Copy className='size-3.5' />}
-                  <span>{hasCopied ? 'Copied to Clipboard!' : `Copy ${format.toUpperCase()}`}</span>
+                  {hasCopied ? (
+                    <Check className='size-3.5 text-ok' />
+                  ) : (
+                    <Copy className='size-3.5' />
+                  )}
+                  <span>
+                    {hasCopied
+                      ? 'Copied to Clipboard!'
+                      : `Copy ${format.toUpperCase()}`}
+                  </span>
                 </Button>
               )}
             </div>
           </div>
 
-          <div className='md:col-span-7 flex flex-col p-4 sm:p-5 bg-muted/20 min-h-0 justify-between'>
-            <div className='flex items-center justify-between mb-2 text-xs font-semibold text-muted-foreground'>
+          <div className='flex min-h-0 flex-col justify-between bg-muted/20 p-4 sm:p-5 md:col-span-7'>
+            <div className='mb-2 flex items-center justify-between text-xs font-semibold text-muted-foreground'>
               <span>Preview</span>
-              <span className='text-[10px] font-mono rounded bg-muted/80 px-2 py-0.5 border border-border/60'>
+              <span className='rounded border border-border/60 bg-muted/80 px-2 py-0.5 font-mono text-[10px]'>
                 {format.toUpperCase()} • {theme} • {bgType}
               </span>
             </div>
 
             <div
-              className='relative flex-1 min-h-[240px] max-h-[360px] sm:max-h-[420px] rounded-xl border border-border/80 overflow-hidden flex items-center justify-center p-4 transition-colors shadow-inner'
+              className='relative flex max-h-[360px] min-h-[240px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-border/80 p-4 shadow-inner transition-colors sm:max-h-[420px]'
               style={{
-                backgroundColor: effectiveBgColor === 'transparent' ? 'var(--background)' : effectiveBgColor,
-                backgroundImage: effectiveBgColor === 'transparent' ? CHECKERBOARD_BG : undefined,
-                backgroundSize: effectiveBgColor === 'transparent' ? '16px 16px' : undefined,
+                backgroundColor:
+                  effectiveBgColor === 'transparent'
+                    ? 'var(--background)'
+                    : effectiveBgColor,
+                backgroundImage:
+                  effectiveBgColor === 'transparent'
+                    ? CHECKERBOARD_BG
+                    : undefined,
+                backgroundSize:
+                  effectiveBgColor === 'transparent' ? '16px 16px' : undefined,
               }}
             >
               {format === 'mmd' ? (
-                <div className='size-full overflow-auto bg-background/95 border border-border/80 rounded-lg p-3 font-mono text-[11px] text-foreground'>
+                <div className='size-full overflow-auto rounded-lg border border-border/80 bg-background/95 p-3 font-mono text-[11px] text-foreground'>
                   <pre className='whitespace-pre-wrap'>{content}</pre>
                 </div>
               ) : activeSvg ? (
                 <div
-                  className='size-full max-h-full max-w-full flex items-center justify-center overflow-auto [&_svg]:max-w-full [&_svg]:max-h-full [&_svg]:w-auto [&_svg]:h-auto [&_svg]:object-contain'
+                  className='flex size-full max-h-full max-w-full items-center justify-center overflow-auto [&_svg]:h-auto [&_svg]:max-h-full [&_svg]:w-auto [&_svg]:max-w-full [&_svg]:object-contain'
                   dangerouslySetInnerHTML={{ __html: activeSvg }}
                 />
               ) : (
-                <div className='text-xs text-muted-foreground text-center'>
+                <div className='text-center text-xs text-muted-foreground'>
                   No preview available
                 </div>
               )}

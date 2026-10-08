@@ -6,6 +6,7 @@ export type InlineAttributes = Record<string, boolean | string>
 export type InlineNode =
   | { type: 'run'; content: string; attributes: InlineAttributes }
   | { type: 'image'; attributes: InlineAttributes }
+  | { type: 'mention'; attributes: InlineAttributes }
   | { type: 'math'; content: string; attributes: InlineAttributes }
   | { type: 'line-break'; attributes: InlineAttributes }
   | { type: 'opaque-inline'; content: string; attributes: InlineAttributes }

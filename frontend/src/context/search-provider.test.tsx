@@ -126,7 +126,7 @@ describe('SearchProvider and CommandMenu', () => {
 
     await userEvent.click(screen.getByText('Recent Documents'))
 
-    expect(mocks.navigate).toHaveBeenCalledWith({ to: '/' })
+    expect(mocks.navigate).toHaveBeenCalledWith({ to: '/dashboard' })
     await expect
       .element(screen.getByPlaceholder(COMMAND_MENU_PLACEHOLDER))
       .not.toBeInTheDocument()

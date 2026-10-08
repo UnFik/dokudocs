@@ -35,11 +35,11 @@ func (r *Repository) UpdateAuthorized(ctx context.Context, doc model.Document, c
 		`, doc.ID, doc.WorkspaceID).Scan(&currentType, &currentContent); err != nil {
 			return err
 		}
-		if currentType == "markdown" {
+		if hasCollabBody(currentType) {
 			if doc.Content != "" && doc.Content != currentContent {
 				return constant.ErrDocumentConflict
 			}
-			// Markdown body writes go through initialization or AST commands.
+			// The body is written only by the collaboration service.
 			// Metadata reads mask initialized bodies, so always preserve this column.
 			doc.Content = currentContent
 		}

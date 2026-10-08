@@ -65,6 +65,12 @@ function serializeNode(node: InlineNode, labels?: Labels): string {
       if (isMatchingAutolink(node, labels)) return sourceOf(node.attributes)!
       return formatLink(inner, node.attributes.href, node.attributes.linkTitle)
     }
+    case 'mention': {
+      const { kind, id, label } = node.attributes
+      if (kind === 'document') return `[${label}](/docs/${id})`
+      if (kind === 'project') return `[${label}](/projects/${id})`
+      return `@${label}`
+    }
     case 'image': {
       const source = matchingImageSource(node.attributes, labels)
       const image = source ?? formatImage(node.attributes)
@@ -168,12 +174,23 @@ function serializeRuns(
       output.push(active[i]!.delimiter)
     for (let i = common; i < marks.length; i++) output.push(marks[i]!.delimiter)
 
-    output.push(runContent(node, insideLink))
+    output.push(wrapHtmlMarks(node, runContent(node, insideLink)))
     active = marks
   }
 
   for (let i = active.length - 1; i >= 0; i--) output.push(active[i]!.delimiter)
   return output.join('')
+}
+
+/** Underline and highlight have no Markdown syntax: they are written as inline HTML. */
+function wrapHtmlMarks(
+  node: Extract<InlineNode, { type: 'run' }>,
+  text: string
+) {
+  let wrapped = text
+  if (node.attributes.underline === true) wrapped = `<u>${wrapped}</u>`
+  if (node.attributes.highlight === true) wrapped = `<mark>${wrapped}</mark>`
+  return wrapped
 }
 
 function runContent(

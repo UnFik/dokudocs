@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { version } from '../../../../package.json'
 import { AuthLayout } from '../auth-layout'
 import { UserAuthForm } from './components/user-auth-form'
 
@@ -53,6 +54,9 @@ export function SignIn() {
           </p>
         </CardFooter>
       </Card>
+      <p className='text-center font-mono text-xs text-muted-foreground'>
+        Version {version}
+      </p>
     </AuthLayout>
   )
 }

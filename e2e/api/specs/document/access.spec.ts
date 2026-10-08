@@ -311,56 +311,18 @@ test.describe('Document: Collaborator Access Control', () => {
     })
     expect(grantRes.status()).toBe(201)
 
-    const rootNodeID = randomUUID()
-    const paragraphNodeID = randomUUID()
-    const initialization = {
-      baseBodyVersion: 1,
-      bodySchemaVersion: 1,
-      sourceFingerprint: createHash('sha256').update(documentData.content).digest('hex'),
-      rootNodeID,
-      nodes: [
-        { nodeID: rootNodeID, parentID: null, siblingOrder: 0, type: 'document', content: '', attributes: {} },
-        {
-          nodeID: paragraphNodeID,
-          parentID: rootNodeID,
-          siblingOrder: 0,
-          type: 'paragraph',
-          content: 'Imported content',
-          attributes: {},
-        },
-      ],
-    }
-    const deniedInitialization = await viewerRequest.post(
-      `/api/v1/documents/${document.id}/body/initialize`,
-      { data: initialization },
-    )
-    expect(deniedInitialization.status()).toBe(403)
-
-    const ownerInitialization = await ownerRequest.post(
-      `/api/v1/documents/${document.id}/body/initialize`,
-      { data: initialization },
-    )
-    expect(ownerInitialization.status()).toBe(204)
-    const bodyResponse = await ownerRequest.get(`/api/v1/documents/${document.id}/body`)
-    expect(bodyResponse.status()).toBe(200)
-    expect((await bodyResponse.json()).data.nodes).toContainEqual(
-      expect.objectContaining({ nodeID: paragraphNodeID, content: 'Imported content' }),
-    )
-    const viewerBody = await viewerRequest.get(`/api/v1/documents/${document.id}/body`)
-    expect(viewerBody.status()).toBe(200)
-    expect((await viewerBody.json()).data.canEdit).toBe(false)
+    // Only someone who can edit the document may read its JSON for writing; a
+    // viewer reads it, and the public link shows the stored Markdown.
+    const viewerRead = await viewerRequest.get(`/api/v1/documents/${document.id}`)
+    expect(viewerRead.status()).toBe(200)
 
     const shareRes = await ownerRequest.post(`/api/v1/documents/${document.id}/share-token`)
     expect(shareRes.status()).toBe(200)
     const shareToken = (await shareRes.json()).data.shareToken
-    const publicBody = await request.get(`/api/v1/public/documents/${shareToken}/body`)
-    expect(publicBody.status()).toBe(200)
-    const publicBodyData = (await publicBody.json()).data
-    expect(publicBodyData.nodes).toContainEqual(
-      expect.objectContaining({ nodeID: paragraphNodeID, content: 'Imported content' }),
-    )
-    expect(publicBodyData).not.toHaveProperty('encodedState')
-    expect((await request.get('/api/v1/public/documents/invalid-token/body')).status()).toBe(404)
+    const publicDocument = await request.get(`/api/v1/public/documents/${shareToken}`)
+    expect(publicDocument.status()).toBe(200)
+    expect((await publicDocument.json()).data).toMatchObject({ content: documentData.content })
+    expect((await request.get('/api/v1/public/documents/invalid-token')).status()).toBe(404)
 
     await viewerRequest.dispose()
     await ownerRequest.dispose()

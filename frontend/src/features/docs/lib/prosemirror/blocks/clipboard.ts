@@ -24,11 +24,180 @@ const inlineTypes = new Set([
   'opaque_inline',
 ])
 
+const blockStart = /^\s*([-*+]\s|\d+[.)]\s|#{1,6}\s|>|\||```|---+\s*$)/
+
+/**
+ * Pasted Markdown with its line endings made plain and the spaces that end a
+ * block removed. Two spaces at the end of a list item or a paragraph are how
+ * some tools write "and then a line break", but nothing follows them; they would
+ * become two spaces of text. Inside a paragraph, where another line of it
+ * follows, they stay: that is a real line break.
+ */
+export function normalizePastedMarkdown(text: string): string {
+  const lines = joinSpacedTableRows(text.replace(/\r\n?/g, '\n').split('\n'))
+  return lines
+    .map((line, index) => {
+      if (!/ {2,}$/.test(line)) return line.replace(/\t+$/, '')
+      const next = lines[index + 1]
+      const endsBlock =
+        next === undefined || next.trim() === '' || blockStart.test(next)
+      return endsBlock ? line.replace(/[ \t]+$/, '') : line
+    })
+    .join('\n')
+}
+
+const tableDelimiterRow = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
+
+/**
+ * A table copied from a page that puts each row in its own paragraph arrives
+ * with a blank line between rows, which reads as many one-line paragraphs. A run
+ * of pipe rows with one blank line between each, whose second row is the
+ * delimiter row, is joined back into one table.
+ */
+function joinSpacedTableRows(lines: string[]): string[] {
+  const out: string[] = []
+  let index = 0
+  while (index < lines.length) {
+    const rows: string[] = []
+    let end = index
+    while (
+      end < lines.length &&
+      lines[end]!.trim().startsWith('|') &&
+      (end + 1 >= lines.length || lines[end + 1]!.trim() === '') &&
+      (end + 2 >= lines.length || lines[end + 2]!.trim().startsWith('|'))
+    ) {
+      rows.push(lines[end]!)
+      end += 2
+    }
+    const last = end < lines.length && lines[end]!.trim().startsWith('|')
+    if (last) rows.push(lines[end]!)
+    if (rows.length >= 3 && tableDelimiterRow.test(rows[1]!)) {
+      out.push(...rows)
+      index = end + (last ? 1 : 0)
+    } else {
+      out.push(lines[index]!)
+      index++
+    }
+  }
+  return out
+}
+
+type Segment =
+  | { kind: 'markdown'; text: string }
+  | { kind: 'notice'; variant: string; text: string }
+  | { kind: 'toggle'; text: string }
+
+const noticeVariants = new Set(['info', 'success', 'warning', 'tip'])
+
+/** Splits `:::variant` and `+++` blocks out of the Markdown, leaving code fences alone. */
+function splitContainers(markdown: string): Segment[] {
+  const segments: Segment[] = []
+  let plain: string[] = []
+  let open: {
+    kind: 'notice' | 'toggle'
+    variant: string
+    lines: string[]
+  } | null = null
+  let fenced = false
+  const flush = () => {
+    if (plain.join('\n').trim())
+      segments.push({ kind: 'markdown', text: plain.join('\n') })
+    plain = []
+  }
+  for (const line of markdown.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced
+    if (!fenced) {
+      if (open) {
+        const closes =
+          open.kind === 'notice'
+            ? /^:::\s*$/.test(line)
+            : /^\+\+\+\s*$/.test(line)
+        if (closes) {
+          const text = open.lines.join('\n')
+          segments.push(
+            open.kind === 'notice'
+              ? { kind: 'notice', variant: open.variant, text }
+              : { kind: 'toggle', text }
+          )
+          open = null
+        } else open.lines.push(line)
+        continue
+      }
+      const notice = /^:::(\w+)\s*$/.exec(line)
+      if (notice && noticeVariants.has(notice[1]!)) {
+        flush()
+        open = { kind: 'notice', variant: notice[1]!, lines: [] }
+        continue
+      }
+      if (/^\+\+\+\s*$/.test(line)) {
+        flush()
+        open = { kind: 'toggle', variant: '', lines: [] }
+        continue
+      }
+    }
+    plain.push(line)
+  }
+  // A marker that never closes is just text.
+  if (open) {
+    plain.push(
+      open.kind === 'notice' ? `:::${open.variant}` : '+++',
+      ...open.lines
+    )
+  }
+  flush()
+  return segments
+}
+
+async function parseBlocks(markdown: string): Promise<ProseMirrorNode[]> {
+  const parsed = await markdownToDocumentBody(
+    crypto.randomUUID(),
+    normalizePastedMarkdown(markdown),
+    1,
+    { lenient: true }
+  )
+  const blocks: ProseMirrorNode[] = []
+  documentBodyToProseMirror(parsed.nodes)
+    .child(0)
+    .content.forEach((node) => blocks.push(node))
+  return blocks
+}
+
+const emptyParagraph = () =>
+  documentBodySchema.nodes.paragraph!.create({
+    nodeID: null,
+    bodyAttributes: '{}',
+    bodyContent: '',
+  })
+
 /** Markdown text to a slice whose nodes carry no IDs; the editor assigns them. */
 export async function markdownToSlice(markdown: string): Promise<Slice> {
-  const parsed = await markdownToDocumentBody(crypto.randomUUID(), markdown)
-  const blocks = documentBodyToProseMirror(parsed.nodes).child(0).content
-  const content = sanitizePastedSlice(new Slice(blocks, 0, 0)).content
+  // Pasted text only has to read right, so it is imported leniently: a trailing
+  // space or a line ending that does not survive an export must not refuse it.
+  const segments = splitContainers(markdown.replace(/\r\n?/g, '\n'))
+  const blocks: ProseMirrorNode[] = []
+  for (const segment of segments) {
+    if (segment.kind === 'markdown') {
+      blocks.push(...(await parseBlocks(segment.text)))
+      continue
+    }
+    const inner = await parseBlocks(segment.text)
+    const content = inner.length ? inner : [emptyParagraph()]
+    blocks.push(
+      documentBodySchema.nodes[segment.kind]!.create(
+        {
+          nodeID: null,
+          bodyAttributes: JSON.stringify(
+            segment.kind === 'notice' ? { variant: segment.variant } : {}
+          ),
+          bodyContent: '',
+        },
+        content
+      )
+    )
+  }
+  const content = sanitizePastedSlice(
+    new Slice(Fragment.from(blocks.length ? blocks : [emptyParagraph()]), 0, 0)
+  ).content
   if (
     content.childCount === 1 &&
     content.child(0).type === documentBodySchema.nodes.paragraph
@@ -86,6 +255,8 @@ const markdownSignals = [
   /^```/m,
   /^\|.+\|\s*$/m,
   /^\s*---+\s*$/m,
+  /^:::(info|success|warning|tip)\s*$/m,
+  /^\+\+\+\s*$/m,
   /\*\*[^*\n]+\*\*/,
   /(^|[^\w])_[^_\n]+_([^\w]|$)/,
   /`[^`\n]+`/,
@@ -120,10 +291,36 @@ export async function pasteFromClipboard(
   const markdown =
     source.kind === 'html' ? htmlToMarkdownText(source.text) : source.text
   if (!markdown.trim()) return false
-  const slice = await markdownToSlice(markdown)
-  if (view.isDestroyed) return true
-  view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView())
+  // Pasting must never do nothing. If the converted blocks cannot be placed
+  // where the caret is, or the text cannot be converted at all, it goes in as
+  // plain paragraphs.
+  const before = view.state.doc
+  try {
+    const slice = await markdownToSlice(markdown)
+    if (view.isDestroyed) return true
+    view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView())
+    if (view.state.doc !== before) return true
+  } catch {
+    if (view.isDestroyed) return true
+  }
+  view.dispatch(
+    view.state.tr.replaceSelection(plainTextSlice(markdown)).scrollIntoView()
+  )
   return true
+}
+
+/** The text as paragraphs, one per line, with no formatting. */
+export function plainTextSlice(text: string): Slice {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  const paragraphs = lines.map((line) =>
+    documentBodySchema.nodes.paragraph!.create(
+      { nodeID: null, bodyAttributes: '{}', bodyContent: '' },
+      line ? [documentBodySchema.text(line)] : []
+    )
+  )
+  return paragraphs.length === 1
+    ? new Slice(Fragment.from(paragraphs), 1, 1)
+    : new Slice(Fragment.from(paragraphs), 0, 0)
 }
 
 function wrapInlineRuns(nodes: ProseMirrorNode[]) {

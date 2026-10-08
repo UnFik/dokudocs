@@ -33,11 +33,11 @@ func (r *Repository) ReadRoomHead(ctx context.Context, workspaceID, documentID u
 		var documentType string
 		err := tx.QueryRowContext(ctx, `
 			SELECT id, workspace_id, project_id, author_id, is_draft, visibility::text, updated_at, deleted_at,
-			       type::text, body_version, body_epoch, body_schema_version
+			       type::text
 			FROM documents WHERE id = $1 AND workspace_id = $2
 		`, documentID, workspaceID).Scan(
 			&doc.ID, &doc.WorkspaceID, &doc.ProjectID, &doc.AuthorID, &doc.IsDraft, &doc.Visibility, &doc.UpdatedAt,
-			&deletedAt, &documentType, &head.BodyVersion, &head.BodyEpoch, &head.BodySchemaVersion,
+			&deletedAt, &documentType,
 		)
 		if errors.Is(err, sql.ErrNoRows) {
 			return constant.ErrDocumentNotFound
@@ -45,9 +45,10 @@ func (r *Repository) ReadRoomHead(ctx context.Context, workspaceID, documentID u
 		if err != nil {
 			return err
 		}
-		if deletedAt.Valid || documentType != "markdown" {
-			return nil // nobody may read a trashed or non-Markdown document
+		if deletedAt.Valid || (documentType != "markdown" && documentType != "architecture") {
+			return nil // nobody may open a room for a trashed document, or a DBML or Mermaid one
 		}
+		head.DocumentType = documentType
 
 		workspaceRoles, err := scanUserRoles(ctx, tx, `
 			SELECT user_id, role::text FROM workspace_members WHERE workspace_id = $1 AND user_id = ANY($2::uuid[])
@@ -85,7 +86,7 @@ func (r *Repository) ReadRoomHead(ctx context.Context, workspaceID, documentID u
 				ProjectRole: projectRoles[userID], DocumentGrant: grants[userID],
 			}
 			if policy.CanReadDocument(doc, context) {
-				head.Access[userID] = collaboration.RoomAccess{CanRead: true, CanEdit: policy.CanEditDocument(doc, context)}
+				head.Access[userID] = collaboration.RoomAccess{CanRead: true, CanEdit: policy.CanEditDocument(doc, context), CanSuggest: policy.CanSuggest(doc, context)}
 			}
 		}
 		return nil

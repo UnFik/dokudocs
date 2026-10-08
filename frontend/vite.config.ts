@@ -49,11 +49,21 @@ export default defineConfig(({ mode }) => {
     process.env.API_PROXY_TARGET ||
     env.API_PROXY_TARGET ||
     'http://localhost:8080'
+  const collabTarget =
+    process.env.COLLAB_PROXY_TARGET ||
+    env.COLLAB_PROXY_TARGET ||
+    'http://localhost:1234'
   const proxy = {
     '/api': {
       target: proxyTarget,
       changeOrigin: false,
+    },
+    // The collaboration service (Hocuspocus) speaks WebSocket on the same origin.
+    '/collab': {
+      target: collabTarget,
+      changeOrigin: false,
       ws: true,
+      rewrite: (path: string) => path.replace(/^\/collab/, '') || '/',
     },
   }
   const callbackHeaders = (server: {

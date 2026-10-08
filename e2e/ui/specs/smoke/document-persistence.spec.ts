@@ -16,7 +16,15 @@ test('live smoke @smoke: creates a document and reads it from the backend after 
   await page.getByRole('button', { name: /workspace/i }).first().click()
   await page.getByRole('menuitem', { name: 'Create Workspace' }).click()
   await page.getByLabel('Workspace Name').fill(workspaceName)
+  const workspaceResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === '/api/v1/workspaces'
+  )
   await page.getByRole('button', { name: 'Create Workspace' }).click()
+  const workspaceID = (
+    (await (await workspaceResponse).json()) as { data: { id: string } }
+  ).data.id
   await expect(page.getByRole('button', { name: new RegExp(workspaceName) })).toBeVisible()
 
   await page.getByRole('button', { name: /new/i }).first().click()
@@ -26,22 +34,14 @@ test('live smoke @smoke: creates a document and reads it from the backend after 
   await page.getByRole('button', { name: 'Create Document' }).click()
   await page.waitForURL(/\/docs\/[0-9a-f-]{36}$/i)
 
-  await page.evaluate(() => {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith('dokudocs-workspace-storage:')) {
-        localStorage.removeItem(key)
-      }
-    }
+  // Read it back from the server, for the workspace this test made.
+  const token = (await page.context().cookies()).find(
+    (cookie) => cookie.name === 'thisisjustarandomstring'
+  )!.value
+  const apiURL = process.env.API_URL ?? 'http://localhost:8080'
+  const response = await page.request.get(`${apiURL}/api/v1/documents`, {
+    headers: { Authorization: `Bearer ${token}`, 'X-Workspace-Id': workspaceID },
   })
-  const documentsResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return (
-      response.request().method() === 'GET' &&
-      url.pathname === '/api/v1/documents'
-    )
-  })
-  await page.goto('/')
-  const response = await documentsResponse
   expect(response.ok()).toBe(true)
   const { data } = (await response.json()) as {
     data: Array<{ title: string; content: string }>

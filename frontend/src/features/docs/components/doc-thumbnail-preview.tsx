@@ -5,11 +5,9 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import type { DocType } from '@/types/dokudocs'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
-import { getMarkdownBody } from '@/lib/domain-api'
 import {
   getLocalUserScope,
   isLocalUserScopeCurrent,
@@ -21,10 +19,6 @@ import {
   generateDbmlThumbnail,
   generateMermaidThumbnail,
 } from '../lib/doc-thumbnail-generator'
-import {
-  documentBodyToMarkdown,
-  type DocumentBodyNode,
-} from '../lib/muya/state/documentBodyToMarkdown'
 
 interface DocThumbnailPreviewProps {
   docId?: string
@@ -131,7 +125,93 @@ function ThumbnailSkeleton({
   )
 }
 
+/**
+ * A canvas in a list: lists carry the canvas's text (one line per element), not
+ * its JSON, so the card shows a sketch and how many elements it holds.
+ */
+function ArchitectureThumbnail({
+  content,
+  className,
+}: {
+  content?: string
+  className?: string
+}) {
+  const elements = (content ?? '')
+    .split('\n')
+    .filter((line) => /^(System|Host|Group) /.test(line)).length
+  return (
+    <div
+      className={cn(
+        'flex h-full w-full flex-col justify-between bg-muted/20 p-2.5 select-none',
+        className
+      )}
+    >
+      <svg viewBox='0 0 120 50' className='h-3/4 w-full' aria-hidden>
+        <rect
+          x='4'
+          y='6'
+          width='52'
+          height='38'
+          rx='3'
+          fill='none'
+          stroke='var(--input)'
+          strokeDasharray='3 2'
+        />
+        <rect
+          x='10'
+          y='16'
+          width='40'
+          height='11'
+          rx='2'
+          fill='var(--card)'
+          stroke='var(--input)'
+        />
+        <rect
+          x='10'
+          y='29'
+          width='40'
+          height='11'
+          rx='2'
+          fill='var(--card)'
+          stroke='var(--input)'
+        />
+        <rect
+          x='74'
+          y='22'
+          width='40'
+          height='11'
+          rx='2'
+          fill='var(--card)'
+          stroke='var(--input)'
+        />
+        <path
+          d='M50 21 C62 21 62 27 74 27'
+          fill='none'
+          stroke='var(--muted-foreground)'
+          strokeWidth='0.8'
+        />
+      </svg>
+      <span className='font-mono text-[10px] text-muted-foreground'>
+        {elements
+          ? `${elements} element${elements === 1 ? '' : 's'}`
+          : 'Empty canvas'}
+      </span>
+    </div>
+  )
+}
+
 export function DocThumbnailPreview(props: DocThumbnailPreviewProps) {
+  if (props.type === 'architecture')
+    return (
+      <ArchitectureThumbnail
+        content={props.content}
+        className={props.className}
+      />
+    )
+  return <DocThumbnailPreviewForText {...props} />
+}
+
+function DocThumbnailPreviewForText(props: DocThumbnailPreviewProps) {
   const scope = useSyncExternalStore(subscribeLocalUser, getLocalUserScope)
   return (
     <ScopedDocThumbnailPreview
@@ -143,7 +223,6 @@ export function DocThumbnailPreview(props: DocThumbnailPreviewProps) {
 
 function ScopedDocThumbnailPreview({
   docId,
-  workspaceID,
   type,
   content,
   thumbnail,
@@ -163,29 +242,7 @@ function ScopedDocThumbnailPreview({
   const docKey = `${scope.generation}:${docId || `${type}-${(content || '').slice(0, 32)}`}`
   const [isVisible, setIsVisible] = useState(() => visibleDocCache.has(docKey))
 
-  const bodyQuery = useQuery({
-    queryKey: ['markdown-preview-body', scope.generation, workspaceID, docId],
-    queryFn: ({ signal }) => getMarkdownBody(workspaceID!, docId!, signal),
-    enabled: Boolean(
-      isVisible &&
-      type === 'markdown' &&
-      !content?.trim() &&
-      !activeThumbnail &&
-      workspaceID &&
-      docId
-    ),
-    retry: false,
-    staleTime: 30_000,
-  })
-  const astMarkdown = useMemo(() => {
-    if (!bodyQuery.data) return ''
-    try {
-      return documentBodyToMarkdown(bodyQuery.data.nodes as DocumentBodyNode[])
-    } catch {
-      return ''
-    }
-  }, [bodyQuery.data])
-  const previewMarkdown = content?.trim() ? content : astMarkdown
+  const previewMarkdown = content ?? ''
 
   const [isImgLoaded, setIsImgLoaded] = useState(() =>
     Boolean(activeThumbnail && loadedImageCache.has(activeThumbnail))

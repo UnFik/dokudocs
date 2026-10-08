@@ -3,18 +3,9 @@ package repository
 import (
 	"context"
 
-	"backend/internal/domain/documentbody"
 	"backend/internal/domain/model"
 	"github.com/google/uuid"
 )
-
-type MarkdownDocumentCreate struct {
-	Document          model.Document
-	Categories        []string
-	RequestID         uuid.UUID
-	Body              documentbody.Body
-	BodySchemaVersion int
-}
 
 type DocumentFilter struct {
 	ProjectID *uuid.UUID
@@ -31,7 +22,6 @@ type DocumentRepository interface {
 	GetByShareToken(ctx context.Context, token string) (model.Document, error)
 	Create(ctx context.Context, doc model.Document, categoryNames []string) (model.Document, error)
 	CreateIdempotent(ctx context.Context, doc model.Document, categoryNames []string, requestID uuid.UUID) (model.Document, error)
-	CreateMarkdownIdempotent(ctx context.Context, input MarkdownDocumentCreate) (model.Document, error)
 	DuplicateAuthorized(ctx context.Context, docID, workspaceID, actorID, requestID uuid.UUID) (model.Document, error)
 	UpdateAuthorized(ctx context.Context, doc model.Document, categoryNames []string, actorID uuid.UUID) error
 	UpdateThumbnails(ctx context.Context, id, workspaceID, actorID uuid.UUID, thumb, thumbDark, thumbPreview, thumbPreviewDark string) error
@@ -56,8 +46,20 @@ type DocumentRepository interface {
 }
 
 type SuggestionRepository interface {
-	CreateSuggestion(ctx context.Context, workspaceID uuid.UUID, suggestion model.DocumentSuggestion) error
 	ListSuggestions(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.DocumentSuggestion, error)
-	RejectSuggestion(ctx context.Context, workspaceID, documentID, suggestionID, deciderID uuid.UUID) error
-	AcceptSuggestion(ctx context.Context, workspaceID, documentID, suggestionID, deciderID uuid.UUID) error
+	CreateSuggestionReply(ctx context.Context, workspaceID uuid.UUID, reply model.SuggestionReply) error
+	SetSuggestionResolved(ctx context.Context, workspaceID, documentID, suggestionID, actorID uuid.UUID, resolved bool) error
+}
+
+type CommentRepository interface {
+	ListComments(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.CommentThread, error)
+	CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error
+	CreateCommentReply(ctx context.Context, workspaceID, documentID uuid.UUID, reply model.CommentReply) error
+	SetCommentResolved(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, resolved bool) error
+	// UpdateComment and UpdateCommentReply change the text; only its author may.
+	UpdateComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, content string) error
+	UpdateCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID, content string) error
+	// DeleteComment removes a thread with its replies; its author or an editor may.
+	DeleteComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID) error
+	DeleteCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID) error
 }

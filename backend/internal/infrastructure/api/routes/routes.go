@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"context"
 	"net/http"
 
 	"backend/internal/config"
@@ -11,11 +10,6 @@ import (
 
 // InitRoutes initializes and wires all route groups for the application.
 func InitRoutes(c *container.Container, cfg config.Config) http.Handler {
-	handler, _ := InitRoutesWithShutdown(c, cfg)
-	return handler
-}
-
-func InitRoutesWithShutdown(c *container.Container, cfg config.Config) (http.Handler, func(context.Context) error) {
 	mux := http.NewServeMux()
 
 	// Base API group /api/v1
@@ -32,9 +26,11 @@ func InitRoutesWithShutdown(c *container.Container, cfg config.Config) (http.Han
 	addUserRoutes(appGroup, c, cfg)
 	addWorkspaceRoutes(appGroup, c, cfg)
 	addProjectRoutes(appGroup, c, cfg)
-	shutdownCollaboration := addDocumentRoutes(appGroup, c, cfg)
+	addDocumentRoutes(appGroup, c, cfg)
+	addCatalogRoutes(appGroup, c, cfg)
+	addCollabInternalRoutes(mux, c, cfg)
 
-	return mux, shutdownCollaboration
+	return mux
 }
 
 // Health handles health check requests.

@@ -224,3 +224,276 @@ function moveToCell(direction: 1 | -1): TableCommand {
 
 export const goToNextCell = moveToCell(1)
 export const goToPreviousCell = moveToCell(-1)
+
+// The commands below act on a table by its position and on a range of its rows
+// or columns, so a menu, a drag or a shortcut can all call them. Indexes are
+// 0-based and `to` is inclusive.
+
+function tableAt(state: EditorState, tablePos: number) {
+  const table = state.doc.nodeAt(tablePos)
+  if (!table || table.type !== nodes.table) return null
+  return { table, cells: cellPositions(table, tablePos) }
+}
+
+export function tableDimensions(table: ProseMirrorNode) {
+  return { rows: table.childCount, columns: table.firstChild?.childCount ?? 0 }
+}
+
+/** `count` new rows go in before row `index` (the row count means: at the end). */
+export const insertRowsAt =
+  (tablePos: number, index: number, count: number): TableCommand =>
+  (state, dispatch) => {
+    const found = tableAt(state, tablePos)
+    if (!found || count < 1 || index < 0 || index > found.table.childCount)
+      return false
+    if (dispatch) {
+      const aligns: TableAlign[] = []
+      found.table.firstChild?.forEach((cell) => aligns.push(cellAlign(cell)))
+      const at =
+        index < found.table.childCount
+          ? found.cells[index]![0]! - 1
+          : tablePos + found.table.nodeSize - 1
+      const tr = state.tr.insert(
+        at,
+        Array.from({ length: count }, () => newRow(aligns))
+      )
+      dispatch(tr)
+    }
+    return true
+  }
+
+/** `count` new columns go in before column `index` (the column count means: at the end). */
+export const insertColumnsAt =
+  (tablePos: number, index: number, count: number): TableCommand =>
+  (state, dispatch) => {
+    const found = tableAt(state, tablePos)
+    if (!found || count < 1) return false
+    const { columns } = tableDimensions(found.table)
+    if (index < 0 || index > columns) return false
+    if (dispatch) {
+      const tr = state.tr
+      for (let r = found.cells.length - 1; r >= 0; r--) {
+        const row = found.cells[r]!
+        const at =
+          index < row.length
+            ? row[index]!
+            : row[row.length - 1]! + found.table.child(r).lastChild!.nodeSize
+        tr.insert(
+          at,
+          Array.from({ length: count }, () => newCell('none'))
+        )
+      }
+      dispatch(tr)
+    }
+    return true
+  }
+
+/** Deleting every row deletes the table. */
+export const deleteRowsAt =
+  (tablePos: number, from: number, to: number): TableCommand =>
+  (state, dispatch) => {
+    const found = tableAt(state, tablePos)
+    if (!found || from < 0 || to < from || to >= found.table.childCount)
+      return false
+    if (dispatch) {
+      if (from === 0 && to === found.table.childCount - 1) {
+        dispatch(state.tr.delete(tablePos, tablePos + found.table.nodeSize))
+        return true
+      }
+      const start = found.cells[from]![0]! - 1
+      const last = found.cells[to]!
+      const end =
+        last[last.length - 1]! + found.table.child(to).lastChild!.nodeSize + 1
+      dispatch(state.tr.delete(start, end))
+    }
+    return true
+  }
+
+/** Deleting every column deletes the table. */
+export const deleteColumnsAt =
+  (tablePos: number, from: number, to: number): TableCommand =>
+  (state, dispatch) => {
+    const found = tableAt(state, tablePos)
+    if (!found) return false
+    const { columns } = tableDimensions(found.table)
+    if (from < 0 || to < from || to >= columns) return false
+    if (dispatch) {
+      if (from === 0 && to === columns - 1) {
+        dispatch(state.tr.delete(tablePos, tablePos + found.table.nodeSize))
+        return true
+      }
+      const tr = state.tr
+      for (let r = found.cells.length - 1; r >= 0; r--) {
+        const row = found.cells[r]!
+        const start = row[from]!
+        const end = row[to]! + found.table.child(r).child(to).nodeSize
+        tr.delete(start, end)
+      }
+      dispatch(tr)
+    }
+    return true
+  }
+
+export const alignColumnsAt =
+  (
+    tablePos: number,
+    from: number,
+    to: number,
+    align: TableAlign
+  ): TableCommand =>
+  (state, dispatch) => {
+    const found = tableAt(state, tablePos)
+    if (!found) return false
+    const { columns } = tableDimensions(found.table)
+    if (from < 0 || to < from || to >= columns) return false
+    if (dispatch) {
+      const tr = state.tr
+      found.cells.forEach((row) => {
+        for (let c = from; c <= to; c++) {
+          const cell = state.doc.nodeAt(row[c]!)
+          if (!cell) continue
+          const attributes: Record<string, unknown> = JSON.parse(
+            cell.attrs.bodyAttributes as string
+          )
+          tr.setNodeMarkup(row[c]!, undefined, {
+            ...cell.attrs,
+            bodyAttributes: JSON.stringify({ ...attributes, align }),
+          })
+        }
+      })
+      dispatch(tr)
+    }
+    return true
+  }
+
+/** True when moving `count` items from `from` to the gap `gap` changes nothing. */
+export const isNoMove = (from: number, count: number, gap: number) =>
+  gap >= from && gap <= from + count
+
+/**
+ * Moves `count` rows starting at `from` to the gap `gap` (0..rowCount). The rows
+ * are deleted and inserted again with their IDs, which the editor recognizes as
+ * a move.
+ */
+export const moveRowsAt =
+  (tablePos: number, from: number, count: number, gap: number): TableCommand =>
+  (state, dispatch) => {
+    const found = tableAt(state, tablePos)
+    if (!found) return false
+    const rows = found.table.childCount
+    if (
+      count < 1 ||
+      from < 0 ||
+      from + count > rows ||
+      gap < 0 ||
+      gap > rows ||
+      isNoMove(from, count, gap)
+    )
+      return false
+    if (dispatch) {
+      const rowStart = (index: number) =>
+        index < rows
+          ? found.cells[index]![0]! - 1
+          : tablePos + found.table.nodeSize - 1
+      const moved: ProseMirrorNode[] = []
+      for (let i = from; i < from + count; i++) moved.push(found.table.child(i))
+      const tr = state.tr.delete(rowStart(from), rowStart(from + count))
+      tr.insert(tr.mapping.map(rowStart(gap), -1), moved)
+      dispatch(tr)
+    }
+    return true
+  }
+
+/** Moves `count` columns starting at `from` to the gap `gap` (0..columnCount), in every row. */
+export const moveColumnsAt =
+  (tablePos: number, from: number, count: number, gap: number): TableCommand =>
+  (state, dispatch) => {
+    const found = tableAt(state, tablePos)
+    if (!found) return false
+    const { columns } = tableDimensions(found.table)
+    if (
+      count < 1 ||
+      from < 0 ||
+      from + count > columns ||
+      gap < 0 ||
+      gap > columns ||
+      isNoMove(from, count, gap)
+    )
+      return false
+    if (dispatch) {
+      const tr = state.tr
+      for (let r = found.cells.length - 1; r >= 0; r--) {
+        const row = found.table.child(r)
+        const positions = found.cells[r]!
+        const cellStart = (index: number) =>
+          index < columns
+            ? positions[index]!
+            : positions[columns - 1]! + row.child(columns - 1).nodeSize
+        const moved: ProseMirrorNode[] = []
+        for (let c = from; c < from + count; c++) moved.push(row.child(c))
+        const mark = tr.steps.length
+        tr.delete(cellStart(from), cellStart(from + count))
+        const rest = tr.mapping.slice(mark)
+        tr.insert(rest.map(cellStart(gap), -1), moved)
+      }
+      dispatch(tr)
+    }
+    return true
+  }
+
+function withAttribute(
+  node: ProseMirrorNode,
+  key: string,
+  value: number | null
+) {
+  const attributes: Record<string, unknown> = JSON.parse(
+    node.attrs.bodyAttributes as string
+  )
+  if (value === null) delete attributes[key]
+  else attributes[key] = Math.round(value)
+  return { ...node.attrs, bodyAttributes: JSON.stringify(attributes) }
+}
+
+/** Gives every cell of a column the same width in pixels; null goes back to automatic. */
+export const setColumnWidthAt =
+  (tablePos: number, index: number, width: number | null): TableCommand =>
+  (state, dispatch) => {
+    const found = tableAt(state, tablePos)
+    if (!found || index < 0 || index >= tableDimensions(found.table).columns)
+      return false
+    if (width !== null && !(width > 0)) return false
+    if (dispatch) {
+      const tr = state.tr
+      found.cells.forEach((row) => {
+        const cell = state.doc.nodeAt(row[index]!)
+        if (cell)
+          tr.setNodeMarkup(
+            row[index]!,
+            undefined,
+            withAttribute(cell, 'width', width)
+          )
+      })
+      dispatch(tr)
+    }
+    return true
+  }
+
+/** Gives a row a height in pixels (its least height); null goes back to automatic. */
+export const setRowHeightAt =
+  (tablePos: number, index: number, height: number | null): TableCommand =>
+  (state, dispatch) => {
+    const found = tableAt(state, tablePos)
+    if (!found || index < 0 || index >= found.table.childCount) return false
+    if (height !== null && !(height > 0)) return false
+    if (dispatch) {
+      const rowPos = found.cells[index]![0]! - 1
+      dispatch(
+        state.tr.setNodeMarkup(
+          rowPos,
+          undefined,
+          withAttribute(found.table.child(index), 'height', height)
+        )
+      )
+    }
+    return true
+  }

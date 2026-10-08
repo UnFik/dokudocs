@@ -1,33 +1,5 @@
 basePath: /api/v1
 definitions:
-  backend_internal_application_collaboration.DeleteNodeResult:
-    properties:
-      bodyEpoch:
-        type: integer
-      bodyVersion:
-        type: integer
-      changed:
-        type: boolean
-      commandID:
-        type: string
-      documentID:
-        type: string
-      nodeID:
-        type: string
-    type: object
-  backend_internal_application_collaboration.MoveNodeResult:
-    properties:
-      bodyEpoch:
-        type: integer
-      bodyVersion:
-        type: integer
-      changed:
-        type: boolean
-      commandID:
-        type: string
-      documentID:
-        type: string
-    type: object
   backend_internal_domain_model.Document:
     properties:
       author:
@@ -43,6 +15,12 @@ definitions:
         type: string
       content:
         type: string
+      contentJSON:
+        description: ContentJSON is the editor document as ProseMirror JSON; only
+          the single-document read fills it.
+        items:
+          type: integer
+        type: array
       createdAt:
         type: string
       deletedAt:
@@ -110,8 +88,6 @@ definitions:
     type: object
   backend_internal_domain_model.DocumentRestoreResult:
     properties:
-      bodyEpoch:
-        type: integer
       bodyVersion:
         type: integer
       documentId:
@@ -123,18 +99,16 @@ definitions:
     type: object
   backend_internal_domain_model.DocumentRevision:
     properties:
-      astSnapshot:
-        items:
-          type: integer
-        type: array
       authorId:
         type: string
-      bodySchemaVersion:
-        type: integer
       bodyVersion:
         type: integer
       content:
         type: string
+      contentJSON:
+        items:
+          type: integer
+        type: array
       createdAt:
         type: string
       documentId:
@@ -416,8 +390,10 @@ definitions:
         type: array
       content:
         type: string
-      initialBody:
-        $ref: '#/definitions/backend_internal_presentation_document_presenter.CreateMarkdownBodyRequest'
+      contentJSON:
+        items:
+          type: integer
+        type: array
       isDraft:
         type: boolean
       projectId:
@@ -431,36 +407,6 @@ definitions:
       type:
         type: string
       visibility:
-        type: string
-    type: object
-  backend_internal_presentation_document_presenter.CreateMarkdownBodyNode:
-    properties:
-      attributes:
-        items:
-          type: integer
-        type: array
-      content:
-        type: string
-      nodeID:
-        type: string
-      parentID:
-        type: string
-      siblingOrder:
-        type: number
-      type:
-        type: string
-    type: object
-  backend_internal_presentation_document_presenter.CreateMarkdownBodyRequest:
-    properties:
-      bodySchemaVersion:
-        type: integer
-      documentID:
-        type: string
-      nodes:
-        items:
-          $ref: '#/definitions/backend_internal_presentation_document_presenter.CreateMarkdownBodyNode'
-        type: array
-      rootNodeID:
         type: string
     type: object
   backend_internal_presentation_document_presenter.MoveRequest:
@@ -626,120 +572,9 @@ definitions:
       plan:
         type: string
     type: object
-  internal_presentation_document_handler.bodyInitializationNode:
-    properties:
-      attributes:
-        items:
-          type: integer
-        type: array
-      content:
-        type: string
-      nodeID:
-        type: string
-      parentID:
-        type: string
-      siblingOrder:
-        type: number
-      type:
-        type: string
-    type: object
-  internal_presentation_document_handler.bodyInitializationRequest:
-    properties:
-      baseBodyVersion:
-        type: integer
-      bodySchemaVersion:
-        type: integer
-      nodes:
-        items:
-          $ref: '#/definitions/internal_presentation_document_handler.bodyInitializationNode'
-        type: array
-      rootNodeID:
-        type: string
-      sourceFingerprint:
-        type: string
-    type: object
-  internal_presentation_document_handler.bodyNodeResponse:
-    properties:
-      attributes:
-        items:
-          type: integer
-        type: array
-      content:
-        type: string
-      nodeID:
-        type: string
-      parentID:
-        type: string
-      siblingOrder:
-        type: number
-      type:
-        type: string
-      version:
-        type: integer
-    type: object
-  internal_presentation_document_handler.bodySnapshotResponse:
-    properties:
-      bodyEpoch:
-        type: integer
-      bodySchemaVersion:
-        type: integer
-      bodyVersion:
-        type: integer
-      canEdit:
-        type: boolean
-      encodedState:
-        items:
-          type: integer
-        type: array
-      nodes:
-        items:
-          $ref: '#/definitions/internal_presentation_document_handler.bodyNodeResponse'
-        type: array
-      rootNodeID:
-        type: string
-    type: object
   internal_presentation_document_handler.createNamedRevisionRequest:
     properties:
       title:
-        type: string
-    type: object
-  internal_presentation_document_handler.deleteNodeRequest:
-    properties:
-      bodyEpoch:
-        type: integer
-      bodySchemaVersion:
-        type: integer
-      commandID:
-        type: string
-      nodeID:
-        type: string
-    type: object
-  internal_presentation_document_handler.moveNodeRequest:
-    properties:
-      beforeNodeID:
-        type: string
-      bodyEpoch:
-        type: integer
-      bodySchemaVersion:
-        type: integer
-      commandID:
-        type: string
-      nodeID:
-        type: string
-      targetParentID:
-        type: string
-    type: object
-  internal_presentation_document_handler.publicBodySnapshotResponse:
-    properties:
-      bodySchemaVersion:
-        type: integer
-      bodyVersion:
-        type: integer
-      nodes:
-        items:
-          $ref: '#/definitions/internal_presentation_document_handler.bodyNodeResponse'
-        type: array
-      rootNodeID:
         type: string
     type: object
 info:
@@ -1315,225 +1150,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Revoke document access
-      tags:
-      - Document
-  /documents/{id}/body:
-    get:
-      description: Returns the canonical AST and matching Yjs state for a Markdown
-        document.
-      parameters:
-      - description: Workspace ID (UUID)
-        in: header
-        name: X-Workspace-Id
-        required: true
-        type: string
-      - description: Document ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
-            - properties:
-                data:
-                  $ref: '#/definitions/internal_presentation_document_handler.bodySnapshotResponse'
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-      security:
-      - BearerAuth: []
-      summary: Get Markdown body
-      tags:
-      - Document
-  /documents/{id}/body/delete:
-    post:
-      consumes:
-      - application/json
-      description: Atomically deletes a block subtree and advances the document body
-        epoch.
-      parameters:
-      - description: Workspace ID (UUID)
-        in: header
-        name: X-Workspace-Id
-        required: true
-        type: string
-      - description: Document ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Delete command
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_presentation_document_handler.deleteNodeRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
-            - properties:
-                data:
-                  $ref: '#/definitions/backend_internal_application_collaboration.DeleteNodeResult'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-      security:
-      - BearerAuth: []
-      summary: Delete a Markdown block
-      tags:
-      - Document
-  /documents/{id}/body/initialize:
-    post:
-      consumes:
-      - application/json
-      description: Atomically stores the AST and initial Yjs state for an uninitialized
-        Markdown document.
-      parameters:
-      - description: Workspace ID (UUID)
-        in: header
-        name: X-Workspace-Id
-        required: true
-        type: string
-      - description: Document ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Parsed body and source fingerprint
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_presentation_document_handler.bodyInitializationRequest'
-      responses:
-        "204":
-          description: No Content
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-      security:
-      - BearerAuth: []
-      summary: Initialize Markdown body
-      tags:
-      - Document
-  /documents/{id}/body/move:
-    post:
-      consumes:
-      - application/json
-      description: Applies one idempotent structural move and returns the resulting
-        body epoch/version.
-      parameters:
-      - description: Workspace ID (UUID)
-        in: header
-        name: X-Workspace-Id
-        required: true
-        type: string
-      - description: Document ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Move command
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_presentation_document_handler.moveNodeRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
-            - properties:
-                data:
-                  $ref: '#/definitions/backend_internal_application_collaboration.MoveNodeResult'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-      security:
-      - BearerAuth: []
-      summary: Move a Markdown block
       tags:
       - Document
   /documents/{id}/duplicate:
@@ -2955,39 +2571,6 @@ paths:
           schema:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
       summary: Get public document
-      tags:
-      - Document
-  /public/documents/{shareToken}/body:
-    get:
-      description: Returns a shared document's canonical AST without exposing its
-        CRDT state.
-      parameters:
-      - description: Document Share Token
-        in: path
-        name: shareToken
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
-            - properties:
-                data:
-                  $ref: '#/definitions/internal_presentation_document_handler.publicBodySnapshotResponse'
-              type: object
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-      summary: Get public Markdown body
       tags:
       - Document
   /trash:

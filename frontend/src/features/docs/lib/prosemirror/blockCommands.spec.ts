@@ -134,13 +134,13 @@ describe('heading commands', () => {
     }
   })
 
-  it('leaves "# " as text when the paragraph would lose its only run', () => {
+  it('turns "# " into an empty heading when it is all the paragraph holds', () => {
     const harness = mountTestEditor(paragraphsBody('#'))
     try {
       caret(harness, '#', 1)
       typeText(harness, ' ')
-      expect(node(harness, 'p0')?.type).toBe('paragraph')
-      expect(node(harness, 'r0')?.content).toBe('# ')
+      expect(node(harness, 'p0')?.type).toBe('atx-heading')
+      expect(node(harness, 'r0')).toBeUndefined()
     } finally {
       harness.cleanup()
     }
@@ -176,6 +176,29 @@ describe('Enter', () => {
       )
       expect(second?.content).toBe(' world')
       expect(new Set(body.map((item) => item.nodeID)).size).toBe(body.length)
+    } finally {
+      harness.cleanup()
+    }
+  })
+
+  it('leaves no empty run when Enter is pressed at the end of a run', () => {
+    const harness = mountTestEditor(paragraphsBody('hello'))
+    try {
+      caret(harness, 'hello', 5)
+      pressKey(harness.editor.view.dom, 'Enter')
+      const emptyRuns: string[] = []
+      harness.editor.view.state.doc.descendants((child) => {
+        if (child.type.name === 'run' && child.content.size === 0)
+          emptyRuns.push(child.type.name)
+      })
+      expect(emptyRuns).toEqual([])
+      const { $from } = harness.editor.view.state.selection
+      expect($from.parent.type.name).toBe('paragraph')
+      expect($from.parent.textContent).toBe('')
+      expect($from.index(1)).toBe(1)
+      expect(
+        harness.editor.getBody().filter((item) => item.type === 'paragraph')
+      ).toHaveLength(2)
     } finally {
       harness.cleanup()
     }
@@ -337,6 +360,42 @@ describe('insert blocks', () => {
       expect(
         harness.editor.getBody().some((i) => i.type === 'code-block')
       ).toBe(false)
+    } finally {
+      harness.cleanup()
+    }
+  })
+})
+
+describe('Enter in a diagram block', () => {
+  it('adds a line, also after the whole source was deleted', () => {
+    const harness = mountTestEditor([
+      ...paragraphsBody('before'),
+      {
+        nodeID: 'diagram',
+        parentID: 'root',
+        siblingOrder: 5,
+        type: 'diagram',
+        content: 'graph LR',
+        attributes: { type: 'mermaid' },
+      },
+    ])
+    try {
+      const { view } = harness.editor
+      let from = 0
+      view.state.doc.descendants((n, pos) => {
+        if (n.type.name === 'diagram') from = pos + 1
+      })
+      const diagram = () =>
+        harness.editor.getBody().find((i) => i.nodeID === 'diagram')!
+      view.dispatch(view.state.tr.delete(from, from + 'graph LR'.length))
+      view.dispatch(
+        view.state.tr.setSelection(TextSelection.create(view.state.doc, from))
+      )
+      view.dom.focus()
+      view.dispatch(view.state.tr.insertText('a'))
+      pressKey(view.dom, 'Enter')
+      view.dispatch(view.state.tr.insertText('b'))
+      expect(diagram().content).toBe('a\nb')
     } finally {
       harness.cleanup()
     }
