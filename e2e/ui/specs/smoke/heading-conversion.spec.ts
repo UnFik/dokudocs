@@ -33,7 +33,7 @@ test("@live @smoke: slash Heading 2 and Ctrl+Alt shortcuts convert blocks, rende
   await page.locator('input[name="email"]').fill("admin@example.com");
   await page.locator('input[name="password"]').fill("password123");
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => url.pathname === "/");
+  await page.waitForURL((url) => url.pathname === "/dashboard");
   const token = (await page.context().cookies()).find(
     (cookie) => cookie.name === "thisisjustarandomstring",
   )!.value;

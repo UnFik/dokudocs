@@ -16,7 +16,7 @@ test('@live: public share route renders the canonical Markdown AST read-only', a
   await page.locator('input[name="email"]').fill('admin@example.com')
   await page.locator('input[name="password"]').fill('password123')
   await page.getByRole('button', { name: /sign in/i }).click()
-  await page.waitForURL((url) => url.pathname === '/')
+  await page.waitForURL((url) => url.pathname === '/dashboard')
 
   await page.getByRole('button', { name: /workspace/i }).first().click()
   await page.getByRole('menuitem', { name: 'Create Workspace' }).click()
@@ -130,6 +130,6 @@ test('@live: public share route renders the canonical Markdown AST read-only', a
   )
   await expect(page.locator('.ProseMirror')).toHaveCount(0)
 
-  await page.goto('/')
+  await page.goto('/dashboard')
   await expect(page.getByText('Rendered from the stored Markdown.')).toBeVisible()
 })
