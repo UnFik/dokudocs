@@ -41,12 +41,19 @@ type Suggestion struct {
 type StoreOptions struct {
 	// UpdatedBy is the user whose edit the store is for, when it is known.
 	UpdatedBy *uuid.UUID
+	// Thumbnail is the SVG drawn on an architecture document's card; empty
+	// clears it. Nil leaves the stored one as it is (Markdown rooms send none).
+	Thumbnail *string
 }
 
 type StoreOption func(*StoreOptions)
 
 func WithUpdatedBy(id uuid.UUID) StoreOption {
 	return func(options *StoreOptions) { options.UpdatedBy = &id }
+}
+
+func WithThumbnail(svg string) StoreOption {
+	return func(options *StoreOptions) { options.Thumbnail = &svg }
 }
 
 func ApplyStoreOptions(options []StoreOption) StoreOptions {

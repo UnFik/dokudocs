@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"backend/internal/application/collaboration"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
@@ -146,5 +147,58 @@ func TestAPublicLinkToAnArchitectureDocumentGivesItsCanvas(t *testing.T) {
 	got, err := repo.GetByShareToken(ctx, token)
 	if err != nil || got.Type != "architecture" || !sameJSON(t, got.ContentJSON, canvasOne) {
 		t.Fatalf("GetByShareToken() = (%s, %s, %v), want the canvas", got.Type, got.ContentJSON, err)
+	}
+}
+
+func TestStoringACanvasKeepsTheDrawingOnItsCard(t *testing.T) {
+	ctx := context.Background()
+	db := openIntegrationDB(t)
+	workspaceID, documentID, ownerID, repo := seedArchitectureDocument(t, ctx, db, canvasOne, `System "API".`)
+	store := NewCollabStateStore(database.NewSQLDB(db))
+	preview := func() string {
+		t.Helper()
+		got, err := repo.GetByID(ctx, documentID, ownerID)
+		if err != nil {
+			t.Fatalf("GetByID(): %v", err)
+		}
+		return got.ThumbnailPreview
+	}
+
+	drawing := `<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>`
+	if err := store.StoreState(ctx, workspaceID, documentID, []byte{1}, json.RawMessage(canvasOne), `System "API".`, nil, collaboration.WithThumbnail(drawing)); err != nil {
+		t.Fatalf("StoreState(): %v", err)
+	}
+	if got := preview(); got != drawing {
+		t.Fatalf("thumbnail preview = %q, want the drawing", got)
+	}
+	// A store without one leaves it; an empty one (an empty canvas) clears it.
+	if err := store.StoreState(ctx, workspaceID, documentID, []byte{2}, json.RawMessage(canvasOne), `System "API".`, nil); err != nil {
+		t.Fatalf("StoreState(): %v", err)
+	}
+	if got := preview(); got != drawing {
+		t.Fatalf("thumbnail preview after a store without one = %q, want it kept", got)
+	}
+	if err := store.StoreState(ctx, workspaceID, documentID, []byte{3}, json.RawMessage(`{"version":1,"nodes":[],"connections":[]}`), "", nil, collaboration.WithThumbnail("")); err != nil {
+		t.Fatalf("StoreState(): %v", err)
+	}
+	if got := preview(); got != "" {
+		t.Fatalf("thumbnail preview of an empty canvas = %q, want none", got)
+	}
+}
+
+func TestAMarkdownStoreNeverWritesACanvasDrawing(t *testing.T) {
+	ctx := context.Background()
+	db := openIntegrationDB(t)
+	workspaceID, documentID, ownerID, paragraphID, runID, repo := seedRunDocument(t, ctx, db)
+	store := NewCollabStateStore(database.NewSQLDB(db))
+	if err := store.StoreState(ctx, workspaceID, documentID, []byte{1}, json.RawMessage(plainDocumentJSON(paragraphID, runID, "plain")), "plain\n", nil, collaboration.WithThumbnail(`<svg/>`)); err != nil {
+		t.Fatalf("StoreState(): %v", err)
+	}
+	got, err := repo.GetByID(ctx, documentID, ownerID)
+	if err != nil {
+		t.Fatalf("GetByID(): %v", err)
+	}
+	if got.ThumbnailPreview != "" {
+		t.Fatalf("thumbnail preview of a Markdown document = %q, want none", got.ThumbnailPreview)
 	}
 }
