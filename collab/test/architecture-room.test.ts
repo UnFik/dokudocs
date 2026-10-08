@@ -51,6 +51,9 @@ describe('an Architecture room', () => {
     expect(stored.content).toMatchObject({ version: 1, nodes: [{ id: 'order', name: 'Backend Order' }], connections: [] })
     expect(stored.markdown).toBe('System "Backend Order".')
     expect(stored.suggestions).toEqual([])
+    // The drawing on the document card, with no text from the canvas in it.
+    expect(stored.thumbnail).toMatch(/^<svg[^>]*>.*<rect .*<\/svg>$/)
+    expect(stored.thumbnail).not.toContain('Backend Order')
     a.provider.destroy()
   })
 

@@ -71,6 +71,14 @@ describe('HttpBackend against the Go contract', () => {
     expect(loaded.content).toEqual({ type: 'doc' })
   })
 
+  it('sends the card drawing with an architecture store, and none with a Markdown one', async () => {
+    await backend.storeState({ workspaceID: 'ws-1', documentID: 'doc-1', state: new Uint8Array([1]), content: { version: 1 }, markdown: 'System "API".', suggestions: [], updatedBy: null, thumbnail: '<svg></svg>' })
+    await backend.storeState({ workspaceID: 'ws-1', documentID: 'doc-2', state: new Uint8Array([1]), content: { type: 'doc' }, markdown: 'text\n', suggestions: [], updatedBy: null })
+    const puts = seen.filter((s) => s.method === 'PUT').map((s) => s.body as Record<string, unknown>)
+    expect(puts[0]!.thumbnail).toBe('<svg></svg>')
+    expect(puts[1]).not.toHaveProperty('thumbnail')
+  })
+
   it('loads a document with nothing stored as nulls, and refuses one that is not there', async () => {
     await expect(backend.loadDocument('ws-1', 'fresh')).resolves.toEqual({ state: null, content: null })
     await expect(backend.loadDocument('ws-1', 'missing')).rejects.toThrow(/not found/i)

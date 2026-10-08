@@ -70,6 +70,8 @@ describe('collaboration service', () => {
     const stored = backend.stores.at(-1)!
     expect(stored.documentID).toBe(document)
     expect(stored.workspaceID).toBe(workspace)
+    // Only an architecture room has a card drawing.
+    expect(stored.thumbnail).toBeUndefined()
 
     const second = connect(port, room, 'tok-b')
     await second.synced
