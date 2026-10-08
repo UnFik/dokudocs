@@ -130,11 +130,14 @@ services:
       - "${FRONTEND_PORT:-5173}:5173"
     volumes:
       - ./frontend:/app
+      # node_modules lives in this volume, not in the bind-mounted source, so it
+      # keeps the packages of the image it was created from. Installing on every
+      # start brings it up to bun.lock after a pull adds a dependency.
       - /app/node_modules
     depends_on:
       - api
       - collab
-    command: bun run dev --host
+    command: sh -c "bun install --frozen-lockfile && exec bun run dev --host"
 
 # Reuse the volumes created by backend/docker-compose.yaml so existing dev data carries over.
 volumes:
