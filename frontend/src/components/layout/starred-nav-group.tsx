@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
-import { DocumentItem, ProjectItem } from '@/types/dokudocs'
+import type { DocumentItem, ProjectItem } from '@/types/dokudocs'
 import {
   ChevronRight,
   Copy,
@@ -44,6 +44,8 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
+import { useToggleProjectStar } from '@/features/projects/hooks/use-toggle-project-star'
 
 type StarredEntry =
   | { kind: 'project'; data: ProjectItem; timestamp: number }
@@ -53,10 +55,9 @@ export function StarredNavGroup() {
   const navigate = useNavigate()
   const { state, isMobile, setOpenMobile } = useSidebar()
   const href = useLocation({ select: (location) => location.href })
-  const activeOrgId = useDokudocsStore((s) => s.activeOrgId)
-  const projects = useDokudocsStore((s) => s.projects)
+  const { activeOrgId, projects } = useDokudocs()
   const documents = useDokudocsStore((s) => s.documents)
-  const toggleStarProject = useDokudocsStore((s) => s.toggleStarProject)
+  const starMutation = useToggleProjectStar()
   const toggleStarDocument = useDokudocsStore((s) => s.toggleStarDocument)
 
   const starredProjects = (projects || []).filter(
@@ -190,8 +191,8 @@ export function StarredNavGroup() {
                               <ContextMenuSeparator />
                               <ContextMenuItem
                                 onClick={() => {
-                                  toggleStarProject(p.id)
-                                  toast.success(`Unstarred "${p.name}"`)
+                                  if (!starMutation.isPending)
+                                    starMutation.mutate(p)
                                 }}
                               >
                                 <StarOff className='mr-2 size-3.5 text-muted-foreground' />
@@ -387,8 +388,8 @@ export function StarredNavGroup() {
                                 <ContextMenuSeparator />
                                 <ContextMenuItem
                                   onClick={() => {
-                                    toggleStarProject(p.id)
-                                    toast.success(`Unstarred "${p.name}"`)
+                                    if (!starMutation.isPending)
+                                      starMutation.mutate(p)
                                   }}
                                 >
                                   <StarOff className='mr-2 size-3.5 text-muted-foreground' />
