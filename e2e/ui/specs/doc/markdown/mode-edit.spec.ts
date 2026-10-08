@@ -86,8 +86,8 @@ test.describe('Markdown Editor - Mode Edit', () => {
       })
     }, { timeout: 5000 }).toContain('DirectEdit')
 
-    await page.goto('/')
-    await expect(page).toHaveURL('/')
+    await page.goto('/dashboard')
+    await expect(page).toHaveURL('/dashboard')
 
     await docEditorPage.goto('doc-1')
     const reloadedText = await page.locator('.muya-editor-root').textContent()
