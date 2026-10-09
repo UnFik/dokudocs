@@ -1,0 +1,4 @@
+self-hosted-runner:
+  # The runner on the production server (docs/deployment.md).
+  labels:
+    - dokudocs-production

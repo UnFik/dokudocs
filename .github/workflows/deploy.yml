@@ -1,0 +1,89 @@
+name: Deploy
+
+# Every push to main is built into images on GitHub and deployed to the server
+# by the runner that lives there. Run it by hand with an older commit to roll
+# back to that commit's images. See docs/deployment.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit on main to deploy (its images must exist); empty for the latest main
+        required: false
+
+permissions:
+  contents: read
+
+# One deploy at a time, and none is cancelled halfway.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/unfik/dokudocs
+
+jobs:
+  images:
+    # A rollback reuses the images built for that commit.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.sha == '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: api
+            context: backend
+            file: backend/Dockerfile
+            target: prod
+          - name: collab
+            context: .
+            file: collab/Dockerfile
+            target: ''
+          - name: frontend
+            context: frontend
+            file: frontend/Dockerfile
+            target: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}-${{ matrix.name }}:${{ github.sha }}
+            ${{ env.IMAGE }}-${{ matrix.name }}:main
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    needs: images
+    if: >-
+      always() && github.ref == 'refs/heads/main' &&
+      (needs.images.result == 'success' || needs.images.result == 'skipped')
+    runs-on: [self-hosted, dokudocs-production]
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Deploy
+        env:
+          SHA: ${{ inputs.sha || github.sha }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$TOKEN" | sudo /usr/local/bin/dokudocs-deploy "$SHA"
