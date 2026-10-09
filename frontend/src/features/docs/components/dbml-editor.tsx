@@ -1,39 +1,42 @@
+import { useMemo, useRef } from 'react'
 import { AlignLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { formatDbml } from '../lib/format-dbml'
+import type { SourceBinding } from '../lib/source-binding'
 import { DbmlVisualCanvas } from './previews/dbml-visual-canvas'
-import { UnifiedMonacoEditor } from './unified-monaco-editor'
+import { UnifiedMonacoEditor, type SourceCollab } from './unified-monaco-editor'
 
 interface DbmlEditorProps {
   docId?: string
   content: string
   onChange: (newContent: string) => void
+  /** Edited together: the editor writes the shared source, and `content` is its preview. */
+  collab?: SourceCollab
 }
 
-export function DbmlEditor({ docId, content, onChange }: DbmlEditorProps) {
-  const formatCode = () => {
-    const formatted = content
-      .split('\n')
-      .map((line) => {
-        const trimmed = line.trim()
-        if (
-          trimmed.startsWith('Table ') ||
-          trimmed.startsWith('Enum ') ||
-          trimmed.startsWith('TableGroup ') ||
-          trimmed.startsWith('Project ')
-        ) {
-          return trimmed
-        }
-        if (trimmed === '}') {
-          return '}'
-        }
-        if (trimmed && !trimmed.startsWith('//')) {
-          return '  ' + trimmed
-        }
-        return trimmed
-      })
-      .join('\n')
+export function DbmlEditor({
+  docId,
+  content,
+  onChange,
+  collab,
+}: DbmlEditorProps) {
+  const bindingRef = useRef<SourceBinding | null>(null)
+  const shared = useMemo<SourceCollab | undefined>(
+    () =>
+      collab && {
+        ...collab,
+        onBinding: (binding) => {
+          bindingRef.current = binding
+          collab.onBinding?.(binding)
+        },
+      },
+    [collab]
+  )
 
-    onChange(formatted)
+  const formatCode = () => {
+    // Formatted from the source as it is now, so a result is never stale.
+    if (shared) bindingRef.current?.replace(formatDbml(shared.text.toString()))
+    else onChange(formatDbml(content))
   }
 
   const customActions = (
@@ -41,6 +44,7 @@ export function DbmlEditor({ docId, content, onChange }: DbmlEditorProps) {
       variant='ghost'
       size='sm'
       onClick={formatCode}
+      disabled={collab?.readOnly}
       className='h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground'
       title='Beautify schema code'
     >
@@ -52,6 +56,7 @@ export function DbmlEditor({ docId, content, onChange }: DbmlEditorProps) {
   return (
     <UnifiedMonacoEditor
       docId={docId}
+      collab={shared}
       content={content}
       onChange={onChange}
       language='dbml'

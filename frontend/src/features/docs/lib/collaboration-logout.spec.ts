@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { IndexeddbPersistence } from 'y-indexeddb'
+import * as Y from 'yjs'
 import { registerOpenDocument } from './collab-registry'
 import {
   discardLocalEdits,
@@ -70,6 +72,28 @@ describe('logout and local document data', () => {
       { documentID: 'doc-2', count: 3, workspaceID: 'workspace-1' },
     ])
     expect(await localDatabases()).toContain('dokudocs:ws.doc-2')
+  })
+
+  it('does not clear the copy of a closed DBML or Mermaid document it could not send', async () => {
+    const userID = `user-${crypto.randomUUID()}`
+    // Copies the other tests leave are empty databases, not documents.
+    await discardLocalEdits(userID)
+    // Named after its record; no server answers here, so nothing reaches it.
+    const doc = new Y.Doc()
+    const copy = new IndexeddbPersistence('dokudocs:ws.doc-9.record-1', doc)
+    await copy.whenSynced
+    doc.getText('source').insert(0, 'Table unsent {}')
+    await copy.destroy()
+
+    const result = await flushLocalEditsForLogout({
+      userID,
+      token: () => 'token',
+      timeoutMs: 50,
+    })
+
+    expect(result.unsynced.map((item) => item.documentID)).toContain('doc-9')
+    expect(await localDatabases()).toContain('dokudocs:ws.doc-9.record-1')
+    await discardLocalEdits(userID)
   })
 
   it('discards local copies and stops open editors on request', async () => {

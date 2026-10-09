@@ -9,9 +9,15 @@ export type CollabStatus =
   | 'offline'
   | 'unauthorized'
   | 'forbidden'
+  /** A restore replaced the record this copy was made for (DBML and Mermaid only). */
+  | 'replaced'
 
 /** canComment is absent from a service that predates it; then suggesting implies commenting. */
-export type CollabAccess = { canEdit: boolean; canSuggest: boolean; canComment?: boolean }
+export type CollabAccess = {
+  canEdit: boolean
+  canSuggest: boolean
+  canComment?: boolean
+}
 
 /** A collaborator's selection. Only name and color are shared, never contact data. */
 export type RemoteCursor = {
@@ -29,9 +35,18 @@ export type PresenceUser = {
   avatarURL?: string
 }
 
-/** A room is named `{workspaceID}.{documentID}`. */
-export function roomName(workspaceID: string, documentID: string) {
-  return `${workspaceID}.${documentID}`
+/**
+ * A room is named `{workspaceID}.{documentID}`. A DBML or Mermaid room also names
+ * its record, which a restore replaces: `{workspaceID}.{documentID}.{record}`.
+ */
+export function roomName(
+  workspaceID: string,
+  documentID: string,
+  record?: string
+) {
+  return record
+    ? `${workspaceID}.${documentID}.${record}`
+    : `${workspaceID}.${documentID}`
 }
 
 /** The collaboration service sits behind the same origin, under `/collab`. */
@@ -44,18 +59,26 @@ export function collabURL(baseURL = window.location.href) {
 }
 
 /** Drops this device's copy of a document, for when the server replaced the body. */
-export function clearLocalCopy(workspaceID: string, documentID: string) {
+export function clearLocalCopy(
+  workspaceID: string,
+  documentID: string,
+  record?: string
+) {
   return new Promise<void>((resolve) => {
     const request = indexedDB.deleteDatabase(
-      `dokudocs:${roomName(workspaceID, documentID)}`
+      `dokudocs:${roomName(workspaceID, documentID, record)}`
     )
     request.onsuccess = request.onerror = request.onblocked = () => resolve()
   })
 }
 
 /** Whether this device holds a copy of the document, so it can open without a connection. */
-export async function hasLocalCopy(workspaceID: string, documentID: string) {
-  const name = `dokudocs:${roomName(workspaceID, documentID)}`
+export async function hasLocalCopy(
+  workspaceID: string,
+  documentID: string,
+  record?: string
+) {
+  const name = `dokudocs:${roomName(workspaceID, documentID, record)}`
   const databases = await indexedDB.databases()
   return databases.some((database) => database.name === name)
 }
@@ -63,6 +86,8 @@ export async function hasLocalCopy(workspaceID: string, documentID: string) {
 export function openCollabSession(input: {
   workspaceID: string
   documentID: string
+  /** A DBML or Mermaid document's record; its room and local copy are named after it. */
+  record?: string
   userID: string
   userName?: string
   token: string | (() => string)
@@ -77,7 +102,7 @@ export function openCollabSession(input: {
   /** The server refused an update and closes the connection; sending it again would loop. */
   onRefused?: (reason: string) => void
 }) {
-  const name = roomName(input.workspaceID, input.documentID)
+  const name = roomName(input.workspaceID, input.documentID, input.record)
   const ydoc = new Y.Doc()
   // The local copy makes the document open offline and keeps unsynced edits
   // across a reload; the server merges them in when the connection returns.
@@ -93,6 +118,7 @@ export function openCollabSession(input: {
   }
   // Declared before the provider: its first status event may arrive at once.
   const pongs = new Map<string, () => void>()
+  const stores = new Map<string, (ok: boolean) => void>()
   let wroteOffline = false
   let connected = false
   let syncedOnce = false
@@ -109,7 +135,10 @@ export function openCollabSession(input: {
       else setStatus('offline')
     },
     onAuthenticationFailed: ({ reason }) => {
-      status = reason === 'forbidden' ? 'forbidden' : 'unauthorized'
+      status =
+        reason === 'forbidden' || reason === 'replaced'
+          ? reason
+          : 'unauthorized'
       input.onStatus?.(status)
       markSynced()
     },
@@ -136,9 +165,15 @@ export function openCollabSession(input: {
       else if (message.type === 'comments_changed') input.onCommentsChanged?.()
       else if (message.type === 'reloaded') input.onReloaded?.()
       else if (message.type === 'refused')
-        input.onRefused?.(String((message as { reason?: unknown }).reason ?? ''))
+        input.onRefused?.(
+          String((message as { reason?: unknown }).reason ?? '')
+        )
       else if (message.type === 'pong')
         pongs.get(String((message as { id?: unknown }).id))?.()
+      else if (message.type === 'stored')
+        stores.get(String((message as { id?: unknown }).id))?.(
+          Boolean((message as { ok?: unknown }).ok)
+        )
     },
   })
   // A change made while the connection is down is not on the server until the
@@ -234,6 +269,28 @@ export function openCollabSession(input: {
             }, 200)
           }
         }, 50)
+      })
+    },
+    /**
+     * Resolves true once the database holds every change made here: the room has
+     * them and has stored them. Only then may the editor say "saved" or name a version.
+     */
+    async flushed(timeoutMs: number) {
+      const started = Date.now()
+      if (!(await this.drained(timeoutMs))) return false
+      return new Promise<boolean>((resolve) => {
+        const id = crypto.randomUUID()
+        const finish = (ok: boolean) => {
+          clearTimeout(timer)
+          stores.delete(id)
+          resolve(ok)
+        }
+        const timer = setTimeout(
+          () => finish(false),
+          Math.max(0, timeoutMs - (Date.now() - started))
+        )
+        stores.set(id, finish)
+        provider.sendStateless(JSON.stringify({ type: 'flush', id }))
       })
     },
     /** Shares the local selection, or clears it when the editor loses focus. */

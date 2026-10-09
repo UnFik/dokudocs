@@ -1,4 +1,4 @@
-import type { Authorized, BackendApi, LoadedDocument, StoredDocument } from './backend-api'
+import { ReplacedError, type Authorized, type BackendApi, type LoadedDocument, type StoredDocument } from './backend-api'
 
 const toBase64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64')
 const fromBase64 = (text: string) => new Uint8Array(Buffer.from(text, 'base64'))
@@ -46,7 +46,9 @@ export class HttpBackend implements BackendApi {
       updatedBy: document.updatedBy,
       suggestions: document.suggestions,
       ...(document.thumbnail === undefined ? {} : { thumbnail: document.thumbnail }),
+      ...(document.replacementID === undefined ? {} : { replacementID: document.replacementID }),
     })
+    if (response.status === 409) throw new ReplacedError()
     if (response.status !== 204) throw new Error(`store failed: ${response.status}`)
   }
 }

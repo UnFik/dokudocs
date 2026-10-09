@@ -15,12 +15,19 @@ import { ArchitectureDocEditor } from '@/features/architecture/components/archit
 import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { useDocEditor } from '../hooks/use-doc-editor'
+import {
+  copyDiagramSvg,
+  exportDiagramPng,
+  exportDiagramSvg,
+  getDiagramSvg,
+} from '../lib/diagram-export'
 import { DbmlEditor } from './dbml-editor'
 import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
 import { EditorHeader } from './editor-header'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
 import { RemoteMarkdownDocEditor } from './remote-markdown-doc-editor'
+import { RemoteSourceDocEditor } from './remote-source-doc-editor'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
 export function DocEditor() {
@@ -42,6 +49,11 @@ export function DocEditor() {
   // A canvas opens offline from this device's copy of its room, like Markdown.
   const cachedCanvas =
     cachedDocument?.type === 'architecture' ? cachedDocument : undefined
+  // A DBML or Mermaid document opens offline from this device's copy of its record.
+  const cachedSource =
+    cachedDocument?.type === 'dbdiagram' || cachedDocument?.type === 'mermaid'
+      ? cachedDocument
+      : undefined
   const isRemoteID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       docId
@@ -50,11 +62,11 @@ export function DocEditor() {
     queryKey: ['document', workspaceID, docId, scope.userId],
     queryFn: async ({ signal }) => {
       const document = await getDocument(workspaceID, docId, signal)
-      if (document.type === 'markdown' || document.type === 'architecture')
-        useDokudocsStore.getState().upsertDocument({
-          ...document,
-          content: '',
-        })
+      // Kept for opening offline; every body lives in its room, not in this cache.
+      useDokudocsStore.getState().upsertDocument({
+        ...document,
+        content: '',
+      })
       return document
     },
     enabled:
@@ -76,6 +88,17 @@ export function DocEditor() {
         document={cachedCanvas}
         workspaceID={cachedCanvas.workspaceId}
         userID={scope.userId ?? ''}
+      />
+    )
+
+  if (offline && cachedSource?.workspaceId && cachedSource.replacementId)
+    return (
+      <RemoteSourceDocEditor
+        key={`${scope.generation}:${docId}`}
+        document={cachedSource}
+        workspaceID={cachedSource.workspaceId}
+        userID={scope.userId ?? ''}
+        offline
       />
     )
 
@@ -133,6 +156,19 @@ export function DocEditor() {
         workspaceID={workspaceID}
         userID={scope.userId ?? auth.user?.id ?? ''}
         focusNodeID={citationNodeID}
+      />
+    )
+
+  if (
+    documentQuery.data.type === 'dbdiagram' ||
+    documentQuery.data.type === 'mermaid'
+  )
+    return (
+      <RemoteSourceDocEditor
+        key={`${scope.generation}:${docId}`}
+        document={documentQuery.data}
+        workspaceID={workspaceID}
+        userID={scope.userId ?? auth.user?.id ?? ''}
       />
     )
 
@@ -235,78 +271,6 @@ function ScopedDocEditor({ docId }: { docId: string }) {
     toast.success('Document raw code copied to clipboard')
   }
 
-  const getDiagramSvg = (): string | null => {
-    const svgEl = document.querySelector(
-      '#mermaid-canvas-layer svg, [data-preview-layer] svg, svg.pointer-events-none, .dokudocs-preview-svg svg'
-    )
-    if (svgEl) {
-      return new XMLSerializer().serializeToString(svgEl)
-    }
-    return null
-  }
-
-  const handleExportCopySvg = () => {
-    const svgText = getDiagramSvg()
-    if (!svgText) {
-      toast.error('No rendered diagram found to copy SVG')
-      return
-    }
-    navigator.clipboard.writeText(svgText)
-    toast.success('SVG code copied to clipboard')
-  }
-
-  const handleExportSvg = () => {
-    const svgText = getDiagramSvg()
-    if (!svgText) {
-      toast.error('No rendered diagram found to export SVG')
-      return
-    }
-    const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${title.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'diagram'}.svg`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    toast.success('SVG diagram downloaded')
-  }
-
-  const handleExportPng = () => {
-    const svgText = getDiagramSvg()
-    if (!svgText) {
-      toast.error('No rendered diagram found to export PNG')
-      return
-    }
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    const img = new Image()
-    const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(svgBlob)
-
-    img.onload = () => {
-      const scale = 2
-      canvas.width = (img.width || 800) * scale
-      canvas.height = (img.height || 600) * scale
-      if (ctx) {
-        ctx.fillStyle = isDark ? '#09090b' : '#ffffff'
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        const pngUrl = canvas.toDataURL('image/png')
-        const a = document.createElement('a')
-        a.href = pngUrl
-        a.download = `${title.toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'diagram'}.png`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-      }
-      URL.revokeObjectURL(url)
-      toast.success('PNG image downloaded')
-    }
-    img.src = url
-  }
-
   const isDiagram = doc.type === 'mermaid' || doc.type === 'dbdiagram'
 
   return (
@@ -328,9 +292,11 @@ function ScopedDocEditor({ docId }: { docId: string }) {
             : undefined
         }
         onExportCode={handleExportCode}
-        onExportCopySvg={isDiagram ? handleExportCopySvg : undefined}
-        onExportSvg={isDiagram ? handleExportSvg : undefined}
-        onExportPng={isDiagram ? handleExportPng : undefined}
+        onExportCopySvg={isDiagram ? copyDiagramSvg : undefined}
+        onExportSvg={isDiagram ? () => exportDiagramSvg(title) : undefined}
+        onExportPng={
+          isDiagram ? () => exportDiagramPng(title, isDark) : undefined
+        }
         onToggleComments={doc.type === 'markdown' ? toggleSidebar : undefined}
         isCommentsOpen={isSidebarOpen}
         commentsCount={doc.type === 'markdown' ? unresolvedCount : undefined}

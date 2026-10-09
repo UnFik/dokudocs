@@ -11,6 +11,14 @@ import (
 // ErrCollabDocumentNotFound means the document does not exist in that workspace.
 var ErrCollabDocumentNotFound = errors.New("collaboration document not found")
 
+// ErrInvalidCollabContent means the JSON does not fit the document's type, such
+// as a DBML or Mermaid body that is not exactly {"source": "..."}.
+var ErrInvalidCollabContent = errors.New("collaboration content does not fit the document type")
+
+// ErrCollabReplaced means a restore replaced the record the room was opened on;
+// what the room holds must not be written over the current one.
+var ErrCollabReplaced = errors.New("collaboration record was replaced")
+
 // RoomAccess is one user's current access to a document.
 type RoomAccess struct {
 	CanRead    bool
@@ -21,8 +29,10 @@ type RoomAccess struct {
 // RoomHead is each requested user's access to a document.
 type RoomHead struct {
 	Access map[uuid.UUID]RoomAccess
-	// DocumentType is the kind of document the room holds: markdown or architecture.
+	// DocumentType is the kind of document the room holds: markdown, architecture, dbdiagram or mermaid.
 	DocumentType string
+	// ReplacementID is the record the room must hold; a room opened on another one is stale.
+	ReplacementID uuid.UUID
 }
 
 // RoomReader evaluates access for many users with a fixed number of lock-free
@@ -44,6 +54,9 @@ type StoreOptions struct {
 	// Thumbnail is the SVG drawn on an architecture document's card; empty
 	// clears it. Nil leaves the stored one as it is (Markdown rooms send none).
 	Thumbnail *string
+	// ReplacementID is the record the room was opened on. When set, the store is
+	// refused with ErrCollabReplaced if a restore has replaced that record since.
+	ReplacementID *uuid.UUID
 }
 
 type StoreOption func(*StoreOptions)
@@ -54,6 +67,10 @@ func WithUpdatedBy(id uuid.UUID) StoreOption {
 
 func WithThumbnail(svg string) StoreOption {
 	return func(options *StoreOptions) { options.Thumbnail = &svg }
+}
+
+func WithReplacementID(id uuid.UUID) StoreOption {
+	return func(options *StoreOptions) { options.ReplacementID = &id }
 }
 
 func ApplyStoreOptions(options []StoreOption) StoreOptions {

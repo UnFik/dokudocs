@@ -24,8 +24,11 @@ type Document struct {
 	Content     string     `json:"content"`
 	// ContentJSON is the editor document as ProseMirror JSON; only the single-document read fills it.
 	ContentJSON json.RawMessage `json:"contentJSON,omitempty"`
-	AuthorID    uuid.UUID       `json:"authorId"`
-	Author      UserAuthor      `json:"author"`
+	// ReplacementID names the record the body's collaboration room writes to; only a
+	// restore changes it. Only the single-document read fills it.
+	ReplacementID *uuid.UUID `json:"replacementId,omitempty"`
+	AuthorID      uuid.UUID  `json:"authorId"`
+	Author        UserAuthor `json:"author"`
 	// UpdatedBy is the person whose edit was stored last; nil before the first edit. Only the single-document read fills it.
 	UpdatedBy            *UserAuthor `json:"updatedBy,omitempty"`
 	Tags                 []string    `json:"tags"`
@@ -68,6 +71,8 @@ type DocumentRestoreResult struct {
 	RevisionID       uuid.UUID `json:"revisionId"`
 	SourceRevisionID uuid.UUID `json:"sourceRevisionId"`
 	BodyVersion      int64     `json:"bodyVersion"`
+	// ReplacementID is the record the restore made; editors reopen the document on it.
+	ReplacementID uuid.UUID `json:"replacementId"`
 }
 
 type TrashItem struct {

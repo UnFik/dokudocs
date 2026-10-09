@@ -110,8 +110,8 @@ describe('an Architecture room', () => {
     a.provider.destroy()
   })
 
-  it('refuses DBML and Mermaid documents, which have no room', async () => {
-    backend.grant('tok-d', 'user-d', { documentType: 'mermaid' })
+  it('refuses a kind of document that has no room', async () => {
+    backend.grant('tok-d', 'user-d', { documentType: 'spreadsheet' })
     const d = connect(port, room, 'tok-d')
     await expect(d.refused).resolves.toBeTruthy()
     d.provider.destroy()

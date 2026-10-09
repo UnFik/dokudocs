@@ -115,6 +115,8 @@ func (h *InternalHandler) authorize(w http.ResponseWriter, r *http.Request) {
 		"canSuggest": access.CanSuggest,
 		// The service picks how to read and store the room by this.
 		"documentType": head.DocumentType,
+		// A room opened on another record is stale: a restore replaced it.
+		"replacementID": head.ReplacementID.String(),
 	})
 }
 
@@ -156,12 +158,14 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		State       string          `json:"state"`
-		Content     json.RawMessage `json:"content"`
-		Markdown    string          `json:"markdown"`
-		UpdatedBy   string          `json:"updatedBy"`
-		Thumbnail   *string         `json:"thumbnail"`
-		Suggestions []struct {
+		State     string          `json:"state"`
+		Content   json.RawMessage `json:"content"`
+		Markdown  string          `json:"markdown"`
+		UpdatedBy string          `json:"updatedBy"`
+		Thumbnail *string         `json:"thumbnail"`
+		// ReplacementID is the record the room was opened on; absent from a room that does not check it.
+		ReplacementID string `json:"replacementID"`
+		Suggestions   []struct {
 			ID     string `json:"id"`
 			Author string `json:"author"`
 		} `json:"suggestions"`
@@ -199,9 +203,20 @@ func (h *InternalHandler) storeState(w http.ResponseWriter, r *http.Request) {
 	if request.Thumbnail != nil {
 		options = append(options, collaboration.WithThumbnail(*request.Thumbnail))
 	}
+	if record, err := uuid.Parse(request.ReplacementID); err == nil {
+		options = append(options, collaboration.WithReplacementID(record))
+	}
 	if err := h.store.StoreState(r.Context(), workspaceID, documentID, state, request.Content, request.Markdown, suggestions, options...); err != nil {
 		if errors.Is(err, ErrDocumentNotFound) {
 			http.NotFound(w, r)
+			return
+		}
+		if errors.Is(err, collaboration.ErrCollabReplaced) {
+			http.Error(w, "the record was replaced", http.StatusConflict)
+			return
+		}
+		if errors.Is(err, collaboration.ErrInvalidCollabContent) {
+			http.Error(w, "content does not fit the document type", http.StatusBadRequest)
 			return
 		}
 		http.Error(w, "store failed", http.StatusServiceUnavailable)
