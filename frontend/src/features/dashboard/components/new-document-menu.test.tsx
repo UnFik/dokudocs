@@ -7,12 +7,7 @@ describe('the New menu', () => {
     const onCreate = vi.fn()
     const screen = await render(<NewDocumentMenu onCreate={onCreate} />)
     await screen.getByRole('button', { name: 'New' }).click()
-    for (const name of [
-      'Markdown',
-      'DB Diagram',
-      'Mermaid diagram',
-      'Architecture',
-    ])
+    for (const name of ['Markdown', 'DBML', 'Mermaid', 'Architecture'])
       await expect.element(screen.getByRole('menuitem', { name })).toBeVisible()
     await screen.getByRole('menuitem', { name: 'Architecture' }).click()
     expect(onCreate).toHaveBeenCalledWith('architecture')

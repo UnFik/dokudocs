@@ -1,4 +1,6 @@
-import { DocType } from '@/types/dokudocs'
+import { z } from 'zod'
+import type { DocType } from '@/types/dokudocs'
+import { DOCUMENT_TYPES } from './document-types'
 
 const ACRONYMS = new Set([
   'FSD',
@@ -67,7 +69,7 @@ export function detectDocTypeAndContent(
   fileName: string,
   rawContent: string
 ): {
-  type: Exclude<DocType, 'architecture'>
+  type: DocType
   content: string
   detectedReason: string
 } {
@@ -75,17 +77,14 @@ export function detectDocTypeAndContent(
   const ext = extMatch ? extMatch[1].toLowerCase() : ''
   const trimmed = rawContent.trim()
 
-  if (ext === 'dbml') {
+  const detectedType = DOCUMENT_TYPES.find(
+    ({ value, extensions }) =>
+      value !== 'markdown' &&
+      extensions.some((extension) => extension === `.${ext}`)
+  )
+  if (detectedType) {
     return {
-      type: 'dbdiagram',
-      content: trimmed,
-      detectedReason: '.dbml extension',
-    }
-  }
-
-  if (ext === 'mermaid' || ext === 'mmd') {
-    return {
-      type: 'mermaid',
+      type: detectedType.value,
       content: trimmed,
       detectedReason: `.${ext} extension`,
     }
@@ -174,4 +173,16 @@ export function detectDocTypeAndContent(
     content: trimmed,
     detectedReason: 'Markdown content',
   }
+}
+
+export function parseArchitectureImport(content: string) {
+  const element = z.object({ id: z.string().min(1) }).passthrough()
+  return z
+    .object({
+      version: z.literal(1),
+      nodes: z.array(element),
+      connections: z.array(element),
+    })
+    .passthrough()
+    .parse(JSON.parse(content))
 }

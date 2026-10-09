@@ -1,16 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import type { DocType } from '@/types/dokudocs'
-import {
-  Database,
-  ExternalLink,
-  FileText,
-  Folder,
-  GitFork,
-  Search,
-  Network,
-} from 'lucide-react'
+import { ExternalLink, Folder, Search } from 'lucide-react'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { getDocumentType } from '@/lib/document-types'
 import { formatRelativeTime } from '@/lib/time-utils'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -30,17 +23,8 @@ interface ProjectDocsHoverCardProps {
 }
 
 function getDocTypeIcon(type: DocType) {
-  switch (type) {
-    case 'mermaid':
-      return <GitFork className='size-3.5 shrink-0 text-muted-foreground' />
-    case 'dbdiagram':
-      return <Database className='size-3.5 shrink-0 text-muted-foreground' />
-    case 'architecture':
-      return <Network className='size-3.5 shrink-0 text-muted-foreground' />
-    case 'markdown':
-    default:
-      return <FileText className='size-3.5 shrink-0 text-muted-foreground' />
-  }
+  const Icon = getDocumentType(type).icon
+  return <Icon className='size-3.5 shrink-0 text-muted-foreground' />
 }
 
 export function ProjectDocsHoverCard({

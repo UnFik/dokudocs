@@ -80,6 +80,7 @@ interface DokudocsState {
     category?: string | null
     categories?: string[]
     content?: string
+    contentJSON?: unknown
     isDraft?: boolean
   }) => DocumentItem
   upsertDocument: (document: DocumentItem) => void
@@ -389,6 +390,7 @@ export const useDokudocsStore = create<DokudocsState>()(
           title: payload.title?.trim() || 'My Draft',
           type: payload.type,
           content: payload.content ?? defaultTemplates[payload.type],
+          contentJSON: payload.contentJSON,
           projectId: payload.projectId ?? null,
           projectName: project?.name ?? null,
           category: docCategories[0] ?? null,

@@ -1,12 +1,6 @@
 import type { DocType } from '@/types/dokudocs'
-import {
-  ChevronDown,
-  Database,
-  FileText,
-  GitFork,
-  Network,
-  Plus,
-} from 'lucide-react'
+import { ChevronDown, Plus } from 'lucide-react'
+import { DOCUMENT_TYPES } from '@/lib/document-types'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -14,14 +8,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-
-// Same names as the create dialog, so a type reads the same wherever it is picked.
-const TYPES: { type: DocType; label: string; icon: typeof FileText }[] = [
-  { type: 'markdown', label: 'Markdown', icon: FileText },
-  { type: 'dbdiagram', label: 'DB Diagram', icon: Database },
-  { type: 'mermaid', label: 'Mermaid diagram', icon: GitFork },
-  { type: 'architecture', label: 'Architecture', icon: Network },
-]
 
 /** The dashboard's "New" button: opens the create dialog with the chosen type. */
 export function NewDocumentMenu({
@@ -39,8 +25,8 @@ export function NewDocumentMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-48'>
-        {TYPES.map(({ type, label, icon: Icon }) => (
-          <DropdownMenuItem key={type} onClick={() => onCreate(type)}>
+        {DOCUMENT_TYPES.map(({ value, label, icon: Icon }) => (
+          <DropdownMenuItem key={value} onClick={() => onCreate(value)}>
             <Icon className='mr-2 size-3.5 text-muted-foreground' />
             {label}
           </DropdownMenuItem>

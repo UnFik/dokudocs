@@ -1,14 +1,11 @@
 import React, { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { DocType } from '@/types/dokudocs'
+import type { DocType } from '@/types/dokudocs'
 import {
   Clock,
-  Database,
   FileEdit,
-  FileText,
   Folder,
   FolderPlus,
-  GitFork,
   Laptop,
   Moon,
   Sun,
@@ -18,6 +15,11 @@ import {
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { getDocCategories } from '@/lib/doc-category-utils'
+import {
+  DOCUMENT_TYPES,
+  DOCUMENT_IMPORT_EXTENSIONS,
+  getDocumentType,
+} from '@/lib/document-types'
 import { useSearch } from '@/context/search-provider'
 import { useTheme } from '@/context/theme-provider'
 import {
@@ -77,6 +79,7 @@ export function CommandMenu() {
             {documents.length > 0 && (
               <CommandGroup heading='Documents'>
                 {documents.map((doc, idx) => {
+                  const Icon = getDocumentType(doc.type).icon
                   const project = projects.find((p) => p.id === doc.projectId)
                   const docCats = getDocCategories(doc)
 
@@ -101,15 +104,7 @@ export function CommandMenu() {
                     >
                       <div className='flex min-w-0 flex-1 items-center gap-2.5'>
                         <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-foreground'>
-                          {doc.type === 'markdown' && (
-                            <FileText className='size-3.5 text-muted-foreground' />
-                          )}
-                          {doc.type === 'dbdiagram' && (
-                            <Database className='size-3.5 text-muted-foreground' />
-                          )}
-                          {doc.type === 'mermaid' && (
-                            <GitFork className='size-3.5 text-muted-foreground' />
-                          )}
+                          <Icon className='size-3.5 text-muted-foreground' />
                         </div>
                         <div className='flex min-w-0 flex-col truncate'>
                           <span className='truncate text-xs font-semibold text-foreground'>
@@ -217,39 +212,21 @@ export function CommandMenu() {
 
             <CommandSeparator />
             <CommandGroup heading='Quick Create'>
-              <CommandItem
-                key='action-create-markdown'
-                value='action-create-markdown-document-fsd'
-                onSelect={() => handleCreateDocAction('markdown')}
-              >
-                <div className='flex size-5 items-center justify-center rounded-sm bg-secondary text-muted-foreground'>
-                  <FileText className='size-3' />
-                </div>
-                <span>New Markdown Document</span>
-              </CommandItem>
-              <CommandItem
-                key='action-create-dbdiagram'
-                value='action-create-dbdiagram-database-diagram-dbml'
-                onSelect={() => handleCreateDocAction('dbdiagram')}
-              >
-                <div className='flex size-5 items-center justify-center rounded-sm bg-secondary text-muted-foreground'>
-                  <Database className='size-3' />
-                </div>
-                <span>New Database Diagram (DBML)</span>
-              </CommandItem>
-              <CommandItem
-                key='action-create-mermaid'
-                value='action-create-mermaid-flowchart-diagram'
-                onSelect={() => handleCreateDocAction('mermaid')}
-              >
-                <div className='flex size-5 items-center justify-center rounded-sm bg-secondary text-muted-foreground'>
-                  <GitFork className='size-3' />
-                </div>
-                <span>New Flowchart Diagram (Mermaid)</span>
-              </CommandItem>
+              {DOCUMENT_TYPES.map(({ value, label, keywords, icon: Icon }) => (
+                <CommandItem
+                  key={`action-create-${value}`}
+                  value={`action-create-${value}-${label}-${keywords}`}
+                  onSelect={() => handleCreateDocAction(value)}
+                >
+                  <div className='flex size-5 items-center justify-center rounded-sm bg-secondary text-muted-foreground'>
+                    <Icon className='size-3' />
+                  </div>
+                  <span>New {label} Document</span>
+                </CommandItem>
+              ))}
               <CommandItem
                 key='action-import-document'
-                value='action-import-document-markdown-dbml-mermaid'
+                value={`action-import-document-${DOCUMENT_TYPES.map(({ label }) => label).join('-')}`}
                 onSelect={() => {
                   setOpen(false)
                   setImportDocOpen(true)
@@ -258,7 +235,10 @@ export function CommandMenu() {
                 <div className='flex size-5 items-center justify-center rounded-sm bg-primary/10 text-primary'>
                   <Upload className='size-3' />
                 </div>
-                <span>Import Document (.md, .dbml, .mermaid)</span>
+                <span>
+                  Import Document (
+                  {DOCUMENT_IMPORT_EXTENSIONS.replaceAll(',', ', ')})
+                </span>
               </CommandItem>
               <CommandItem
                 key='action-create-project'
@@ -277,7 +257,9 @@ export function CommandMenu() {
               <CommandItem
                 key='nav-goto-recent'
                 value='nav-goto-recent-documents'
-                onSelect={() => runCommand(() => navigate({ to: '/dashboard' }))}
+                onSelect={() =>
+                  runCommand(() => navigate({ to: '/dashboard' }))
+                }
               >
                 <Clock className='size-3.5 text-muted-foreground' />
                 <span>Recent Documents</span>

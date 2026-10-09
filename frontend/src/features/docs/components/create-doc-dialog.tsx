@@ -5,22 +5,14 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import type { DocType } from '@/types/dokudocs'
-import {
-  Code2,
-  Database,
-  FileText,
-  GitBranch,
-  Network,
-  Plus,
-  Tag,
-  X,
-} from 'lucide-react'
+import { Code2, Plus, Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   getDefaultDocumentContent,
   useDokudocsStore,
 } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
+import { documentTypeSchema } from '@/lib/document-types'
 import {
   createDocument,
   listProjects,
@@ -53,10 +45,11 @@ import {
 } from '@/components/ui/select'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { markdownToDocumentJSON } from '../lib/markdown-to-document-json'
+import { DocumentTypePicker } from './document-type-picker'
 
 const createDocSchema = z.object({
   title: z.string().min(1, 'Please enter a document title'),
-  type: z.enum(['markdown', 'dbdiagram', 'mermaid', 'architecture']),
+  type: documentTypeSchema,
   projectId: z.string(),
   categories: z.array(z.string()),
 })
@@ -77,7 +70,7 @@ interface CreateDocDialogProps {
 export function CreateDocDialog(props: CreateDocDialogProps) {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-[540px]'>
+      <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-[720px]'>
         {props.open && <CreateDocDialogForm key='create-doc-form' {...props} />}
       </DialogContent>
     </Dialog>
@@ -249,33 +242,6 @@ function CreateDocDialogForm({
     })
   }
 
-  const typeOptions = [
-    {
-      value: 'markdown',
-      label: 'Markdown',
-      description: 'Functional specs & technical docs',
-      icon: FileText,
-    },
-    {
-      value: 'dbdiagram',
-      label: 'Database Diagram',
-      description: 'DBML schema definitions & ERD',
-      icon: Database,
-    },
-    {
-      value: 'mermaid',
-      label: 'Mermaid diagram',
-      description: 'Flowcharts & sequence diagrams as text',
-      icon: GitBranch,
-    },
-    {
-      value: 'architecture',
-      label: 'Architecture',
-      description: 'Hosts, systems and how they connect, edited together',
-      icon: Network,
-    },
-  ]
-
   return (
     <>
       <DialogHeader>
@@ -290,7 +256,10 @@ function CreateDocDialogForm({
       </DialogHeader>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4 pt-1'>
+        <form
+          onSubmit={(event) => void form.handleSubmit(onSubmit)(event)}
+          className='space-y-4 pt-1'
+        >
           <FormField
             control={form.control}
             name='title'
@@ -320,42 +289,10 @@ function CreateDocDialogForm({
                 <FormLabel className='text-xs font-semibold'>
                   Document Type
                 </FormLabel>
-                <div className='grid grid-cols-1 gap-2.5 pt-1 sm:grid-cols-3'>
-                  {typeOptions.map((opt) => {
-                    const Icon = opt.icon
-                    const isSelected = field.value === opt.value
-                    return (
-                      <button
-                        key={opt.value}
-                        type='button'
-                        onClick={() => field.onChange(opt.value)}
-                        className={`flex cursor-pointer flex-col items-start rounded-lg border p-3 text-left transition-all ${
-                          isSelected
-                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                            : 'border-border/80 hover:border-border hover:bg-muted/40'
-                        }`}
-                      >
-                        <div className='mb-1.5 flex items-center gap-2'>
-                          <div
-                            className={`rounded-md p-1.5 ${
-                              isSelected
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted text-muted-foreground'
-                            }`}
-                          >
-                            <Icon className='size-3.5' />
-                          </div>
-                          <span className='text-xs font-semibold'>
-                            {opt.label}
-                          </span>
-                        </div>
-                        <span className='line-clamp-2 text-[10px] leading-relaxed text-muted-foreground'>
-                          {opt.description}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
+                <DocumentTypePicker
+                  value={field.value}
+                  onChange={field.onChange}
+                />
                 <FormMessage />
               </FormItem>
             )}
