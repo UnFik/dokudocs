@@ -1434,7 +1434,11 @@ export function createDocumentBodyEditor(
     },
     setRemoteCursors: (cursors: RemoteCursor[]) => {
       remoteCursors = cursors
-      view.dispatch(view.state.tr.setMeta(remoteCursorPlugin, 'refresh'))
+      const refresh = view.state.tr.setMeta(remoteCursorPlugin, 'refresh')
+      const selection = selectionNow(view)
+      // Presence can repaint before selectionchange records a native caret move.
+      if (!selection.eq(view.state.selection)) refresh.setSelection(selection)
+      view.dispatch(refresh)
       if (!followedUser) return
       const target = [
         ...view.dom.querySelectorAll<HTMLElement>('.remote-cursor'),
