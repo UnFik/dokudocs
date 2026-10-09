@@ -76,7 +76,11 @@ func Logger(log *logger.Logger) func(http.Handler) http.Handler {
 			if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
 				attrs = append(attrs, slog.String("trace_id", span.SpanContext().TraceID().String()))
 				if r.Pattern != "" {
-					span.SetName(r.Pattern)
+					name := r.Pattern
+					if !strings.Contains(name, " ") {
+						name = r.Method + " " + name
+					}
+					span.SetName(name)
 					span.SetAttributes(attribute.String("http.route", r.Pattern))
 				}
 			}
