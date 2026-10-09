@@ -6,3 +6,6 @@
 .env.*
 !.env.example
 !.env.*.example
+
+# The commit the server runs (scripts/deploy/deploy.sh)
+/.deployed
