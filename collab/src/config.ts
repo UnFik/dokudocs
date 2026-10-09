@@ -9,6 +9,8 @@ export type Config = {
   maxConnections: number
   maxPayloadBytes: number
   maxMessagesPerSecond: number
+  /** Receives traces (e.g. http://alloy:4318); null exports none. */
+  otlpEndpoint: string | null
 }
 
 function whole(env: Record<string, string | undefined>, name: string, fallback: number, min: number): number {
@@ -34,5 +36,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     maxConnections: whole(env, 'COLLAB_MAX_CONNECTIONS', 1000, 1),
     maxPayloadBytes: whole(env, 'COLLAB_MAX_PAYLOAD_BYTES', 16 * 1024 * 1024, 1024),
     maxMessagesPerSecond: whole(env, 'COLLAB_MAX_MESSAGES_PER_SECOND', 500, 1),
+    otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT?.replace(/\/+$/, '') || null,
   }
 }

@@ -13,6 +13,7 @@ import (
 	"backend/internal/infrastructure/postgres"
 	documentrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/infrastructure/runtime/container"
+	"backend/internal/infrastructure/tracing"
 	"backend/internal/infrastructure/validator"
 )
 
@@ -30,6 +31,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
+	shutdownTracing, err := tracing.Setup(context.Background(), "api", cfg.OTLPEndpoint)
+	if err != nil {
+		log.Fatalf("set up tracing: %v", err)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
 	db, err := postgres.Open(cfg)
 	if err != nil {
 		log.Fatalf("open database: %v", err)
@@ -52,7 +58,7 @@ func main() {
 				return
 			case <-ticker.C:
 				if _, err := routes.SweepAssets(workerCtx, c, cfg, 24*time.Hour); err != nil {
-					log.Printf("sweep assets: %v", err)
+					log.Errorf("sweep assets: %v", err)
 				}
 			}
 		}
@@ -67,11 +73,11 @@ func runRAGIndexWorker(ctx context.Context, repo *documentrepo.Repository, embed
 	defer ticker.Stop()
 	for {
 		if _, err := repo.RebuildStaleRAGIndexes(ctx, 100); err != nil {
-			log.Printf("rebuild stale RAG indexes: %v", err)
+			log.Errorf("rebuild stale RAG indexes: %v", err)
 		}
 		if embedder != nil {
 			if err := embedRAGBacklog(ctx, repo, embedder); err != nil {
-				log.Printf("embed RAG chunks: %v", err)
+				log.Errorf("embed RAG chunks: %v", err)
 			}
 		}
 		select {

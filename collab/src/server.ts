@@ -11,6 +11,7 @@ import { parseRoom } from './room'
 import { seedFromJSON } from './seed'
 import { seedSource, sourceToJSON } from './source'
 import { suggestionsIn } from './suggestions'
+import { inSpan } from './tracing'
 
 // The editor binds its document to this fragment.
 const fragmentName = 'body'
@@ -78,25 +79,26 @@ function authentication(
 ): Extension<CollabContext> {
   return {
     extensionName: 'authentication',
-    async onAuthenticate({ token, documentName, connectionConfig }) {
-      if (metrics.connections >= maxConnections) throw refusal('busy', metrics)
-      const room = parseRoom(documentName)
-      if (!room) throw refusal('forbidden', metrics)
-      const access = await backend.authorize(token, room.workspaceID, room.documentID)
-      // A token that is not valid means signing in again; no access means asking for it.
-      if (!access) throw refusal('unauthorized', metrics)
-      if (!access.canRead) throw refusal('forbidden', metrics)
-      const documentType = (access.documentType ?? 'markdown') as DocumentType
-      if (!documentTypes.includes(documentType)) throw refusal('forbidden', metrics)
-      // A device opening a record a restore replaced must not send what it holds: the editor
-      // keeps its unsent edits as a recovery copy and opens the current record instead.
-      if (isSourceType(documentType) && (!room.replacementID || room.replacementID !== access.replacementID))
-        throw refusal('replaced', metrics)
-      // A viewer only reads. On Markdown someone who can suggest still writes; what they may
-      // write is checked per message. A canvas or a source has no suggest mode: only an editor writes.
-      connectionConfig.readOnly = documentType === 'markdown' ? !access.canEdit && !access.canSuggest : !access.canEdit
-      return { userID: access.userID, access, ...room, documentType, token }
-    },
+    onAuthenticate: ({ token, documentName, connectionConfig }) =>
+      inSpan('collab connect', { 'collab.room': documentName }, async () => {
+        if (metrics.connections >= maxConnections) throw refusal('busy', metrics)
+        const room = parseRoom(documentName)
+        if (!room) throw refusal('forbidden', metrics)
+        const access = await backend.authorize(token, room.workspaceID, room.documentID)
+        // A token that is not valid means signing in again; no access means asking for it.
+        if (!access) throw refusal('unauthorized', metrics)
+        if (!access.canRead) throw refusal('forbidden', metrics)
+        const documentType = (access.documentType ?? 'markdown') as DocumentType
+        if (!documentTypes.includes(documentType)) throw refusal('forbidden', metrics)
+        // A device opening a record a restore replaced must not send what it holds: the editor
+        // keeps its unsent edits as a recovery copy and opens the current record instead.
+        if (isSourceType(documentType) && (!room.replacementID || room.replacementID !== access.replacementID))
+          throw refusal('replaced', metrics)
+        // A viewer only reads. On Markdown someone who can suggest still writes; what they may
+        // write is checked per message. A canvas or a source has no suggest mode: only an editor writes.
+        connectionConfig.readOnly = documentType === 'markdown' ? !access.canEdit && !access.canSuggest : !access.canEdit
+        return { userID: access.userID, access, ...room, documentType, token }
+      }),
     // The editor needs to know what it may do; the connection itself only says read or write.
     async connected({ connection, context }) {
       connection.sendStateless(accessMessage(context, context.access))
@@ -248,7 +250,11 @@ function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabCon
     },
   }
 
-  async function store(document: Document, documentName: string) {
+  function store(document: Document, documentName: string) {
+    return inSpan('collab store', { 'collab.room': documentName }, () => storeNow(document, documentName))
+  }
+
+  async function storeNow(document: Document, documentName: string) {
     const room = parseRoom(documentName)
     if (!room || droppedRooms.has(documentName)) return
     const type = roomType(documentName)
@@ -286,7 +292,7 @@ function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabCon
         throw error
       }
       metrics.storeFailures++
-      log('store_failed', { room: documentName, error: String(error) })
+      log('store_failed', { room: documentName, error: String(error) }, 'ERROR')
       throw error
     }
   }

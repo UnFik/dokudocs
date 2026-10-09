@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/infrastructure/tracing"
+
 	"github.com/google/uuid"
 )
 
@@ -21,7 +23,7 @@ type Client struct {
 
 // New returns a client for the service at baseURL. With no URL every call does nothing.
 func New(baseURL, secret string) *Client {
-	return &Client{baseURL: strings.TrimRight(baseURL, "/"), secret: secret, http: &http.Client{Timeout: 5 * time.Second}}
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), secret: secret, http: &http.Client{Timeout: 5 * time.Second, Transport: tracing.Transport()}}
 }
 
 // ReloadRoom asks the service to tell the editors in a document's room that the
