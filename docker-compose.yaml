@@ -2,8 +2,8 @@ name: dokudocs
 
 # Production stack: http://127.0.0.1:8088. Run with: make build
 # Copy .env.example to .env and fill in the required values.
-# Images are built here unless DOKUDOCS_IMAGE and DOKUDOCS_TAG name the ones
-# CI pushed (docs/deployment.md).
+# Images are built here unless DOKUDOCS_IMAGE and the DOKUDOCS_*_TAG values name
+# the ones CI pushed (docs/deployment.md).
 # Development: docker-compose.dev.yaml, run with: make dev
 # Observability: docker-compose.observability.yaml (docs/observability.md).
 
@@ -33,7 +33,7 @@ services:
       retries: 10
 
   migrate:
-    image: ${DOKUDOCS_IMAGE:-dokudocs}-api:${DOKUDOCS_TAG:-latest}
+    image: ${DOKUDOCS_IMAGE:-dokudocs}-api:${DOKUDOCS_API_TAG:-latest}
     build:
       context: ./backend
       target: prod
@@ -47,7 +47,7 @@ services:
     restart: "no"
 
   api:
-    image: ${DOKUDOCS_IMAGE:-dokudocs}-api:${DOKUDOCS_TAG:-latest}
+    image: ${DOKUDOCS_IMAGE:-dokudocs}-api:${DOKUDOCS_API_TAG:-latest}
     build:
       context: ./backend
       target: prod
@@ -83,6 +83,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+      # Checked every second while starting, so a deploy waits for it no longer than it takes.
+      start_period: 60s
+      start_interval: 1s
     depends_on:
       db:
         condition: service_healthy
@@ -92,7 +95,7 @@ services:
         condition: service_completed_successfully
 
   collab:
-    image: ${DOKUDOCS_IMAGE:-dokudocs}-collab:${DOKUDOCS_TAG:-latest}
+    image: ${DOKUDOCS_IMAGE:-dokudocs}-collab:${DOKUDOCS_COLLAB_TAG:-latest}
     build:
       context: .
       dockerfile: collab/Dockerfile
@@ -108,6 +111,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+      start_period: 60s
+      start_interval: 1s
     depends_on:
       redis:
         condition: service_healthy
@@ -115,11 +120,14 @@ services:
         condition: service_healthy
 
   frontend:
-    image: ${DOKUDOCS_IMAGE:-dokudocs}-frontend:${DOKUDOCS_TAG:-latest}
+    image: ${DOKUDOCS_IMAGE:-dokudocs}-frontend:${DOKUDOCS_FRONTEND_TAG:-latest}
     build:
       context: ./frontend
       target: prod
     restart: unless-stopped
+    # nginx waits for open connections (the tunnel's) before it stops. It is only
+    # replaced with a new frontend image, by then api and collab are down too.
+    stop_grace_period: 2s
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-8088}:80"
     depends_on:
