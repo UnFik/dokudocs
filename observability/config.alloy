@@ -1,0 +1,217 @@
+// Collects logs, metrics and traces from the production stack and sends them to
+// Grafana Cloud. Runs with: docker compose --profile observability up -d
+// See docs/observability.md for the .env values it reads.
+
+// ---------------------------------------------------------------- Logs
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+// Only this stack's containers, labelled by their compose service.
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+		regex         = "dokudocs"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+}
+
+loki.source.docker "containers" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.relabel.containers.output
+	relabel_rules = discovery.relabel.containers.rules
+	forward_to    = [loki.process.containers.receiver]
+}
+
+// The API, collab and nginx write JSON lines. Only `service` and `level` become
+// labels; everything else stays in the line. The trace ID is kept as metadata so
+// Grafana links a line to its trace.
+loki.process "containers" {
+	stage.json {
+		expressions = {level = "level", trace_id = "trace_id", route = "route"}
+	}
+
+	// The container health check calls this every 10 seconds.
+	stage.drop {
+		source = "route"
+		value  = "GET /api/v1/health"
+	}
+
+	stage.labels {
+		values = {level = ""}
+	}
+
+	stage.structured_metadata {
+		values = {trace_id = ""}
+	}
+
+	forward_to = [loki.write.cloud.receiver]
+}
+
+loki.write "cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+			password = sys.env("GRAFANA_CLOUD_API_KEY")
+		}
+	}
+	external_labels = {env = "production"}
+}
+
+// ---------------------------------------------------------------- Metrics
+
+// The API serves its metrics on an internal port; collab on its own /metrics.
+// Neither is reachable through nginx.
+prometheus.scrape "services" {
+	targets = [
+		{"__address__" = "api:9091", "service" = "api"},
+		{"__address__" = "collab:1234", "service" = "collab"},
+	]
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.cloud.receiver]
+}
+
+// Only what the dashboards and alerts use, to stay well under the free tier's series.
+prometheus.exporter.unix "host" {
+	procfs_path    = "/host/proc"
+	sysfs_path     = "/host/sys"
+	rootfs_path    = "/host/root"
+	set_collectors = ["cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "pressure", "uname"]
+
+	filesystem {
+		fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tmpfs|tracefs)$"
+		mount_points_exclude = "^/(dev|proc|run|sys|var/lib/docker/.+|var/lib/containerd/.+)($|/)"
+	}
+
+	netdev {
+		device_exclude = "^(lo|veth.*|br-.*|docker.*)$"
+	}
+
+	disk {
+		device_exclude = "^(loop|ram|zram|sr|dm-)\\d+$"
+	}
+}
+
+prometheus.scrape "host" {
+	targets         = prometheus.exporter.unix.host.targets
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.exporter.cadvisor "containers" {
+	docker_host                  = "unix:///var/run/docker.sock"
+	docker_only                  = true
+	store_container_labels       = false
+	allowlisted_container_labels = ["com.docker.compose.project", "com.docker.compose.service"]
+}
+
+prometheus.scrape "containers" {
+	targets         = prometheus.exporter.cadvisor.containers.targets
+	scrape_interval = "30s"
+	forward_to      = [prometheus.relabel.containers.receiver]
+}
+
+// This stack's containers only, and only the usage the dashboards and alerts read.
+prometheus.relabel "containers" {
+	rule {
+		source_labels = ["container_label_com_docker_compose_project"]
+		regex         = "dokudocs"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "container_(cpu_usage_seconds_total|memory_working_set_bytes|network_(receive|transmit)_bytes_total|oom_events_total|spec_memory_limit_bytes|start_time_seconds)"
+		action        = "keep"
+	}
+	forward_to = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.remote_write "cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_PROMETHEUS_URL")
+
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_PROMETHEUS_USER")
+			password = sys.env("GRAFANA_CLOUD_API_KEY")
+		}
+	}
+	external_labels = {env = "production"}
+}
+
+// ---------------------------------------------------------------- Traces
+
+// The API and collab send spans here (OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318).
+otelcol.receiver.otlp "services" {
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		traces = [otelcol.processor.tail_sampling.services.input]
+	}
+}
+
+// Keeps every trace with an error or slower than one second, and a tenth of the rest.
+otelcol.processor.tail_sampling "services" {
+	decision_wait = "10s"
+
+	policy {
+		name = "errors"
+		type = "status_code"
+
+		status_code {
+			status_codes = ["ERROR"]
+		}
+	}
+
+	policy {
+		name = "slow"
+		type = "latency"
+
+		latency {
+			threshold_ms = 1000
+		}
+	}
+
+	policy {
+		name = "sample"
+		type = "probabilistic"
+
+		probabilistic {
+			sampling_percentage = 10
+		}
+	}
+
+	output {
+		traces = [otelcol.processor.batch.services.input]
+	}
+}
+
+otelcol.processor.batch "services" {
+	output {
+		traces = [otelcol.exporter.otlphttp.cloud.input]
+	}
+}
+
+otelcol.auth.basic "cloud" {
+	username = sys.env("GRAFANA_CLOUD_OTLP_USER")
+	password = sys.env("GRAFANA_CLOUD_API_KEY")
+}
+
+otelcol.exporter.otlphttp "cloud" {
+	client {
+		endpoint = sys.env("GRAFANA_CLOUD_OTLP_URL")
+		auth     = otelcol.auth.basic.cloud.handler
+	}
+}
