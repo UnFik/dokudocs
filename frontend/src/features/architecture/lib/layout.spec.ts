@@ -172,6 +172,13 @@ describe('resizing by hand', () => {
   it('stops at 160 x 90 when empty', () => {
     expect(minSize([host()], 'vps')).toEqual({ w: 160, h: 90 })
   })
+
+  it('stops at 160 x 90 for a container just deleted, still drawn for one frame', () => {
+    expect(minSize([system('api', null, 0, 0)], 'vps')).toEqual({
+      w: 160,
+      h: 90,
+    })
+  })
 })
 
 describe('taking an element out of its Host', () => {

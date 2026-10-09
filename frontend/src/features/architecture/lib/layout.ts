@@ -217,6 +217,8 @@ export function fitToContents(
 
 /** The smallest size a container may be resized to: its contents, or 160 x 90 when empty. */
 export function minSize(nodes: LayoutNode[], containerID: string) {
+  // A container just deleted is still drawn until React Flow catches up.
+  if (!nodes.some((n) => n.id === containerID)) return { ...MIN_CONTAINER }
   const box = absoluteRect(nodes, containerID)
   const kids = childRects(nodes, containerID)
   if (!kids.length) return { ...MIN_CONTAINER }
