@@ -5,7 +5,7 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import * as Y from 'yjs'
-import { addContainer, addSystem, readCanvas } from '../lib/canvas-doc'
+import { addContainer, addSystem, readCanvas, removeElement } from '../lib/canvas-doc'
 import type { ArchitectureJSON } from '../lib/canvas-model'
 import { ArchitectureCanvas } from './architecture-canvas'
 
@@ -98,6 +98,30 @@ describe('dragging on the canvas', () => {
       const moved = after.nodes.find((n) => n.name === 'VPS-1')!
       expect([moved.x, moved.y]).not.toEqual([40, 40])
       expect(after.nodes.find((n) => n.name === 'API')).toMatchObject({ parentId: vps, x: 14, y: 32 })
+    })
+  })
+})
+
+describe('deleting on the canvas', () => {
+  it('draws the rest of the canvas after a Host with something inside is deleted', async () => {
+    const doc = new Y.Doc()
+    const vps = addContainer(doc, { kind: 'host', catalog: 'vps', name: 'VPS-1', x: 40, y: 40, w: 320, h: 206, parentId: null })
+    addSystem(doc, { catalog: 'golang', name: 'API', x: 14, y: 32, parentId: vps })
+    addSystem(doc, { catalog: 'redis', name: 'Cache', x: 500, y: 300, parentId: null })
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ReactFlowProvider>
+          <Harness doc={doc} />
+        </ReactFlowProvider>
+      </QueryClientProvider>
+    )
+    await vi.waitFor(() => expect(document.querySelectorAll('.react-flow__node')).toHaveLength(3))
+
+    removeElement(doc, vps)
+
+    await vi.waitFor(() => {
+      const left = [...document.querySelectorAll('.react-flow__node')]
+      expect(left.map((n) => n.textContent)).toEqual([expect.stringContaining('Cache')])
     })
   })
 })
