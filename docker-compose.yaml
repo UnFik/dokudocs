@@ -1,8 +1,8 @@
 name: dokudocs
 
-# Production stack: http://127.0.0.1:8088. Usually run through make (STACK=prod in .env).
+# Production stack: http://127.0.0.1:8088. Run with: make build
 # Copy .env.example to .env and fill in the required values.
-# Development: docker-compose.dev.yaml (make up with STACK=dev, the default).
+# Development: docker-compose.dev.yaml, run with: make dev
 # Observability: docker-compose.observability.yaml (docs/observability.md).
 
 services:

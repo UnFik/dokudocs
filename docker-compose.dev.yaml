@@ -3,7 +3,7 @@ name: dokudocs
 # Every ${VAR:-default} can be overridden from the shell or a root .env file.
 # Secrets (GOOGLE_*, OPENAI_API_KEY) default to empty; JWT_SECRET and COLLAB_SERVICE_SECRET are dev-only values.
 #
-#   make up                        # db, redis, migrate, api, collab, frontend (STACK=dev, the default)
+#   make dev                       # db, redis, migrate, api, collab, frontend
 #   open http://localhost:5173
 #
 # Without make: docker compose -f docker-compose.dev.yaml up --build
