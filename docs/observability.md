@@ -16,28 +16,38 @@ The trace ID is the request ID: the API returns it as `X-Request-ID`, each log l
 
 Never collected: request and response bodies, document content, emails, tokens, query strings, SQL parameter values, prompts. Logs keep the signed-in User's ID and the client IP (`CF-Connecting-IP`). Everything is kept for 14 days.
 
-## Turning it on
+## Turning it on and off
 
-Everything for it lives in `docker-compose.observability.yaml`: the `alloy` service, and the settings that make the API serve metrics and send traces to it. One line in `.env` adds that file, so a plain `docker compose up -d` includes it.
+Everything for it lives in `docker-compose.observability.yaml`: the `alloy` service, and the settings that make the API serve metrics and send traces to it. It adds to either stack, production or development, and `COMPOSE_FILE` in `.env` decides whether it does. A plain `docker compose up -d` then follows `.env`.
 
 1. In Grafana Cloud, open the stack's details page, then **OpenTelemetry → Configure**. Note the **OTLP endpoint** and the **Instance ID**.
 2. Create an access policy token (**Security → Access Policies**) with `logs:write`, `metrics:write` and `traces:write`.
-3. In `.env` on the VPS, uncomment the observability lines (they are in `.env.example`) and fill them in:
+3. In `.env`, uncomment the observability lines (they are in `.env.example`), pick the `COMPOSE_FILE` for your stack, and fill in the values:
 
    ```bash
+   # Production
    COMPOSE_FILE=docker-compose.yaml:docker-compose.observability.yaml
+   # or development
+   COMPOSE_FILE=docker-compose.dev.yaml:docker-compose.observability.yaml
+
    GRAFANA_CLOUD_OTLP_URL=https://otlp-gateway-prod-XX.grafana.net/otlp
    GRAFANA_CLOUD_INSTANCE_ID=123456
    GRAFANA_CLOUD_API_KEY=glc_...
    ```
 
-4. Start the stack as usual. `api` and `collab` are recreated with the new settings:
+4. Apply it. `api` and `collab` are recreated with the new settings:
 
    ```bash
    docker compose up -d --build
    ```
 
-With the `COMPOSE_FILE` line but a missing value, Compose stops and names it. Remove the line to turn observability off; the stack then runs without Alloy and the API and collab export nothing.
+An explicit `-f` on the command line replaces `COMPOSE_FILE`, so with it set, run `docker compose ...` without `-f`.
+
+To turn it off, comment out `COMPOSE_FILE` (or list only the base file) and run `docker compose up -d --remove-orphans`, which also removes the `alloy` container. The API and collab then serve no metrics port and export nothing. With `COMPOSE_FILE` on but a value missing, Compose stops and names it.
+
+In development, `GRAFANA_CLOUD_OTLP_URL` can point at any OTLP endpoint instead of Grafana Cloud, for example a local `grafana/otel-lgtm` container; the instance ID and token are then ignored.
+
+Running the API or collab outside Docker, the same two settings turn their part on: `OTEL_EXPORTER_OTLP_ENDPOINT` (traces) and, for the API, `METRICS_ADDR` (metrics). Empty or unset, they are off.
 
 Alloy mounts the Docker and containerd sockets, `/proc`, `/sys` and the root filesystem read-only, and shares the host's cgroup namespace, to find the containers and read their logs and usage. Access to the Docker socket amounts to root on the VPS, which is why Alloy is the only service with it. It used about 400 MB on a test run; its limit is 768 MB.
 
