@@ -27,6 +27,7 @@ function ToolButton(props: {
   shortcut: string
   pressed: boolean
   icon: LucideIcon
+  disabled?: boolean
   onClick: () => void
 }) {
   const Icon = props.icon
@@ -38,9 +39,10 @@ function ToolButton(props: {
           aria-label={props.label}
           aria-pressed={props.pressed}
           aria-keyshortcuts={props.shortcut}
+          disabled={props.disabled}
           onClick={props.onClick}
           className={cn(
-            'inline-flex size-9 items-center justify-center rounded-[4px] text-muted-foreground transition-colors duration-[120ms] hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal motion-reduce:transition-none pointer-coarse:size-11',
+            'inline-flex size-9 items-center justify-center rounded-[4px] text-muted-foreground transition-colors duration-[120ms] hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none pointer-coarse:size-11',
             props.pressed && 'bg-muted text-signal hover:text-signal'
           )}
         >
@@ -57,7 +59,10 @@ function ToolButton(props: {
   )
 }
 
-/** The tool bar at the bottom of the canvas: Lock, then the tools this person may use. */
+/**
+ * The tool bar at the bottom of the canvas: Lock, then the tools this person may
+ * use. Locked, the canvas only pans and zooms, so the tools wait until unlocked.
+ */
 export function CanvasToolbar(props: {
   tools: CanvasTool[]
   active: CanvasTool
@@ -75,7 +80,7 @@ export function CanvasToolbar(props: {
       {props.lock && (
         <>
           <ToolButton
-            label='Lock tool'
+            label='Lock canvas'
             shortcut={lockKey}
             pressed={props.lock.locked}
             icon={props.lock.locked ? Lock : LockOpen}
@@ -89,7 +94,8 @@ export function CanvasToolbar(props: {
           key={tool}
           label={labels[tool].name}
           shortcut={toolKeys[tool]}
-          pressed={props.active === tool}
+          pressed={!props.lock?.locked && props.active === tool}
+          disabled={props.lock?.locked}
           icon={labels[tool].icon}
           onClick={() => props.onTool(tool)}
         />

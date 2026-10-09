@@ -217,7 +217,7 @@ async function box(
 
 afterEach(() => {
   try {
-    localStorage.removeItem('architecture-tool-lock')
+    localStorage.removeItem('architecture-canvas-lock')
   } catch {
     // Storage can be blocked; nothing to clean then.
   }
@@ -227,7 +227,7 @@ describe('the tool bar', () => {
   it('shows an editor every tool, with its shortcut', async () => {
     await show({ doc: sample().doc })
     for (const [name, key] of [
-      ['Lock tool', 'L'],
+      ['Lock canvas', 'L'],
       ['Hand', 'H'],
       ['Cursor', 'V'],
       ['Eraser', 'E'],
@@ -243,7 +243,7 @@ describe('the tool bar', () => {
     await expect.element(tool('Cursor')).toBeVisible()
     expect(document.querySelector('[aria-label="Eraser"]')).toBeNull()
     expect(document.querySelector('[aria-label="Comment"]')).toBeNull()
-    expect(document.querySelector('[aria-label="Lock tool"]')).toBeNull()
+    expect(document.querySelector('[aria-label="Lock canvas"]')).toBeNull()
   })
 
   it('names the tool and its key in a tooltip', async () => {
@@ -318,26 +318,55 @@ describe('Eraser', () => {
     expect(spies.onDelete).toHaveBeenCalledWith([{ kind: 'node', id: cache }])
     expect(pressed('Cursor')).toBe('true')
   })
+})
 
-  it('stays active while the tool is locked', async () => {
-    const { doc, cache, db } = sample()
-    const spies = await show({ doc })
-    await userEvent.click(tool('Lock tool'))
-    expect(pressed('Lock tool')).toBe('true')
-    await userEvent.click(tool('Eraser'))
-    await userEvent.click(page.getByText('Cache'))
+describe('Lock', () => {
+  it('leaves the canvas for looking only: nothing moves, gets selected or deleted', async () => {
+    const { doc, cache } = sample()
+    const onSelection = vi.fn()
+    const spies = await show({ doc, onSelection })
     await userEvent.click(page.getByText('DB', { exact: true }))
-    expect(spies.onDelete.mock.calls).toEqual([
-      [[{ kind: 'node', id: cache }]],
-      [[{ kind: 'node', id: db }]],
+    expect(onSelection).toHaveBeenLastCalledWith([
+      { kind: 'node', id: expect.any(String) },
     ])
-    expect(pressed('Eraser')).toBe('true')
+
+    await userEvent.click(tool('Lock canvas'))
+    expect(pressed('Lock canvas')).toBe('true')
+    // Locking lets go of what was selected.
+    expect(onSelection).toHaveBeenLastCalledWith([])
+    expect(document.querySelector('.react-flow__node.selected')).toBeNull()
+
+    await drag(element('Cache'), 120, 40)
+    await userEvent.click(page.getByText('DB', { exact: true }))
+    await userEvent.keyboard('{Control>}a{/Control}')
+    await userEvent.keyboard('{Delete}')
+    expect(readCanvas(doc).nodes.find((n) => n.id === cache)).toMatchObject({
+      x: 480,
+      y: 60,
+    })
+    expect(onSelection).toHaveBeenLastCalledWith([])
+    expect(document.querySelector('.react-flow__node.selected')).toBeNull()
+    expect(spies.onDelete).not.toHaveBeenCalled()
+    expect(getComputedStyle(element('Cache')).cursor).toBe('grab')
   })
 
-  it('remembers the lock on this device', async () => {
+  it('holds the tools until it is unlocked', async () => {
     await show({ doc: sample().doc })
     await userEvent.keyboard('l')
-    expect(localStorage.getItem('architecture-tool-lock')).toBe('true')
+    for (const name of ['Hand', 'Cursor', 'Eraser', 'Comment']) {
+      await expect.element(tool(name)).toBeDisabled()
+      expect(pressed(name)).toBe('false')
+    }
+    await userEvent.keyboard('e')
+    await userEvent.keyboard('l')
+    expect(pressed('Lock canvas')).toBe('false')
+    expect(pressed('Cursor')).toBe('true')
+  })
+
+  it('is remembered on this device', async () => {
+    await show({ doc: sample().doc })
+    await userEvent.keyboard('l')
+    expect(localStorage.getItem('architecture-canvas-lock')).toBe('true')
   })
 })
 
