@@ -12,7 +12,7 @@ test("@live @smoke: canvas tools, comment pins and selecting several elements", 
   await page.locator('input[name="email"]').fill("admin@example.com");
   await page.locator('input[name="password"]').fill("password123");
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"));
+  await page.waitForURL((url) => url.pathname === "/dashboard");
 
   const token = (await page.context().cookies()).find((c) => c.name === "thisisjustarandomstring")!.value;
   const auth = { Authorization: `Bearer ${token}` };

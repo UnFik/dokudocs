@@ -21,7 +21,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
   await page.locator('input[name="email"]').fill("admin@example.com");
   await page.locator('input[name="password"]').fill("password123");
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => url.pathname === "/");
+  await page.waitForURL((url) => url.pathname === "/dashboard");
   await page
     .getByRole("button", { name: /workspace/i })
     .first()
@@ -141,7 +141,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     await commenter.locator('input[name="email"]').fill(commenterEmail);
     await commenter.locator('input[name="password"]').fill(commenterPassword);
     await commenter.getByRole("button", { name: /sign in/i }).click();
-    await commenter.waitForURL((url) => url.pathname === "/");
+    await commenter.waitForURL((url) => url.pathname === "/dashboard");
     await commenter.goto(`/docs/${documentID}`);
     const commenterEditor = commenter.locator(".ProseMirror");
     await expect(commenterEditor).toContainText("Original phrase");

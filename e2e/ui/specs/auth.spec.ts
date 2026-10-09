@@ -9,7 +9,7 @@ test.describe('Authentication Flow', () => {
   test('successful login with valid credentials redirects to dashboard', async ({ page, loginPage }) => {
     await loginPage.goto()
     await loginPage.login('fikri@dokudocs.app', 'password123')
-    await page.waitForURL((url) => url.pathname === '/')
+    await page.waitForURL((url) => url.pathname === '/dashboard')
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   })
 
