@@ -30,6 +30,12 @@ func validCanvas(raw json.RawMessage) bool {
 	return true
 }
 
+// normalizeLineEndings keeps a DBML or Mermaid source with LF only: the editor
+// cannot hold mixed line endings, and its offsets would drift from the shared text.
+func normalizeLineEndings(source string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(source, "\r\n", "\n"), "\r", "\n")
+}
+
 func (u *useCase) CreateDocument(ctx context.Context, input dto.CreateDocumentInput) (data model.Document, err error) {
 	if _, err = u.checkWorkspaceMembership(ctx, input.WorkspaceID, input.UserID); err != nil {
 		return data, err
@@ -77,6 +83,13 @@ func (u *useCase) CreateDocument(ctx context.Context, input dto.CreateDocumentIn
 			}
 			doc.ContentJSON = input.ContentJSON
 		}
+	case docType == "dbdiagram" || docType == "mermaid":
+		// The source is the body; the collaboration service builds its text from this once.
+		if len(input.ContentJSON) > 0 {
+			return data, ErrInvalidContentJSON
+		}
+		doc.Content = normalizeLineEndings(input.Content)
+		doc.ContentJSON, _ = json.Marshal(map[string]string{"source": doc.Content})
 	case len(input.ContentJSON) > 0:
 		var object map[string]json.RawMessage
 		if docType != "markdown" || json.Unmarshal(input.ContentJSON, &object) != nil || object == nil {

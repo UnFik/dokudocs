@@ -114,7 +114,7 @@ func TestReadRoomHeadReportsNoAccessForATrashedOrForeignDocument(t *testing.T) {
 	}
 }
 
-func TestReadRoomHeadOpensMarkdownAndArchitectureRoomsOnly(t *testing.T) {
+func TestReadRoomHeadOpensARoomForEveryDocumentType(t *testing.T) {
 	ctx := context.Background()
 	db, err := sql.Open("pgx", integrationDatabaseURL(t))
 	if err != nil {
@@ -125,7 +125,7 @@ func TestReadRoomHeadOpensMarkdownAndArchitectureRoomsOnly(t *testing.T) {
 	for _, tc := range []struct {
 		documentType string
 		read         bool
-	}{{"markdown", true}, {"architecture", true}, {"mermaid", false}, {"dbdiagram", false}} {
+	}{{"markdown", true}, {"architecture", true}, {"mermaid", true}, {"dbdiagram", true}} {
 		if _, err := db.ExecContext(ctx, `UPDATE documents SET type = $2::document_type WHERE id = $1`, documentID, tc.documentType); err != nil {
 			t.Fatalf("set type %s: %v", tc.documentType, err)
 		}

@@ -31,13 +31,14 @@ func (r *Repository) ReadRoomHead(ctx context.Context, workspaceID, documentID u
 		var doc model.Document
 		var deletedAt sql.NullTime
 		var documentType string
+		var replacementID uuid.UUID
 		err := tx.QueryRowContext(ctx, `
 			SELECT id, workspace_id, project_id, author_id, is_draft, visibility::text, updated_at, deleted_at,
-			       type::text
+			       type::text, body_replacement_id
 			FROM documents WHERE id = $1 AND workspace_id = $2
 		`, documentID, workspaceID).Scan(
 			&doc.ID, &doc.WorkspaceID, &doc.ProjectID, &doc.AuthorID, &doc.IsDraft, &doc.Visibility, &doc.UpdatedAt,
-			&deletedAt, &documentType,
+			&deletedAt, &documentType, &replacementID,
 		)
 		if errors.Is(err, sql.ErrNoRows) {
 			return constant.ErrDocumentNotFound
@@ -45,10 +46,11 @@ func (r *Repository) ReadRoomHead(ctx context.Context, workspaceID, documentID u
 		if err != nil {
 			return err
 		}
-		if deletedAt.Valid || (documentType != "markdown" && documentType != "architecture") {
-			return nil // nobody may open a room for a trashed document, or a DBML or Mermaid one
+		if deletedAt.Valid || !hasCollabBody(documentType) {
+			return nil // nobody may open a room for a trashed document, or one whose body has no room
 		}
 		head.DocumentType = documentType
+		head.ReplacementID = replacementID
 
 		workspaceRoles, err := scanUserRoles(ctx, tx, `
 			SELECT user_id, role::text FROM workspace_members WHERE workspace_id = $1 AND user_id = ANY($2::uuid[])

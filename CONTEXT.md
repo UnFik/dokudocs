@@ -65,7 +65,7 @@ A Document whose DiagramSource describes a diagram in Mermaid. It is distinct fr
 _Avoid_: Flow, flow document
 
 **DiagramSource**:
-The exact text that forms the body of a DBML or Mermaid document, including formatting and temporarily invalid syntax. A rendered diagram is a preview of this source rather than a replacement for it.
+The exact text that forms the body of a DBML or Mermaid document, including formatting and temporarily invalid syntax. Line endings are always LF. A rendered diagram is a preview of this source rather than a replacement for it.
 _Avoid_: Diagram when referring to the editable source text
 
 **RecoveryCopy**:

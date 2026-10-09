@@ -45,6 +45,30 @@ func TestCreateDocumentKeepsAContentJSONObjectAndRefusesAnythingElse(t *testing.
 	}
 }
 
+func TestCreateDiagramDocumentKeepsItsSourceForTheCollaborationService(t *testing.T) {
+	for _, docType := range []string{"dbdiagram", "mermaid"} {
+		for source, want := range map[string]string{
+			"":                             "",
+			"Table café 😀 {\n  id int [pk": "Table café 😀 {\n  id int [pk",
+			"  \t\n":                       "  \t\n",
+			// The editor cannot hold mixed line endings, so every source is kept with LF.
+			"graph TD\r\n  A --> B\r  C\n": "graph TD\n  A --> B\n  C\n",
+		} {
+			repo := &contentJSONRepoStub{}
+			uc := NewUseCaseWithRepos(repo, getDocumentWorkspaceRepoStub{role: "member"}, nil, nil)
+			if _, err := uc.CreateDocument(context.Background(), dto.CreateDocumentInput{
+				WorkspaceID: uuid.New(), UserID: uuid.New(), RequestID: uuid.New(), Type: docType, Content: source,
+			}); err != nil {
+				t.Fatalf("%s %q: CreateDocument() = %v", docType, source, err)
+			}
+			wantJSON, _ := json.Marshal(map[string]string{"source": want})
+			if repo.created.Content != want || string(repo.created.ContentJSON) != string(wantJSON) {
+				t.Fatalf("%s %q: created = (%q, %s), want (%q, %s)", docType, source, repo.created.Content, repo.created.ContentJSON, want, wantJSON)
+			}
+		}
+	}
+}
+
 func TestCreateArchitectureDocumentStartsWithAnEmptyCanvasOrAGivenOne(t *testing.T) {
 	create := func(contentJSON string) (*contentJSONRepoStub, error) {
 		repo := &contentJSONRepoStub{}
