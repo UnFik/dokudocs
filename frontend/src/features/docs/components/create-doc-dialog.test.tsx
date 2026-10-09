@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import '@/styles/index.css'
 import { jsonResponse, testSession } from '@/test-utils/auth'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
+import { page } from 'vitest/browser'
 import { useAuthStore } from '@/stores/auth-store'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { CreateDocDialog } from './create-doc-dialog'
@@ -27,6 +29,32 @@ afterEach(() => {
 })
 
 describe('CreateDocDialog', () => {
+  it('keeps four document types in one desktop row and within the mobile dialog', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse([])))
+    )
+    await page.viewport(1024, 768)
+    const screen = await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CreateDocDialog open onOpenChange={() => {}} />
+      </QueryClientProvider>
+    )
+    const options = ['Markdown', 'DBML', 'Mermaid', 'Architecture'].map(
+      (name) => screen.getByRole('button', { name }).element()
+    )
+    const boxes = options.map((option) => option.getBoundingClientRect())
+    expect(new Set(boxes.map((box) => Math.round(box.top))).size).toBe(1)
+    await page.viewport(375, 812)
+    const dialog = screen.getByRole('dialog').element().getBoundingClientRect()
+    for (const option of options) {
+      const box = option.getBoundingClientRect()
+      expect(box.left).toBeGreaterThanOrEqual(dialog.left)
+      expect(box.right).toBeLessThanOrEqual(dialog.right)
+    }
+    await page.viewport(1024, 768)
+  })
+
   it('creates a non-Markdown document on the server and opens its route', async () => {
     const fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input)).pathname
@@ -86,7 +114,7 @@ describe('CreateDocDialog', () => {
     )
 
     await screen.getByLabelText(/Document Title/).fill('New system spec')
-    await screen.getByRole('button', { name: 'Database Diagram' }).click()
+    await screen.getByRole('button', { name: 'DBML' }).click()
     await screen.getByRole('button', { name: 'Create Document' }).click()
 
     await vi.waitFor(() => expect(navigate).toHaveBeenCalled())

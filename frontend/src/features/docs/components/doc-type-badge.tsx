@@ -1,4 +1,5 @@
 import type { DocType } from '@/types/dokudocs'
+import { getDocumentType } from '@/lib/document-types'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 
@@ -7,18 +8,11 @@ interface DocTypeBadgeProps {
   className?: string
 }
 
-const LABELS: Record<DocType, string> = {
-  markdown: 'Markdown',
-  dbdiagram: 'DBML',
-  mermaid: 'Mermaid',
-  architecture: 'Architecture',
-}
-
 // Document type is named by label, never by hue (DESIGN.md: tags).
 export function DocTypeBadge({ type, className }: DocTypeBadgeProps) {
   return (
     <Badge variant='tag' className={cn('shrink-0', className)}>
-      {LABELS[type] ?? LABELS.markdown}
+      {getDocumentType(type).label}
     </Badge>
   )
 }

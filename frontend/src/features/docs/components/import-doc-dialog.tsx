@@ -7,10 +7,7 @@ import { useNavigate } from '@tanstack/react-router'
 import type { ProjectItem } from '@/types/dokudocs'
 import {
   Check,
-  Database,
   FileCode,
-  FileText,
-  GitBranch,
   Plus,
   ScanSearch,
   Tag,
@@ -24,7 +21,12 @@ import { getCategoryPalette } from '@/lib/category-palette'
 import {
   detectDocTypeAndContent,
   parseProperCaseTitle,
+  parseArchitectureImport,
 } from '@/lib/doc-import-utils'
+import {
+  documentTypeSchema,
+  DOCUMENT_IMPORT_EXTENSIONS,
+} from '@/lib/document-types'
 import {
   createDocument as createWorkspaceDocument,
   listProjects,
@@ -58,10 +60,11 @@ import {
 } from '@/components/ui/select'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { markdownToDocumentJSON } from '../lib/markdown-to-document-json'
+import { DocumentTypePicker } from './document-type-picker'
 
 const importDocSchema = z.object({
   title: z.string().min(1, 'Please enter a document title'),
-  type: z.enum(['markdown', 'dbdiagram', 'mermaid']),
+  type: documentTypeSchema,
   projectId: z.string(),
   categories: z.array(z.string()),
   content: z.string(),
@@ -85,7 +88,7 @@ export function ImportDocDialog(props: ImportDocDialogProps) {
       : (props.preselectedProjectId ?? 'unassigned')
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-[580px]'>
+      <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-[720px]'>
         {props.open && isLoading ? (
           <>
             <DialogHeader>
@@ -281,6 +284,18 @@ function ImportDocForm({
     const assignedProjectId =
       values.projectId === 'unassigned' ? null : values.projectId
 
+    let architectureCanvas: unknown
+    if (values.type === 'architecture') {
+      try {
+        architectureCanvas = parseArchitectureImport(values.content)
+      } catch {
+        form.setError('content', {
+          message: 'Choose a valid Architecture JSON export (version 1).',
+        })
+        return
+      }
+    }
+
     if (!activeWorkspaceId) {
       const newDoc = createDocument({
         title: values.title.trim(),
@@ -288,6 +303,7 @@ function ImportDocForm({
         projectId: assignedProjectId,
         categories: values.categories,
         content: values.content,
+        contentJSON: architectureCanvas,
         isDraft: !assignedProjectId,
       })
       toast.success(`Imported "${newDoc.title}" successfully`)
@@ -341,30 +357,12 @@ function ImportDocForm({
 
     createMutation.mutate({
       requestID,
-      input: { ...common, type: values.type, content: values.content },
+      input:
+        values.type === 'architecture'
+          ? { ...common, type: 'architecture', contentJSON: architectureCanvas }
+          : { ...common, type: values.type, content: values.content },
     })
   }
-
-  const typeOptions = [
-    {
-      value: 'markdown',
-      label: 'Markdown',
-      description: 'Functional specs & documentation',
-      icon: FileText,
-    },
-    {
-      value: 'dbdiagram',
-      label: 'Database Diagram',
-      description: 'DBML schema & entity relationships',
-      icon: Database,
-    },
-    {
-      value: 'mermaid',
-      label: 'Flowchart / Architecture',
-      description: 'Sequence diagrams & graph flows',
-      icon: GitBranch,
-    },
-  ]
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`
@@ -384,8 +382,8 @@ function ImportDocForm({
           Import Document
         </DialogTitle>
         <DialogDescription className='text-xs text-muted-foreground'>
-          Import .md, .dbml, or .mermaid files with automatic type detection and
-          Proper Case title formatting.
+          Import Markdown, DBML, Mermaid, or an Architecture JSON export. The
+          type and title are detected from your file.
         </DialogDescription>
       </DialogHeader>
 
@@ -395,7 +393,7 @@ function ImportDocForm({
             ref={fileInputRef}
             type='file'
             aria-label='Import document file'
-            accept='.md,.markdown,.dbml,.mermaid,.mmd,.txt'
+            accept={`${DOCUMENT_IMPORT_EXTENSIONS},.txt`}
             className='hidden'
             onChange={handleFileChange}
           />
@@ -419,7 +417,7 @@ function ImportDocForm({
                 Choose a file or drag & drop here
               </p>
               <p className='mt-1 text-[11px] text-muted-foreground'>
-                Supports .md, .dbml, .mermaid, .mmd
+                Supports {DOCUMENT_IMPORT_EXTENSIONS.replaceAll(',', ', ')}
               </p>
             </div>
           ) : (
@@ -473,6 +471,12 @@ function ImportDocForm({
             </div>
           )}
 
+          {form.formState.errors.content && (
+            <p role='alert' className='text-sm text-destructive'>
+              {form.formState.errors.content.message}
+            </p>
+          )}
+
           <FormField
             control={form.control}
             name='title'
@@ -507,42 +511,10 @@ function ImportDocForm({
                     </span>
                   )}
                 </FormLabel>
-                <div className='grid grid-cols-1 gap-2.5 pt-1 sm:grid-cols-3'>
-                  {typeOptions.map((opt) => {
-                    const Icon = opt.icon
-                    const isSelected = field.value === opt.value
-                    return (
-                      <button
-                        key={opt.value}
-                        type='button'
-                        onClick={() => field.onChange(opt.value)}
-                        className={`flex cursor-pointer flex-col items-start rounded-lg border p-3 text-left transition-all ${
-                          isSelected
-                            ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                            : 'border-border/80 hover:border-border hover:bg-muted/40'
-                        }`}
-                      >
-                        <div className='mb-1.5 flex items-center gap-2'>
-                          <div
-                            className={`rounded-md p-1.5 ${
-                              isSelected
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted text-muted-foreground'
-                            }`}
-                          >
-                            <Icon className='size-3.5' />
-                          </div>
-                          <span className='text-xs font-semibold'>
-                            {opt.label}
-                          </span>
-                        </div>
-                        <span className='line-clamp-2 text-[10px] leading-relaxed text-muted-foreground'>
-                          {opt.description}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
+                <DocumentTypePicker
+                  value={field.value}
+                  onChange={field.onChange}
+                />
                 <FormMessage />
               </FormItem>
             )}
