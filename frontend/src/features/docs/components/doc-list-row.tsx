@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useToggleDocumentStar } from '../hooks/use-toggle-document-star'
 import { DocTypeBadge } from './doc-type-badge'
 import { MoveDocDialog } from './move-doc-dialog'
 import { RenameDocDialog } from './rename-doc-dialog'
@@ -58,12 +59,12 @@ export function DocListRow({ document }: DocListRowProps) {
     projects,
     activeOrgId,
     recordDocumentView,
-    toggleStarDocument,
     duplicateDocument,
     moveToTrash,
     updateDocument,
     moveDocumentToProject,
   } = useDokudocsStore()
+  const starMutation = useToggleDocumentStar()
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [moveDialogOpen, setMoveDialogOpen] = useState(false)
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
@@ -175,8 +176,13 @@ export function DocListRow({ document }: DocListRowProps) {
                 type='button'
                 onClick={(e) => {
                   e.stopPropagation()
-                  toggleStarDocument(document.id)
+                  starMutation.mutate(document)
                 }}
+                title={document.isStarred ? 'Unstar Document' : 'Star Document'}
+                aria-label={
+                  document.isStarred ? 'Unstar Document' : 'Star Document'
+                }
+                aria-pressed={document.isStarred}
                 className='text-muted-foreground transition-colors hover:text-foreground'
               >
                 <Star
@@ -441,7 +447,7 @@ export function DocListRow({ document }: DocListRowProps) {
             <span>Open in New Tab</span>
           </ContextMenuItem>
 
-          <ContextMenuItem onClick={() => toggleStarDocument(document.id)}>
+          <ContextMenuItem onClick={() => starMutation.mutate(document)}>
             <Star
               className={`mr-2 size-3.5 ${
                 document.isStarred ? 'fill-foreground text-foreground' : ''

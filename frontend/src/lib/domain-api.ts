@@ -432,6 +432,19 @@ export async function createProject(
   )
 }
 
+export async function toggleDocumentStar(
+  workspaceId: string,
+  documentId: string
+): Promise<boolean> {
+  const result = z.object({ isStarred: z.boolean() }).parse(
+    await apiFetch<unknown>(`/api/v1/documents/${documentId}/star`, {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceId),
+    })
+  )
+  return result.isStarred
+}
+
 export async function toggleProjectStar(
   workspaceId: string,
   projectId: string
