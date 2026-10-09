@@ -14,7 +14,7 @@ test("@live @smoke: undo and redo only touch the local user's edits", async ({
   await page.locator('input[name="email"]').fill("admin@example.com");
   await page.locator('input[name="password"]').fill("password123");
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => url.pathname === "/");
+  await page.waitForURL((url) => url.pathname === "/dashboard");
 
   await page
     .getByRole("button", { name: /workspace/i })

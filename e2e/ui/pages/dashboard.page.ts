@@ -10,7 +10,7 @@ export class DashboardPage extends BasePage {
   }
 
   async goto() {
-    await super.goto('/')
+    await super.goto('/dashboard')
   }
 
   async selectFilterTab(tabName: 'All' | 'Created by me' | 'Shared with me' | 'Starred') {

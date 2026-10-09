@@ -10,7 +10,7 @@ async function signInAndCreateCanvas(page: Page) {
   await page.locator('input[name="email"]').fill("admin@example.com");
   await page.locator('input[name="password"]').fill("password123");
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"));
+  await page.waitForURL((url) => url.pathname === "/dashboard");
   await page.getByRole("button", { name: /workspace/i }).first().click();
   await page.getByRole("menuitem", { name: "Create Workspace" }).click();
   await page.getByLabel("Workspace Name").fill(`Canvas workspace ${suffix}`);

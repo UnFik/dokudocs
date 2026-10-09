@@ -8,7 +8,7 @@ test.describe('Backend and Frontend Live Integration @live', () => {
     await page.locator('input[name="password"]').fill('password123')
     await page.getByRole('button', { name: /sign in/i }).click()
 
-    await page.waitForURL((url) => url.pathname === '/')
+    await page.waitForURL((url) => url.pathname === '/dashboard')
     await expect(page.getByRole('heading', { name: /dokudocs workspace/i })).toBeVisible()
 
     const userProfileName = page.locator('[data-slot="sidebar-container"] [data-slot="sidebar-footer"], [data-sidebar="footer"]').first()
@@ -40,7 +40,7 @@ test.describe('Backend and Frontend Live Integration @live', () => {
     await page.locator('input[name="confirmPassword"]').fill(testPassword)
     await page.getByRole('button', { name: /create account/i }).click()
 
-    await page.waitForURL((url) => url.pathname === '/')
+    await page.waitForURL((url) => url.pathname === '/dashboard')
     await expect(page.getByRole('heading', { name: /dokudocs workspace/i })).toBeVisible()
 
     const footer = page.locator('[data-slot="sidebar-container"] [data-slot="sidebar-footer"], [data-sidebar="footer"]').first()
@@ -54,11 +54,11 @@ test.describe('Backend and Frontend Live Integration @live', () => {
     await page.locator('input[name="password"]').fill('password123')
     await page.getByRole('button', { name: /sign in/i }).click()
 
-    await page.waitForURL((url) => url.pathname === '/')
+    await page.waitForURL((url) => url.pathname === '/dashboard')
     await expect(page.getByRole('heading', { name: /dokudocs workspace/i })).toBeVisible()
 
     await page.reload()
     await expect(page.getByRole('heading', { name: /dokudocs workspace/i })).toBeVisible()
-    await expect(page).toHaveURL('/')
+    await expect(page).toHaveURL('/dashboard')
   })
 })

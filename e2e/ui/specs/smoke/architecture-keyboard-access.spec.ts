@@ -10,7 +10,7 @@ async function signIn(page: Page, email: string, password: string) {
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/sign-in"));
+  await page.waitForURL((url) => url.pathname === "/dashboard");
 }
 
 test("@live @smoke: keyboard editing, undo, and a commenter's read-only canvas", async ({ page, browser }) => {

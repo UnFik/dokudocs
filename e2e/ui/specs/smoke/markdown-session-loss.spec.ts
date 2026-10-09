@@ -23,7 +23,7 @@ async function signIn(
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => url.pathname === "/");
+  await page.waitForURL((url) => url.pathname === "/dashboard");
   const cookie = (await context.cookies()).find((c) => c.name === tokenCookie);
   expect(cookie).toBeDefined();
 
@@ -204,7 +204,7 @@ test("@live @smoke: access revoked while offline discards the local copy on reco
 });
 
 async function startSignOut(page: Page) {
-  await page.goto("/");
+  await page.goto("/dashboard");
   await page.locator('[data-sidebar="footer"] button').last().click();
   await page.getByRole("menuitem", { name: /logout/i }).click();
   await page.getByRole("button", { name: /^sign out$/i }).click();
