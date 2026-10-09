@@ -9,8 +9,8 @@ import {
 import { cardTitle } from './suggestionCards'
 import { ME } from './suggestionTestKit'
 
-it.each([false, true])(
-  'keeps a browser caret move before selectionchange (remote refresh: %s)',
+it.each(['none', 'remote cursor', 'comments'] as const)(
+  'keeps a browser caret move before selectionchange (refresh: %s)',
   (refresh) => {
     const { editor, cleanup } = mountTestEditor(
       paragraphsBody('Original phrase'),
@@ -33,7 +33,7 @@ it.each([false, true])(
       // Native End moves the browser caret before selectionchange updates the editor.
       window.getSelection()!.collapse(text, text.textContent!.length)
       const anchor = editor.createAnchor(start + 1, start + 2)
-      if (refresh)
+      if (refresh === 'remote cursor')
         editor.setRemoteCursors([
           {
             connectionID: 'owner',
@@ -44,6 +44,10 @@ it.each([false, true])(
             head: anchor.start,
           },
         ])
+      if (refresh === 'comments') {
+        const anchor = editor.createAnchor(start + 1, start + 2)
+        editor.setComments([{ id: 'comment', anchor, resolved: false }])
+      }
       pressKey(editor.view.dom, 'Enter')
       const { from, to } = editor.view.state.selection
       editor.view.someProp('handleTextInput', (handler) =>
@@ -59,3 +63,21 @@ it.each([false, true])(
     }
   }
 )
+
+it('keeps a browser text selection when comment decorations refresh', () => {
+  const { editor, cleanup } = mountTestEditor(paragraphsBody('Beta'))
+  try {
+    const start = runStart(editor.view.state.doc, 'Beta')
+    editor.view.focus()
+    const text = document
+      .createTreeWalker(editor.view.dom, NodeFilter.SHOW_TEXT)
+      .nextNode()!
+    window.getSelection()!.setBaseAndExtent(text, 0, text, 4)
+    const anchor = editor.createAnchor(start, start + 1)
+    editor.setComments([{ id: 'comment', anchor, resolved: false }])
+    expect(editor.view.state.selection.from).toBe(start)
+    expect(editor.view.state.selection.to).toBe(start + 4)
+  } finally {
+    cleanup()
+  }
+})
