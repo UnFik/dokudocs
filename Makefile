@@ -1,35 +1,52 @@
 DOCKER_COMPOSE ?= docker compose
 
-# Whole stack in Docker (docker-compose.yaml): db, redis, migrate, api, collab, frontend.
-# The app is at http://localhost:5173; the browser only talks to the frontend.
-up:
-	$(DOCKER_COMPOSE) up --build -d
-	@echo "Frontend http://localhost:5173  API http://localhost:8080  Collab http://localhost:1234 (health /health, metrics /metrics)"
+# make dev    development stack (docker-compose.dev.yaml): hot reload, http://localhost:5173
+# make build  production stack (docker-compose.yaml), built and started: http://127.0.0.1:8088
+# OBSERVABILITY=true in .env adds docker-compose.observability.yaml to either
+# (docs/observability.md). A value on the command line wins: make dev OBSERVABILITY=true
+# The other targets act on whichever stack is running.
+OBSERVABILITY ?= $(or $(shell sed -n 's/^OBSERVABILITY=//p' .env 2>/dev/null | tail -n 1),false)
+observability_files = $(if $(filter true 1 yes,$(OBSERVABILITY)),-f docker-compose.observability.yaml)
+
+# The compose files the running stack was started with, as Docker recorded them.
+comma := ,
+running_files = $(shell docker ps -a --filter label=com.docker.compose.project=dokudocs --format '{{.Label "com.docker.compose.project.config_files"}}' 2>/dev/null | head -n 1)
+RUNNING = $(DOCKER_COMPOSE) $(or $(foreach f,$(subst $(comma), ,$(running_files)),-f $(f)),-f docker-compose.dev.yaml)
+
+# Starting one stack replaces the other (same project) and, with observability
+# off, removes the alloy container.
+dev:
+	$(DOCKER_COMPOSE) -f docker-compose.dev.yaml $(observability_files) up --build -d --remove-orphans
+	@echo "Frontend http://localhost:5173  API http://localhost:8080  Collab http://localhost:1234  (observability $(OBSERVABILITY))"
+
+build:
+	$(DOCKER_COMPOSE) -f docker-compose.yaml $(observability_files) up --build -d --remove-orphans
+	@echo "Site http://127.0.0.1:$(or $(shell sed -n 's/^FRONTEND_PORT=//p' .env 2>/dev/null | tail -n 1),8088)  (observability $(OBSERVABILITY))"
 
 down:
-	$(DOCKER_COMPOSE) down
+	$(RUNNING) down --remove-orphans
 
-restart: down up
-
-rebuild:
-	$(DOCKER_COMPOSE) build --no-cache
-	$(DOCKER_COMPOSE) up -d
+restart:
+	$(RUNNING) restart $(SERVICE)
 
 logs:
-	$(DOCKER_COMPOSE) logs -f --tail=100 $(SERVICE)
+	$(RUNNING) logs -f --tail=100 $(SERVICE)
 
 ps:
-	$(DOCKER_COMPOSE) ps
+	$(RUNNING) ps
 
 # Admin user and mock documents, inside the running api container.
 seed-docker:
-	$(DOCKER_COMPOSE) exec api seeder
+	$(RUNNING) exec api seeder
 
-# Stops the stack and deletes its database volume.
+# Stops the running stack and deletes its volumes. On production it asks for CONFIRM=yes.
 reset:
-	$(DOCKER_COMPOSE) down --volumes
+	@case "$(running_files)" in *docker-compose.yaml*) \
+		if [ "$(CONFIRM)" != yes ]; then echo "The production stack is running; this deletes its database. Run: make reset CONFIRM=yes"; exit 1; fi;; \
+	esac
+	$(RUNNING) down --volumes --remove-orphans
 
-.PHONY: up down restart rebuild logs ps seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
+.PHONY: dev build down restart logs ps seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
 
 test-e2e: test-e2e-api
 
