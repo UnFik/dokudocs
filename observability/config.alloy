@@ -1,6 +1,6 @@
-// Collects logs, metrics and traces from the production stack and sends them to
-// Grafana Cloud. Runs with: docker compose --profile observability up -d
-// See docs/observability.md for the .env values it reads.
+// Collects logs, metrics and traces from the production stack and sends all three
+// to Grafana Cloud through its one OTLP endpoint. Runs from
+// docker-compose.observability.yaml; see docs/observability.md.
 
 // ---------------------------------------------------------------- Logs
 
@@ -31,9 +31,8 @@ loki.source.docker "containers" {
 	forward_to    = [loki.process.containers.receiver]
 }
 
-// The API, collab and nginx write JSON lines. Only `service` and `level` become
-// labels; everything else stays in the line. The trace ID is kept as metadata so
-// Grafana links a line to its trace.
+// The API, collab and nginx write JSON lines. `level` and `trace_id` are lifted
+// out of the line so Grafana can filter on them and link a line to its trace.
 loki.process "containers" {
 	stage.json {
 		expressions = {level = "level", trace_id = "trace_id", route = "route"}
@@ -46,26 +45,16 @@ loki.process "containers" {
 	}
 
 	stage.labels {
-		values = {level = ""}
+		values = {level = "", trace_id = ""}
 	}
 
-	stage.structured_metadata {
-		values = {trace_id = ""}
-	}
-
-	forward_to = [loki.write.cloud.receiver]
+	forward_to = [otelcol.receiver.loki.logs.receiver]
 }
 
-loki.write "cloud" {
-	endpoint {
-		url = sys.env("GRAFANA_CLOUD_LOKI_URL")
-
-		basic_auth {
-			username = sys.env("GRAFANA_CLOUD_LOKI_USER")
-			password = sys.env("GRAFANA_CLOUD_API_KEY")
-		}
+otelcol.receiver.loki "logs" {
+	output {
+		logs = [otelcol.processor.transform.cloud.input]
 	}
-	external_labels = {env = "production"}
 }
 
 // ---------------------------------------------------------------- Metrics
@@ -78,7 +67,7 @@ prometheus.scrape "services" {
 		{"__address__" = "collab:1234", "service" = "collab"},
 	]
 	scrape_interval = "30s"
-	forward_to      = [prometheus.remote_write.cloud.receiver]
+	forward_to      = [otelcol.receiver.prometheus.metrics.receiver]
 }
 
 // Only what the dashboards and alerts use, to stay well under the free tier's series.
@@ -105,7 +94,7 @@ prometheus.exporter.unix "host" {
 prometheus.scrape "host" {
 	targets         = prometheus.exporter.unix.host.targets
 	scrape_interval = "30s"
-	forward_to      = [prometheus.remote_write.cloud.receiver]
+	forward_to      = [otelcol.receiver.prometheus.metrics.receiver]
 }
 
 prometheus.exporter.cadvisor "containers" {
@@ -134,19 +123,13 @@ prometheus.relabel "containers" {
 		regex         = "container_(cpu_usage_seconds_total|memory_working_set_bytes|network_(receive|transmit)_bytes_total|oom_events_total|spec_memory_limit_bytes|start_time_seconds)"
 		action        = "keep"
 	}
-	forward_to = [prometheus.remote_write.cloud.receiver]
+	forward_to = [otelcol.receiver.prometheus.metrics.receiver]
 }
 
-prometheus.remote_write "cloud" {
-	endpoint {
-		url = sys.env("GRAFANA_CLOUD_PROMETHEUS_URL")
-
-		basic_auth {
-			username = sys.env("GRAFANA_CLOUD_PROMETHEUS_USER")
-			password = sys.env("GRAFANA_CLOUD_API_KEY")
-		}
+otelcol.receiver.prometheus "metrics" {
+	output {
+		metrics = [otelcol.processor.transform.cloud.input]
 	}
-	external_labels = {env = "production"}
 }
 
 // ---------------------------------------------------------------- Traces
@@ -194,18 +177,59 @@ otelcol.processor.tail_sampling "services" {
 	}
 
 	output {
-		traces = [otelcol.processor.batch.services.input]
+		traces = [otelcol.processor.transform.cloud.input]
 	}
 }
 
-otelcol.processor.batch "services" {
+// ---------------------------------------------------------------- Out
+
+// Every signal is marked as production. A log line's compose service becomes its
+// service.name, which Grafana Cloud indexes as `service_name`.
+otelcol.processor.transform "cloud" {
+	error_mode = "ignore"
+
+	log_statements {
+		context    = "log"
+		statements = [
+			`set(resource.attributes["service.name"], attributes["service"]) where attributes["service"] != nil`,
+			`delete_key(attributes, "service")`,
+			// Left by the Loki receiver; it means nothing to the OTLP endpoint.
+			`delete_key(attributes, "loki.attribute.labels")`,
+		]
+	}
+
+	log_statements {
+		context    = "resource"
+		statements = [`set(attributes["deployment.environment"], "production")`]
+	}
+
+	metric_statements {
+		context    = "resource"
+		statements = [`set(attributes["deployment.environment"], "production")`]
+	}
+
+	trace_statements {
+		context    = "resource"
+		statements = [`set(attributes["deployment.environment"], "production")`]
+	}
+
 	output {
-		traces = [otelcol.exporter.otlphttp.cloud.input]
+		logs    = [otelcol.processor.batch.cloud.input]
+		metrics = [otelcol.processor.batch.cloud.input]
+		traces  = [otelcol.processor.batch.cloud.input]
+	}
+}
+
+otelcol.processor.batch "cloud" {
+	output {
+		logs    = [otelcol.exporter.otlphttp.cloud.input]
+		metrics = [otelcol.exporter.otlphttp.cloud.input]
+		traces  = [otelcol.exporter.otlphttp.cloud.input]
 	}
 }
 
 otelcol.auth.basic "cloud" {
-	username = sys.env("GRAFANA_CLOUD_OTLP_USER")
+	username = sys.env("GRAFANA_CLOUD_INSTANCE_ID")
 	password = sys.env("GRAFANA_CLOUD_API_KEY")
 }
 

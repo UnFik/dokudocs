@@ -1,8 +1,9 @@
 name: dokudocs
 
-# Production stack behind Cloudflare Tunnel: http://127.0.0.1:8088.
-# Copy .env.production.example to .env and fill in the required values.
-# Development: docker compose -f docker-compose.dev.yaml up --build -d
+# Production stack: http://127.0.0.1:8088. Run with: make build
+# Copy .env.example to .env and fill in the required values.
+# Development: docker-compose.dev.yaml, run with: make dev
+# Observability: docker-compose.observability.yaml (docs/observability.md).
 
 services:
   db:
@@ -71,10 +72,6 @@ services:
       SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10s}
       COLLAB_SERVICE_SECRET: ${COLLAB_SERVICE_SECRET:?Set COLLAB_SERVICE_SECRET in .env}
       COLLAB_SERVICE_URL: http://collab:1234
-      # Internal only: Alloy scrapes it; it is not published and not behind nginx.
-      METRICS_ADDR: :9091
-      # Set to http://alloy:4318 with the observability profile on (docs/observability.md).
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     volumes:
       - assets:/var/lib/dokudocs/assets
     healthcheck:
@@ -101,7 +98,6 @@ services:
       COLLAB_SERVICE_SECRET: ${COLLAB_SERVICE_SECRET:?Set COLLAB_SERVICE_SECRET in .env}
       COLLAB_PORT: "1234"
       REDIS_URL: redis://redis:6379/1
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:1234/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
@@ -126,44 +122,8 @@ services:
       collab:
         condition: service_healthy
 
-  # Sends logs, metrics and traces to Grafana Cloud. Off unless started with
-  # --profile observability; see docs/observability.md.
-  alloy:
-    image: grafana/alloy:v1.20.1
-    profiles: [observability]
-    restart: unless-stopped
-    mem_limit: 512m
-    # Sees every container's cgroup, not only its own, for per-container usage.
-    cgroup: host
-    command:
-      - run
-      - --server.http.listen-addr=0.0.0.0:12345
-      - --storage.path=/var/lib/alloy/data
-      - /etc/alloy/config.alloy
-    environment:
-      GRAFANA_CLOUD_API_KEY: ${GRAFANA_CLOUD_API_KEY:-}
-      GRAFANA_CLOUD_LOKI_URL: ${GRAFANA_CLOUD_LOKI_URL:-}
-      GRAFANA_CLOUD_LOKI_USER: ${GRAFANA_CLOUD_LOKI_USER:-}
-      GRAFANA_CLOUD_PROMETHEUS_URL: ${GRAFANA_CLOUD_PROMETHEUS_URL:-}
-      GRAFANA_CLOUD_PROMETHEUS_USER: ${GRAFANA_CLOUD_PROMETHEUS_USER:-}
-      GRAFANA_CLOUD_OTLP_URL: ${GRAFANA_CLOUD_OTLP_URL:-}
-      GRAFANA_CLOUD_OTLP_USER: ${GRAFANA_CLOUD_OTLP_USER:-}
-    volumes:
-      - ./observability/config.alloy:/etc/alloy/config.alloy:ro
-      - alloy_data:/var/lib/alloy/data
-      # Read-only: finds the containers and reads their logs and usage (Docker and
-      # its containerd), and the host's CPU, memory, disk and network.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
-      - /run/udev/data:/run/udev/data:ro
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/host/root:ro,rslave
-      - /var/lib/docker:/var/lib/docker:ro
-
 # Reuse the volumes created by backend/docker-compose.yaml so existing dev data carries over.
 volumes:
   assets:
   postgres_data:
     name: backend_postgres_data
-  alloy_data:

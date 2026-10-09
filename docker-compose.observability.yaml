@@ -1,0 +1,52 @@
+# Observability for the production stack: Alloy collects logs, metrics and
+# traces and sends them to Grafana Cloud over OTLP. Turn it on with one line in
+# .env, so a plain `docker compose up -d` includes it:
+#
+#   COMPOSE_FILE=docker-compose.yaml:docker-compose.observability.yaml
+#
+# See docs/observability.md.
+
+services:
+  api:
+    environment:
+      # Internal only: Alloy scrapes it; it is not published and not behind nginx.
+      METRICS_ADDR: :9091
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+
+  collab:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+
+  alloy:
+    image: grafana/alloy:v1.20.1
+    restart: unless-stopped
+    # About 400 MB in use on a test run. GOMEMLIMIT makes Go collect garbage
+    # harder before the container limit is reached.
+    mem_limit: 768m
+    # Sees every container's cgroup, not only its own, for per-container usage.
+    cgroup: host
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      GOMEMLIMIT: 600MiB
+      GRAFANA_CLOUD_OTLP_URL: ${GRAFANA_CLOUD_OTLP_URL:?Set GRAFANA_CLOUD_OTLP_URL in .env}
+      GRAFANA_CLOUD_INSTANCE_ID: ${GRAFANA_CLOUD_INSTANCE_ID:?Set GRAFANA_CLOUD_INSTANCE_ID in .env}
+      GRAFANA_CLOUD_API_KEY: ${GRAFANA_CLOUD_API_KEY:?Set GRAFANA_CLOUD_API_KEY in .env}
+    volumes:
+      - ./observability/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
+      # Read-only: finds the containers and reads their logs and usage (Docker and
+      # its containerd), and the host's CPU, memory, disk and network.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+      - /run/udev/data:/run/udev/data:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+      - /var/lib/docker:/var/lib/docker:ro
+
+volumes:
+  alloy_data:
