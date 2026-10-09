@@ -70,5 +70,5 @@ func Transport(attrs ...attribute.KeyValue) http.RoundTripper {
 // QueryTracer traces database queries. Spans hold the SQL text with its
 // placeholders, never the parameter values.
 func QueryTracer() pgx.QueryTracer {
-	return otelpgx.NewTracer(otelpgx.WithTrimSQLInSpanName())
+	return otelpgx.NewTracer()
 }
