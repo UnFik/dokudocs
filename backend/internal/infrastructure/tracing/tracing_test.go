@@ -85,3 +85,14 @@ func TestHealthChecksAreNotTraced(t *testing.T) {
 		t.Errorf("got %d spans for a health check, want 0", n)
 	}
 }
+
+func TestASpanNamesTheMethodWhenTheRouteHasNone(t *testing.T) {
+	spans := recordSpans(t)
+	mux := http.NewServeMux()
+	mux.Handle("/internal/collab/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	handler := tracing.Middleware(middleware.Logger(logger.NewJSON(&bytes.Buffer{}))(mux))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPut, "/internal/collab/document", nil))
+	if ended := spans.Ended(); len(ended) != 1 || ended[0].Name() != "PUT /internal/collab/" {
+		t.Fatalf("spans = %v, want one named \"PUT /internal/collab/\"", ended)
+	}
+}
