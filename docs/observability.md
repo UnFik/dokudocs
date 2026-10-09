@@ -22,7 +22,7 @@ Everything for it lives in `docker-compose.observability.yaml`: the `alloy` serv
 
 1. In Grafana Cloud, open the stack's details page, then **OpenTelemetry → Configure**. Note the **OTLP endpoint** and the **Instance ID**.
 2. Create an access policy token (**Security → Access Policies**) with `logs:write`, `metrics:write` and `traces:write`.
-3. Add to `.env` on the VPS:
+3. In `.env` on the VPS, uncomment the observability lines (they are in `.env.example`) and fill them in:
 
    ```bash
    COMPOSE_FILE=docker-compose.yaml:docker-compose.observability.yaml
