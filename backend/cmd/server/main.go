@@ -52,7 +52,7 @@ func main() {
 				return
 			case <-ticker.C:
 				if _, err := routes.SweepAssets(workerCtx, c, cfg, 24*time.Hour); err != nil {
-					log.Printf("sweep assets: %v", err)
+					log.Errorf("sweep assets: %v", err)
 				}
 			}
 		}
@@ -67,11 +67,11 @@ func runRAGIndexWorker(ctx context.Context, repo *documentrepo.Repository, embed
 	defer ticker.Stop()
 	for {
 		if _, err := repo.RebuildStaleRAGIndexes(ctx, 100); err != nil {
-			log.Printf("rebuild stale RAG indexes: %v", err)
+			log.Errorf("rebuild stale RAG indexes: %v", err)
 		}
 		if embedder != nil {
 			if err := embedRAGBacklog(ctx, repo, embedder); err != nil {
-				log.Printf("embed RAG chunks: %v", err)
+				log.Errorf("embed RAG chunks: %v", err)
 			}
 		}
 		select {
