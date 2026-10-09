@@ -71,8 +71,14 @@ test("@live @smoke: keyboard editing, undo, and a commenter's read-only canvas",
   const theirRedis = commenter.locator(".react-flow__node-system").filter({ hasText: "Redis" });
   await theirRedis.click();
   await expect(commenter.getByLabel("name").first()).toBeDisabled();
-  await commenter.getByLabel("New comment on Redis").fill("Is this the session store?");
-  await commenter.getByRole("button", { name: "Comment", exact: true }).click();
-  await expect(redis.getByTitle("1 open comment")).toBeVisible({ timeout: 20000 });
+  const theirProperties = commenter.locator("#architecture-properties");
+  await theirProperties.getByLabel("New comment on Redis").fill("Is this the session store?");
+  await theirProperties.getByRole("button", { name: "Comment", exact: true }).click();
+  // The editor sees the new thread as a pin on Redis.
+  await expect(page.getByRole("button", { name: /^Comment by .* on Redis$/ })).toBeVisible({ timeout: 20000 });
+  // A commenter has Hand, Cursor and Comment, and no Eraser.
+  const tools = commenter.getByRole("toolbar", { name: "Canvas tools" });
+  await expect(tools.getByRole("button", { name: "Comment", exact: true })).toBeVisible();
+  await expect(tools.getByRole("button", { name: "Eraser" })).toHaveCount(0);
   await other.close();
 });

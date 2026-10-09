@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	appauth "backend/internal/application/auth/dto"
@@ -50,6 +51,7 @@ type storedState struct {
 	markdown                string
 	suggestions             []collaboration.Suggestion
 	updatedBy               *uuid.UUID
+	thumbnail               *string
 }
 
 type fakeStore struct {
@@ -68,7 +70,7 @@ func (f *fakeStore) LoadDocument(_ context.Context, _, documentID uuid.UUID) ([]
 
 func (f *fakeStore) StoreState(_ context.Context, workspaceID, documentID uuid.UUID, state []byte, content json.RawMessage, markdown string, suggestions []collaboration.Suggestion, options ...collaboration.StoreOption) error {
 	applied := collaboration.ApplyStoreOptions(options)
-	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content, markdown, suggestions, applied.UpdatedBy})
+	f.stored = append(f.stored, storedState{workspaceID, documentID, state, content, markdown, suggestions, applied.UpdatedBy, applied.Thumbnail})
 	f.states[documentID] = state
 	f.contents[documentID] = content
 	return nil
@@ -230,5 +232,52 @@ func TestStoreRefusesWhatIsNotAStateAndContent(t *testing.T) {
 	}
 	if got := do(h, http.MethodPut, "/internal/collab/document?workspaceID=x&documentID=y", map[string]any{}, true).Code; got != http.StatusBadRequest {
 		t.Fatalf("bad ids = %d, want 400", got)
+	}
+}
+
+func TestStoreCarriesTheCardDrawingOfACanvas(t *testing.T) {
+	h, store := newHandler(t)
+	target := "/internal/collab/document?workspaceID=" + workspaceID.String() + "&documentID=" + documentID.String()
+	body := func(thumbnail any) map[string]any {
+		b := map[string]any{"state": "AQID", "content": map[string]any{"version": 1}, "markdown": ""}
+		if thumbnail != nil {
+			b["thumbnail"] = thumbnail
+		}
+		return b
+	}
+
+	for _, sent := range []string{`<svg xmlns="http://www.w3.org/2000/svg"></svg>`, ""} {
+		if got := do(h, http.MethodPut, target, body(sent), true); got.Code != http.StatusNoContent {
+			t.Fatalf("store with thumbnail %q = %d %s, want 204", sent, got.Code, got.Body.String())
+		}
+		last := store.stored[len(store.stored)-1]
+		if last.thumbnail == nil || *last.thumbnail != sent {
+			t.Fatalf("thumbnail = %v, want %q (empty clears it)", last.thumbnail, sent)
+		}
+	}
+
+	// A Markdown room sends none, and the thumbnail is left as it is.
+	if got := do(h, http.MethodPut, target, body(nil), true).Code; got != http.StatusNoContent {
+		t.Fatalf("store without thumbnail = %d, want 204", got)
+	}
+	if last := store.stored[len(store.stored)-1]; last.thumbnail != nil {
+		t.Fatalf("thumbnail = %q, want none when the service sends none", *last.thumbnail)
+	}
+}
+
+func TestStoreRefusesACardDrawingThatIsNotASmallSVG(t *testing.T) {
+	h, store := newHandler(t)
+	target := "/internal/collab/document?workspaceID=" + workspaceID.String() + "&documentID=" + documentID.String()
+	for name, thumbnail := range map[string]string{
+		"not an SVG":  `<img src=x onerror=alert(1)>`,
+		"over 64 KiB": "<svg>" + strings.Repeat(" ", 64*1024) + "</svg>",
+	} {
+		got := do(h, http.MethodPut, target, map[string]any{"state": "AQID", "content": map[string]any{}, "thumbnail": thumbnail}, true)
+		if got.Code != http.StatusBadRequest {
+			t.Fatalf("%s = %d, want 400", name, got.Code)
+		}
+	}
+	if len(store.stored) != 0 {
+		t.Fatalf("nothing should have been stored, got %d", len(store.stored))
 	}
 }

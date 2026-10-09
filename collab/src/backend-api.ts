@@ -21,6 +21,8 @@ export type StoredDocument = {
   updatedBy: string | null
   /** The suggestions the document carries, for the discussion index. */
   suggestions: { id: string; author: string }[]
+  /** An architecture room only: the SVG drawn on its document card, empty for an empty canvas. */
+  thumbnail?: string
 }
 
 export type LoadedDocument = {
