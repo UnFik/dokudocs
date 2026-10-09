@@ -99,15 +99,37 @@ test("@live @smoke: canvas tools, comment pins and selecting several elements", 
   const after = (await node("Queue").boundingBox())!;
   expect(after.y - queueBox.y).toBeGreaterThan(60);
 
-  // Eraser with the lock on stays active for a second element.
-  await tools.getByRole("button", { name: "Lock tool" }).click();
+  // Eraser takes one element, then goes back to Cursor.
   await page.keyboard.press("e");
   await node("Queue").click();
-  await node("Cache").click();
   await expect(page.locator(".react-flow__node").filter({ hasText: "Queue" })).toHaveCount(0);
-  await expect(page.locator(".react-flow__node").filter({ hasText: "Cache" })).toHaveCount(0);
-  await expect(tools.getByRole("button", { name: "Eraser" })).toHaveAttribute("aria-pressed", "true");
-  await tools.getByRole("button", { name: "Lock tool" }).click();
+  await expect(tools.getByRole("button", { name: "Cursor" })).toHaveAttribute("aria-pressed", "true");
+
+  // Locked, the canvas is for looking only: Cache neither moves, gets selected nor deleted.
+  const lock = tools.getByRole("button", { name: "Lock canvas" });
+  await lock.click();
+  await expect(lock).toHaveAttribute("aria-pressed", "true");
+  await expect(tools.getByRole("button", { name: "Eraser" })).toBeDisabled();
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
+  const offset = async () => {
+    const [cache, vps] = [(await node("Cache").boundingBox())!, (await node("VPS-1").boundingBox())!];
+    return { x: Math.round(cache.x - vps.x), y: Math.round(cache.y - vps.y) };
+  };
+  const lockedAt = await offset();
+  const cacheNow = (await node("Cache").boundingBox())!;
+  await page.mouse.move(cacheNow.x + cacheNow.width / 2, cacheNow.y + cacheNow.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cacheNow.x + cacheNow.width / 2, cacheNow.y + cacheNow.height / 2 + 100, { steps: 8 });
+  await page.mouse.up();
+  await node("Cache").click();
+  await page.keyboard.press("Delete");
+  // The drag panned the view; Cache stayed where it was next to the Host.
+  expect(await offset()).toEqual(lockedAt);
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(0);
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Cache" })).toHaveCount(1);
+  await lock.click();
+  await expect(lock).toHaveAttribute("aria-pressed", "false");
+  await expect(tools.getByRole("button", { name: "Cursor" })).toHaveAttribute("aria-pressed", "true");
 
   // Hand pans and leaves the Host where it is.
   await page.keyboard.press("h");
