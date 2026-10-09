@@ -5,7 +5,11 @@ Every push to `main` deploys to the production server. The `Deploy` workflow
 
 1. **images**, on GitHub: builds the `api` (also used by `migrate`), `collab`
    and `frontend` images and pushes them to GHCR as
-   `ghcr.io/unfik/dokudocs-<name>:<commit SHA>` (and `:main`).
+   `ghcr.io/unfik/dokudocs-<name>:src-<hash>`. The hash comes from what goes
+   into that image (`scripts/deploy/image-tags.sh`): the `backend` or
+   `frontend` folder, or for `collab` its folder plus the frontend files its
+   Dockerfile copies. An image already pushed for the same sources is not
+   built again.
 2. **deploy**, on the runner that lives on the server: runs
    `sudo /usr/local/bin/dokudocs-deploy <SHA>`.
 
@@ -16,12 +20,27 @@ Every push to `main` deploys to the production server. The `Deploy` workflow
 - dumps the database to `/var/backups/dokudocs/` (the last 10 are kept), since
   migrations only go forward,
 - runs `docker compose up -d --no-build` with the same files `make build` uses
-  (`OBSERVABILITY` in `.env` decides on `docker-compose.observability.yaml`),
+  (`OBSERVABILITY` in `.env` decides on `docker-compose.observability.yaml`).
+  Only services whose image tag changed are replaced; the rest keep running,
 - waits for `/api/v1/health` and `/sign-in` through nginx, and writes the
   commit to `/opt/dokudocs/.deployed`.
 
 The server builds nothing: it has about 2 GB of memory. Deploys run one at a
-time. Open editors reconnect after `api` and `collab` restart.
+time.
+
+## Downtime
+
+Measured on a local copy of the stack, probing every 0.2 s:
+
+| What changed | Replaced | Down |
+|---|---|---|
+| backend only | `api` | the API for about 1 s; pages keep loading |
+| everything | `api`, `collab`, `frontend` | the site for about 10 s |
+
+Health checks run every second while a container starts, so the next service
+starts as soon as the one before is ready. nginx looks `api` and `collab` up
+again as they are replaced, so it can keep running. Open editors reconnect
+whenever `collab` is replaced.
 
 Pull request CI is the only test gate: a merge to `main` deploys without
 waiting for another run.
