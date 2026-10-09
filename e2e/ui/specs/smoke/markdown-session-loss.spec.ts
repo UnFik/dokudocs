@@ -23,7 +23,7 @@ async function signIn(
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL((url) => url.pathname !== "/sign-in");
+  await page.waitForURL((url) => url.pathname === "/dashboard");
   const cookie = (await context.cookies()).find((c) => c.name === tokenCookie);
   expect(cookie).toBeDefined();
 
