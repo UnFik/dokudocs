@@ -1,67 +1,52 @@
 DOCKER_COMPOSE ?= docker compose
 
-# Which stack the targets below run, and whether observability is added to it.
-# Both come from .env (see .env.example), so a VPS sets them once:
-#   STACK=dev | prod            dev: docker-compose.dev.yaml, prod: docker-compose.yaml
-#   OBSERVABILITY=true | false  adds docker-compose.observability.yaml (docs/observability.md)
-# A value on the command line wins: make up STACK=prod OBSERVABILITY=true
-env_value = $(shell sed -n 's/^$(1)=//p' .env 2>/dev/null | tail -n 1)
-STACK ?= $(or $(call env_value,STACK),dev)
-OBSERVABILITY ?= $(or $(call env_value,OBSERVABILITY),false)
+# make dev    development stack (docker-compose.dev.yaml): hot reload, http://localhost:5173
+# make build  production stack (docker-compose.yaml), built and started: http://127.0.0.1:8088
+# OBSERVABILITY=true in .env adds docker-compose.observability.yaml to either
+# (docs/observability.md). A value on the command line wins: make dev OBSERVABILITY=true
+# The other targets act on whichever stack is running.
+OBSERVABILITY ?= $(or $(shell sed -n 's/^OBSERVABILITY=//p' .env 2>/dev/null | tail -n 1),false)
+observability_files = $(if $(filter true 1 yes,$(OBSERVABILITY)),-f docker-compose.observability.yaml)
 
-ifeq ($(STACK),prod)
-COMPOSE_FILES := -f docker-compose.yaml
-else ifeq ($(STACK),dev)
-COMPOSE_FILES := -f docker-compose.dev.yaml
-else
-$(error STACK must be dev or prod, not "$(STACK)")
-endif
-ifneq ($(filter true 1 yes,$(OBSERVABILITY)),)
-COMPOSE_FILES += -f docker-compose.observability.yaml
-endif
-COMPOSE := $(DOCKER_COMPOSE) $(COMPOSE_FILES)
+# The compose files the running stack was started with, as Docker recorded them.
+comma := ,
+running_files = $(shell docker ps -a --filter label=com.docker.compose.project=dokudocs --format '{{.Label "com.docker.compose.project.config_files"}}' 2>/dev/null | head -n 1)
+RUNNING = $(DOCKER_COMPOSE) $(or $(foreach f,$(subst $(comma), ,$(running_files)),-f $(f)),-f docker-compose.dev.yaml)
 
-# Starts the stack. Turning observability off removes the alloy container too.
-up:
-	$(COMPOSE) up --build -d --remove-orphans
-ifeq ($(STACK),prod)
-	@echo "Site http://127.0.0.1:$(or $(call env_value,FRONTEND_PORT),8088)"
-else
-	@echo "Frontend http://localhost:5173  API http://localhost:8080  Collab http://localhost:1234"
-endif
-	@echo "Stack $(STACK), observability $(OBSERVABILITY)"
+# Starting one stack replaces the other (same project) and, with observability
+# off, removes the alloy container.
+dev:
+	$(DOCKER_COMPOSE) -f docker-compose.dev.yaml $(observability_files) up --build -d --remove-orphans
+	@echo "Frontend http://localhost:5173  API http://localhost:8080  Collab http://localhost:1234  (observability $(OBSERVABILITY))"
+
+build:
+	$(DOCKER_COMPOSE) -f docker-compose.yaml $(observability_files) up --build -d --remove-orphans
+	@echo "Site http://127.0.0.1:$(or $(shell sed -n 's/^FRONTEND_PORT=//p' .env 2>/dev/null | tail -n 1),8088)  (observability $(OBSERVABILITY))"
 
 down:
-	$(COMPOSE) down --remove-orphans
+	$(RUNNING) down --remove-orphans
 
-restart: down up
-
-rebuild:
-	$(COMPOSE) build --no-cache
-	$(COMPOSE) up -d --remove-orphans
+restart:
+	$(RUNNING) restart $(SERVICE)
 
 logs:
-	$(COMPOSE) logs -f --tail=100 $(SERVICE)
+	$(RUNNING) logs -f --tail=100 $(SERVICE)
 
 ps:
-	$(COMPOSE) ps
-
-# The merged compose configuration, to check what a STACK/OBSERVABILITY pair runs.
-config:
-	$(COMPOSE) config
+	$(RUNNING) ps
 
 # Admin user and mock documents, inside the running api container.
 seed-docker:
-	$(COMPOSE) exec api seeder
+	$(RUNNING) exec api seeder
 
-# Stops the stack and deletes its volumes. On prod it asks for CONFIRM=yes.
+# Stops the running stack and deletes its volumes. On production it asks for CONFIRM=yes.
 reset:
-	@if [ "$(STACK)" = prod ] && [ "$(CONFIRM)" != yes ]; then \
-		echo "This deletes the production database. Run: make reset STACK=prod CONFIRM=yes"; exit 1; \
-	fi
-	$(COMPOSE) down --volumes --remove-orphans
+	@case "$(running_files)" in *docker-compose.yaml*) \
+		if [ "$(CONFIRM)" != yes ]; then echo "The production stack is running; this deletes its database. Run: make reset CONFIRM=yes"; exit 1; fi;; \
+	esac
+	$(RUNNING) down --volumes --remove-orphans
 
-.PHONY: up down restart rebuild logs ps config seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
+.PHONY: dev build down restart logs ps seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
 
 test-e2e: test-e2e-api
 

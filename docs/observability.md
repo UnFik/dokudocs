@@ -18,23 +18,22 @@ Never collected: request and response bodies, document content, emails, tokens, 
 
 ## Turning it on and off
 
-Everything for it lives in `docker-compose.observability.yaml`: the `alloy` service, and the settings that make the API serve metrics and send traces to it. It adds to either stack, production or development. `OBSERVABILITY` in `.env` decides whether `make` adds it.
+Everything for it lives in `docker-compose.observability.yaml`: the `alloy` service, and the settings that make the API serve metrics and send traces to it. It adds to either stack, production or development. `OBSERVABILITY` in `.env` decides whether `make build` (production) and `make dev` (development) add it.
 
 1. In Grafana Cloud, open the stack's details page, then **OpenTelemetry → Configure**. Note the **OTLP endpoint** and the **Instance ID**.
 2. Create an access policy token (**Security → Access Policies**) with `logs:write`, `metrics:write` and `traces:write`.
 3. In `.env` (see `.env.example`):
 
    ```bash
-   STACK=prod            # or dev
    OBSERVABILITY=true
    GRAFANA_CLOUD_OTLP_URL=https://otlp-gateway-prod-XX.grafana.net/otlp
    GRAFANA_CLOUD_INSTANCE_ID=123456
    GRAFANA_CLOUD_API_KEY=glc_...
    ```
 
-4. Apply it with `make up`. `api` and `collab` are recreated with the new settings.
+4. Apply it with `make build` (or `make dev`). `api` and `collab` are recreated with the new settings.
 
-To turn it off, set `OBSERVABILITY=false` and run `make up` again: the `alloy` container is removed, and the API and collab serve no metrics port and export nothing. With it on but a value missing, Compose stops and names it. `make config` prints what a `STACK`/`OBSERVABILITY` pair runs.
+To turn it off, set `OBSERVABILITY=false` and run `make build` (or `make dev`) again: the `alloy` container is removed, and the API and collab serve no metrics port and export nothing. With it on but a value missing, Compose stops and names it.
 
 Without `make`, list the files yourself: `docker compose -f docker-compose.yaml -f docker-compose.observability.yaml up -d` (or `docker-compose.dev.yaml` first for development).
 
