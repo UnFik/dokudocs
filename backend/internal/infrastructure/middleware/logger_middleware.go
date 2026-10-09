@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"backend/internal/infrastructure/logger"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type statusRecorder struct {
@@ -40,7 +43,8 @@ func (r *statusRecorder) Write(data []byte) (int, error) {
 	return r.ResponseWriter.Write(data)
 }
 
-// Logger writes one line per request. It never logs the query string or a body.
+// Logger writes one line per request, with its trace ID, and names the request's
+// span after the matched route. It never logs the query string or a body.
 func Logger(log *logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -68,6 +72,13 @@ func Logger(log *logger.Logger) func(http.Handler) http.Handler {
 			}
 			if fields.UserID != "" {
 				attrs = append(attrs, slog.String("user_id", fields.UserID))
+			}
+			if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+				attrs = append(attrs, slog.String("trace_id", span.SpanContext().TraceID().String()))
+				if r.Pattern != "" {
+					span.SetName(r.Pattern)
+					span.SetAttributes(attribute.String("http.route", r.Pattern))
+				}
 			}
 			log.Log(ctx, level, "request", attrs...)
 		})

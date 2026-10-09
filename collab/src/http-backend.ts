@@ -1,4 +1,6 @@
+import { SpanKind, SpanStatusCode } from '@opentelemetry/api'
 import { ReplacedError, type Authorized, type BackendApi, type LoadedDocument, type StoredDocument } from './backend-api'
+import { inSpan, traceHeaders } from './tracing'
 
 const toBase64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64')
 const fromBase64 = (text: string) => new Uint8Array(Buffer.from(text, 'base64'))
@@ -10,13 +12,19 @@ export class HttpBackend implements BackendApi {
     private readonly secret: string
   ) {}
 
-  private async request(method: string, path: string, body?: unknown) {
-    const response = await fetch(`${this.baseURL}${path}`, {
-      method,
-      headers: { 'content-type': 'application/json', 'x-collab-secret': this.secret },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-    return response
+  // Each call is a client span named without its query, so document IDs stay out of span names.
+  private request(method: string, path: string, body?: unknown) {
+    const route = path.split('?')[0]
+    return inSpan(`${method} ${route}`, { 'http.request.method': method, 'url.path': route }, async (span) => {
+      const response = await fetch(`${this.baseURL}${path}`, {
+        method,
+        headers: { 'content-type': 'application/json', 'x-collab-secret': this.secret, ...traceHeaders() },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+      span.setAttribute('http.response.status_code', response.status)
+      if (response.status >= 500) span.setStatus({ code: SpanStatusCode.ERROR })
+      return response
+    }, SpanKind.CLIENT)
   }
 
   async authorize(token: string, workspaceID: string, documentID: string): Promise<Authorized | null> {

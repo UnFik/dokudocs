@@ -1,8 +1,11 @@
 import { loadConfig } from './config'
 import { HttpBackend } from './http-backend'
+import { log } from './operations'
 import { createCollabServer } from './server'
+import { startTracing } from './tracing'
 
 const config = loadConfig(process.env)
+const stopTracing = startTracing(config.otlpEndpoint)
 const server = await createCollabServer({
   backend: new HttpBackend(config.backendURL, config.secret),
   port: config.port,
@@ -14,7 +17,7 @@ const server = await createCollabServer({
   maxPayloadBytes: config.maxPayloadBytes,
   maxMessagesPerSecond: config.maxMessagesPerSecond,
 })
-console.log(`collaboration service listening on :${config.port}${config.redisURL ? ' (Redis)' : ''}`)
+log('listening', { port: config.port, redis: Boolean(config.redisURL), tracing: Boolean(config.otlpEndpoint) })
 
 let stopping = false
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
@@ -22,6 +25,9 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     if (stopping) return
     stopping = true
     // Stopping stores what is still waiting, so an edit made a moment ago is not lost.
-    void server.stop().finally(() => process.exit(0))
+    void server
+      .stop()
+      .then(stopTracing)
+      .finally(() => process.exit(0))
   })
 }

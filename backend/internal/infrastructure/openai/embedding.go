@@ -11,6 +11,9 @@ import (
 	"time"
 
 	appchat "backend/internal/application/rag/usecase"
+	"backend/internal/infrastructure/tracing"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const embeddingDimensions = 1536
@@ -22,7 +25,7 @@ type EmbeddingModel struct {
 }
 
 func NewEmbeddingModel(apiKey, model string) *EmbeddingModel {
-	return &EmbeddingModel{apiKey: apiKey, model: model, client: &http.Client{Timeout: 30 * time.Second}}
+	return &EmbeddingModel{apiKey: apiKey, model: model, client: &http.Client{Timeout: 30 * time.Second, Transport: tracing.Transport(attribute.String("gen_ai.request.model", model))}}
 }
 
 func (*EmbeddingModel) Provider() string { return "openai" }

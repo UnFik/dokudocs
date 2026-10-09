@@ -1,4 +1,5 @@
 import type { Extension } from '@hocuspocus/server'
+import { activeTraceID } from './tracing'
 
 /** Counters for what the service is doing, shown in Prometheus text at /metrics. */
 const buckets = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1]
@@ -48,8 +49,9 @@ export class Metrics {
 }
 
 /** One JSON line per event, so a log collector can read the fields. */
-export function log(event: string, fields: Record<string, unknown> = {}) {
-  console.log(JSON.stringify({ time: new Date().toISOString(), event, ...fields }))
+export function log(event: string, fields: Record<string, unknown> = {}, level: 'INFO' | 'ERROR' = 'INFO') {
+  const traceID = activeTraceID()
+  console.log(JSON.stringify({ time: new Date().toISOString(), level, event, ...fields, ...(traceID ? { trace_id: traceID } : {}) }))
 }
 
 export function instrumentation(metrics: Metrics, maxMessagesPerSecond: number): Extension {
