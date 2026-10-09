@@ -12,8 +12,10 @@ import (
 	"time"
 
 	appchat "backend/internal/application/rag/usecase"
+	"backend/internal/infrastructure/tracing"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type AnswerModel struct {
@@ -23,7 +25,7 @@ type AnswerModel struct {
 }
 
 func NewAnswerModel(apiKey, model string) *AnswerModel {
-	return &AnswerModel{apiKey: apiKey, model: model, client: &http.Client{Timeout: 55 * time.Second}}
+	return &AnswerModel{apiKey: apiKey, model: model, client: &http.Client{Timeout: 55 * time.Second, Transport: tracing.Transport(attribute.String("gen_ai.request.model", model))}}
 }
 
 func (m *AnswerModel) Answer(ctx context.Context, input appchat.ModelInput) (appchat.ModelOutput, error) {

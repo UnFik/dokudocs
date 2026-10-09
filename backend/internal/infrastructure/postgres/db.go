@@ -2,20 +2,24 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"backend/internal/config"
 	"backend/internal/infrastructure/database"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"backend/internal/infrastructure/tracing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 func Open(cfg config.Config) (database.DB, error) {
-	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	connConfig, err := pgx.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}
+	connConfig.Tracer = tracing.QueryTracer()
+	db := stdlib.OpenDB(*connConfig)
 	db.SetMaxOpenConns(cfg.DBMaxOpenConns)
 	db.SetMaxIdleConns(cfg.DBMaxIdleConns)
 	db.SetConnMaxLifetime(cfg.DBConnMaxLifetime)

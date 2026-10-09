@@ -20,7 +20,12 @@ describe('loadConfig', () => {
       maxConnections: 1000,
       maxPayloadBytes: 16 * 1024 * 1024,
       maxMessagesPerSecond: 500,
+      otlpEndpoint: null,
     })
+  })
+
+  it('exports traces only when an endpoint is set', () => {
+    expect(loadConfig({ ...base, OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318/' }).otlpEndpoint).toBe('http://alloy:4318')
   })
 
   it('reads the port, Redis and the store timing', () => {

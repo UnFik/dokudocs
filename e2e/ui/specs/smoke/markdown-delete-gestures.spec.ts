@@ -1,4 +1,9 @@
-import { test, expect, type Locator, type Page } from "@playwright/test";
+import {
+  test,
+  expect as baseExpect,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import {
   createdDocumentID,
@@ -6,9 +11,9 @@ import {
   settleSelection,
 } from "../../helpers/markdown-document";
 
-// Structural deletes round-trip to the server and remount the editor, so they
-// take longer than the default assertion wait.
-expect.configure({ timeout: 15000 });
+// Structural deletes take longer than the default assertion wait on a slow
+// runner. configure() returns a new expect; it does not change the imported one.
+const expect = baseExpect.configure({ timeout: 15000 });
 
 // Real keyboard, real editor, real server. Unit tests of the editor cannot see
 // what the server does with the commands these gestures send.
@@ -46,6 +51,16 @@ function watch(page: Page) {
       );
     }
   };
+}
+
+// The browser selects at once, but the editor learns of it from a later
+// selectionchange event. A key pressed before that acts on the old caret: on a
+// slow runner Backspace removed one letter instead of the selected word. The
+// selection toolbar shows once the editor holds the selection.
+async function editorHasSelection(page: Page) {
+  await expect(
+    page.getByRole("toolbar", { name: "Format selection" }),
+  ).toBeVisible();
 }
 
 async function openDocument(page: Page, blocks: Block[]) {
@@ -381,11 +396,10 @@ test("@live @smoke @deletegestures: emptying a line and pressing Backspace again
     await expect
       .poll(() => page.evaluate(() => window.getSelection()?.toString()))
       .toBe("Beta");
+    await editorHasSelection(page);
     await page.keyboard.press("Backspace");
-    // The run goes through DeleteNode, which locks the editor until it returns.
-    await expect(editor).toBeVisible();
-    await expect(editor).not.toContainText("Beta");
     await expect(editor.locator("p")).toHaveCount(3);
+    await expect(editor.locator("p").nth(1)).toHaveText("");
     // The caret is put back after the delete: no click needed to go on.
     await settleSelection(page, { collapsed: true });
     await page.keyboard.press("Backspace");
@@ -617,9 +631,10 @@ for (const key of ["Control+Delete", "Control+Backspace"]) {
       await expect
         .poll(() => page.evaluate(() => window.getSelection()?.toString()))
         .toBe("Beta");
+      await editorHasSelection(page);
       await page.keyboard.press("Backspace");
-      await expect(editor).not.toContainText("Beta");
       await expect(editor.locator("p")).toHaveCount(3);
+      await expect(editor.locator("p").nth(1)).toHaveText("");
       // The caret is put back next to the empty line; click into it.
       await editor.locator("p").nth(1).click();
       await page.keyboard.press(key);

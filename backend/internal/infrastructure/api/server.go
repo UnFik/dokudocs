@@ -11,8 +11,10 @@ import (
 
 	"backend/internal/config"
 	"backend/internal/infrastructure/api/routes"
+	"backend/internal/infrastructure/metrics"
 	"backend/internal/infrastructure/middleware"
 	"backend/internal/infrastructure/runtime/container"
+	"backend/internal/infrastructure/tracing"
 )
 
 // Routes initializes application routes via routes package.
@@ -22,8 +24,16 @@ func Routes(c *container.Container, cfg config.Config) http.Handler {
 
 func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Container) error {
 	handler := routes.InitRoutes(c, cfg)
-	handler = middleware.Logger(c.Logger)(handler)
+	// Recover sits inside Logger, so a request that panicked still gets its line.
 	handler = middleware.Recover(c.Logger)(handler)
+	var metricsServer *http.Server
+	if cfg.MetricsAddr != "" {
+		m := metrics.New()
+		handler = m.Middleware(handler)
+		metricsServer = &http.Server{Addr: cfg.MetricsAddr, Handler: m.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	}
+	handler = middleware.Logger(c.Logger)(handler)
+	handler = tracing.Middleware(handler)
 	handler = middleware.CORS(cfg.AllowedOrigin)(handler)
 	handler = middleware.TimeoutWithRAG(cfg.ReadTimeout, cfg.RAGRequestTimeout)(handler)
 	writeTimeout := cfg.WriteTimeout
@@ -38,11 +48,17 @@ func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Containe
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  cfg.IdleTimeout,
 	}
-	errCh := make(chan error, 1)
+	errCh := make(chan error, 2)
 	go func() {
 		c.Logger.Printf("api listening on %s", cfg.Addr)
 		errCh <- server.ListenAndServe()
 	}()
+	if metricsServer != nil {
+		go func() {
+			c.Logger.Printf("metrics listening on %s", cfg.MetricsAddr)
+			errCh <- metricsServer.ListenAndServe()
+		}()
+	}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(stop)
@@ -59,5 +75,9 @@ func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Containe
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	return errors.Join(serveErr, server.Shutdown(shutdownCtx))
+	shutdownErr := server.Shutdown(shutdownCtx)
+	if metricsServer != nil {
+		shutdownErr = errors.Join(shutdownErr, metricsServer.Shutdown(shutdownCtx))
+	}
+	return errors.Join(serveErr, shutdownErr)
 }

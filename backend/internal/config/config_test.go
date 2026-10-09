@@ -117,3 +117,27 @@ func TestLoadConfigReadsTheCollaborationServiceURL(t *testing.T) {
 		t.Fatalf("with the variable = (%q, %v), want the URL", cfg.CollabServiceURL, err)
 	}
 }
+
+func TestLoadConfigServesMetricsOnlyWhenAnAddressIsSet(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil || cfg.MetricsAddr != "" {
+		t.Fatalf("MetricsAddr = %q, %v; want off by default", cfg.MetricsAddr, err)
+	}
+	t.Setenv("METRICS_ADDR", ":9091")
+	cfg, err = LoadConfig()
+	if err != nil || cfg.MetricsAddr != ":9091" {
+		t.Fatalf("MetricsAddr = %q, %v; want :9091", cfg.MetricsAddr, err)
+	}
+}
+
+func TestLoadConfigExportsTracesOnlyWhenAnEndpointIsSet(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4318")
+	cfg, err := LoadConfig()
+	if err != nil || cfg.OTLPEndpoint != "http://alloy:4318" {
+		t.Fatalf("OTLPEndpoint = %q, %v", cfg.OTLPEndpoint, err)
+	}
+}
