@@ -20,9 +20,8 @@ export function toolForKey(key: string): CanvasTool | null {
   return keys[key.toLowerCase()] ?? null
 }
 
-/** The tool after one use: Eraser and Comment are one-shot unless the tool is locked. */
-export function afterUse(tool: CanvasTool, locked: boolean): CanvasTool {
-  if (locked) return tool
+/** The tool after one use: Eraser and Comment are one-shot. */
+export function afterUse(tool: CanvasTool): CanvasTool {
   return tool === 'eraser' || tool === 'comment' ? 'cursor' : tool
 }
 

@@ -144,17 +144,39 @@ test("@live @smoke @split: the Markdown button shows the exported text beside th
 test("@live @smoke @revisions: the version list steps through the changes from the version before", async ({
   page,
 }) => {
-  const { editor } = await openMarkdownDocument(page, ["alpha"]);
+  const { editor, documentID, workspaceID } = await openMarkdownDocument(page, ["alpha"]);
+  // A milestone first, so the version before the edit is "alpha" whenever the
+  // edit itself reaches the server.
+  await page.getByTitle("Version History").click();
+  await page.getByTitle("Create Named Milestone").click();
+  await page.getByPlaceholder(/Pre-release/).fill("before beta");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("before beta")).toBeVisible();
+  await page.getByTitle("Close").click();
+
   await editor.locator("p").first().click();
   await page.keyboard.press("End");
   await page.keyboard.type(" beta");
   await expect(page.getByRole("status")).toContainText("Synced");
+  // The edit is saved as an auto-saved session once the collaboration server writes it.
+  const token = (await page.context().cookies()).find((c) => c.name === "thisisjustarandomstring")!.value;
+  const apiURL = process.env.API_URL ?? "http://localhost:8080";
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get(`${apiURL}/api/v1/documents/${documentID}/revisions`, {
+          headers: { Authorization: `Bearer ${token}`, "X-Workspace-Id": workspaceID },
+        });
+        const newest = ((await response.json()) as { data: { isNamed: boolean; content: string }[] }).data[0];
+        return !newest.isNamed && newest.content.includes("alpha beta");
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(true);
+
+  await page.reload();
   await page.getByTitle("Version History").click();
-  await page.getByTitle("Create Named Milestone").click();
-  await page.getByPlaceholder(/Pre-release/).fill("after beta");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  // The list refetches after saving; give it room when the machine is busy.
-  await expect(page.getByText(/Change 1 of/)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/Change 1 of/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Next change" })).toBeVisible();
 });
 

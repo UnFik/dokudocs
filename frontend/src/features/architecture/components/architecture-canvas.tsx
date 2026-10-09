@@ -80,7 +80,9 @@ const edgeTypes = { connection: ConnectionEdge }
 /** What is selected on the canvas; empty when nothing is. */
 export type Selection = Selected[]
 
-const LOCK_KEY = 'architecture-tool-lock'
+const noSelection: Selection = []
+
+const LOCK_KEY = 'architecture-canvas-lock'
 
 // The lock is a convenience on this device; without storage it lasts until reload.
 function readLock() {
@@ -200,7 +202,7 @@ export type ArchitectureCanvasProps = {
 }
 
 export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
-  const { doc, canvas, readOnly, selection } = props
+  const { doc, canvas, readOnly } = props
   const flow = useReactFlow()
   const catalogIndex = useMemo(
     () => new Map((props.catalog ?? []).map((e) => [e.slug, e])),
@@ -215,19 +217,26 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   const tools = toolsFor({ canEdit: !readOnly, canComment: props.canComment })
   // A tool no longer offered (an editor became a viewer) falls back to Cursor.
   const chosen: CanvasTool = tools.includes(tool) ? tool : 'cursor'
-  const active: CanvasTool = spaceHeld ? 'hand' : chosen
+  // Locked, the canvas is for looking only: it pans and zooms like Hand.
+  // People who cannot edit have no lock to turn off, so it never holds for them.
+  const isLocked = locked && !readOnly
+  const active: CanvasTool = isLocked || spaceHeld ? 'hand' : chosen
+  // Nothing shows as selected or editable while locked.
+  const selection = isLocked ? noSelection : props.selection
+  const changeable = !readOnly && !isLocked
   const editable = !readOnly && active === 'cursor'
   const setTool = (next: CanvasTool) => {
     setToolState(next)
     setErasing(null)
   }
-  /** After one use of a tool: Eraser and Comment go back to Cursor unless locked. */
-  const used = () => setTool(afterUse(chosen, locked))
+  /** After one use of a tool: Eraser and Comment go back to Cursor. */
+  const used = () => setTool(afterUse(chosen))
   const toggleLock = () => {
-    setLocked((current) => {
-      writeLock(!current)
-      return !current
-    })
+    const next = !locked
+    writeLock(next)
+    setLocked(next)
+    setErasing(null)
+    if (next) props.onSelect([])
   }
 
   const [nodes, setNodes] = useState<Node[]>(() =>
@@ -307,7 +316,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
 
   const context: CanvasContextValue = useMemo(
     () => ({
-      readOnly,
+      readOnly: !changeable,
       catalog: catalogIndex,
       containers,
       peerSelections,
@@ -358,7 +367,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      readOnly,
+      changeable,
       catalogIndex,
       containers,
       peerSelections,
@@ -541,7 +550,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
 
   const onDragOver = (event: DragEvent) => {
     const item = paletteDrag.current
-    if (!item || readOnly || !props.canAdd) return
+    if (!item || readOnly || isLocked || !props.canAdd) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'copy'
     const point = flow.screenToFlowPosition({
@@ -555,7 +564,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   const onDrop = (event: DragEvent) => {
     const item = paletteDrag.current
     setSlot(null)
-    if (!item || readOnly || !props.canAdd) return
+    if (!item || readOnly || isLocked || !props.canAdd) return
     event.preventDefault()
     paletteDrag.current = null
     props.onAdd(
@@ -581,6 +590,8 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       if (target?.closest?.('button, a')) return
       event.preventDefault()
       if (!event.repeat) setSpaceHeld(true)
+    } else if (isLocked) {
+      if (!mod && !event.altKey && key === 'l') toggleLock()
     } else if (mod && key === 'z') {
       event.preventDefault()
       if (event.shiftKey) props.onRedo()
@@ -743,7 +754,9 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
               active={active}
               onTool={setTool}
               lock={
-                readOnly ? undefined : { locked, onToggle: toggleLock }
+                readOnly
+                  ? undefined
+                  : { locked: isLocked, onToggle: toggleLock }
               }
             />
           </Panel>
