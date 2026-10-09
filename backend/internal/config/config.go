@@ -12,7 +12,9 @@ type Config struct {
 	Addr string
 	// MetricsAddr is where Prometheus metrics are served, apart from the API;
 	// empty turns them off.
-	MetricsAddr        string
+	MetricsAddr string
+	// OTLPEndpoint receives traces (e.g. http://alloy:4318); empty exports none.
+	OTLPEndpoint       string
 	DatabaseURL        string
 	DBMaxOpenConns     int
 	DBMaxIdleConns     int
@@ -55,6 +57,7 @@ func LoadConfig() (Config, error) {
 	cfg := Config{
 		Addr:                env.GetString("APP_ADDR", ":8080"),
 		MetricsAddr:         env.GetString("METRICS_ADDR", ""),
+		OTLPEndpoint:        strings.TrimRight(env.GetString("OTEL_EXPORTER_OTLP_ENDPOINT", ""), "/"),
 		DatabaseURL:         env.GetString("DATABASE_URL", ""),
 		DBMaxOpenConns:      env.GetInt("DB_MAX_OPEN_CONNS", 10),
 		DBMaxIdleConns:      env.GetInt("DB_MAX_IDLE_CONNS", 10),

@@ -13,6 +13,7 @@ import (
 	"backend/internal/infrastructure/postgres"
 	documentrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/infrastructure/runtime/container"
+	"backend/internal/infrastructure/tracing"
 	"backend/internal/infrastructure/validator"
 )
 
@@ -30,6 +31,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
+	shutdownTracing, err := tracing.Setup(context.Background(), "api", cfg.OTLPEndpoint)
+	if err != nil {
+		log.Fatalf("set up tracing: %v", err)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
 	db, err := postgres.Open(cfg)
 	if err != nil {
 		log.Fatalf("open database: %v", err)

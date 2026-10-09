@@ -131,3 +131,13 @@ func TestLoadConfigServesMetricsOnlyWhenAnAddressIsSet(t *testing.T) {
 		t.Fatalf("MetricsAddr = %q, %v; want :9091", cfg.MetricsAddr, err)
 	}
 }
+
+func TestLoadConfigExportsTracesOnlyWhenAnEndpointIsSet(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4318")
+	cfg, err := LoadConfig()
+	if err != nil || cfg.OTLPEndpoint != "http://alloy:4318" {
+		t.Fatalf("OTLPEndpoint = %q, %v", cfg.OTLPEndpoint, err)
+	}
+}

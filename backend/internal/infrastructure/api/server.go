@@ -14,6 +14,7 @@ import (
 	"backend/internal/infrastructure/metrics"
 	"backend/internal/infrastructure/middleware"
 	"backend/internal/infrastructure/runtime/container"
+	"backend/internal/infrastructure/tracing"
 )
 
 // Routes initializes application routes via routes package.
@@ -32,6 +33,7 @@ func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Containe
 		metricsServer = &http.Server{Addr: cfg.MetricsAddr, Handler: m.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	}
 	handler = middleware.Logger(c.Logger)(handler)
+	handler = tracing.Middleware(handler)
 	handler = middleware.CORS(cfg.AllowedOrigin)(handler)
 	handler = middleware.TimeoutWithRAG(cfg.ReadTimeout, cfg.RAGRequestTimeout)(handler)
 	writeTimeout := cfg.WriteTimeout
