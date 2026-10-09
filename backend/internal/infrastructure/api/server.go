@@ -22,8 +22,9 @@ func Routes(c *container.Container, cfg config.Config) http.Handler {
 
 func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Container) error {
 	handler := routes.InitRoutes(c, cfg)
-	handler = middleware.Logger(c.Logger)(handler)
+	// Recover sits inside Logger, so a request that panicked still gets its line.
 	handler = middleware.Recover(c.Logger)(handler)
+	handler = middleware.Logger(c.Logger)(handler)
 	handler = middleware.CORS(cfg.AllowedOrigin)(handler)
 	handler = middleware.TimeoutWithRAG(cfg.ReadTimeout, cfg.RAGRequestTimeout)(handler)
 	writeTimeout := cfg.WriteTimeout

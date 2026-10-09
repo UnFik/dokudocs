@@ -8,6 +8,7 @@ import (
 	"backend/constant"
 	"backend/internal/application/auth/dto"
 	usecasecontract "backend/internal/domain/contract/usecase"
+	"backend/internal/infrastructure/logger"
 	"backend/internal/presentation/response"
 )
 
@@ -33,6 +34,7 @@ func ValidateToken(service usecasecontract.AuthUseCase) func(http.Handler) http.
 				response.Error(w, http.StatusUnauthorized, constant.ErrInvalidToken.Error())
 				return
 			}
+			logger.SetUserID(r.Context(), user.ID)
 			ctx := context.WithValue(r.Context(), userContextKey, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
