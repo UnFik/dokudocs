@@ -911,6 +911,13 @@ export function createDocumentBodyEditor(
   }
 
   const dispatchTransaction = (transaction: Transaction) => {
+    const currentView = viewHolder.current
+    // Metadata redraws can land before the browser selectionchange is handled.
+    if (currentView && !transaction.docChanged && !transaction.selectionSet) {
+      const selection = selectionNow(currentView)
+      if (!selection.eq(state.selection))
+        transaction = transaction.setSelection(selection)
+    }
     const remote = transaction.getMeta(ySyncPluginKey)?.isChangeOrigin === true
     const tracked = transaction.getMeta(trackedMeta) === true
     if (
@@ -1434,11 +1441,7 @@ export function createDocumentBodyEditor(
     },
     setRemoteCursors: (cursors: RemoteCursor[]) => {
       remoteCursors = cursors
-      const refresh = view.state.tr.setMeta(remoteCursorPlugin, 'refresh')
-      const selection = selectionNow(view)
-      // Presence can repaint before selectionchange records a native caret move.
-      if (!selection.eq(view.state.selection)) refresh.setSelection(selection)
-      view.dispatch(refresh)
+      view.dispatch(view.state.tr.setMeta(remoteCursorPlugin, 'refresh'))
       if (!followedUser) return
       const target = [
         ...view.dom.querySelectorAll<HTMLElement>('.remote-cursor'),
