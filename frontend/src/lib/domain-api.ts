@@ -135,10 +135,13 @@ const commentAnchorSchema = z.object({
   start: z.string().min(1),
   end: z.string().min(1),
 })
-// A comment on an Architecture canvas points at an element (a node or a Connection) instead of text.
+// A comment on an Architecture canvas points at an element (a node or a Connection) instead of text,
+// and on a node at a point given as a share (0 to 1) of its box. Older threads have no point.
 const elementAnchorSchema = z.object({
   kind: z.literal('element'),
   elementId: z.string().min(1),
+  x: z.number().min(0).max(1).optional(),
+  y: z.number().min(0).max(1).optional(),
 })
 const commentReplySchema = z.object({
   id: z.guid(),
@@ -149,32 +152,34 @@ const commentReplySchema = z.object({
   createdAt: z.string(),
   editedAt: z.string().nullable().optional(),
 })
-const commentThreadSchema = z.object({
-  id: z.guid(),
-  documentId: z.guid(),
-  authorId: z.guid(),
-  authorName: z.string().optional().default(''),
-  selectedText: z.string().optional().default(''),
-  content: z.string(),
-  // Threads made before anchors existed have none; a malformed one is none too.
-  anchor: z.unknown().optional(),
-  createdAt: z.string(),
-  editedAt: z.string().nullable().optional(),
-  resolvedAt: z.string().nullable().optional(),
-  resolvedBy: z.guid().nullable().optional(),
-  replies: z
-    .array(commentReplySchema)
-    .nullish()
-    .transform((v) => v ?? []),
-}).transform(({ anchor, ...thread }) => {
-  const text = commentAnchorSchema.safeParse(anchor)
-  const element = elementAnchorSchema.safeParse(anchor)
-  return {
-    ...thread,
-    anchor: text.success ? text.data : null,
-    ...(element.success ? { elementAnchor: element.data } : {}),
-  }
-})
+const commentThreadSchema = z
+  .object({
+    id: z.guid(),
+    documentId: z.guid(),
+    authorId: z.guid(),
+    authorName: z.string().optional().default(''),
+    selectedText: z.string().optional().default(''),
+    content: z.string(),
+    // Threads made before anchors existed have none; a malformed one is none too.
+    anchor: z.unknown().optional(),
+    createdAt: z.string(),
+    editedAt: z.string().nullable().optional(),
+    resolvedAt: z.string().nullable().optional(),
+    resolvedBy: z.guid().nullable().optional(),
+    replies: z
+      .array(commentReplySchema)
+      .nullish()
+      .transform((v) => v ?? []),
+  })
+  .transform(({ anchor, ...thread }) => {
+    const text = commentAnchorSchema.safeParse(anchor)
+    const element = elementAnchorSchema.safeParse(anchor)
+    return {
+      ...thread,
+      anchor: text.success ? text.data : null,
+      ...(element.success ? { elementAnchor: element.data } : {}),
+    }
+  })
 
 const shareTokenSchema = z.object({ shareToken: z.string().min(1) })
 const ragCitationSchema = z.object({
@@ -380,17 +385,8 @@ export async function listWorkspaceMembers(
   }))
 }
 
-export async function listProjects(
-  workspaceId: string,
-  signal?: AbortSignal
-): Promise<ProjectItem[]> {
-  const rows = z.array(projectSchema).parse(
-    await apiFetch<unknown>('/api/v1/projects', {
-      headers: workspaceHeaders(workspaceId),
-      signal,
-    })
-  )
-  return rows.map((project) => ({
+function toProject(project: z.infer<typeof projectSchema>): ProjectItem {
+  return {
     id: project.id,
     name: project.name,
     description: project.description,
@@ -407,7 +403,55 @@ export async function listProjects(
     documentIds: [],
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
-  }))
+  }
+}
+
+export interface CreateProjectInput {
+  name: string
+  description?: string
+  logoUrl?: string
+  categories?: string[]
+}
+
+export async function createProject(
+  workspaceId: string,
+  input: CreateProjectInput
+): Promise<ProjectItem> {
+  return toProject(
+    projectSchema.parse(
+      await apiFetch<unknown>('/api/v1/projects', {
+        method: 'POST',
+        headers: workspaceHeaders(workspaceId),
+        body: JSON.stringify(input),
+      })
+    )
+  )
+}
+
+export async function toggleProjectStar(
+  workspaceId: string,
+  projectId: string
+): Promise<boolean> {
+  const result = z.object({ isStarred: z.boolean() }).parse(
+    await apiFetch<unknown>(`/api/v1/projects/${projectId}/star`, {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceId),
+    })
+  )
+  return result.isStarred
+}
+
+export async function listProjects(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<ProjectItem[]> {
+  const rows = z.array(projectSchema).parse(
+    await apiFetch<unknown>('/api/v1/projects', {
+      headers: workspaceHeaders(workspaceId),
+      signal,
+    })
+  )
+  return rows.map(toProject)
 }
 
 export async function listDocuments(

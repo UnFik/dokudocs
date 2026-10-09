@@ -45,6 +45,7 @@ export class HttpBackend implements BackendApi {
       markdown: document.markdown,
       updatedBy: document.updatedBy,
       suggestions: document.suggestions,
+      ...(document.thumbnail === undefined ? {} : { thumbnail: document.thumbnail }),
     })
     if (response.status !== 204) throw new Error(`store failed: ${response.status}`)
   }

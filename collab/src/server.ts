@@ -2,7 +2,7 @@ import { Redis } from '@hocuspocus/extension-redis'
 import { Server, type Extension } from '@hocuspocus/server'
 import * as Y from 'yjs'
 import { yDocToProsemirrorJSON } from 'y-prosemirror'
-import { architectureSummary, architectureToJSON, seedArchitecture } from './architecture'
+import { architectureSummary, architectureThumbnail, architectureToJSON, seedArchitecture } from './architecture'
 import type { Authorized, BackendApi, DocumentType } from './backend-api'
 import { toMarkdown } from './markdown'
 import { instrumentation, log, Metrics } from './operations'
@@ -182,7 +182,12 @@ function persistence(backend: BackendApi, metrics: Metrics): Extension<CollabCon
         roomType(documentName) === 'architecture'
           ? (() => {
               const content = architectureToJSON(document)
-              return { content, markdown: architectureSummary(content), suggestions: [] }
+              return {
+                content,
+                markdown: architectureSummary(content),
+                suggestions: [],
+                thumbnail: architectureThumbnail(content),
+              }
             })()
           : (() => {
               const content = yDocToProsemirrorJSON(document, fragmentName)

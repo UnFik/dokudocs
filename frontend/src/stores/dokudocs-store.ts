@@ -97,15 +97,8 @@ interface DokudocsState {
   duplicateDocument: (id: string) => DocumentItem
   moveDocumentToProject: (docId: string, targetProjectId: string | null) => void
 
-  createProject: (
-    name: string,
-    description?: string,
-    logoUrl?: string,
-    categories?: string[]
-  ) => ProjectItem
   updateProject: (id: string, updates: Partial<ProjectItem>) => void
   deleteProject: (id: string) => void
-  toggleStarProject: (id: string) => void
   addProjectCategory: (
     projectId: string,
     category: string,
@@ -637,31 +630,6 @@ export const useDokudocsStore = create<DokudocsState>()(
         }))
       },
 
-      createProject: (name, description, logoUrl, categories) => {
-        const id = generateUniqueId('proj')
-        const activeOrgId = get().activeOrgId
-
-        const newProject: ProjectItem = {
-          id,
-          name,
-          description,
-          logoUrl,
-          categories: categories ?? ['General'],
-          categoryColors: { General: 'blue' },
-          orgId: activeOrgId,
-          isStarred: false,
-          documentIds: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: 'Just now',
-        }
-
-        set((state) => ({
-          projects: [newProject, ...(state.projects || [])],
-        }))
-
-        return newProject
-      },
-
       updateProject: (id, updates) => {
         set((state) => ({
           projects: (state.projects || []).map((p) =>
@@ -678,20 +646,6 @@ export const useDokudocsStore = create<DokudocsState>()(
               ? { ...d, projectId: null, projectName: null, isDraft: true }
               : d
           ),
-        }))
-      },
-
-      toggleStarProject: (id) => {
-        set((state) => ({
-          projects: (state.projects || []).map((p) => {
-            if (p.id !== id) return p
-            const nextStarred = !p.isStarred
-            return {
-              ...p,
-              isStarred: nextStarred,
-              starredAt: nextStarred ? new Date().toISOString() : null,
-            }
-          }),
         }))
       },
 

@@ -14,7 +14,7 @@ import {
   type NodeProps,
   type ResizeParams,
 } from '@xyflow/react'
-import { FileText, LogOut, MessageSquare } from 'lucide-react'
+import { FileText, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type {
   ArchitectureConnection,
@@ -28,16 +28,19 @@ export type CanvasContextValue = {
   readOnly: boolean
   catalog: Map<string, CatalogEntry>
   containers: Map<string, ArchitectureNode>
-  /** People who have an element selected, by element id. */
-  peerSelections: Map<string, { name: string; color: string }[]>
+  /** People who have an element selected, by element id; `named` on the first element each person selected. */
+  peerSelections: Map<string, PeerMark[]>
+  /** The element the Eraser would remove on click. */
+  erasing: string | null
   minSizeOf: (id: string) => { w: number; h: number }
   shouldResize: (id: string, params: ResizeParams) => boolean
   onResize: (id: string, params: ResizeParams) => void
   onResizeEnd: (id: string, params: ResizeParams) => void
   takeOut: (id: string) => void
   familyOf: (protocol: string) => string
-  commentCounts: Map<string, number>
 }
+
+export type PeerMark = { name: string; color: string; named: boolean }
 
 export const CanvasContext = createContext<CanvasContextValue | null>(null)
 
@@ -60,20 +63,37 @@ function PeerOutline({ id }: { id: string }) {
   const { peerSelections } = useCanvas()
   const peers = peerSelections.get(id)
   if (!peers?.length) return null
+  const named = peers.filter((p) => p.named)
   return (
     <>
       <span
         aria-hidden
+        data-peer-outline
         className='pointer-events-none absolute -inset-[5px] rounded-[9px] border-2'
         style={{ borderColor: peers[0]!.color }}
       />
-      <span
-        className='pointer-events-none absolute -top-[22px] left-0 rounded-[2px] px-1 text-[10px] leading-4 font-medium text-white'
-        style={{ background: peers[0]!.color }}
-      >
-        {peers.map((p) => p.name).join(', ')}
-      </span>
+      {named.length > 0 && (
+        <span
+          className='pointer-events-none absolute -top-[22px] left-0 rounded-[2px] px-1 text-[10px] leading-4 font-medium text-white'
+          style={{ background: named[0]!.color }}
+        >
+          {named.map((p) => p.name).join(', ')}
+        </span>
+      )}
     </>
+  )
+}
+
+/** The red outline on what the Eraser would remove. */
+function EraseMark({ id }: { id: string }) {
+  const { erasing } = useCanvas()
+  if (erasing !== id) return null
+  return (
+    <span
+      aria-hidden
+      data-erasing
+      className='pointer-events-none absolute -inset-[3px] rounded-[8px] border-2 border-destructive'
+    />
   )
 }
 
@@ -111,8 +131,7 @@ function TakeOutToolbar({
 }
 
 export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
-  const { readOnly, catalog, commentCounts } = useCanvas()
-  const comments = commentCounts.get(id) ?? 0
+  const { readOnly, catalog } = useCanvas()
   const element = data.element
   const entry = element.catalog ? catalog.get(element.catalog) : undefined
   const external = entry?.subkind === 'external'
@@ -126,6 +145,7 @@ export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
       data-element={id}
     >
       <PeerOutline id={id} />
+      <EraseMark id={id} />
       <TakeOutToolbar id={id} element={element} selected={Boolean(selected)} />
       <CatalogIcon
         slug={element.catalog}
@@ -146,14 +166,6 @@ export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
           title={`${element.links.length} linked document${element.links.length === 1 ? '' : 's'}`}
         >
           <FileText className='size-2.5' aria-hidden /> {element.links.length}
-        </span>
-      )}
-      {comments > 0 && (
-        <span
-          className='absolute -right-2 -bottom-2 inline-flex items-center gap-0.5 rounded-[2px] border border-border bg-card px-1 font-mono text-[10px] text-muted-foreground'
-          title={`${comments} open comment${comments === 1 ? '' : 's'}`}
-        >
-          <MessageSquare className='size-2.5' aria-hidden /> {comments}
         </span>
       )}
       <Handle
@@ -196,6 +208,7 @@ function ContainerNode({
       data-element={id}
     >
       <PeerOutline id={id} />
+      <EraseMark id={id} />
       <TakeOutToolbar id={id} element={element} selected={Boolean(selected)} />
       {!readOnly && (
         <NodeResizer
@@ -278,7 +291,7 @@ function facingSide(node: InternalNode, other: InternalNode) {
 export function ConnectionEdge(
   props: EdgeProps & { data?: { connection: ArchitectureConnection } }
 ) {
-  const { familyOf, peerSelections } = useCanvas()
+  const { familyOf, peerSelections, erasing } = useCanvas()
   const connection = props.data?.connection
   const sourceNode = useInternalNode(props.source)
   const targetNode = useInternalNode(props.target)
@@ -303,9 +316,12 @@ export function ConnectionEdge(
   )
   const family = connection ? familyOf(connection.protocol) : 'request'
   const peer = peerSelections.get(props.id)?.[0]
-  const stroke = props.selected
-    ? 'var(--signal)'
-    : (peer?.color ?? 'var(--muted-foreground)')
+  const stroke =
+    erasing === props.id
+      ? 'var(--destructive)'
+      : props.selected
+        ? 'var(--signal)'
+        : (peer?.color ?? 'var(--muted-foreground)')
   return (
     <>
       <BaseEdge

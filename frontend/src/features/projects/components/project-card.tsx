@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ProjectWithDocuments } from '@/types/dokudocs'
+import type { ProjectWithDocuments } from '@/types/dokudocs'
 import {
   Folder,
   Layers,
@@ -10,8 +10,6 @@ import {
   Star,
   Trash2,
 } from 'lucide-react'
-import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { formatRelativeTime } from '@/lib/time-utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useToggleProjectStar } from '../hooks/use-toggle-project-star'
 import { DeleteProjectDialog } from './delete-project-dialog'
 import { EditProjectDialog } from './edit-project-dialog'
 import { ProjectSubCard } from './project-sub-card'
@@ -39,7 +38,7 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
   const navigate = useNavigate()
-  const toggleStarProject = useDokudocsStore((s) => s.toggleStarProject)
+  const starMutation = useToggleProjectStar()
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
@@ -53,12 +52,7 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
 
   const handleToggleStar = (e?: React.MouseEvent) => {
     e?.stopPropagation()
-    toggleStarProject(project.id)
-    toast.success(
-      project.isStarred
-        ? `Unstarred "${project.name}"`
-        : `Starred "${project.name}"`
-    )
+    if (!starMutation.isPending) starMutation.mutate(project)
   }
 
   const handleCardClick = () => {
@@ -114,6 +108,7 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
                     variant='ghost'
                     size='icon'
                     onClick={handleToggleStar}
+                    disabled={starMutation.isPending}
                     className='size-7 text-muted-foreground transition-colors hover:text-amber-500'
                     title={
                       project.isStarred ? 'Unstar Project' : 'Star Project'
@@ -149,7 +144,10 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
                         </Link>
                       </DropdownMenuItem>
 
-                      <DropdownMenuItem onClick={handleToggleStar}>
+                      <DropdownMenuItem
+                        onClick={handleToggleStar}
+                        disabled={starMutation.isPending}
+                      >
                         <Star
                           className={`mr-2 size-3.5 ${
                             project.isStarred
@@ -261,7 +259,10 @@ export function ProjectCard({ project, onAddDoc }: ProjectCardProps) {
             </Link>
           </ContextMenuItem>
 
-          <ContextMenuItem onClick={handleToggleStar}>
+          <ContextMenuItem
+            onClick={handleToggleStar}
+            disabled={starMutation.isPending}
+          >
             <Star
               className={`mr-2 size-3.5 ${
                 project.isStarred ? 'fill-amber-400 text-amber-500' : ''
