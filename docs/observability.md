@@ -18,32 +18,25 @@ Never collected: request and response bodies, document content, emails, tokens, 
 
 ## Turning it on and off
 
-Everything for it lives in `docker-compose.observability.yaml`: the `alloy` service, and the settings that make the API serve metrics and send traces to it. It adds to either stack, production or development, and `COMPOSE_FILE` in `.env` decides whether it does. A plain `docker compose up -d` then follows `.env`.
+Everything for it lives in `docker-compose.observability.yaml`: the `alloy` service, and the settings that make the API serve metrics and send traces to it. It adds to either stack, production or development. `OBSERVABILITY` in `.env` decides whether `make` adds it.
 
 1. In Grafana Cloud, open the stack's details page, then **OpenTelemetry → Configure**. Note the **OTLP endpoint** and the **Instance ID**.
 2. Create an access policy token (**Security → Access Policies**) with `logs:write`, `metrics:write` and `traces:write`.
-3. In `.env`, uncomment the observability lines (they are in `.env.example`), pick the `COMPOSE_FILE` for your stack, and fill in the values:
+3. In `.env` (see `.env.example`):
 
    ```bash
-   # Production
-   COMPOSE_FILE=docker-compose.yaml:docker-compose.observability.yaml
-   # or development
-   COMPOSE_FILE=docker-compose.dev.yaml:docker-compose.observability.yaml
-
+   STACK=prod            # or dev
+   OBSERVABILITY=true
    GRAFANA_CLOUD_OTLP_URL=https://otlp-gateway-prod-XX.grafana.net/otlp
    GRAFANA_CLOUD_INSTANCE_ID=123456
    GRAFANA_CLOUD_API_KEY=glc_...
    ```
 
-4. Apply it. `api` and `collab` are recreated with the new settings:
+4. Apply it with `make up`. `api` and `collab` are recreated with the new settings.
 
-   ```bash
-   docker compose up -d --build
-   ```
+To turn it off, set `OBSERVABILITY=false` and run `make up` again: the `alloy` container is removed, and the API and collab serve no metrics port and export nothing. With it on but a value missing, Compose stops and names it. `make config` prints what a `STACK`/`OBSERVABILITY` pair runs.
 
-An explicit `-f` on the command line replaces `COMPOSE_FILE`, so with it set, run `docker compose ...` without `-f`.
-
-To turn it off, comment out `COMPOSE_FILE` (or list only the base file) and run `docker compose up -d --remove-orphans`, which also removes the `alloy` container. The API and collab then serve no metrics port and export nothing. With `COMPOSE_FILE` on but a value missing, Compose stops and names it.
+Without `make`, list the files yourself: `docker compose -f docker-compose.yaml -f docker-compose.observability.yaml up -d` (or `docker-compose.dev.yaml` first for development).
 
 In development, `GRAFANA_CLOUD_OTLP_URL` can point at any OTLP endpoint instead of Grafana Cloud, for example a local `grafana/otel-lgtm` container; the instance ID and token are then ignored.
 

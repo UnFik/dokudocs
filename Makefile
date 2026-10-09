@@ -1,35 +1,67 @@
 DOCKER_COMPOSE ?= docker compose
 
-# Whole stack in Docker (docker-compose.yaml): db, redis, migrate, api, collab, frontend.
-# The app is at http://localhost:5173; the browser only talks to the frontend.
+# Which stack the targets below run, and whether observability is added to it.
+# Both come from .env (see .env.example), so a VPS sets them once:
+#   STACK=dev | prod            dev: docker-compose.dev.yaml, prod: docker-compose.yaml
+#   OBSERVABILITY=true | false  adds docker-compose.observability.yaml (docs/observability.md)
+# A value on the command line wins: make up STACK=prod OBSERVABILITY=true
+env_value = $(shell sed -n 's/^$(1)=//p' .env 2>/dev/null | tail -n 1)
+STACK ?= $(or $(call env_value,STACK),dev)
+OBSERVABILITY ?= $(or $(call env_value,OBSERVABILITY),false)
+
+ifeq ($(STACK),prod)
+COMPOSE_FILES := -f docker-compose.yaml
+else ifeq ($(STACK),dev)
+COMPOSE_FILES := -f docker-compose.dev.yaml
+else
+$(error STACK must be dev or prod, not "$(STACK)")
+endif
+ifneq ($(filter true 1 yes,$(OBSERVABILITY)),)
+COMPOSE_FILES += -f docker-compose.observability.yaml
+endif
+COMPOSE := $(DOCKER_COMPOSE) $(COMPOSE_FILES)
+
+# Starts the stack. Turning observability off removes the alloy container too.
 up:
-	$(DOCKER_COMPOSE) up --build -d
-	@echo "Frontend http://localhost:5173  API http://localhost:8080  Collab http://localhost:1234 (health /health, metrics /metrics)"
+	$(COMPOSE) up --build -d --remove-orphans
+ifeq ($(STACK),prod)
+	@echo "Site http://127.0.0.1:$(or $(call env_value,FRONTEND_PORT),8088)"
+else
+	@echo "Frontend http://localhost:5173  API http://localhost:8080  Collab http://localhost:1234"
+endif
+	@echo "Stack $(STACK), observability $(OBSERVABILITY)"
 
 down:
-	$(DOCKER_COMPOSE) down
+	$(COMPOSE) down --remove-orphans
 
 restart: down up
 
 rebuild:
-	$(DOCKER_COMPOSE) build --no-cache
-	$(DOCKER_COMPOSE) up -d
+	$(COMPOSE) build --no-cache
+	$(COMPOSE) up -d --remove-orphans
 
 logs:
-	$(DOCKER_COMPOSE) logs -f --tail=100 $(SERVICE)
+	$(COMPOSE) logs -f --tail=100 $(SERVICE)
 
 ps:
-	$(DOCKER_COMPOSE) ps
+	$(COMPOSE) ps
+
+# The merged compose configuration, to check what a STACK/OBSERVABILITY pair runs.
+config:
+	$(COMPOSE) config
 
 # Admin user and mock documents, inside the running api container.
 seed-docker:
-	$(DOCKER_COMPOSE) exec api seeder
+	$(COMPOSE) exec api seeder
 
-# Stops the stack and deletes its database volume.
+# Stops the stack and deletes its volumes. On prod it asks for CONFIRM=yes.
 reset:
-	$(DOCKER_COMPOSE) down --volumes
+	@if [ "$(STACK)" = prod ] && [ "$(CONFIRM)" != yes ]; then \
+		echo "This deletes the production database. Run: make reset STACK=prod CONFIRM=yes"; exit 1; \
+	fi
+	$(COMPOSE) down --volumes --remove-orphans
 
-.PHONY: up down restart rebuild logs ps seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
+.PHONY: up down restart rebuild logs ps config seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
 
 test-e2e: test-e2e-api
 
