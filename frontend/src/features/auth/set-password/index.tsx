@@ -202,9 +202,11 @@ export function SetPasswordPage({
 
   return (
     <main className='flex flex-1 flex-col overflow-y-auto p-6'>
-      <div className='mx-auto w-full max-w-md space-y-6'>
-        <h1 className='text-xl font-bold'>{title}</h1>
-        {body}
+      <div className='mx-auto w-full max-w-4xl'>
+        <div className='max-w-md space-y-6'>
+          <h1 className='text-xl font-bold'>{title}</h1>
+          {body}
+        </div>
       </div>
     </main>
   )
