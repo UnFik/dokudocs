@@ -74,3 +74,7 @@ _Avoid_: Confirmed email, activated account
 
 **Takeover**:
 Signing in with a provider whose verified email matches a local account that never verified its email. The account is kept, its password is dropped, and the Linked identity is added (ADR-0034).
+
+**Workspace invite**:
+An offer to join a workspace, mailed as a single-use link to one email address. Only a User whose Verified email is that address can accept it, so a forwarded link is useless. It expires after 7 days and can be sent again or withdrawn. Accepting adds the User to the workspace; nothing adds a person who has not accepted (ADR-0036).
+_Avoid_: Add member, share link, join link
