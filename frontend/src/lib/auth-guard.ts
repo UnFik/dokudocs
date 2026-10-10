@@ -18,7 +18,7 @@ export function safeRedirect(value?: string) {
     return '/dashboard'
   const url = new URL(value, window.location.origin)
   if (
-    !/^\/(?:$|dashboard\/?$|account\/?$|projects(?:\/[^/]+)?\/?$|docs\/[^/]+\/?$|drafts\/?$|trash\/?$|users\/?$|settings(?:\/(?:account|appearance|display|notifications))?\/?$|help-center\/?$)/.test(
+    !/^\/(?:$|dashboard\/?$|account\/?$|projects(?:\/[^/]+)?\/?$|docs\/[^/]+\/?$|drafts\/?$|trash\/?$|users\/?$|settings(?:\/(?:account(?:\/set-password)?|appearance|display|notifications))?\/?$|help-center\/?$)/.test(
       url.pathname
     )
   )

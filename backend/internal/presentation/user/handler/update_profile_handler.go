@@ -48,7 +48,6 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		FullName:    req.FullName,
 		PhoneNumber: req.PhoneNumber,
 		Bio:         req.Bio,
-		AvatarURL:   req.AvatarURL,
 	})
 	if errors.Is(err, constant.ErrInvalidDisplayName) {
 		response.Error(w, http.StatusBadRequest, err.Error())

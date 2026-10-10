@@ -72,6 +72,7 @@ type signInEnv struct {
 	db     *sql.DB
 	api    http.Handler
 	google *fakeGoogle
+	mailer *recordingMailer
 	emails []string
 }
 
@@ -89,6 +90,8 @@ func newSignInEnv(t *testing.T, mutate func(*config.Config)) *signInEnv {
 	google := &fakeGoogle{identities: map[string]model.ProviderIdentity{}, nonces: map[string]string{}}
 	app := container.New(database.NewSQLDB(db), logger.New(), validator.New())
 	app.IdentityProvider = google
+	mailer := &recordingMailer{}
+	app.Mailer = mailer
 	cfg := config.Config{
 		JWTSecret: "google-test-secret-that-is-long-enough", AccessTokenTTL: time.Hour, PublicAppURL: appURL,
 		GoogleClientID: "client", GoogleClientSecret: "secret",
@@ -96,7 +99,7 @@ func newSignInEnv(t *testing.T, mutate func(*config.Config)) *signInEnv {
 	if mutate != nil {
 		mutate(&cfg)
 	}
-	env := &signInEnv{t: t, db: db, api: InitRoutes(app, cfg), google: google}
+	env := &signInEnv{t: t, db: db, api: InitRoutes(app, cfg), google: google, mailer: mailer}
 	t.Cleanup(func() {
 		for _, email := range env.emails {
 			_, _ = db.Exec(`DELETE FROM users WHERE email = $1`, email)

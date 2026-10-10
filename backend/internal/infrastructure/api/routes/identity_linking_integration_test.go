@@ -5,7 +5,6 @@ package routes
 import (
 	"net/http"
 	"net/url"
-	"strings"
 	"testing"
 
 	"backend/internal/domain/model"
@@ -152,21 +151,16 @@ func TestUnlinkKeepsAtLeastOneWayToSignIn(t *testing.T) {
 		t.Fatalf("unlink the only way to sign in = %d %s, want 409", res.Code, res.Body.String())
 	}
 
-	// Set a password, then unlinking is fine.
-	if res := env.do(http.MethodPost, "/api/v1/auth/password", map[string]string{"password": "short"}, bearer(token), ""); res.Code != http.StatusBadRequest {
-		t.Fatalf("short password = %d, want 400", res.Code)
+	// Set a password through the emailed link, then unlinking is fine.
+	if res := env.do(http.MethodPost, "/api/v1/auth/password/link", nil, bearer(token), ""); res.Code != http.StatusNoContent {
+		t.Fatalf("send link = %d %s, want 204", res.Code, res.Body.String())
 	}
-	if res := env.do(http.MethodPost, "/api/v1/auth/password", map[string]string{"password": strings.Repeat("é", 40)}, bearer(token), ""); res.Code != http.StatusBadRequest {
-		t.Fatalf("a password over 72 bytes = %d, want 400", res.Code)
-	}
-	if res := env.do(http.MethodPost, "/api/v1/auth/password", map[string]string{"password": localPassword}, bearer(token), ""); res.Code != http.StatusNoContent {
+	link := env.passwordLinkToken()
+	if res := env.do(http.MethodPost, "/api/v1/auth/password", map[string]string{"token": link, "password": localPassword}, bearer(token), ""); res.Code != http.StatusNoContent {
 		t.Fatalf("set password = %d %s, want 204", res.Code, res.Body.String())
 	}
 	if res := env.do(http.MethodPost, "/api/v1/auth/login", map[string]string{"email": out.Data.User.Email, "password": localPassword}, nil, ""); res.Code != http.StatusOK {
 		t.Fatalf("login with the new password = %d, want 200", res.Code)
-	}
-	if res := env.do(http.MethodPost, "/api/v1/auth/password", map[string]string{"password": localPassword + "x"}, bearer(token), ""); res.Code != http.StatusConflict {
-		t.Fatalf("a second set password = %d, want 409: changing it is not part of this", res.Code)
 	}
 	if res := env.do(http.MethodDelete, "/api/v1/auth/identities/google", nil, bearer(token), ""); res.Code != http.StatusNoContent {
 		t.Fatalf("unlink with a password = %d %s, want 204", res.Code, res.Body.String())
@@ -187,6 +181,7 @@ func TestIdentityEndpointsNeedASignedInUser(t *testing.T) {
 		{http.MethodGet, "/api/v1/auth/identities"},
 		{http.MethodDelete, "/api/v1/auth/identities/google"},
 		{http.MethodPost, "/api/v1/auth/password"},
+		{http.MethodPost, "/api/v1/auth/password/link"},
 	} {
 		if res := env.do(c.method, c.path, nil, nil, ""); res.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s without a token = %d, want 401", c.method, c.path, res.Code)

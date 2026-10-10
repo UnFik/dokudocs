@@ -35,14 +35,15 @@ test('@live @smoke: a new Google user lands signed in, with nothing secret left 
 
   // The profile is Google's, and the account page lists Google as connected.
   await page.goto('/settings/account')
-  await expect(page.getByLabel('Email Address')).toHaveValue(email)
   await expect(page.getByLabel('Full Name')).toHaveValue('Browser Google')
   await expect(page.getByText(email, { exact: true }).first()).toBeVisible()
   await expect(page.getByRole('button', { name: 'Disconnect Google' })).toBeVisible()
-  // Google only: the page offers a password, and unlinking is refused until there is one.
-  await expect(page.getByLabel('New password')).toBeVisible()
+  // Google only: the page offers to set a password, and the disconnect dialog
+  // sends the User to the set-password link instead of a button that would be refused.
+  await expect(page.getByRole('button', { name: 'Set password' })).toBeVisible()
   await page.getByRole('button', { name: 'Disconnect Google' }).click()
-  await expect(page.getByRole('alert')).toContainText('Set a password')
+  await expect(page.getByRole('alertdialog')).toContainText('only way you sign in')
+  await expect(page.getByRole('alertdialog').getByRole('button', { name: 'Disconnect', exact: true })).toHaveCount(0)
 })
 
 test('@live @smoke: signing in again with the same Google account is the same user', async ({ page, request }) => {

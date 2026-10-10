@@ -37,7 +37,7 @@ func (authBoundaryUsers) FindByID(context.Context, uuid.UUID) (model.UserProfile
 	return model.UserProfile{}, sql.ErrNoRows
 }
 func (authBoundaryUsers) Create(context.Context, model.AuthUser, string) error { return nil }
-func (authBoundaryUsers) UpdateProfile(context.Context, uuid.UUID, string, string, string, string) error {
+func (authBoundaryUsers) UpdateProfile(context.Context, uuid.UUID, string, string, string) error {
 	return nil
 }
 func (authBoundaryUsers) GetSettings(context.Context, uuid.UUID) (model.UserSettings, error) {

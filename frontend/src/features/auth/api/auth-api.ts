@@ -84,9 +84,24 @@ export async function unlinkIdentityApi(provider: string) {
     method: 'DELETE',
   })
 }
-export async function setPasswordApi(password: string) {
+/** Mails the signed-in User a one-time link to set or change the password. */
+export async function sendPasswordLinkApi() {
+  await apiFetch('/api/v1/auth/password/link', { method: 'POST' })
+}
+/** Says whether the link is still usable by this User, without using it up. */
+export async function checkPasswordLinkApi(
+  token: string,
+  signal?: AbortSignal
+) {
+  await apiFetch('/api/v1/auth/password/check', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+    signal,
+  })
+}
+export async function setPasswordApi(token: string, password: string) {
   await apiFetch('/api/v1/auth/password', {
     method: 'POST',
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ token, password }),
   })
 }

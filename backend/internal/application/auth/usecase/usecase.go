@@ -12,6 +12,7 @@ import (
 	emailverificationrepo "backend/internal/infrastructure/repository/emailverification"
 	identityrepo "backend/internal/infrastructure/repository/identity"
 	oauthtransactionrepo "backend/internal/infrastructure/repository/oauthtransaction"
+	passwordtokenrepo "backend/internal/infrastructure/repository/passwordtoken"
 	userrepo "backend/internal/infrastructure/repository/user"
 )
 
@@ -23,12 +24,13 @@ type useCase struct {
 	factory RepositoryFactory
 	tokens  *appjwt.Manager
 
-	verifications func(database.Queryer) repocontract.EmailVerificationRepository
-	transactions  func(database.Queryer) repocontract.OAuthTransactionRepository
-	identities    func(database.Queryer) repocontract.IdentityRepository
-	providers     map[string]repocontract.IdentityProvider
-	mailer        mail.Mailer
-	appURL        string
+	passwordTokens func(database.Queryer) repocontract.PasswordTokenRepository
+	verifications  func(database.Queryer) repocontract.EmailVerificationRepository
+	transactions   func(database.Queryer) repocontract.OAuthTransactionRepository
+	identities     func(database.Queryer) repocontract.IdentityRepository
+	providers      map[string]repocontract.IdentityProvider
+	mailer         mail.Mailer
+	appURL         string
 }
 
 // WithIdentityProvider lets Users sign in, and link accounts, with a provider.
@@ -65,6 +67,9 @@ func NewUseCaseWithFactory(db database.DB, jwtSecret string, accessTokenTTL time
 		tokens:  appjwt.NewManager(jwtSecret, accessTokenTTL),
 		verifications: func(q database.Queryer) repocontract.EmailVerificationRepository {
 			return emailverificationrepo.NewRepository(q)
+		},
+		passwordTokens: func(q database.Queryer) repocontract.PasswordTokenRepository {
+			return passwordtokenrepo.NewRepository(q)
 		},
 		transactions: func(q database.Queryer) repocontract.OAuthTransactionRepository {
 			return oauthtransactionrepo.NewRepository(q)
