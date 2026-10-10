@@ -133,6 +133,15 @@ type CommentThread struct {
 	Replies      []CommentReply  `json:"replies"`
 }
 
+// MentionTarget is a person a comment names: who they are and whether they may
+// read the document it is on.
+type MentionTarget struct {
+	UserID  uuid.UUID
+	Name    string
+	Email   string
+	CanRead bool
+}
+
 // CommentReply is one message after the first in a comment thread.
 type CommentReply struct {
 	ID         uuid.UUID `json:"id"`

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"backend/internal/domain/mention"
 	"backend/internal/domain/model"
 
 	"github.com/google/uuid"
@@ -17,6 +18,19 @@ type recordingComments struct {
 	// docType is what the document reports; markdown when left empty.
 	docType    string
 	docTypeErr error
+	// members are who a mention may name; anyone else is not in the workspace.
+	members map[uuid.UUID]model.MentionTarget
+	edits   []string
+}
+
+func (r *recordingComments) ResolveMentions(_ context.Context, _, _ uuid.UUID, ids []uuid.UUID) ([]model.MentionTarget, error) {
+	var found []model.MentionTarget
+	for _, id := range ids {
+		if target, ok := r.members[id]; ok {
+			found = append(found, target)
+		}
+	}
+	return found, nil
 }
 
 func (r *recordingComments) CommentDocumentType(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (string, error) {
@@ -43,11 +57,13 @@ func (r *recordingComments) CreateCommentReply(_ context.Context, _, _ uuid.UUID
 	return nil
 }
 
-func (r *recordingComments) UpdateComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
+func (r *recordingComments) UpdateComment(_ context.Context, _, _, _, _ uuid.UUID, content string) error {
+	r.edits = append(r.edits, content)
 	return nil
 }
 
-func (r *recordingComments) UpdateCommentReply(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
+func (r *recordingComments) UpdateCommentReply(_ context.Context, _, _, _, _, _ uuid.UUID, content string) error {
+	r.edits = append(r.edits, content)
 	return nil
 }
 
@@ -178,5 +194,98 @@ func TestCommentUseCaseReplyValidation(t *testing.T) {
 	}
 	if err := usecase.Reply(context.Background(), base); err != nil || len(repo.replies) != 1 {
 		t.Fatalf("Reply() = %v, %d stored, want one", err, len(repo.replies))
+	}
+}
+
+func mentionedMember(name string, canRead bool) (uuid.UUID, model.MentionTarget) {
+	id := uuid.New()
+	return id, model.MentionTarget{UserID: id, Name: name, Email: "m@example.com", CanRead: canRead}
+}
+
+func TestCommentUseCaseMentions(t *testing.T) {
+	ana, anaTarget := mentionedMember("Ana Bo", true)
+	locked, lockedTarget := mentionedMember("Locked Out", false)
+	stranger := uuid.New()
+	repo := &recordingComments{members: map[uuid.UUID]model.MentionTarget{ana: anaTarget, locked: lockedTarget}}
+	usecase := NewCommentUseCase(repo)
+	token := func(id uuid.UUID, label string) string { return mention.Token(id, label) }
+	create := func(content string) error {
+		return usecase.Create(context.Background(), CommentInput{
+			WorkspaceID: uuid.New(), DocumentID: uuid.New(), ThreadID: uuid.New(), AuthorID: uuid.New(),
+			Content: content, Anchor: []byte(`{"nodeID":"n","start":"AA==","end":"AQ=="}`),
+		})
+	}
+
+	if err := create("look " + token(ana, "an old name") + " and " + token(ana, "Ana Bo")); err != nil {
+		t.Fatalf("a mention of a member = %v", err)
+	}
+	if got, want := repo.created[0].Content, "look "+token(ana, "Ana Bo")+" and "+token(ana, "Ana Bo"); got != want {
+		t.Fatalf("stored %q, want the label written from the member's name: %q", got, want)
+	}
+
+	for name, content := range map[string]string{
+		"someone outside the workspace": "hi " + token(stranger, "Stranger"),
+		"someone who cannot read":       "hi " + token(locked, "Locked Out"),
+		"too many mentions":             strings.Repeat(token(ana, "Ana Bo")+" ", MaxMentionsPerComment+1),
+		"visible text too long":         strings.Repeat("a", MaxCommentLength) + token(ana, "Ana Bo"),
+	} {
+		before := len(repo.created)
+		if err := create(content); !errors.Is(err, ErrInvalidComment) {
+			t.Errorf("%s: Create() = %v, want ErrInvalidComment", name, err)
+		}
+		if len(repo.created) != before {
+			t.Errorf("%s: reached the repository", name)
+		}
+	}
+
+	// The token is longer than the name it shows; only what reads counts.
+	roomy := strings.Repeat("a", MaxCommentLength-len("@Ana Bo")) + token(ana, "Ana Bo")
+	if err := create(roomy); err != nil {
+		t.Fatalf("a comment that reads %d characters = %v", MaxCommentLength, err)
+	}
+
+	odd, oddTarget := mentionedMember("Ana [Bo] (HQ)", true)
+	repo.members[odd] = oddTarget
+	if err := create(token(odd, "x")); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := repo.created[len(repo.created)-1].Content, token(odd, "Ana Bo HQ"); got != want {
+		t.Fatalf("stored %q, want a label that cannot end the token early: %q", got, want)
+	}
+}
+
+func TestCommentUseCaseRepliesAndEditsResolveMentionsToo(t *testing.T) {
+	ana, anaTarget := mentionedMember("Ana Bo", true)
+	stranger := uuid.New()
+	repo := &recordingComments{members: map[uuid.UUID]model.MentionTarget{ana: anaTarget}}
+	usecase := NewCommentUseCase(repo)
+	ws, doc, thread, actor := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+
+	reply := func(content string) error {
+		return usecase.Reply(context.Background(), CommentReplyInput{
+			WorkspaceID: ws, DocumentID: doc, ThreadID: thread, ReplyID: uuid.New(), AuthorID: actor, Content: content,
+		})
+	}
+	if err := reply(mention.Token(ana, "old")); err != nil || repo.replies[0].Content != mention.Token(ana, "Ana Bo") {
+		t.Fatalf("Reply() = %v, stored %+v", err, repo.replies)
+	}
+	if err := reply(mention.Token(stranger, "Who")); !errors.Is(err, ErrInvalidComment) {
+		t.Fatalf("Reply() naming a stranger = %v, want ErrInvalidComment", err)
+	}
+
+	if err := usecase.Edit(context.Background(), ws, doc, thread, actor, "now "+mention.Token(ana, "old")); err != nil {
+		t.Fatalf("Edit() = %v", err)
+	}
+	if err := usecase.EditReply(context.Background(), ws, doc, thread, uuid.New(), actor, mention.Token(ana, "old")); err != nil {
+		t.Fatalf("EditReply() = %v", err)
+	}
+	if repo.edits[0] != "now "+mention.Token(ana, "Ana Bo") || repo.edits[1] != mention.Token(ana, "Ana Bo") {
+		t.Fatalf("edits stored as %q", repo.edits)
+	}
+	if err := usecase.Edit(context.Background(), ws, doc, thread, actor, mention.Token(stranger, "Who")); !errors.Is(err, ErrInvalidComment) {
+		t.Fatalf("Edit() naming a stranger = %v, want ErrInvalidComment", err)
+	}
+	if err := usecase.EditReply(context.Background(), ws, doc, thread, uuid.New(), actor, mention.Token(stranger, "Who")); !errors.Is(err, ErrInvalidComment) {
+		t.Fatalf("EditReply() naming a stranger = %v, want ErrInvalidComment", err)
 	}
 }

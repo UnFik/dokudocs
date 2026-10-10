@@ -23,6 +23,9 @@ type commentRepoFake struct{ err error }
 func (f commentRepoFake) ListComments(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) ([]model.CommentThread, error) {
 	return []model.CommentThread{}, f.err
 }
+func (f commentRepoFake) ResolveMentions(context.Context, uuid.UUID, uuid.UUID, []uuid.UUID) ([]model.MentionTarget, error) {
+	return nil, f.err
+}
 func (f commentRepoFake) CommentDocumentType(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (string, error) {
 	return "markdown", f.err
 }
