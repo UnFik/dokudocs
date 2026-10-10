@@ -12,7 +12,7 @@ func addWorkspaceRoutes(f Router, c *container.Container, cfg config.Config) {
 	authUseCase := appauth.NewUseCase(c.DB, cfg.JWTSecret, cfg.AccessTokenTTL)
 	authRequired := signedIn(authUseCase, cfg)
 
-	workspaceUseCase := appws.NewUseCase(c.DB)
+	workspaceUseCase := appws.NewUseCase(c.DB, appws.WithMailer(c.Mailer, cfg.PublicAppURL))
 	workspaceHandler := wshandler.NewHandler(workspaceUseCase, c.Validator)
 
 	wsGroup := f.Group("/workspaces", authRequired)
@@ -26,6 +26,17 @@ func addWorkspaceRoutes(f Router, c *container.Container, cfg config.Config) {
 
 	// Workspace Members
 	wsGroup.Get("/{id}/members", workspaceHandler.GetMembers)
-	wsGroup.Post("/{id}/invites", workspaceHandler.AddMember)
 	wsGroup.Delete("/{id}/members/{userId}", workspaceHandler.RemoveMember)
+
+	// Invitations: mailed single-use links, bound to the invited email.
+	sending := rateLimit(cfg.RateLimitInviteSendPerMin, cfg)
+	wsGroup.Post("/{id}/invites", workspaceHandler.InviteMember, sending)
+	wsGroup.Get("/{id}/invites", workspaceHandler.ListInvites)
+	wsGroup.Post("/{id}/invites/{inviteId}/resend", workspaceHandler.ResendInvite, sending)
+	wsGroup.Delete("/{id}/invites/{inviteId}", workspaceHandler.RevokeInvite)
+
+	lookup := rateLimit(cfg.RateLimitInviteLookupPerMin, cfg)
+	inviteGroup := f.Group("/invites")
+	inviteGroup.Post("/preview", workspaceHandler.PreviewInvite, lookup)
+	inviteGroup.Post("/accept", workspaceHandler.AcceptInvite, lookup, authRequired)
 }
