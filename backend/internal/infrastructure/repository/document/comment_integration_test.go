@@ -39,34 +39,79 @@ func TestCommentThreadsRepliesAndResolve(t *testing.T) {
 		ID: uuid.New(), DocumentID: documentID, AuthorID: commenterID,
 		SelectedText: "plain", Content: "is this right?", Anchor: []byte(`{"nodeID":"x","start":"AA==","end":"AQ=="}`),
 	}
-	if err := repo.CreateComment(ctx, workspaceID, thread); err != nil {
+	if _, err := repo.CreateComment(ctx, workspaceID, thread); err != nil {
 		t.Fatalf("commenter starts a thread: %v", err)
 	}
-	if err := repo.CreateComment(ctx, workspaceID, thread); err != nil {
+	if _, err := repo.CreateComment(ctx, workspaceID, thread); err != nil {
 		t.Fatalf("retrying the same thread must be a no-op: %v", err)
 	}
 	denied := thread
 	denied.ID, denied.AuthorID = uuid.New(), viewerID
-	if err := repo.CreateComment(ctx, workspaceID, denied); !errors.Is(err, constant.ErrForbidden) {
+	if _, err := repo.CreateComment(ctx, workspaceID, denied); !errors.Is(err, constant.ErrForbidden) {
 		t.Fatalf("thread by a viewer = %v, want forbidden", err)
+	}
+
+	if docType, err := repo.CommentDocumentType(ctx, workspaceID, documentID, commenterID); err != nil || docType != "markdown" {
+		t.Fatalf("type for a commenter = %q, %v, want markdown", docType, err)
+	}
+	if _, err := repo.CommentDocumentType(ctx, workspaceID, documentID, viewerID); !errors.Is(err, constant.ErrForbidden) {
+		t.Fatalf("type for a viewer = %v, want forbidden", err)
+	}
+	if _, err := repo.CommentDocumentType(ctx, uuid.New(), documentID, commenterID); !errors.Is(err, constant.ErrDocumentNotFound) {
+		t.Fatalf("type through another workspace = %v, want not found", err)
+	}
+
+	outsiderID := insertAccessTestUser(t, ctx, db)
+	t.Cleanup(func() { _, _ = db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, outsiderID) })
+	targets, err := repo.ResolveMentions(ctx, workspaceID, documentID, []uuid.UUID{commenterID, viewerID, outsiderID, commenterID})
+	if err != nil {
+		t.Fatalf("resolve mentions: %v", err)
+	}
+	byID := map[uuid.UUID]model.MentionTarget{}
+	for _, target := range targets {
+		byID[target.UserID] = target
+	}
+	if len(targets) != 2 || !byID[commenterID].CanRead || !byID[viewerID].CanRead || byID[commenterID].Name == "" || byID[commenterID].Email == "" {
+		t.Fatalf("resolved %+v, want the commenter and the viewer once each, both able to read, and no outsider", targets)
+	}
+	if _, err := repo.ResolveMentions(ctx, uuid.New(), documentID, []uuid.UUID{commenterID}); !errors.Is(err, constant.ErrDocumentNotFound) {
+		t.Fatalf("resolve through another workspace = %v, want not found", err)
+	}
+
+	candidates, err := repo.ListMentionCandidates(ctx, workspaceID, documentID, commenterID)
+	if err != nil {
+		t.Fatalf("list mention candidates: %v", err)
+	}
+	listed := map[uuid.UUID]bool{}
+	for _, candidate := range candidates {
+		listed[candidate.UserID] = candidate.CanRead
+	}
+	if !listed[commenterID] || !listed[viewerID] || !listed[ownerID] {
+		t.Fatalf("candidates %+v, want the owner, the commenter and the viewer, all able to read", candidates)
+	}
+	if _, ok := listed[outsiderID]; ok {
+		t.Fatal("someone outside the workspace was offered")
+	}
+	if _, err := repo.ListMentionCandidates(ctx, workspaceID, documentID, viewerID); !errors.Is(err, constant.ErrForbidden) {
+		t.Fatalf("candidates for a viewer = %v, want forbidden", err)
 	}
 
 	reply := func(authorID uuid.UUID, content string) model.CommentReply {
 		return model.CommentReply{ID: uuid.New(), ThreadID: thread.ID, AuthorID: authorID, Content: content}
 	}
 	first := reply(ownerID, "yes")
-	if err := repo.CreateCommentReply(ctx, workspaceID, documentID, first); err != nil {
+	if _, err := repo.CreateCommentReply(ctx, workspaceID, documentID, first); err != nil {
 		t.Fatalf("editor replies: %v", err)
 	}
-	if err := repo.CreateCommentReply(ctx, workspaceID, documentID, first); err != nil {
+	if _, err := repo.CreateCommentReply(ctx, workspaceID, documentID, first); err != nil {
 		t.Fatalf("retrying the same reply must be a no-op: %v", err)
 	}
-	if err := repo.CreateCommentReply(ctx, workspaceID, documentID, reply(viewerID, "me too")); !errors.Is(err, constant.ErrForbidden) {
+	if _, err := repo.CreateCommentReply(ctx, workspaceID, documentID, reply(viewerID, "me too")); !errors.Is(err, constant.ErrForbidden) {
 		t.Fatalf("reply by a viewer = %v, want forbidden", err)
 	}
 	ghost := reply(ownerID, "ghost")
 	ghost.ThreadID = uuid.New()
-	if err := repo.CreateCommentReply(ctx, workspaceID, documentID, ghost); !errors.Is(err, constant.ErrDocumentNotFound) {
+	if _, err := repo.CreateCommentReply(ctx, workspaceID, documentID, ghost); !errors.Is(err, constant.ErrDocumentNotFound) {
 		t.Fatalf("reply to a missing thread = %v, want not found", err)
 	}
 
@@ -90,7 +135,7 @@ func TestCommentThreadsRepliesAndResolve(t *testing.T) {
 	if items[0].ResolvedAt == nil || items[0].ResolvedBy == nil || *items[0].ResolvedBy != commenterID {
 		t.Fatalf("after resolve = %+v, want resolved by the commenter", items[0])
 	}
-	if err := repo.CreateCommentReply(ctx, workspaceID, documentID, reply(ownerID, "one more thing")); err != nil {
+	if _, err := repo.CreateCommentReply(ctx, workspaceID, documentID, reply(ownerID, "one more thing")); err != nil {
 		t.Fatalf("reply to a resolved thread: %v", err)
 	}
 	items, _ = repo.ListComments(ctx, workspaceID, documentID, ownerID)
@@ -114,7 +159,7 @@ func TestCommentThreadsRepliesAndResolve(t *testing.T) {
 	// A thread of another document cannot be reached through this one, even by
 	// someone who may comment there.
 	otherWorkspaceID, otherDocumentID, otherOwnerID, _, _, _ := seedRunDocument(t, ctx, db)
-	if err := repo.CreateCommentReply(ctx, otherWorkspaceID, otherDocumentID, reply(otherOwnerID, "wrong document")); !errors.Is(err, constant.ErrDocumentNotFound) {
+	if _, err := repo.CreateCommentReply(ctx, otherWorkspaceID, otherDocumentID, reply(otherOwnerID, "wrong document")); !errors.Is(err, constant.ErrDocumentNotFound) {
 		t.Fatalf("reply through another document = %v, want not found", err)
 	}
 	if err := repo.SetCommentResolved(ctx, otherWorkspaceID, otherDocumentID, thread.ID, otherOwnerID, true); !errors.Is(err, constant.ErrDocumentNotFound) {
@@ -143,11 +188,11 @@ func TestCommentEditAndDelete(t *testing.T) {
 	}
 	authorID, otherID, viewerID := add("comment"), add("comment"), add("view")
 	thread := model.CommentThread{ID: uuid.New(), DocumentID: documentID, AuthorID: authorID, SelectedText: "x", Content: "first draft"}
-	if err := repo.CreateComment(ctx, workspaceID, thread); err != nil {
+	if _, err := repo.CreateComment(ctx, workspaceID, thread); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	reply := model.CommentReply{ID: uuid.New(), ThreadID: thread.ID, AuthorID: otherID, Content: "a reply"}
-	if err := repo.CreateCommentReply(ctx, workspaceID, documentID, reply); err != nil {
+	if _, err := repo.CreateCommentReply(ctx, workspaceID, documentID, reply); err != nil {
 		t.Fatalf("reply: %v", err)
 	}
 	read := func() model.CommentThread {
@@ -164,20 +209,20 @@ func TestCommentEditAndDelete(t *testing.T) {
 
 	// Only the author edits.
 	for name, actor := range map[string]uuid.UUID{"another commenter": otherID, "an editor": ownerID, "a viewer": viewerID} {
-		if err := repo.UpdateComment(ctx, workspaceID, documentID, thread.ID, actor, "hijacked"); !errors.Is(err, constant.ErrForbidden) {
+		if _, err := repo.UpdateComment(ctx, workspaceID, documentID, thread.ID, actor, "hijacked", nil); !errors.Is(err, constant.ErrForbidden) {
 			t.Fatalf("%s editing a thread = %v, want forbidden", name, err)
 		}
 	}
-	if err := repo.UpdateComment(ctx, workspaceID, documentID, thread.ID, authorID, "second draft"); err != nil {
+	if _, err := repo.UpdateComment(ctx, workspaceID, documentID, thread.ID, authorID, "second draft", nil); err != nil {
 		t.Fatalf("author edits the thread: %v", err)
 	}
 	if got := read(); got.Content != "second draft" || got.EditedAt == nil {
 		t.Fatalf("after the edit = %+v, want new text marked edited", got)
 	}
-	if err := repo.UpdateCommentReply(ctx, workspaceID, documentID, thread.ID, reply.ID, authorID, "hijacked"); !errors.Is(err, constant.ErrForbidden) {
+	if _, err := repo.UpdateCommentReply(ctx, workspaceID, documentID, thread.ID, reply.ID, authorID, "hijacked", nil); !errors.Is(err, constant.ErrForbidden) {
 		t.Fatalf("editing someone else's reply = %v, want forbidden", err)
 	}
-	if err := repo.UpdateCommentReply(ctx, workspaceID, documentID, thread.ID, reply.ID, otherID, "a better reply"); err != nil {
+	if _, err := repo.UpdateCommentReply(ctx, workspaceID, documentID, thread.ID, reply.ID, otherID, "a better reply", nil); err != nil {
 		t.Fatalf("author edits the reply: %v", err)
 	}
 	if got := read().Replies[0]; got.Content != "a better reply" || got.EditedAt == nil {
@@ -190,7 +235,7 @@ func TestCommentEditAndDelete(t *testing.T) {
 
 	// A thread of another document is out of reach.
 	otherWorkspaceID, otherDocumentID, otherOwnerID, _, _, _ := seedRunDocument(t, ctx, db)
-	if err := repo.UpdateComment(ctx, otherWorkspaceID, otherDocumentID, thread.ID, otherOwnerID, "x"); !errors.Is(err, constant.ErrDocumentNotFound) {
+	if _, err := repo.UpdateComment(ctx, otherWorkspaceID, otherDocumentID, thread.ID, otherOwnerID, "x", nil); !errors.Is(err, constant.ErrDocumentNotFound) {
 		t.Fatalf("editing through another document = %v, want not found", err)
 	}
 	if err := repo.DeleteComment(ctx, otherWorkspaceID, otherDocumentID, thread.ID, otherOwnerID); !errors.Is(err, constant.ErrDocumentNotFound) {
@@ -223,7 +268,7 @@ func TestCommentEditAndDelete(t *testing.T) {
 	}
 	// The author may delete their own thread.
 	again := model.CommentThread{ID: uuid.New(), DocumentID: documentID, AuthorID: authorID, SelectedText: "x", Content: "mine"}
-	if err := repo.CreateComment(ctx, workspaceID, again); err != nil {
+	if _, err := repo.CreateComment(ctx, workspaceID, again); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if err := repo.DeleteComment(ctx, workspaceID, documentID, again.ID, authorID); err != nil {

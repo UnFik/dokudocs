@@ -15,7 +15,8 @@ import {
 import { formatRelativeTime } from '@/lib/time-utils'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { CommentText } from '@/components/comment-text'
+import { MentionTextarea } from '@/components/mention-textarea'
 
 export const commentsKey = (workspaceID: string, documentID: string) => [
   'document-comments',
@@ -36,6 +37,8 @@ export function useCanvasComments(workspaceID: string, documentID: string) {
 
 /** A comment or a reply, with edit and delete for its author. */
 function Entry(props: {
+  workspaceID: string
+  documentID: string
   label: string
   authorName: string
   content: string
@@ -60,7 +63,7 @@ function Entry(props: {
             props.resolved && 'text-muted-foreground line-through'
           )}
         >
-          {props.content}
+          <CommentText content={props.content} />
           {props.edited && (
             <span className='ml-1 font-mono text-[10.5px] text-muted-foreground'>
               edited
@@ -79,11 +82,13 @@ function Entry(props: {
           <label htmlFor={fieldID} className='sr-only'>
             Edit {props.label}
           </label>
-          <Textarea
+          <MentionTextarea
             id={fieldID}
+            workspaceID={props.workspaceID}
+            documentID={props.documentID}
             autoFocus
             value={editing}
-            onChange={(e) => setEditing(e.target.value)}
+            onValueChange={setEditing}
             maxLength={2000}
             className='min-h-12 text-[12.5px]'
           />
@@ -265,6 +270,8 @@ export function Thread({
         </span>
       </div>
       <Entry
+        workspaceID={workspaceID}
+        documentID={documentID}
         label='comment'
         authorName={thread.authorName}
         content={thread.content}
@@ -280,6 +287,8 @@ export function Thread({
         <div key={r.id} className='border-l border-border pl-2'>
           <span className='font-medium'>{r.authorName || 'Someone'}</span>
           <Entry
+            workspaceID={workspaceID}
+            documentID={documentID}
             label='reply'
             authorName={r.authorName}
             content={r.content}
@@ -298,10 +307,12 @@ export function Thread({
             Reply to {thread.authorName || 'this comment'}
           </label>
           {!thread.resolvedAt && (
-            <Textarea
+            <MentionTextarea
               id={replyID}
+              workspaceID={workspaceID}
+              documentID={documentID}
               value={reply}
-              onChange={(e) => setReply(e.target.value)}
+              onValueChange={setReply}
               placeholder='Reply'
               maxLength={2000}
               className='min-h-12 text-[12.5px]'
@@ -455,10 +466,12 @@ export function ElementComments({
           <label htmlFor={newID} className='sr-only'>
             New comment on {elementName}
           </label>
-          <Textarea
+          <MentionTextarea
             id={newID}
+            workspaceID={workspaceID}
+            documentID={documentID}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onValueChange={setDraft}
             placeholder={`Ask or note something about ${elementName}`}
             maxLength={2000}
             className='min-h-14 text-[12.5px]'
@@ -514,7 +527,9 @@ export function OrphanedComments({
               {t.authorName || 'Someone'}, on an element that was removed: “
               {t.selectedText}”
             </p>
-            <p>{t.content}</p>
+            <p>
+              <CommentText content={t.content} />
+            </p>
           </li>
         ))}
       </ul>

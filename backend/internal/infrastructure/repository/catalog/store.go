@@ -200,7 +200,12 @@ func (s *Store) AnswerRequest(ctx context.Context, actorID, requestID uuid.UUID,
 
 func (s *Store) Notifications(ctx context.Context, userID uuid.UUID) ([]appcatalog.Notification, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, kind, title, body, read_at IS NOT NULL, created_at FROM notifications
+		SELECT id, kind, title, body, read_at IS NOT NULL, created_at,
+			CASE WHEN document_id IS NULL THEN '' ELSE
+				'/docs/' || document_id || '?workspaceId=' || workspace_id ||
+				CASE WHEN thread_id IS NULL THEN '' ELSE '&thread=' || thread_id END
+			END
+		FROM notifications
 		WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, userID)
 	if err != nil {
 		return nil, err
@@ -209,7 +214,7 @@ func (s *Store) Notifications(ctx context.Context, userID uuid.UUID) ([]appcatal
 	notes := []appcatalog.Notification{}
 	for rows.Next() {
 		var n appcatalog.Notification
-		if err := rows.Scan(&n.ID, &n.Kind, &n.Title, &n.Body, &n.Read, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.Kind, &n.Title, &n.Body, &n.Read, &n.CreatedAt, &n.Path); err != nil {
 			return nil, err
 		}
 		notes = append(notes, n)
@@ -217,7 +222,9 @@ func (s *Store) Notifications(ctx context.Context, userID uuid.UUID) ([]appcatal
 	return notes, rows.Err()
 }
 
-func (s *Store) MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE notifications SET read_at = NOW() WHERE user_id = $1 AND read_at IS NULL`, userID)
+func (s *Store) MarkNotificationsRead(ctx context.Context, userID uuid.UUID, kind string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE notifications SET read_at = NOW()
+		WHERE user_id = $1 AND read_at IS NULL AND ($2 = '' OR kind = $2)`, userID, kind)
 	return err
 }

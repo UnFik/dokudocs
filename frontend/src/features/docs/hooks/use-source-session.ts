@@ -59,6 +59,8 @@ export function useSourceSession(input: {
   userName?: string
   title: string
   onReplaced: () => void
+  /** Someone else changed the comments of this document. */
+  onCommentsChanged?: () => void
 }) {
   const [text, setText] = useState<Y.Text | null>(null)
   const [awareness, setAwareness] = useState<Awareness | null>(null)
@@ -120,6 +122,7 @@ export function useSourceSession(input: {
         getUserStorage().setItem(accessKey(room), JSON.stringify(next))
       },
       onPresence: setPresence,
+      onCommentsChanged: () => latest.current.onCommentsChanged?.(),
       // The room closed for a restore; reconnecting is refused as replaced, but
       // there is no need to wait for that.
       onReloaded: replace,
@@ -220,6 +223,8 @@ export function useSourceSession(input: {
     synced,
     saveState,
     lastSaved,
+    /** Tells the others in the room that this person changed the comments. */
+    signalComments: () => sessionRef.current?.signalCommentsChanged(),
     /** After this person restored a revision: keep unsaved source and open the new record. */
     reopen: () => replaceRef.current(),
     /** Resolves true once the database holds every edit made here. */

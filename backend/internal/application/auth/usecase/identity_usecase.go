@@ -13,6 +13,7 @@ import (
 	"backend/internal/application/utils"
 	repocontract "backend/internal/domain/contract/repository"
 	"backend/internal/domain/model"
+	"backend/internal/domain/policy"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
@@ -24,7 +25,6 @@ const (
 	defaultSignIn  = "/dashboard"
 	defaultLink    = "/settings/account"
 	identityScope  = "openid email profile"
-	maxFullName    = 100
 )
 
 // errRetry marks a race that a second look at the database settles.
@@ -252,14 +252,7 @@ func retryOnRace(err error) error {
 
 // profileName fits a provider's name to what a User's full name allows.
 func profileName(name, email string) string {
-	name = strings.TrimSpace(name)
-	if utf8.RuneCountInString(name) < 2 {
-		name = email
-	}
-	if utf8.RuneCountInString(name) > maxFullName {
-		name = string([]rune(name)[:maxFullName])
-	}
-	return name
+	return policy.CleanDisplayName(name, email)
 }
 
 func newSecret() (string, error) { return newVerificationToken() }

@@ -58,6 +58,8 @@ export interface SourceCollab {
   readOnly: boolean
   /** The binding of the editor now on screen, or null once it is gone. */
   onBinding?: (binding: SourceBinding | null) => void
+  /** The Monaco editor now on screen, or null once it is gone, for comment marks. */
+  onEditor?: (editor: monaco.editor.IStandaloneCodeEditor | null) => void
 }
 
 export interface UnifiedMonacoEditorProps {
@@ -266,6 +268,7 @@ export function UnifiedMonacoEditor({
           bindingRef.current?.destroy()
           bindingRef.current = null
           collab?.onBinding?.(null)
+          collab?.onEditor?.(null)
           editorRef.current.dispose()
           editorRef.current = null
         }
@@ -325,6 +328,7 @@ export function UnifiedMonacoEditor({
           setMonacoCanRedo(binding.canRedo())
         })
         collab.onBinding?.(binding)
+        collab.onEditor?.(editor)
       }
 
       scheduleDiagnostics(editor, language)

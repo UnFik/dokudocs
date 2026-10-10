@@ -135,11 +135,110 @@ func threadInDocument(ctx context.Context, tx database.Queryer, documentID, thre
 }
 
 // CreateComment starts a thread. Retrying the same thread ID is a no-op.
-func (r *Repository) CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error {
+func (r *Repository) CommentDocumentType(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) (string, error) {
 	if r.tx == nil {
-		return errors.New("commenting requires a transaction-capable database")
+		return "", errors.New("commenting requires a transaction-capable database")
 	}
-	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+	var docType string
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
+		if err != nil {
+			return err
+		}
+		if err := canDiscuss(doc, access); err != nil {
+			return err
+		}
+		return tx.QueryRowContext(ctx, `SELECT type FROM documents WHERE id = $1`, documentID).Scan(&docType)
+	})
+	return docType, err
+}
+
+// maxMentionCandidates bounds the list of whom a comment offers to name.
+const maxMentionCandidates = 200
+
+func (r *Repository) ResolveMentions(ctx context.Context, workspaceID, documentID uuid.UUID, userIDs []uuid.UUID) ([]model.MentionTarget, error) {
+	if r.tx == nil {
+		return nil, errors.New("commenting requires a transaction-capable database")
+	}
+	var targets []model.MentionTarget
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) (err error) {
+		targets, err = mentionTargets(ctx, tx, workspaceID, documentID, userIDs)
+		return err
+	})
+	return targets, err
+}
+
+func (r *Repository) ListMentionCandidates(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.MentionTarget, error) {
+	if r.tx == nil {
+		return nil, errors.New("commenting requires a transaction-capable database")
+	}
+	var targets []model.MentionTarget
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
+		if err != nil {
+			return err
+		}
+		if err := canDiscuss(doc, access); err != nil {
+			return err
+		}
+		rows, err := tx.QueryContext(ctx, `
+			SELECT user_id FROM workspace_members WHERE workspace_id = $1
+			ORDER BY user_id LIMIT $2
+		`, workspaceID, maxMentionCandidates)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var ids []uuid.UUID
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		rows.Close()
+		targets, err = mentionTargets(ctx, tx, workspaceID, documentID, ids)
+		return err
+	})
+	return targets, err
+}
+
+// mentionTargets says, for each user, who they are and whether they can read the
+// document. A user who is not in the workspace is left out.
+func mentionTargets(ctx context.Context, tx database.Queryer, workspaceID, documentID uuid.UUID, userIDs []uuid.UUID) ([]model.MentionTarget, error) {
+	var targets []model.MentionTarget
+	seen := make(map[uuid.UUID]bool, len(userIDs))
+	for _, userID := range userIDs {
+		if seen[userID] {
+			continue
+		}
+		seen[userID] = true
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, userID, false, nil)
+		if errors.Is(err, constant.ErrForbidden) {
+			continue // not a member of the workspace
+		}
+		if err != nil {
+			return nil, err
+		}
+		target := model.MentionTarget{UserID: userID, CanRead: policy.CanReadDocument(doc, access)}
+		if err := tx.QueryRowContext(ctx, `SELECT full_name, email FROM users WHERE id = $1`, userID).Scan(&target.Name, &target.Email); err != nil {
+			return nil, err
+		}
+		targets = append(targets, target)
+	}
+	return targets, nil
+}
+
+func (r *Repository) CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) ([]model.MentionDelivery, error) {
+	if r.tx == nil {
+		return nil, errors.New("commenting requires a transaction-capable database")
+	}
+	var deliveries []model.MentionDelivery
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
 		doc, access, err := lockDocumentAccess(ctx, tx, thread.DocumentID, workspaceID, thread.AuthorID, false, nil)
 		if err != nil {
 			return err
@@ -151,22 +250,34 @@ func (r *Repository) CreateComment(ctx context.Context, workspaceID uuid.UUID, t
 		if len(thread.Anchor) > 0 {
 			anchor = []byte(thread.Anchor)
 		}
-		_, err = tx.ExecContext(ctx, `
+		result, err := tx.ExecContext(ctx, `
 			INSERT INTO comment_threads (id, document_id, author_id, selected_text, content, anchor)
 			VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (id) DO NOTHING
 		`, thread.ID, thread.DocumentID, thread.AuthorID, thread.SelectedText, thread.Content, anchor)
+		if err != nil {
+			return err
+		}
+		if rows, err := result.RowsAffected(); err != nil || rows == 0 {
+			return err
+		}
+		deliveries, err = notifyMentions(ctx, tx, mentionNotice{
+			workspaceID: workspaceID, documentID: thread.DocumentID, threadID: thread.ID, commentID: thread.ID,
+			actorID: thread.AuthorID, mentioned: thread.Mentioned, content: thread.Content,
+		})
 		return err
 	})
+	return deliveries, err
 }
 
 // CreateCommentReply adds a message to a thread. Replying to a resolved thread
 // reopens it. Retrying the same reply ID is a no-op.
-func (r *Repository) CreateCommentReply(ctx context.Context, workspaceID, documentID uuid.UUID, reply model.CommentReply) error {
+func (r *Repository) CreateCommentReply(ctx context.Context, workspaceID, documentID uuid.UUID, reply model.CommentReply) ([]model.MentionDelivery, error) {
 	if r.tx == nil {
-		return errors.New("replying requires a transaction-capable database")
+		return nil, errors.New("replying requires a transaction-capable database")
 	}
-	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+	var deliveries []model.MentionDelivery
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
 		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, reply.AuthorID, false, nil)
 		if err != nil {
 			return err
@@ -188,13 +299,20 @@ func (r *Repository) CreateCommentReply(ctx context.Context, workspaceID, docume
 		if rows, err := result.RowsAffected(); err != nil || rows == 0 {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `
+		if _, err = tx.ExecContext(ctx, `
 			UPDATE comment_threads
 			SET is_resolved = FALSE, resolved_at = NULL, resolved_by = NULL, updated_at = NOW()
 			WHERE id = $1
-		`, reply.ThreadID)
+		`, reply.ThreadID); err != nil {
+			return err
+		}
+		deliveries, err = notifyMentions(ctx, tx, mentionNotice{
+			workspaceID: workspaceID, documentID: documentID, threadID: reply.ThreadID, commentID: reply.ID,
+			actorID: reply.AuthorID, mentioned: reply.Mentioned, content: reply.Content,
+		})
 		return err
 	})
+	return deliveries, err
 }
 
 // SetCommentResolved closes or reopens a thread.
@@ -257,11 +375,12 @@ func commentReplyAuthor(ctx context.Context, tx database.Queryer, documentID, th
 }
 
 // UpdateComment changes a thread's first message. Only its author may.
-func (r *Repository) UpdateComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, content string) error {
+func (r *Repository) UpdateComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, content string, mentioned []uuid.UUID) ([]model.MentionDelivery, error) {
 	if r.tx == nil {
-		return errors.New("editing requires a transaction-capable database")
+		return nil, errors.New("editing requires a transaction-capable database")
 	}
-	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+	var deliveries []model.MentionDelivery
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
 		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
 		if err != nil {
 			return err
@@ -276,19 +395,27 @@ func (r *Repository) UpdateComment(ctx context.Context, workspaceID, documentID,
 		if author != actorID {
 			return constant.ErrForbidden
 		}
-		_, err = tx.ExecContext(ctx, `
+		if _, err = tx.ExecContext(ctx, `
 			UPDATE comment_threads SET content = $2, edited_at = NOW(), updated_at = NOW() WHERE id = $1
-		`, threadID, content)
+		`, threadID, content); err != nil {
+			return err
+		}
+		deliveries, err = notifyMentions(ctx, tx, mentionNotice{
+			workspaceID: workspaceID, documentID: documentID, threadID: threadID, commentID: threadID,
+			actorID: actorID, mentioned: mentioned, content: content,
+		})
 		return err
 	})
+	return deliveries, err
 }
 
 // UpdateCommentReply changes a reply. Only its author may.
-func (r *Repository) UpdateCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID, content string) error {
+func (r *Repository) UpdateCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID, content string, mentioned []uuid.UUID) ([]model.MentionDelivery, error) {
 	if r.tx == nil {
-		return errors.New("editing requires a transaction-capable database")
+		return nil, errors.New("editing requires a transaction-capable database")
 	}
-	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+	var deliveries []model.MentionDelivery
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
 		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
 		if err != nil {
 			return err
@@ -303,11 +430,18 @@ func (r *Repository) UpdateCommentReply(ctx context.Context, workspaceID, docume
 		if author != actorID {
 			return constant.ErrForbidden
 		}
-		_, err = tx.ExecContext(ctx, `
+		if _, err = tx.ExecContext(ctx, `
 			UPDATE comment_replies SET content = $2, edited_at = NOW(), updated_at = NOW() WHERE id = $1
-		`, replyID, content)
+		`, replyID, content); err != nil {
+			return err
+		}
+		deliveries, err = notifyMentions(ctx, tx, mentionNotice{
+			workspaceID: workspaceID, documentID: documentID, threadID: threadID, commentID: replyID,
+			actorID: actorID, mentioned: mentioned, content: content,
+		})
 		return err
 	})
+	return deliveries, err
 }
 
 // DeleteComment removes a thread and its replies. Its author or an editor may.
