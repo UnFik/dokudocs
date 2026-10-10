@@ -53,7 +53,7 @@ export function CatalogRequests({ catalog }: { catalog: CatalogEntry[] }) {
     (n) => !n.read && n.kind === 'catalog_request'
   ).length
   const read = useMutation({
-    mutationFn: markNotificationsRead,
+    mutationFn: () => markNotificationsRead('catalog_request'),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   })

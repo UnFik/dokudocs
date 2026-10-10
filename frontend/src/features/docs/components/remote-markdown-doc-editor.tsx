@@ -80,12 +80,15 @@ export function RemoteMarkdownDocEditor({
   userID,
   offline = false,
   focusNodeID,
+  focusThreadID,
 }: {
   document: DocumentItem
   workspaceID: string
   userID: string
   offline?: boolean
   focusNodeID?: string
+  /** A comment thread to open, from a notification. */
+  focusThreadID?: string
 }) {
   // Bumped when the server replaces the body (a restored revision): the local
   // copy is dropped and the editor opens again on what the server holds.
@@ -212,6 +215,7 @@ export function RemoteMarkdownDocEditor({
         offline={offline}
         access={access}
         focusNodeID={focusNodeID}
+        focusThreadID={focusThreadID}
         title={document.title}
         titleReadOnly={offline || !access?.canEdit || accessUnavailable}
         onTitleChange={(title) => titleMutation.mutate(title)}
@@ -272,6 +276,7 @@ function CollaborativeMarkdownBody({
   offline,
   access,
   focusNodeID,
+  focusThreadID,
   title,
   titleReadOnly,
   onTitleChange,
@@ -290,6 +295,7 @@ function CollaborativeMarkdownBody({
   offline: boolean
   access: CollabAccess | null
   focusNodeID?: string
+  focusThreadID?: string
   title: string
   titleReadOnly: boolean
   onTitleChange: (title: string) => void
@@ -471,6 +477,25 @@ function CollaborativeMarkdownBody({
     refetchOnWindowFocus: true,
   })
   const comments = useMemo(() => commentsQuery.data ?? [], [commentsQuery.data])
+  // A notification opens the thread it is about, when the editor, the threads and
+  // their marks are ready: the marks come after the threads, so try again as they are placed.
+  const openedThread = useRef<string | null>(null)
+  useEffect(() => {
+    if (
+      !focusThreadID ||
+      !sessionReady ||
+      openedThread.current === focusThreadID
+    )
+      return
+    const thread = comments.find((item) => item.id === focusThreadID)
+    if (!thread) return
+    setFocusedCommentID(focusThreadID)
+    setFocusedSuggestionID(null)
+    setIsSuggestionsOpen(true)
+    const marked = sessionRef.current?.editor.scrollToComment(focusThreadID)
+    // A resolved thread has no marks to wait for.
+    if (marked || thread.resolvedAt) openedThread.current = focusThreadID
+  }, [focusThreadID, sessionReady, comments, commentPositions])
   // The editor marks and places every thread; it needs the threads and a session.
   useEffect(() => {
     if (!sessionReady) return

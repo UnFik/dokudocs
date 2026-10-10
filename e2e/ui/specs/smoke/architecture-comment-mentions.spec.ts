@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 
 const apiURL = () => process.env.API_URL ?? "http://localhost:8080";
 
-test("@live @smoke @comments: @ in a canvas comment offers the workspace, narrows, and mentions a member", async ({ page }) => {
+test("@live @smoke @comments: @ in a canvas comment offers the workspace, narrows, and mentions a member", async ({ page, browser }) => {
   test.setTimeout(120000);
   const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   await page.goto("/sign-in");
@@ -109,6 +109,24 @@ test("@live @smoke @comments: @ in a canvas comment offers the workspace, narrow
     },
   });
   expect(forged.status()).toBe(400);
+
+  // The member finds it in the sidebar and opens the thread from there.
+  const memberContext = await browser.newContext();
+  const memberPage = await memberContext.newPage();
+  await memberPage.goto("/sign-in");
+  await memberPage.locator('input[name="email"]').fill(dewi.email);
+  await memberPage.locator('input[name="password"]').fill("password12345678");
+  await memberPage.getByRole("button", { name: /sign in/i }).click();
+  await memberPage.waitForURL((url) => url.pathname === "/dashboard");
+  const inbox = memberPage.getByRole("button", { name: /^Notifications/ });
+  await expect(inbox).toContainText("1 new");
+  await inbox.click();
+  await memberPage.getByRole("button", { name: /mentioned you in/ }).click();
+  await memberPage.waitForURL((url) => url.pathname === `/docs/${documentID}` && url.searchParams.has("thread"));
+  const memberProperties = memberPage.locator("#architecture-properties");
+  await expect(memberProperties).toContainText("can you check?", { timeout: 20000 });
+  await expect(memberProperties.locator("[data-mention]")).toHaveText("@Dewi Lestari");
+  await memberContext.close();
 
   // Escape closes the list and nothing else.
   await box.click();

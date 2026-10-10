@@ -132,6 +132,8 @@ const notificationSchema = z.object({
   body: z.string(),
   read: z.boolean(),
   createdAt: z.string(),
+  /** Opens what it is about, for the ones that are about something. */
+  path: z.string().optional(),
 })
 export type AppNotification = z.infer<typeof notificationSchema>
 
@@ -166,6 +168,10 @@ export async function listNotifications(signal?: AbortSignal) {
     .parse(await apiFetch<unknown>('/api/v1/notifications', { signal }))
 }
 
-export async function markNotificationsRead() {
-  await apiFetch('/api/v1/notifications/read', { method: 'POST' })
+/** Marks the unread notifications of one kind as read, so reading one list does not clear another. */
+export async function markNotificationsRead(kind: string) {
+  await apiFetch('/api/v1/notifications/read', {
+    method: 'POST',
+    body: JSON.stringify({ kind }),
+  })
 }
