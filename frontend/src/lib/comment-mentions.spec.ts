@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fixture from '../../../fixtures/comment-mentions.json'
+import fixture from './comment-mentions.fixture.json'
 import {
   activeMentionQuery,
   deserialize,

@@ -1,6 +1,6 @@
 // A comment names a person with a token, @[Name](user:<id>). The backend reads
 // the same grammar (internal/domain/mention); both are held to
-// fixtures/comment-mentions.json. In a text box the token would be 45
+// comment-mentions.fixture.json. In a text box the token would be 45
 // characters of noise, so there a mention reads as @Name and is tracked by
 // position until it is serialized back.
 
