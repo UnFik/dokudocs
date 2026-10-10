@@ -10,6 +10,7 @@ import type {
   WorkspaceItem,
 } from '@/types/dokudocs'
 import { apiFetch } from './api-client'
+import { documentTypeSchema } from './document-types'
 
 const postgresUUIDSchema = z
   .string()
@@ -46,7 +47,7 @@ const documentSchema = z.object({
   projectId: z.string().min(1).nullable().optional(),
   projectName: z.string().optional().default(''),
   title: z.string(),
-  type: z.enum(['markdown', 'dbdiagram', 'mermaid', 'architecture']),
+  type: documentTypeSchema,
   content: z.string(),
   contentJSON: z.unknown().optional(),
   replacementId: z.string().uuid().optional(),

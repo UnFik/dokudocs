@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router'
 import type { DocumentItem } from '@/types/dokudocs'
 import { toast } from 'sonner'
 import { ApiError } from '@/lib/api-client'
+import { documentTypeSchema } from '@/lib/document-types'
 import {
   listDocumentRevisions,
   restoreDocumentRevision,
@@ -501,11 +502,11 @@ function VersionDetail({
               className='flex flex-col gap-1 border-t border-border py-1.5 text-[12.5px]'
             >
               <div className='flex flex-wrap items-center gap-2'>
-                {(pin.documentType === 'markdown' ||
-                  pin.documentType === 'dbdiagram' ||
-                  pin.documentType === 'mermaid') && (
-                  <DocTypeBadge type={pin.documentType} />
-                )}
+                {(() => {
+                  const type = documentTypeSchema.safeParse(pin.documentType)
+                  return type.success ? <DocTypeBadge type={type.data} /> : null
+                })()}
+
                 <span className='flex-1 truncate'>{pin.title}</span>
                 {pin.revisionId ? (
                   <>

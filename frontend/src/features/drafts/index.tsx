@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { DocType } from '@/types/dokudocs'
+import type { DocType } from '@/types/dokudocs'
 import { FileEdit, LayoutGrid, List, Plus, Search, Upload } from 'lucide-react'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { DOCUMENT_TYPES } from '@/lib/document-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -90,24 +91,24 @@ export function DraftsPage() {
             </div>
           </div>
 
-          <div className='flex items-center gap-2.5 self-end sm:self-auto'>
+          <div className='flex max-w-full flex-wrap items-center gap-2.5 self-end sm:self-auto'>
             <Tabs
               value={typeFilter}
               onValueChange={(val) => setTypeFilter(val as 'all' | DocType)}
             >
-              <TabsList className='h-8 bg-muted/60 p-0.5'>
-                <TabsTrigger value='all' className='h-7 px-2.5 text-xs'>
+              <TabsList className='h-auto min-h-8 flex-wrap bg-muted/60 p-0.5'>
+                <TabsTrigger value='all' className='h-11 px-2.5 text-xs sm:h-7'>
                   All
                 </TabsTrigger>
-                <TabsTrigger value='markdown' className='h-7 px-2.5 text-xs'>
-                  Markdown
-                </TabsTrigger>
-                <TabsTrigger value='dbdiagram' className='h-7 px-2.5 text-xs'>
-                  DBML
-                </TabsTrigger>
-                <TabsTrigger value='mermaid' className='h-7 px-2.5 text-xs'>
-                  Mermaid
-                </TabsTrigger>
+                {DOCUMENT_TYPES.map(({ value, label }) => (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    className='h-11 px-2.5 text-xs sm:h-7'
+                  >
+                    {label}
+                  </TabsTrigger>
+                ))}
               </TabsList>
             </Tabs>
 

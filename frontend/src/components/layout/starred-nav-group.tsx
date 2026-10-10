@@ -3,15 +3,13 @@ import type { DocumentItem, ProjectItem } from '@/types/dokudocs'
 import {
   ChevronRight,
   Copy,
-  Database,
   ExternalLink,
-  FileText,
   Folder,
-  GitFork,
   Star,
   StarOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { getDocumentType } from '@/lib/document-types'
 import { Badge } from '@/components/ui/badge'
 import {
   Collapsible,
@@ -84,18 +82,6 @@ export function StarredNavGroup() {
       ).getTime(),
     })),
   ].sort((a, b) => b.timestamp - a.timestamp)
-
-  const getDocIcon = (type: string) => {
-    switch (type) {
-      case 'dbdiagram':
-        return Database
-      case 'mermaid':
-        return GitFork
-      case 'markdown':
-      default:
-        return FileText
-    }
-  }
 
   if (state === 'collapsed' && !isMobile) {
     return (
@@ -217,7 +203,7 @@ export function StarredNavGroup() {
                       }
 
                       const doc = entry.data
-                      const Icon = getDocIcon(doc.type)
+                      const Icon = getDocumentType(doc.type).icon
                       return (
                         <ContextMenu key={`star-doc-collapsed-${doc.id}`}>
                           <ContextMenuTrigger asChild>
@@ -415,7 +401,7 @@ export function StarredNavGroup() {
                       }
 
                       const doc = entry.data
-                      const Icon = getDocIcon(doc.type)
+                      const Icon = getDocumentType(doc.type).icon
                       const isActive = href.includes(doc.id)
                       return (
                         <SidebarMenuSubItem key={`star-doc-${doc.id}`}>

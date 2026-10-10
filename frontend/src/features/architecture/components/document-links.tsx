@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { DocType, DocumentItem } from '@/types/dokudocs'
 import { Lock, X } from 'lucide-react'
+import { DOCUMENT_TYPES } from '@/lib/document-types'
 import { createDocument, listDocuments } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,7 +22,9 @@ import {
 } from '@/components/ui/popover'
 import { DocTypeBadge } from '@/features/docs/components/doc-type-badge'
 
-const LINKABLE: DocType[] = ['markdown', 'dbdiagram', 'mermaid']
+const LINKABLE_TYPES = DOCUMENT_TYPES.filter(
+  ({ value }) => value !== 'architecture'
+)
 
 export function useLinkableDocuments(workspaceID: string) {
   return useQuery({
@@ -197,7 +200,9 @@ function LinkExisting({
 }) {
   const [open, setOpen] = useState(false)
   const choices = documents.filter(
-    (d) => LINKABLE.includes(d.type) && !links.includes(d.id)
+    (d) =>
+      LINKABLE_TYPES.some(({ value }) => value === d.type) &&
+      !links.includes(d.id)
   )
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -246,9 +251,7 @@ function CreateAndLink({
 }) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
-  const [type, setType] = useState<'markdown' | 'dbdiagram' | 'mermaid'>(
-    'markdown'
-  )
+  const [type, setType] = useState<Exclude<DocType, 'architecture'>>('markdown')
   const queryClient = useQueryClient()
   const create = useMutation({
     mutationFn: () =>
@@ -321,9 +324,11 @@ function CreateAndLink({
             onChange={(e) => setType(e.target.value as typeof type)}
             className='h-8 rounded-[4px] border border-input bg-card px-2 text-[12.5px] focus-visible:outline-2 focus-visible:outline-signal'
           >
-            <option value='markdown'>Markdown</option>
-            <option value='dbdiagram'>DBML</option>
-            <option value='mermaid'>Mermaid</option>
+            {LINKABLE_TYPES.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
           <p className='text-xs text-muted-foreground'>
             It is created in this document’s project and linked here.

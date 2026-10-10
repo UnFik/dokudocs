@@ -1,4 +1,6 @@
-export type DocType = 'markdown' | 'dbdiagram' | 'mermaid' | 'architecture'
+import type { DocType } from '@/lib/document-types'
+
+export type { DocType } from '@/lib/document-types'
 
 export type DocFilterTab = 'all' | 'created_by_me' | 'shared' | 'starred'
 
