@@ -141,3 +141,26 @@ func TestLoadConfigExportsTracesOnlyWhenAnEndpointIsSet(t *testing.T) {
 		t.Fatalf("OTLPEndpoint = %q, %v", cfg.OTLPEndpoint, err)
 	}
 }
+
+func TestLoadConfigRateLimitDefaultsAndOverrides(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RateLimitCredentialsPerMin != 10 || cfg.RateLimitGoogleStartPerMin != 20 || cfg.RateLimitGoogleCallbackPerMin != 30 || cfg.TrustProxyHeaders {
+		t.Fatalf("unexpected defaults: %+v", cfg)
+	}
+
+	t.Setenv("RATE_LIMIT_LOGIN_PER_MIN", "3")
+	t.Setenv("RATE_LIMIT_GOOGLE_START_PER_MIN", "0")
+	t.Setenv("TRUST_PROXY_HEADERS", "true")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RateLimitCredentialsPerMin != 3 || cfg.RateLimitGoogleStartPerMin != 0 || !cfg.TrustProxyHeaders {
+		t.Fatalf("overrides not applied: %+v", cfg)
+	}
+}
