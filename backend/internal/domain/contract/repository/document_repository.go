@@ -57,6 +57,9 @@ type CommentRepository interface {
 	CommentDocumentType(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) (string, error)
 	// ResolveMentions looks up the people a comment names. Someone who is not a
 	// member of the workspace is left out of the result.
+	// ListMentionCandidates is every member of the workspace with whether they
+	// can read the document, for an actor who may comment on it.
+	ListMentionCandidates(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.MentionTarget, error)
 	ResolveMentions(ctx context.Context, workspaceID, documentID uuid.UUID, userIDs []uuid.UUID) ([]model.MentionTarget, error)
 	ListComments(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.CommentThread, error)
 	CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error

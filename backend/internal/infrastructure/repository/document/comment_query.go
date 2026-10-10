@@ -153,34 +153,84 @@ func (r *Repository) CommentDocumentType(ctx context.Context, workspaceID, docum
 	return docType, err
 }
 
+// maxMentionCandidates bounds the list of whom a comment offers to name.
+const maxMentionCandidates = 200
+
 func (r *Repository) ResolveMentions(ctx context.Context, workspaceID, documentID uuid.UUID, userIDs []uuid.UUID) ([]model.MentionTarget, error) {
 	if r.tx == nil {
 		return nil, errors.New("commenting requires a transaction-capable database")
 	}
 	var targets []model.MentionTarget
-	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
-		seen := make(map[uuid.UUID]bool, len(userIDs))
-		for _, userID := range userIDs {
-			if seen[userID] {
-				continue
-			}
-			seen[userID] = true
-			doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, userID, false, nil)
-			if errors.Is(err, constant.ErrForbidden) {
-				continue // not a member of the workspace
-			}
-			if err != nil {
-				return err
-			}
-			target := model.MentionTarget{UserID: userID, CanRead: policy.CanReadDocument(doc, access)}
-			if err := tx.QueryRowContext(ctx, `SELECT full_name, email FROM users WHERE id = $1`, userID).Scan(&target.Name, &target.Email); err != nil {
-				return err
-			}
-			targets = append(targets, target)
-		}
-		return nil
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) (err error) {
+		targets, err = mentionTargets(ctx, tx, workspaceID, documentID, userIDs)
+		return err
 	})
 	return targets, err
+}
+
+func (r *Repository) ListMentionCandidates(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.MentionTarget, error) {
+	if r.tx == nil {
+		return nil, errors.New("commenting requires a transaction-capable database")
+	}
+	var targets []model.MentionTarget
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
+		if err != nil {
+			return err
+		}
+		if err := canDiscuss(doc, access); err != nil {
+			return err
+		}
+		rows, err := tx.QueryContext(ctx, `
+			SELECT user_id FROM workspace_members WHERE workspace_id = $1
+			ORDER BY user_id LIMIT $2
+		`, workspaceID, maxMentionCandidates)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		var ids []uuid.UUID
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		rows.Close()
+		targets, err = mentionTargets(ctx, tx, workspaceID, documentID, ids)
+		return err
+	})
+	return targets, err
+}
+
+// mentionTargets says, for each user, who they are and whether they can read the
+// document. A user who is not in the workspace is left out.
+func mentionTargets(ctx context.Context, tx database.Queryer, workspaceID, documentID uuid.UUID, userIDs []uuid.UUID) ([]model.MentionTarget, error) {
+	var targets []model.MentionTarget
+	seen := make(map[uuid.UUID]bool, len(userIDs))
+	for _, userID := range userIDs {
+		if seen[userID] {
+			continue
+		}
+		seen[userID] = true
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, userID, false, nil)
+		if errors.Is(err, constant.ErrForbidden) {
+			continue // not a member of the workspace
+		}
+		if err != nil {
+			return nil, err
+		}
+		target := model.MentionTarget{UserID: userID, CanRead: policy.CanReadDocument(doc, access)}
+		if err := tx.QueryRowContext(ctx, `SELECT full_name, email FROM users WHERE id = $1`, userID).Scan(&target.Name, &target.Email); err != nil {
+			return nil, err
+		}
+		targets = append(targets, target)
+	}
+	return targets, nil
 }
 
 func (r *Repository) CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error {
