@@ -225,3 +225,32 @@ func TestLoadConfigReadsGoogleEndpointOverrides(t *testing.T) {
 		t.Fatalf("overrides not read: %+v", cfg)
 	}
 }
+
+func TestPushNeedsEveryFirebaseSetting(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+
+	cfg, err := LoadConfig()
+	if err != nil || cfg.PushConfigured() {
+		t.Fatalf("with nothing set: configured = %v, err = %v, want push off and no error", cfg.PushConfigured(), err)
+	}
+
+	t.Setenv("FIREBASE_CREDENTIALS_JSON", `{"project_id":"p"}`)
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("LoadConfig() accepted a service account without the web settings")
+	}
+
+	t.Setenv("FIREBASE_WEB_API_KEY", "key")
+	t.Setenv("FIREBASE_WEB_APP_ID", "app")
+	t.Setenv("FIREBASE_WEB_SENDER_ID", "123")
+	t.Setenv("FIREBASE_WEB_VAPID_KEY", "vapid")
+	cfg, err = LoadConfig()
+	if err != nil || !cfg.PushConfigured() {
+		t.Fatalf("with everything set: configured = %v, err = %v, want push on", cfg.PushConfigured(), err)
+	}
+
+	t.Setenv("FIREBASE_CREDENTIALS_JSON", "")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("LoadConfig() accepted the web settings without a service account")
+	}
+}

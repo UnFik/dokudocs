@@ -20,6 +20,8 @@ type Container struct {
 	Mailer mail.Mailer
 	// Push sends to a person's browsers; nil when push is not configured.
 	Push notification.PushSender
+	// PushProjectID is the Firebase project push is sent through; empty when off.
+	PushProjectID string
 	// IdentityProvider replaces the Google provider built from the config; tests set it.
 	IdentityProvider repository.IdentityProvider
 }
