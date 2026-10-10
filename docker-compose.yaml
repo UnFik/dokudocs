@@ -68,6 +68,11 @@ services:
       RAG_REQUEST_TIMEOUT: ${RAG_REQUEST_TIMEOUT:-120s}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-24h}
+      # The API publishes no port: nginx is the only way in and sets X-Real-IP.
+      TRUST_PROXY_HEADERS: "true"
+      RATE_LIMIT_LOGIN_PER_MIN: ${RATE_LIMIT_LOGIN_PER_MIN:-10}
+      RATE_LIMIT_GOOGLE_START_PER_MIN: ${RATE_LIMIT_GOOGLE_START_PER_MIN:-20}
+      RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN: ${RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN:-30}
       # Uploaded files live in their own volume, not in the bind-mounted source tree.
       ASSET_DIR: /var/lib/dokudocs/assets
       READ_TIMEOUT: ${READ_TIMEOUT:-5s}

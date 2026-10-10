@@ -35,13 +35,20 @@ type Config struct {
 	// room; empty skips those calls.
 	CollabServiceURL string
 	// AssetDir is where uploaded files are kept; MaxUploadBytes is the most one may hold.
-	AssetDir        string
-	MaxUploadBytes  int64
-	AccessTokenTTL  time.Duration
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
-	IdleTimeout     time.Duration
-	ShutdownTimeout time.Duration
+	AssetDir       string
+	MaxUploadBytes int64
+	AccessTokenTTL time.Duration
+	// Requests a minute one client may make; zero turns that limit off.
+	RateLimitCredentialsPerMin    int
+	RateLimitGoogleStartPerMin    int
+	RateLimitGoogleCallbackPerMin int
+	// TrustProxyHeaders reads the client address from X-Real-IP; set it only
+	// when a proxy that overwrites the header is the sole way to reach the API.
+	TrustProxyHeaders bool
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
+	IdleTimeout       time.Duration
+	ShutdownTimeout   time.Duration
 }
 
 func LoadConfig() (Config, error) {
@@ -76,10 +83,15 @@ func LoadConfig() (Config, error) {
 		AssetDir:            env.GetString("ASSET_DIR", "./data/assets"),
 		MaxUploadBytes:      int64(env.GetInt("MAX_UPLOAD_BYTES", 25<<20)),
 		AccessTokenTTL:      env.GetDuration("ACCESS_TOKEN_TTL", 24*time.Hour),
-		ReadTimeout:         env.GetDuration("READ_TIMEOUT", 5*time.Second),
-		WriteTimeout:        env.GetDuration("WRITE_TIMEOUT", 10*time.Second),
-		IdleTimeout:         env.GetDuration("IDLE_TIMEOUT", 60*time.Second),
-		ShutdownTimeout:     env.GetDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
+
+		RateLimitCredentialsPerMin:    env.GetInt("RATE_LIMIT_LOGIN_PER_MIN", 10),
+		RateLimitGoogleStartPerMin:    env.GetInt("RATE_LIMIT_GOOGLE_START_PER_MIN", 20),
+		RateLimitGoogleCallbackPerMin: env.GetInt("RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN", 30),
+		TrustProxyHeaders:             env.GetBool("TRUST_PROXY_HEADERS", false),
+		ReadTimeout:                   env.GetDuration("READ_TIMEOUT", 5*time.Second),
+		WriteTimeout:                  env.GetDuration("WRITE_TIMEOUT", 10*time.Second),
+		IdleTimeout:                   env.GetDuration("IDLE_TIMEOUT", 60*time.Second),
+		ShutdownTimeout:               env.GetDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
 	}
 
 	if cfg.DBMaxOpenConns < 1 {
