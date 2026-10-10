@@ -11,6 +11,13 @@ export class ApiError extends Error {
   }
 }
 
+const emailNotVerifiedHandlers = new Set<() => void>()
+/** Runs the handler when the server refuses a request because the email is not verified. */
+export function onEmailNotVerified(handler: () => void) {
+  emailNotVerifiedHandlers.add(handler)
+  return () => void emailNotVerifiedHandlers.delete(handler)
+}
+
 type ApiOptions = RequestInit & { authenticated?: boolean }
 
 export async function apiFetch<T = unknown>(
@@ -65,6 +72,14 @@ export async function apiFetch<T = unknown>(
       typeof data.title === 'string'
         ? data.title
         : response.statusText || 'Request failed'
+    if (
+      response.status === 403 &&
+      data &&
+      typeof data === 'object' &&
+      'code' in data &&
+      data.code === 'email_not_verified'
+    )
+      emailNotVerifiedHandlers.forEach((handler) => handler())
     throw new ApiError(response.status, title, data)
   }
   return (

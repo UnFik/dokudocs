@@ -5,6 +5,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { startAuthSync, useAuthStore } from '@/stores/auth-store'
 import { useCommentStore } from '@/stores/comment-store'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { onEmailNotVerified } from '@/lib/api-client'
 import { queryClient } from '@/lib/query-client'
 import { DirectionProvider } from './context/direction-provider'
 import { FontProvider } from './context/font-provider'
@@ -37,6 +38,10 @@ useAuthStore.subscribe((state, previous) => {
     queryClient.clear()
     void router.invalidate()
   }
+})
+onEmailNotVerified(() => {
+  if (router.state.location.pathname !== '/verify-email')
+    void router.navigate({ to: '/verify-email' })
 })
 startAuthSync()
 window.addEventListener('online', () => void router.invalidate())

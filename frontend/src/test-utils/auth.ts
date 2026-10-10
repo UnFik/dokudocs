@@ -8,6 +8,7 @@ export function testSession(
     email: 'user@example.com',
     role: ['member'],
     exp,
+    emailVerified: true,
   }
   const accessToken = `${btoa(JSON.stringify({ alg: 'HS256' }))}.${btoa(JSON.stringify({ sub: id, exp }))}.signature`
   return { user, accessToken }

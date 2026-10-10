@@ -1,7 +1,7 @@
 import { jsonResponse, testSession } from '@/test-utils/auth'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '@/stores/auth-store'
-import { apiFetch, ApiError } from './api-client'
+import { apiFetch, ApiError, onEmailNotVerified } from './api-client'
 
 beforeEach(() => useAuthStore.getState().auth.reset())
 afterEach(() => {
@@ -59,5 +59,46 @@ describe('same-origin API session boundary', () => {
     finish(jsonResponse({ title: 'Unauthorized' }, 401))
     await expect(request).rejects.toThrow('Session changed')
     expect(useAuthStore.getState().auth.user?.id).toBe(next.user.id)
+  })
+})
+
+describe('email verification gate', () => {
+  it('tells the app once when the server says the email is not verified', async () => {
+    useAuthStore.getState().auth.setSession(testSession())
+    const handler = vi.fn()
+    const stop = onEmailNotVerified(handler)
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            {
+              title: 'Verify your email to continue',
+              code: 'email_not_verified',
+            },
+            403
+          )
+        )
+    )
+    await expect(apiFetch('/api/v1/projects')).rejects.toMatchObject({
+      status: 403,
+    })
+    expect(handler).toHaveBeenCalledOnce()
+    stop()
+  })
+  it('leaves other 403 answers alone and keeps the session', async () => {
+    const session = testSession()
+    useAuthStore.getState().auth.setSession(session)
+    const handler = vi.fn()
+    const stop = onEmailNotVerified(handler)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ title: 'Forbidden' }, 403))
+    )
+    await expect(apiFetch('/api/v1/projects')).rejects.toThrow(ApiError)
+    expect(handler).not.toHaveBeenCalled()
+    expect(useAuthStore.getState().auth.user).toEqual(session.user)
+    stop()
   })
 })
