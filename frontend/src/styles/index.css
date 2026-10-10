@@ -117,6 +117,18 @@
   animation: jiggle-alt 0.26s ease-in-out infinite;
 }
 
+/* The words a comment thread is about, in a DBML or Mermaid source: a quiet tone
+   and an underline, so it reads in both themes without the accent. */
+.source-comment-mark {
+  background-color: color-mix(in oklab, var(--foreground) 10%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--foreground) 45%, transparent);
+}
+
+.source-comment-focus {
+  background-color: color-mix(in oklab, var(--foreground) 20%, transparent);
+  border-bottom: 2px solid var(--foreground);
+}
+
 .monaco-error-lens-error-line {
   background-color: rgba(239, 68, 68, 0.08) !important;
 }

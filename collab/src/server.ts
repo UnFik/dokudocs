@@ -66,9 +66,8 @@ const accessMessage = (context: CollabContext, access: Authorized) =>
     type: 'access',
     canEdit: access.canEdit,
     canSuggest: context.documentType === 'markdown' ? access.canSuggest : false,
-    // Someone who may suggest on Markdown may comment; on a canvas that is all they may do.
-    // A source has no comments in this release.
-    canComment: isSourceType(context.documentType) ? false : access.canEdit || access.canSuggest,
+    // Someone who may suggest on Markdown may comment; on a canvas or a source that is all they may do.
+    canComment: access.canEdit || access.canSuggest,
   })
 
 function authentication(

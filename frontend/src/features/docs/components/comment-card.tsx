@@ -12,6 +12,7 @@ import {
   replyToDocumentComment,
   setDocumentCommentResolved,
   type CommentAnchor,
+  type SourceCommentAnchor,
   type CommentThread,
 } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
@@ -136,7 +137,7 @@ export function NewCommentCard({
   workspaceID: string
   documentID: string
   selectedText: string
-  anchor: CommentAnchor
+  anchor: CommentAnchor | SourceCommentAnchor
   onDone: () => void
 }) {
   const queryClient = useQueryClient()

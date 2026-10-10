@@ -191,6 +191,42 @@ describe('Dokudocs domain API adapter', () => {
     )
   })
 
+  it('reads where a comment sits in a DBML or Mermaid source', async () => {
+    const thread = {
+      id: '11111111-1111-4111-8111-111111111111',
+      documentId,
+      authorId: '22222222-2222-4222-8222-222222222222',
+      authorName: 'Dewi',
+      selectedText: 'users',
+      content: 'rename this table?',
+      createdAt: '2026-10-10T00:00:00Z',
+      replies: [],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          { ...thread, anchor: { kind: 'source', start: 'AA==', end: 'AQ==' } },
+          {
+            ...thread,
+            id: '33333333-3333-4333-8333-333333333333',
+            anchor: { kind: 'source', start: 'AA==' },
+          },
+        ])
+      )
+    )
+
+    const threads = await listDocumentComments(workspaceId, documentId)
+
+    expect(threads[0]?.sourceAnchor).toEqual({
+      kind: 'source',
+      start: 'AA==',
+      end: 'AQ==',
+    })
+    expect(threads[0]?.anchor).toBeNull()
+    expect(threads[1]?.sourceAnchor).toBeUndefined()
+  })
+
   it('starts a comment thread with the client id and resolves it', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 201 }))
     vi.stubGlobal('fetch', fetch)
