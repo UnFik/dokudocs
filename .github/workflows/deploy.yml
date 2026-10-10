@@ -58,15 +58,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      # Tagged by its sources: an image already pushed for the same sources is kept.
+      - name: Tag
+        id: tag
+        env:
+          NAME: ${{ matrix.name }}
+        run: |
+          tag=$(scripts/deploy/image-tags.sh | sed -n "s/^$NAME=//p")
+          echo "image=$IMAGE-$NAME:$tag" >>"$GITHUB_OUTPUT"
+          if docker buildx imagetools inspect "$IMAGE-$NAME:$tag" >/dev/null 2>&1; then
+            echo "Already pushed: $IMAGE-$NAME:$tag"
+            echo "exists=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.tag.outputs.exists != 'true'
+        uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           target: ${{ matrix.target }}
           push: true
-          tags: |
-            ${{ env.IMAGE }}-${{ matrix.name }}:${{ github.sha }}
-            ${{ env.IMAGE }}-${{ matrix.name }}:main
+          tags: ${{ steps.tag.outputs.image }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 

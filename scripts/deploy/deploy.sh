@@ -4,7 +4,12 @@
 set -euo pipefail
 
 sha=$1
-export DOKUDOCS_IMAGE=ghcr.io/unfik/dokudocs DOKUDOCS_TAG=$sha
+export DOKUDOCS_IMAGE=ghcr.io/unfik/dokudocs
+# One tag per image, from its sources: an image whose sources did not change
+# keeps its tag, and Compose leaves its containers running.
+while IFS='=' read -r name tag; do
+  export "DOKUDOCS_${name^^}_TAG=$tag"
+done < <(scripts/deploy/image-tags.sh "$sha")
 backups=/var/backups/dokudocs
 keep=10
 

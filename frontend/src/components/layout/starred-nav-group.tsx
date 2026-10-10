@@ -43,6 +43,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
+import { useToggleDocumentStar } from '@/features/docs/hooks/use-toggle-document-star'
 import { useToggleProjectStar } from '@/features/projects/hooks/use-toggle-project-star'
 
 type StarredEntry =
@@ -53,10 +54,9 @@ export function StarredNavGroup() {
   const navigate = useNavigate()
   const { state, isMobile, setOpenMobile } = useSidebar()
   const href = useLocation({ select: (location) => location.href })
-  const { activeOrgId, projects } = useDokudocs()
-  const documents = useDokudocsStore((s) => s.documents)
+  const { activeOrgId, projects, documents } = useDokudocs()
   const starMutation = useToggleProjectStar()
-  const toggleStarDocument = useDokudocsStore((s) => s.toggleStarDocument)
+  const docStarMutation = useToggleDocumentStar()
 
   const starredProjects = (projects || []).filter(
     (p) => p.isStarred && p.orgId === activeOrgId
@@ -246,8 +246,8 @@ export function StarredNavGroup() {
                             <ContextMenuSeparator />
                             <ContextMenuItem
                               onClick={() => {
-                                toggleStarDocument(doc.id)
-                                toast.success(`Unstarred "${doc.title}"`)
+                                if (!docStarMutation.isPending)
+                                  docStarMutation.mutate(doc)
                               }}
                             >
                               <StarOff className='mr-2 size-3.5 text-muted-foreground' />
@@ -443,8 +443,8 @@ export function StarredNavGroup() {
                               <ContextMenuSeparator />
                               <ContextMenuItem
                                 onClick={() => {
-                                  toggleStarDocument(doc.id)
-                                  toast.success(`Unstarred "${doc.title}"`)
+                                  if (!docStarMutation.isPending)
+                                    docStarMutation.mutate(doc)
                                 }}
                               >
                                 <StarOff className='mr-2 size-3.5 text-muted-foreground' />
