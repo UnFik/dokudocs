@@ -10,6 +10,8 @@ import (
 	usecasecontract "backend/internal/domain/contract/usecase"
 	"backend/internal/infrastructure/database"
 	emailverificationrepo "backend/internal/infrastructure/repository/emailverification"
+	identityrepo "backend/internal/infrastructure/repository/identity"
+	oauthtransactionrepo "backend/internal/infrastructure/repository/oauthtransaction"
 	userrepo "backend/internal/infrastructure/repository/user"
 )
 
@@ -22,8 +24,20 @@ type useCase struct {
 	tokens  *appjwt.Manager
 
 	verifications func(database.Queryer) repocontract.EmailVerificationRepository
+	transactions  func(database.Queryer) repocontract.OAuthTransactionRepository
+	identities    func(database.Queryer) repocontract.IdentityRepository
+	providers     map[string]repocontract.IdentityProvider
 	mailer        mail.Mailer
 	appURL        string
+}
+
+// WithIdentityProvider lets Users sign in, and link accounts, with a provider.
+func WithIdentityProvider(name string, provider repocontract.IdentityProvider) Option {
+	return func(u *useCase) {
+		if provider != nil {
+			u.providers[name] = provider
+		}
+	}
 }
 
 // Option configures what the use case reaches beyond the database.
@@ -52,6 +66,13 @@ func NewUseCaseWithFactory(db database.DB, jwtSecret string, accessTokenTTL time
 		verifications: func(q database.Queryer) repocontract.EmailVerificationRepository {
 			return emailverificationrepo.NewRepository(q)
 		},
+		transactions: func(q database.Queryer) repocontract.OAuthTransactionRepository {
+			return oauthtransactionrepo.NewRepository(q)
+		},
+		identities: func(q database.Queryer) repocontract.IdentityRepository {
+			return identityrepo.NewRepository(q)
+		},
+		providers: map[string]repocontract.IdentityProvider{},
 	}
 	for _, option := range options {
 		option(u)

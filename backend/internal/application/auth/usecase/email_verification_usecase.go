@@ -37,7 +37,7 @@ func (u *useCase) SendVerificationEmail(ctx context.Context, userID uuid.UUID) e
 	if err != nil {
 		return err
 	}
-	hash := hashVerificationToken(token)
+	hash := hashSecret(token)
 	err = u.db.WithTransaction(ctx, func(tx database.Queryer) error {
 		return u.verifications(tx).Issue(ctx, userID, hash, verificationTTL, verificationCooldown)
 	})
@@ -60,7 +60,7 @@ func (u *useCase) SendVerificationEmail(ctx context.Context, userID uuid.UUID) e
 }
 
 func (u *useCase) VerifyEmail(ctx context.Context, token string) (data dto.LoginResponse, err error) {
-	hash := hashVerificationToken(token)
+	hash := hashSecret(token)
 	var userID uuid.UUID
 	err = u.db.WithTransaction(ctx, func(tx database.Queryer) error {
 		id, err := u.verifications(tx).Consume(ctx, hash)
@@ -101,7 +101,7 @@ func newVerificationToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-func hashVerificationToken(token string) string {
+func hashSecret(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
