@@ -7,6 +7,7 @@ var (
 	ErrInvalidToken          = errors.New("invalid bearer token")
 	ErrMissingCredential     = errors.New("email and password are required")
 	ErrInvalidRegistration   = errors.New("invalid registration data")
+	ErrInvalidDisplayName    = errors.New("name must be 2 to 100 characters without [ ] ( ) @ or line breaks")
 	ErrMemberRoleNotFound    = errors.New("member role not found")
 	ErrUserNotFound          = errors.New("user not found")
 	ErrEmailAlreadyExists    = errors.New("email already registered")

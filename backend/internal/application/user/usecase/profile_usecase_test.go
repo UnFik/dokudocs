@@ -2,8 +2,10 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	"backend/constant"
 	"backend/internal/application/user/dto"
 	"backend/internal/application/user/usecase"
 	"backend/internal/domain/model"
@@ -37,5 +39,20 @@ func TestUserProfile(t *testing.T) {
 	})
 	if err != nil || updated.FullName != "New Name" {
 		t.Fatalf("unexpected updated profile: %#v, err: %v", updated, err)
+	}
+}
+
+func TestUpdateProfileRefusesANameThatCouldBreakAMention(t *testing.T) {
+	userID := uuid.New()
+	mock := &mockUserRepo{profile: model.UserProfile{ID: userID, FullName: "Old Name"}}
+	uc := usecase.NewUseCaseWithRepo(mock)
+	for _, name := range []string{"New [Name]", "New (Name)", "@new", "New\nName", "N", ""} {
+		_, err := uc.UpdateProfile(context.Background(), dto.UpdateProfileInput{UserID: userID, FullName: name})
+		if !errors.Is(err, constant.ErrInvalidDisplayName) {
+			t.Errorf("UpdateProfile(%q) = %v, want ErrInvalidDisplayName", name, err)
+		}
+	}
+	if mock.profile.FullName != "Old Name" {
+		t.Fatalf("a refused name was stored: %q", mock.profile.FullName)
 	}
 }

@@ -142,6 +142,18 @@ describe.each(['dbdiagram', 'mermaid'])('a %s room', (documentType) => {
     b.provider.destroy()
   })
 
+  it('lets an editor comment, and tells the others when comments change', async () => {
+    const editor = connect(port, room, 'tok-a')
+    const other = connect(port, room, 'tok-a')
+    await Promise.all([editor.synced, other.synced])
+    await waitFor(() => editor.statelessMessages.some((m: any) => m.type === 'access'))
+    expect(editor.statelessMessages.find((m: any) => m.type === 'access')).toMatchObject({ canEdit: true, canComment: true })
+    editor.provider.sendStateless(JSON.stringify({ type: 'comments_changed' }))
+    await waitFor(() => other.statelessMessages.some((m: any) => m.type === 'comments_changed'))
+    editor.provider.destroy()
+    other.provider.destroy()
+  })
+
   it('opens an empty document with empty text', async () => {
     backend.documents.set(document, { state: null, content: { source: '' } })
     const a = connect(port, room, 'tok-a')
@@ -151,9 +163,9 @@ describe.each(['dbdiagram', 'mermaid'])('a %s room', (documentType) => {
   })
 
   it.each([
-    ['viewer', { canEdit: false, canSuggest: false }],
-    ['commenter', { canEdit: false, canSuggest: true }],
-  ])('keeps a %s from writing: a source has no suggest mode or comments', async (_role, access) => {
+    ['viewer', { canEdit: false, canSuggest: false }, false],
+    ['commenter', { canEdit: false, canSuggest: true }, true],
+  ])('keeps a %s from writing: a source has no suggest mode, and only a commenter may comment', async (_role, access, canComment) => {
     backend.grant('tok-c', 'user-c', { documentType, ...access })
     const editor = connect(port, room, 'tok-a')
     const reader = connect(port, room, 'tok-c')
@@ -163,7 +175,7 @@ describe.each(['dbdiagram', 'mermaid'])('a %s room', (documentType) => {
       type: 'access',
       canEdit: false,
       canSuggest: false,
-      canComment: false,
+      canComment,
     })
     reader.doc.getText('source').insert(0, 'vandal ')
     editor.doc.getText('source').insert(0, 'real')

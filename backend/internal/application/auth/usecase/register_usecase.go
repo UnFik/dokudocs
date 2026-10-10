@@ -13,6 +13,7 @@ import (
 	"backend/internal/application/auth/dto"
 	"backend/internal/application/utils"
 	"backend/internal/domain/model"
+	"backend/internal/domain/policy"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
@@ -22,7 +23,7 @@ import (
 func (u *useCase) Register(ctx context.Context, req dto.RegisterRequest) (data dto.LoginResponse, err error) {
 	email := strings.TrimSpace(strings.ToLower(req.Email))
 	fullName := strings.TrimSpace(req.FullName)
-	if !validEmail(email) || utf8.RuneCountInString(fullName) < 2 || utf8.RuneCountInString(fullName) > 100 ||
+	if !validEmail(email) || !policy.ValidDisplayName(fullName) ||
 		utf8.RuneCountInString(req.Password) < 15 || len([]byte(req.Password)) > 72 {
 		return data, constant.ErrInvalidRegistration
 	}

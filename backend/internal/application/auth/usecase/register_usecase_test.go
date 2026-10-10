@@ -45,3 +45,17 @@ func TestRegisterEmailExists(t *testing.T) {
 		t.Fatalf("expected ErrEmailAlreadyExists, got %v", err)
 	}
 }
+
+func TestRegisterRefusesANameThatCouldBreakAMention(t *testing.T) {
+	uc := NewUseCaseWithFactory(fakeDB{}, "secret", time.Hour, func(database.Queryer) repocontract.UserRepository {
+		return fakeUserStore{err: sql.ErrNoRows}
+	})
+	for _, name := range []string{"Fikri [Admin]", "Fikri (HQ)", "@fikri", "Fikri\nIlham"} {
+		_, err := uc.Register(context.Background(), dto.RegisterRequest{
+			Email: "newuser@example.com", Password: "password123456789", FullName: name,
+		})
+		if !errors.Is(err, constant.ErrInvalidRegistration) {
+			t.Errorf("Register(%q) = %v, want ErrInvalidRegistration", name, err)
+		}
+	}
+}

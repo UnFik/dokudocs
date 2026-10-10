@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
+	"backend/constant"
 	"backend/internal/application/user/dto"
 	_ "backend/internal/domain/model"
 	"backend/internal/presentation/middleware"
@@ -47,6 +49,10 @@ func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		PhoneNumber: req.PhoneNumber,
 		Bio:         req.Bio,
 	})
+	if errors.Is(err, constant.ErrInvalidDisplayName) {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "failed to update profile")
 		return

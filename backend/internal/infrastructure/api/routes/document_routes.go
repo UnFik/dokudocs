@@ -9,6 +9,7 @@ import (
 	"backend/internal/config"
 	"backend/internal/infrastructure/assetstore"
 	"backend/internal/infrastructure/collabclient"
+	"backend/internal/infrastructure/notification"
 	docrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/infrastructure/runtime/container"
 	dochandler "backend/internal/presentation/document/handler"
@@ -31,7 +32,9 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
 	suggestionService := appdoc.NewSuggestionUseCase(bodyRepository)
 	suggestionHandler := dochandler.NewSuggestionHandler(suggestionService)
 	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel))
-	commentHandler := dochandler.NewCommentHandler(appdoc.NewCommentUseCase(bodyRepository))
+	commentUseCase := appdoc.NewCommentUseCase(bodyRepository).
+		WithDeliverer(notification.NewMentionDeliverer(c.Mailer, c.Push, cfg.PublicAppURL))
+	commentHandler := dochandler.NewCommentHandler(commentUseCase)
 
 	assetHandler := dochandler.NewAssetHandler(newAssetService(c, cfg), cfg.MaxUploadBytes)
 
@@ -50,6 +53,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
 	docGroup.Post("/{id}/suggestions/{suggestionID}/resolve", suggestionHandler.Resolve)
 	docGroup.Post("/{id}/suggestions/{suggestionID}/reopen", suggestionHandler.Reopen)
 	docGroup.Get("/{id}/comments", commentHandler.List)
+	docGroup.Get("/{id}/mentionable", commentHandler.Mentionable)
 	docGroup.Post("/{id}/comments", commentHandler.Create)
 	docGroup.Patch("/{id}/comments/{threadID}", commentHandler.Edit)
 	docGroup.Delete("/{id}/comments/{threadID}", commentHandler.Delete)

@@ -36,12 +36,36 @@ export async function readEditorPrefs(signal?: AbortSignal) {
 let writing: Promise<unknown> = Promise.resolve()
 
 export function writeEditorPref(key: string, value: unknown) {
-  const write = writing.then(() => sendEditorPref(key, value))
+  return queueWrite('editorPrefs', key, value)
+}
+
+/** What a person chose for notifications: in_app, email and push, each on unless set to false. */
+export async function readNotificationPrefs(signal?: AbortSignal) {
+  const settings = settingsSchema.parse(
+    await apiFetch<unknown>('/api/v1/users/me/settings', { signal })
+  )
+  return parseObject(settings.notificationPrefs)
+}
+
+export function writeNotificationPref(key: string, value: unknown) {
+  return queueWrite('notificationPrefs', key, value)
+}
+
+function queueWrite(
+  blob: 'editorPrefs' | 'notificationPrefs',
+  key: string,
+  value: unknown
+) {
+  const write = writing.then(() => sendPref(blob, key, value))
   writing = write.catch(() => undefined)
   return write
 }
 
-async function sendEditorPref(key: string, value: unknown) {
+async function sendPref(
+  blob: 'editorPrefs' | 'notificationPrefs',
+  key: string,
+  value: unknown
+) {
   const settings = settingsSchema.parse(
     await apiFetch<unknown>('/api/v1/users/me/settings')
   )
@@ -52,8 +76,14 @@ async function sendEditorPref(key: string, value: unknown) {
       fontFamily: settings.fontFamily,
       direction: settings.direction,
       language: settings.language,
-      notificationPrefs: parseObject(settings.notificationPrefs),
-      editorPrefs: { ...parseObject(settings.editorPrefs), [key]: value },
+      notificationPrefs:
+        blob === 'notificationPrefs'
+          ? { ...parseObject(settings.notificationPrefs), [key]: value }
+          : parseObject(settings.notificationPrefs),
+      editorPrefs:
+        blob === 'editorPrefs'
+          ? { ...parseObject(settings.editorPrefs), [key]: value }
+          : parseObject(settings.editorPrefs),
     }),
   })
 }
