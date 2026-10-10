@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useToggleDocumentStar } from '../hooks/use-toggle-document-star'
 import { DocThumbnailPreview } from './doc-thumbnail-preview'
 import { DocTypeBadge } from './doc-type-badge'
 import { MoveDocDialog } from './move-doc-dialog'
@@ -61,10 +62,10 @@ export function DocCard({ document }: DocCardProps) {
     updateDocument,
     recordDocumentView,
     moveToTrash,
-    toggleStarDocument,
     duplicateDocument,
     moveDocumentToProject,
   } = useDokudocsStore()
+  const starMutation = useToggleDocumentStar()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [moveDialogOpen, setMoveDialogOpen] = useState(false)
@@ -189,8 +190,13 @@ export function DocCard({ document }: DocCardProps) {
                 type='button'
                 onClick={(e) => {
                   e.stopPropagation()
-                  toggleStarDocument(document.id)
+                  starMutation.mutate(document)
                 }}
+                title={document.isStarred ? 'Unstar Document' : 'Star Document'}
+                aria-label={
+                  document.isStarred ? 'Unstar Document' : 'Star Document'
+                }
+                aria-pressed={document.isStarred}
                 className='absolute top-2.5 right-2.5 flex size-7 items-center justify-center rounded-md bg-background/80 text-muted-foreground transition-transform hover:scale-110 hover:text-foreground'
               >
                 <Star
@@ -477,7 +483,7 @@ export function DocCard({ document }: DocCardProps) {
             <span>Open in New Tab</span>
           </ContextMenuItem>
 
-          <ContextMenuItem onClick={() => toggleStarDocument(document.id)}>
+          <ContextMenuItem onClick={() => starMutation.mutate(document)}>
             <Star
               className={`mr-2 size-3.5 ${
                 document.isStarred ? 'fill-foreground text-foreground' : ''
