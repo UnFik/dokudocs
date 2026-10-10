@@ -21,7 +21,7 @@ type fixtureCase struct {
 // The same file drives the TypeScript parser in the frontend, so the two agree.
 func loadFixture(t *testing.T) []fixtureCase {
 	t.Helper()
-	raw, err := os.ReadFile("../../../../fixtures/comment-mentions.json")
+	raw, err := os.ReadFile("../../../../frontend/src/lib/comment-mentions.fixture.json")
 	if err != nil {
 		t.Fatal(err)
 	}

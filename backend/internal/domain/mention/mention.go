@@ -1,6 +1,6 @@
 // Package mention reads and writes the token a comment keeps for a person it
 // names: @[Name](user:<id>). The same grammar is in the frontend, and both are
-// held to fixtures/comment-mentions.json.
+// held to frontend/src/lib/comment-mentions.fixture.json.
 package mention
 
 import (
