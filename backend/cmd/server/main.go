@@ -9,6 +9,7 @@ import (
 	"backend/internal/infrastructure/api"
 	"backend/internal/infrastructure/api/routes"
 	"backend/internal/infrastructure/logger"
+	"backend/internal/infrastructure/mail"
 	"backend/internal/infrastructure/openai"
 	"backend/internal/infrastructure/postgres"
 	documentrepo "backend/internal/infrastructure/repository/document"
@@ -45,6 +46,9 @@ func main() {
 	if cfg.OpenAIAPIKey != "" {
 		c.RAGAnswerModel = openai.NewAnswerModel(cfg.OpenAIAPIKey, cfg.RAGAnswerModel)
 		c.RAGEmbeddingModel = openai.NewEmbeddingModel(cfg.OpenAIAPIKey, cfg.RAGEmbeddingModel)
+	}
+	if cfg.MailerConfigured() {
+		c.Mailer = mail.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPassword, cfg.SMTPFrom)
 	}
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()

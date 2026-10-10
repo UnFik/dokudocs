@@ -6,10 +6,10 @@ import (
 )
 
 type Handler struct {
-	service  usecasecontract.AuthUseCase
+	service  usecasecontract.AccountUseCase
 	validate *validator.Validator
 }
 
-func NewHandler(service usecasecontract.AuthUseCase, validate *validator.Validator) *Handler {
+func NewHandler(service usecasecontract.AccountUseCase, validate *validator.Validator) *Handler {
 	return &Handler{service: service, validate: validate}
 }

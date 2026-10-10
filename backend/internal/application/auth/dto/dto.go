@@ -16,6 +16,8 @@ type ResponseUser struct {
 	Email     string
 	Role      []string
 	Exp       int64
+	// EmailVerified comes from the access token, not the database.
+	EmailVerified bool
 }
 
 type RegisterRequest struct {

@@ -164,3 +164,42 @@ func TestLoadConfigRateLimitDefaultsAndOverrides(t *testing.T) {
 		t.Fatalf("overrides not applied: %+v", cfg)
 	}
 }
+
+func TestLoadConfigReadsSMTPSettings(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SMTPHost != "" || cfg.SMTPPort != 587 || cfg.MailerConfigured() {
+		t.Fatalf("SMTP should be off by default on port 587: %+v", cfg)
+	}
+
+	t.Setenv("SMTP_HOST", "smtp.example.test")
+	t.Setenv("SMTP_PORT", "2525")
+	t.Setenv("SMTP_USER", "user")
+	t.Setenv("SMTP_PASSWORD", "pass")
+	t.Setenv("SMTP_FROM", "Dokudocs <no-reply@example.test>")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SMTPHost != "smtp.example.test" || cfg.SMTPPort != 2525 || cfg.SMTPUser != "user" || cfg.SMTPPassword != "pass" || !cfg.MailerConfigured() {
+		t.Fatalf("SMTP settings not read: %+v", cfg)
+	}
+}
+
+func TestEmailVerificationNeedsAMailServer(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("REQUIRE_EMAIL_VERIFICATION", "true")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("turning the gate on with no way to send email would lock every User out; want an error")
+	}
+	t.Setenv("SMTP_HOST", "smtp.example.test")
+	t.Setenv("SMTP_FROM", "no-reply@example.test")
+	if _, err := LoadConfig(); err != nil {
+		t.Fatalf("gate with SMTP configured: %v", err)
+	}
+}

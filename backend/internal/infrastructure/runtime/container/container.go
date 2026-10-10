@@ -2,6 +2,7 @@ package container
 
 import (
 	appchat "backend/internal/application/rag/usecase"
+	"backend/internal/domain/contract/mail"
 	"backend/internal/infrastructure/database"
 	"backend/internal/infrastructure/logger"
 	"backend/internal/infrastructure/validator"
@@ -13,6 +14,8 @@ type Container struct {
 	Validator         *validator.Validator
 	RAGAnswerModel    appchat.AnswerModel
 	RAGEmbeddingModel appchat.EmbeddingModel
+	// Mailer sends email; nil when SMTP is not configured.
+	Mailer mail.Mailer
 }
 
 func New(db database.DB, log *logger.Logger, validate *validator.Validator) *Container {
