@@ -23,17 +23,26 @@ type commentRepoFake struct{ err error }
 func (f commentRepoFake) ListComments(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) ([]model.CommentThread, error) {
 	return []model.CommentThread{}, f.err
 }
-func (f commentRepoFake) CreateComment(context.Context, uuid.UUID, model.CommentThread) error {
-	return f.err
+func (f commentRepoFake) ListMentionCandidates(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) ([]model.MentionTarget, error) {
+	return []model.MentionTarget{{UserID: uuid.MustParse("11111111-1111-4111-8111-111111111111"), Name: "Ana Bo", Email: "ana@example.com", CanRead: true}}, f.err
 }
-func (f commentRepoFake) CreateCommentReply(context.Context, uuid.UUID, uuid.UUID, model.CommentReply) error {
-	return f.err
+func (f commentRepoFake) ResolveMentions(context.Context, uuid.UUID, uuid.UUID, []uuid.UUID) ([]model.MentionTarget, error) {
+	return nil, f.err
 }
-func (f commentRepoFake) UpdateComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
-	return f.err
+func (f commentRepoFake) CommentDocumentType(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (string, error) {
+	return "markdown", f.err
 }
-func (f commentRepoFake) UpdateCommentReply(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
-	return f.err
+func (f commentRepoFake) CreateComment(context.Context, uuid.UUID, model.CommentThread) ([]model.MentionDelivery, error) {
+	return nil, f.err
+}
+func (f commentRepoFake) CreateCommentReply(context.Context, uuid.UUID, uuid.UUID, model.CommentReply) ([]model.MentionDelivery, error) {
+	return nil, f.err
+}
+func (f commentRepoFake) UpdateComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string, []uuid.UUID) ([]model.MentionDelivery, error) {
+	return nil, f.err
+}
+func (f commentRepoFake) UpdateCommentReply(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string, []uuid.UUID) ([]model.MentionDelivery, error) {
+	return nil, f.err
 }
 func (f commentRepoFake) DeleteComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) error {
 	return f.err
@@ -182,5 +191,21 @@ func TestCommentEditAndDeleteWakeTheRoomAndCheckTheText(t *testing.T) {
 	}
 	if len(notifier.documents) != before {
 		t.Fatal("a refused edit woke the room")
+	}
+}
+
+func TestMentionableListsMembersWithTheirAccess(t *testing.T) {
+	h := NewCommentHandler(appdoc.NewCommentUseCase(commentRepoFake{}))
+	rr := callComment(t, h, h.Mentionable, "", uuid.New(), uuid.New())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rr.Code, rr.Body.String())
+	}
+	want := `{"data":[{"userId":"11111111-1111-4111-8111-111111111111","name":"Ana Bo","email":"ana@example.com","canRead":true}]}`
+	if strings.TrimSpace(rr.Body.String()) != want {
+		t.Fatalf("body = %s, want %s", rr.Body.String(), want)
+	}
+	forbidden := NewCommentHandler(appdoc.NewCommentUseCase(commentRepoFake{err: constant.ErrForbidden}))
+	if rr := callComment(t, forbidden, forbidden.Mentionable, "", uuid.New(), uuid.New()); rr.Code != http.StatusForbidden {
+		t.Fatalf("status for a viewer = %d, want 403", rr.Code)
 	}
 }

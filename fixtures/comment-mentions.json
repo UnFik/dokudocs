@@ -1,0 +1,206 @@
+{
+  "cases": [
+    {
+      "name": "plain text",
+      "content": "hello world",
+      "visible": "hello world",
+      "mentions": []
+    },
+    {
+      "name": "one mention",
+      "content": "ping @[Fikri Ilham](user:11111111-1111-4111-8111-111111111111) please",
+      "visible": "ping @Fikri Ilham please",
+      "mentions": [
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "Fikri Ilham"
+        }
+      ]
+    },
+    {
+      "name": "two mentions side by side",
+      "content": "@[Ana Bo](user:11111111-1111-4111-8111-111111111111)@[Cy Di](user:22222222-2222-4222-8222-222222222222)",
+      "visible": "@Ana Bo@Cy Di",
+      "mentions": [
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "Ana Bo"
+        },
+        {
+          "userID": "22222222-2222-4222-8222-222222222222",
+          "label": "Cy Di"
+        }
+      ]
+    },
+    {
+      "name": "same person twice",
+      "content": "@[Ana Bo](user:11111111-1111-4111-8111-111111111111) and @[Ana Bo](user:11111111-1111-4111-8111-111111111111)",
+      "visible": "@Ana Bo and @Ana Bo",
+      "mentions": [
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "Ana Bo"
+        },
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "Ana Bo"
+        }
+      ]
+    },
+    {
+      "name": "a lone at sign",
+      "content": "mail me @ home",
+      "visible": "mail me @ home",
+      "mentions": []
+    },
+    {
+      "name": "an email address",
+      "content": "write to fikri@example.com now",
+      "visible": "write to fikri@example.com now",
+      "mentions": []
+    },
+    {
+      "name": "a handle with no token",
+      "content": "thanks @fikri",
+      "visible": "thanks @fikri",
+      "mentions": []
+    },
+    {
+      "name": "cut off after the colon",
+      "content": "@[Fikri Ilham](user:",
+      "visible": "@[Fikri Ilham](user:",
+      "mentions": []
+    },
+    {
+      "name": "cut off before the closing parenthesis",
+      "content": "@[Fikri Ilham](user:11111111-1111-4111-8111-111111111111",
+      "visible": "@[Fikri Ilham](user:11111111-1111-4111-8111-111111111111",
+      "mentions": []
+    },
+    {
+      "name": "label only",
+      "content": "@[Fikri Ilham]",
+      "visible": "@[Fikri Ilham]",
+      "mentions": []
+    },
+    {
+      "name": "bracket inside the label",
+      "content": "@[Fi]kri](user:11111111-1111-4111-8111-111111111111)",
+      "visible": "@[Fi]kri](user:11111111-1111-4111-8111-111111111111)",
+      "mentions": []
+    },
+    {
+      "name": "parenthesis inside the label",
+      "content": "@[Fi(kri](user:11111111-1111-4111-8111-111111111111)",
+      "visible": "@[Fi(kri](user:11111111-1111-4111-8111-111111111111)",
+      "mentions": []
+    },
+    {
+      "name": "token inside a label",
+      "content": "@[@[Ana Bo](user:11111111-1111-4111-8111-111111111111)](user:22222222-2222-4222-8222-222222222222)",
+      "visible": "@[@Ana Bo](user:22222222-2222-4222-8222-222222222222)",
+      "mentions": [
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "Ana Bo"
+        }
+      ]
+    },
+    {
+      "name": "not an id",
+      "content": "@[Ana Bo](user:not-a-uuid)",
+      "visible": "@[Ana Bo](user:not-a-uuid)",
+      "mentions": []
+    },
+    {
+      "name": "an id with capitals",
+      "content": "@[Ana Bo](user:AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA)",
+      "visible": "@Ana Bo",
+      "mentions": [
+        {
+          "userID": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "label": "Ana Bo"
+        }
+      ]
+    },
+    {
+      "name": "another kind of target",
+      "content": "@[Ana Bo](page:11111111-1111-4111-8111-111111111111)",
+      "visible": "@[Ana Bo](page:11111111-1111-4111-8111-111111111111)",
+      "mentions": []
+    },
+    {
+      "name": "empty label",
+      "content": "@[](user:11111111-1111-4111-8111-111111111111)",
+      "visible": "@[](user:11111111-1111-4111-8111-111111111111)",
+      "mentions": []
+    },
+    {
+      "name": "label with a line break",
+      "content": "@[Ana\nBo](user:11111111-1111-4111-8111-111111111111)",
+      "visible": "@[Ana\nBo](user:11111111-1111-4111-8111-111111111111)",
+      "mentions": []
+    },
+    {
+      "name": "non-latin label",
+      "content": "@[田中 太郎](user:11111111-1111-4111-8111-111111111111) ok",
+      "visible": "@田中 太郎 ok",
+      "mentions": [
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "田中 太郎"
+        }
+      ]
+    },
+    {
+      "name": "label of 100 characters",
+      "content": "@[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa](user:11111111-1111-4111-8111-111111111111)",
+      "visible": "@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mentions": [
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    {
+      "name": "label of 101 characters",
+      "content": "@[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa](user:11111111-1111-4111-8111-111111111111)",
+      "visible": "@[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa](user:11111111-1111-4111-8111-111111111111)",
+      "mentions": []
+    },
+    {
+      "name": "punctuation around",
+      "content": "(@[Ana Bo](user:11111111-1111-4111-8111-111111111111)),",
+      "visible": "(@Ana Bo),",
+      "mentions": [
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "Ana Bo"
+        }
+      ]
+    },
+    {
+      "name": "in code ticks",
+      "content": "`@[Ana Bo](user:11111111-1111-4111-8111-111111111111)`",
+      "visible": "`@Ana Bo`",
+      "mentions": [
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "Ana Bo"
+        }
+      ]
+    },
+    {
+      "name": "after a word",
+      "content": "x@[Ana Bo](user:11111111-1111-4111-8111-111111111111)",
+      "visible": "x@Ana Bo",
+      "mentions": [
+        {
+          "userID": "11111111-1111-4111-8111-111111111111",
+          "label": "Ana Bo"
+        }
+      ]
+    }
+  ]
+}

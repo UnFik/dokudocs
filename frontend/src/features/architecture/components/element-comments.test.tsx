@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { jsonResponse, testSession } from '@/test-utils/auth'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
+import { userEvent } from 'vitest/browser'
 import { useAuthStore } from '@/stores/auth-store'
 import { ElementComments, OrphanedComments } from './element-comments'
 
@@ -37,6 +38,15 @@ function stub(threads: unknown[]) {
     const path = new URL(String(input)).pathname
     if (path.endsWith('/comments') && (!init?.method || init.method === 'GET'))
       return jsonResponse(threads)
+    if (path.endsWith('/mentionable'))
+      return jsonResponse([
+        {
+          userId: '33333333-3333-4333-8333-333333333333',
+          name: 'Dewi Lestari',
+          email: 'dewi@example.com',
+          canRead: true,
+        },
+      ])
     if (init?.method === 'POST') return new Response(null, { status: 201 })
     throw new Error(`Unexpected request: ${path}`)
   })
@@ -91,6 +101,46 @@ describe('comments on a canvas element', () => {
       })
     })
     expect(onChanged).toHaveBeenCalled()
+  })
+
+  it('mentions a person from the workspace, and shows a stored mention as a name', async () => {
+    const fetch = stub([
+      thread(
+        '11111111-1111-4111-8111-111111111111',
+        'api',
+        'cc @[Dewi Lestari](user:33333333-3333-4333-8333-333333333333) please'
+      ),
+    ])
+    const screen = await render(
+      <QueryClientProvider client={client()}>
+        <ElementComments
+          workspaceID={workspaceID}
+          documentID={documentID}
+          elementID='api'
+          elementName='Backend Order'
+          canComment
+          onChanged={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+    await expect.element(screen.getByText('@Dewi Lestari')).toBeVisible()
+    const chip = screen.container.querySelector('[data-mention]')
+    expect(chip?.textContent).toBe('@Dewi Lestari')
+    expect(screen.container.textContent).not.toContain('user:')
+
+    await screen.getByLabelText('New comment on Backend Order').click()
+    await userEvent.keyboard('Thanks @dew')
+    await screen.getByRole('option', { name: /Dewi Lestari/ }).click()
+    await screen.getByRole('button', { name: 'Comment' }).click()
+    await vi.waitFor(() => {
+      const post = fetch.mock.calls.find(
+        ([input, init]) =>
+          init?.method === 'POST' && String(input).endsWith('/comments')
+      )
+      expect(JSON.parse(String(post?.[1]?.body)).content).toBe(
+        'Thanks @[Dewi Lestari](user:33333333-3333-4333-8333-333333333333)'
+      )
+    })
   })
 
   it('cannot be written by someone who may only view', async () => {

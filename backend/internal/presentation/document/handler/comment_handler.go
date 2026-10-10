@@ -58,6 +58,27 @@ func (h *CommentHandler) List(w http.ResponseWriter, r *http.Request) {
 	_ = response.Data(w, http.StatusOK, items)
 }
 
+// Mentionable lists the members of the workspace a comment may name, and which
+// of them can read the document.
+func (h *CommentHandler) Mentionable(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, err := getUserAndWorkspace(r)
+	if err != nil {
+		writeDocumentError(w, err)
+		return
+	}
+	documentID, err := parsePathUUID(r, "id")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid document ID")
+		return
+	}
+	people, err := h.service.MentionCandidates(r.Context(), workspaceID, documentID, actorID)
+	if err != nil {
+		h.writeError(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, people)
+}
+
 type commentRequest struct {
 	ThreadID     uuid.UUID       `json:"threadID"`
 	SelectedText string          `json:"selectedText"`

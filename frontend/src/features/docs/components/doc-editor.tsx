@@ -33,8 +33,11 @@ import { VersionHistorySidebar } from './version-history-sidebar'
 
 export function DocEditor() {
   const { docId } = useParams({ from: '/docs/$docId' })
-  const { workspaceId: citationWorkspaceID, nodeId: citationNodeID } =
-    useSearch({ from: '/docs/$docId' })
+  const {
+    workspaceId: citationWorkspaceID,
+    nodeId: citationNodeID,
+    thread: focusThreadID,
+  } = useSearch({ from: '/docs/$docId' })
   const scope = useSyncExternalStore(subscribeLocalUser, getLocalUserScope)
   const auth = useAuthStore((state) => state.auth)
   const { activeWorkspaceId, isLoading: workspacesLoading } = useWorkspaces()
@@ -146,6 +149,7 @@ export function DocEditor() {
         workspaceID={workspaceID}
         userID={scope.userId ?? auth.user?.id ?? ''}
         focusNodeID={citationNodeID}
+        focusThreadID={focusThreadID}
       />
     )
 
@@ -157,6 +161,7 @@ export function DocEditor() {
         workspaceID={workspaceID}
         userID={scope.userId ?? auth.user?.id ?? ''}
         focusNodeID={citationNodeID}
+        focusThreadID={focusThreadID}
       />
     )
 
@@ -170,6 +175,7 @@ export function DocEditor() {
         document={documentQuery.data}
         workspaceID={workspaceID}
         userID={scope.userId ?? auth.user?.id ?? ''}
+        focusThreadID={focusThreadID}
       />
     )
 

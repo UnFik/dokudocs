@@ -54,7 +54,7 @@ import { ArchitectureVersions } from './architecture-versions'
 import { CatalogPalette } from './catalog-palette'
 import { CatalogRequests } from './catalog-requests'
 import { CommentPins } from './comment-pins'
-import { commentsKey } from './element-comments'
+import { commentsKey, useCanvasComments } from './element-comments'
 import { PanelResizer } from './panel-resizer'
 import { PropertiesPanel } from './properties-panel'
 
@@ -66,6 +66,7 @@ export function ArchitectureDocEditor(props: {
   userID: string
   userName?: string
   focusNodeID?: string
+  focusThreadID?: string
 }) {
   return (
     <ReactFlowProvider>
@@ -86,12 +87,15 @@ function Editor({
   workspaceID,
   userID,
   focusNodeID,
+  focusThreadID,
 }: {
   document: DocumentItem
   workspaceID: string
   userID: string
   userName?: string
   focusNodeID?: string
+  /** A comment thread to open, from a notification. */
+  focusThreadID?: string
 }) {
   const queryClient = useQueryClient()
   const { name: userName } = useCurrentProfile()
@@ -123,6 +127,24 @@ function Editor({
   // Comment pins: a thread being started, the one whose pin is open, and resolved ones shown or not.
   const [draftPin, setDraftPin] = useState<PinAnchor | null>(null)
   const [activeThread, setActiveThread] = useState<string | null>(null)
+  // A notification opens the thread it is about, once the threads are loaded.
+  const threads = useCanvasComments(workspaceID, doc.id)
+  const [openedThread, setOpenedThread] = useState<string | null>(null)
+  const wanted =
+    focusThreadID && openedThread !== focusThreadID
+      ? threads.data?.find((item) => item.id === focusThreadID)
+      : undefined
+  if (wanted) {
+    setOpenedThread(wanted.id)
+    setActiveThread(wanted.id)
+    const elementID = wanted.elementAnchor?.elementId
+    if (elementID) {
+      const kind = session.canvas.nodes.some((node) => node.id === elementID)
+        ? 'node'
+        : 'edge'
+      setSelection([{ kind, id: elementID }])
+    }
+  }
   const [showResolved, setShowResolved] = useState(false)
   const [protocolFor, setProtocolFor] = useState<{
     id: string

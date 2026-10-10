@@ -13,6 +13,7 @@ import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
 import { NavUser } from './nav-user'
 import { NavWorkspace } from './nav-workspace'
+import { NotificationsInbox } from './notifications-inbox'
 import { SidebarSearch } from './sidebar-search'
 import { StarredNavGroup } from './starred-nav-group'
 
@@ -38,6 +39,7 @@ export function AppSidebar() {
         <StarredNavGroup />
       </SidebarContent>
       <SidebarFooter className='p-2'>
+        <NotificationsInbox />
         <NavUser user={currentUser} />
       </SidebarFooter>
       <SidebarRail />
