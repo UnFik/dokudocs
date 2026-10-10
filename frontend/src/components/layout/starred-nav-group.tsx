@@ -9,7 +9,6 @@ import {
   StarOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getDocumentType } from '@/lib/document-types'
 import { Badge } from '@/components/ui/badge'
 import {
