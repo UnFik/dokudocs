@@ -26,3 +26,5 @@ DBML and Mermaid documents need simultaneous source editing and database-backed 
 - Reusing the session does not by itself establish PostgreSQL durability acknowledgement. Persisted source/revisions must not be described as saved solely because the room acknowledged receiving updates.
 
 This decision extends the scope of [ADR 0029](0029-hocuspocus-and-yjs-state-replace-the-ast-stack.md) and supersedes only the DBML/Mermaid collaboration exclusion in [ADR 0001](0001-collaborative-markdown-scope.md). [The implementation plan](../plans/dbml-mermaid-collaboration.md) records the agreed scope and verification sequence. The user confirmed this design on 2026-10-08; implementation has not started.
+
+Comments on a source were added later (#138, [ADR 0036](0036-a-mention-is-a-token-the-backend-writes.md) covers mentions in them). A thread is anchored to the words with two Yjs relative positions in `Y.Text('source')` (`{kind:"source", start, end}`), so it follows the words as the source changes and is orphaned when they are deleted. Viewing is unchanged; someone who may comment but not edit may now write comments, never source.

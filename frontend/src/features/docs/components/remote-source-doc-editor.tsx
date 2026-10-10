@@ -1,14 +1,17 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
+import * as monaco from 'monaco-editor'
 import { toast } from 'sonner'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import {
   createNamedDocumentRevision,
   getDocument,
+  listDocumentComments,
   listDocumentRevisions,
   restoreDocumentRevision,
   updateDocumentMetadata,
+  type SourceCommentAnchor,
 } from '@/lib/domain-api'
 import { useTheme } from '@/context/theme-provider'
 import { Button } from '@/components/ui/button'
@@ -21,12 +24,18 @@ import {
   exportDiagramSvg,
   getDiagramSvg,
 } from '../lib/diagram-export'
+import {
+  trackSourceComments,
+  type SourceCommentMarks,
+  type SourceRanges,
+} from '../lib/source-comment-marks'
 import { DbmlEditor } from './dbml-editor'
 import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { EditorHeader } from './editor-header'
 import { MermaidEditor } from './mermaid-editor'
 import { RecoveryCopyNotice } from './recovery-copy-notice'
+import { SourceCommentsPanel } from './source-comments-panel'
 import type { SourceCollab } from './unified-monaco-editor'
 import { VersionHistorySidebar } from './version-history-sidebar'
 
@@ -40,11 +49,14 @@ export function RemoteSourceDocEditor({
   workspaceID,
   userID,
   offline = false,
+  focusThreadID,
 }: {
   document: DocumentItem
   workspaceID: string
   userID: string
   offline?: boolean
+  /** A comment thread to open, from a notification. */
+  focusThreadID?: string
 }) {
   const queryClient = useQueryClient()
   const [record, setRecord] = useState(doc.replacementId)
@@ -89,6 +101,7 @@ export function RemoteSourceDocEditor({
       workspaceID={workspaceID}
       userID={userID}
       offline={offline}
+      focusThreadID={focusThreadID}
       onReplaced={() => void reopen()}
     />
   )
@@ -100,6 +113,7 @@ function SourceEditor({
   workspaceID,
   userID,
   offline,
+  focusThreadID,
   onReplaced,
 }: {
   document: DocumentItem
@@ -107,6 +121,7 @@ function SourceEditor({
   workspaceID: string
   userID: string
   offline: boolean
+  focusThreadID?: string
   onReplaced: () => void
 }) {
   const queryClient = useQueryClient()
@@ -118,6 +133,18 @@ function SourceEditor({
   const [isShareOpen, setIsShareOpen] = useState(false)
   // The preview follows the shared text; it never writes it.
   const [, setPreviewSource] = useState('')
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false)
+  const [editor, setEditor] =
+    useState<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const [ranges, setRanges] = useState<SourceRanges>(new Map())
+  const [hasSelection, setHasSelection] = useState(false)
+  const [focusedComment, setFocusedComment] = useState<string | null>(null)
+  const [commentDraft, setCommentDraft] = useState<{
+    selectedText: string
+    anchor: SourceCommentAnchor
+  } | null>(null)
+  const marksRef = useRef<SourceCommentMarks | null>(null)
+  const fromRemoteComments = useRef(false)
   const session = useSourceSession({
     workspaceID,
     documentID: doc.id,
@@ -126,6 +153,14 @@ function SourceEditor({
     userName,
     title,
     onReplaced,
+    onCommentsChanged: () => {
+      // A change that came from someone else must not be announced again.
+      fromRemoteComments.current = true
+      void queryClient.invalidateQueries({
+        queryKey: ['document-comments', workspaceID, doc.id],
+      })
+      fromRemoteComments.current = false
+    },
   })
 
   const canEdit =
@@ -139,10 +174,131 @@ function SourceEditor({
             text: session.text,
             awareness: session.awareness,
             readOnly: !canEdit,
+            onEditor: setEditor,
           }
         : undefined,
     [session.text, session.awareness, canEdit]
   )
+  const canComment = Boolean(session.access?.canComment) && !offline
+
+  const commentsQuery = useQuery({
+    queryKey: ['document-comments', workspaceID, doc.id],
+    queryFn: ({ signal }) => listDocumentComments(workspaceID, doc.id, signal),
+    enabled: !offline,
+    retry: false,
+    refetchOnWindowFocus: true,
+  })
+  const threads = useMemo(() => commentsQuery.data ?? [], [commentsQuery.data])
+  // This person's own comment changes are told to the others in the room.
+  const signalComments = session.signalComments
+  useEffect(() => {
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === 'updated' &&
+        event.action.type === 'invalidate' &&
+        event.query.queryKey[0] === 'document-comments' &&
+        event.query.queryKey[2] === doc.id &&
+        !fromRemoteComments.current
+      )
+        signalComments()
+    })
+  }, [queryClient, doc.id, signalComments])
+
+  const startDraft = useCallback(() => {
+    const picked = marksRef.current?.anchorSelection()
+    if (!picked) {
+      toast.error('Select the source to comment on first.', {
+        id: 'comment-draft',
+      })
+      return
+    }
+    setCommentDraft(picked)
+    setIsCommentsOpen(true)
+  }, [])
+
+  // Marks on the words of each open thread, kept on the words as the source changes.
+  useEffect(() => {
+    if (!editor || !session.text) return
+    const marks = trackSourceComments({
+      editor,
+      text: session.text,
+      onRanges: setRanges,
+    })
+    marksRef.current = marks
+    const clicked = editor.onMouseDown((event) => {
+      const id = event.target.position
+        ? marks.threadAt(event.target.position)
+        : null
+      if (!id) return
+      setFocusedComment(id)
+      setIsCommentsOpen(true)
+    })
+    const selected = editor.onDidChangeCursorSelection(() =>
+      setHasSelection(!editor.getSelection()?.isEmpty())
+    )
+    const shortcut = editor.addAction({
+      id: 'dokudocs.source.comment',
+      label: 'Comment on selection',
+      keybindings: [
+        // Ctrl+Alt+M, the same as in a Markdown document.
+        monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyM,
+      ],
+      run: () => startDraft(),
+    })
+    return () => {
+      clicked.dispose()
+      selected.dispose()
+      shortcut.dispose()
+      marks.destroy()
+      marksRef.current = null
+    }
+  }, [editor, session.text, startDraft])
+  useEffect(() => {
+    marksRef.current?.setThreads(
+      threads.flatMap((thread) =>
+        thread.sourceAnchor
+          ? [
+              {
+                id: thread.id,
+                anchor: thread.sourceAnchor,
+                resolved: Boolean(thread.resolvedAt),
+              },
+            ]
+          : []
+      )
+    )
+  }, [threads, editor, session.text])
+  useEffect(() => {
+    marksRef.current?.setFocused(focusedComment)
+  }, [focusedComment, threads, editor])
+
+  // A notification opens the thread it is about: the panel and its card at once,
+  // and the words once they are marked.
+  const [openedFor, setOpenedFor] = useState<string | null>(null)
+  const wanted =
+    focusThreadID && openedFor !== focusThreadID
+      ? threads.find((item) => item.id === focusThreadID && item.sourceAnchor)
+      : undefined
+  if (wanted) {
+    setOpenedFor(wanted.id)
+    setIsCommentsOpen(true)
+    setFocusedComment(wanted.id)
+  }
+  const revealed = useRef<string | null>(null)
+  useEffect(() => {
+    if (!focusThreadID || revealed.current === focusThreadID) return
+    const thread = threads.find((item) => item.id === focusThreadID)
+    // A resolved thread has no words marked; there is nothing to wait for.
+    if (thread?.resolvedAt || marksRef.current?.reveal(focusThreadID))
+      revealed.current = focusThreadID
+  }, [focusThreadID, threads, ranges])
+  const selectComment = (id: string) => {
+    setFocusedComment(id)
+    marksRef.current?.reveal(id)
+  }
+  const openCommentCount = threads.filter(
+    (thread) => thread.sourceAnchor && !thread.resolvedAt
+  ).length
 
   const titleMutation = useMutation({
     mutationFn: (next: string) =>
@@ -250,6 +406,9 @@ function SourceEditor({
             ? () => setIsMermaidExportOpen(true)
             : undefined
         }
+        onToggleComments={() => setIsCommentsOpen((open) => !open)}
+        isCommentsOpen={isCommentsOpen}
+        commentsCount={openCommentCount}
         onExportCode={exportCode}
         onExportCopySvg={copyDiagramSvg}
         onExportSvg={() => exportDiagramSvg(title)}
@@ -289,24 +448,45 @@ function SourceEditor({
         <span className='font-mono'>{extension}</span>
       </div>
 
-      <div className='flex-1 overflow-hidden'>
-        {!collab ? (
-          <div className='p-6 text-sm text-muted-foreground'>
-            Loading diagram…
-          </div>
-        ) : doc.type === 'dbdiagram' ? (
-          <DbmlEditor
-            docId={doc.id}
-            content={session.source}
-            onChange={setPreviewSource}
-            collab={collab}
-          />
-        ) : (
-          <MermaidEditor
-            docId={doc.id}
-            content={session.source}
-            onChange={setPreviewSource}
-            collab={collab}
+      <div className='flex flex-1 overflow-hidden'>
+        <div className='min-w-0 flex-1 overflow-hidden'>
+          {!collab ? (
+            <div className='p-6 text-sm text-muted-foreground'>
+              Loading diagram…
+            </div>
+          ) : doc.type === 'dbdiagram' ? (
+            <DbmlEditor
+              docId={doc.id}
+              content={session.source}
+              onChange={setPreviewSource}
+              collab={collab}
+            />
+          ) : (
+            <MermaidEditor
+              docId={doc.id}
+              content={session.source}
+              onChange={setPreviewSource}
+              collab={collab}
+            />
+          )}
+        </div>
+        {isCommentsOpen && (
+          <SourceCommentsPanel
+            workspaceID={workspaceID}
+            documentID={doc.id}
+            userID={userID}
+            threads={threads}
+            ranges={ranges}
+            loading={commentsQuery.isPending && !offline}
+            failed={Boolean(commentsQuery.error) || offline}
+            canComment={canComment}
+            canDecide={canEdit}
+            hasSelection={hasSelection}
+            draft={commentDraft}
+            focusedID={focusedComment}
+            onSelect={selectComment}
+            onStartDraft={startDraft}
+            onDraftDone={() => setCommentDraft(null)}
           />
         )}
       </div>

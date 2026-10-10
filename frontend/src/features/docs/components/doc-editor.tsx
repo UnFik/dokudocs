@@ -175,6 +175,7 @@ export function DocEditor() {
         document={documentQuery.data}
         workspaceID={workspaceID}
         userID={scope.userId ?? auth.user?.id ?? ''}
+        focusThreadID={focusThreadID}
       />
     )
 

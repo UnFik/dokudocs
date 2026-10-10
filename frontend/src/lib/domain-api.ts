@@ -147,6 +147,12 @@ const elementAnchorSchema = z.object({
   x: z.number().min(0).max(1).optional(),
   y: z.number().min(0).max(1).optional(),
 })
+// A comment on a DBML or Mermaid source points at the words, by two Yjs relative positions.
+const sourceAnchorSchema = z.object({
+  kind: z.literal('source'),
+  start: z.string().min(1),
+  end: z.string().min(1),
+})
 const commentReplySchema = z.object({
   id: z.guid(),
   threadId: z.guid(),
@@ -178,10 +184,12 @@ const commentThreadSchema = z
   .transform(({ anchor, ...thread }) => {
     const text = commentAnchorSchema.safeParse(anchor)
     const element = elementAnchorSchema.safeParse(anchor)
+    const source = sourceAnchorSchema.safeParse(anchor)
     return {
       ...thread,
       anchor: text.success ? text.data : null,
       ...(element.success ? { elementAnchor: element.data } : {}),
+      ...(source.success ? { sourceAnchor: source.data } : {}),
     }
   })
 
@@ -279,6 +287,7 @@ export type DocumentSuggestion = z.infer<typeof documentSuggestionSchema>
 export type SuggestionReply = z.infer<typeof suggestionReplySchema>
 export type CommentAnchor = z.infer<typeof commentAnchorSchema>
 export type ElementAnchor = z.infer<typeof elementAnchorSchema>
+export type SourceCommentAnchor = z.infer<typeof sourceAnchorSchema>
 export type CommentReply = z.infer<typeof commentReplySchema>
 export type CommentThread = z.infer<typeof commentThreadSchema>
 export type RAGCitation = z.infer<typeof ragCitationSchema>
@@ -627,7 +636,7 @@ export async function createDocumentComment(
     threadID: string
     selectedText: string
     content: string
-    anchor?: CommentAnchor | ElementAnchor
+    anchor?: CommentAnchor | ElementAnchor | SourceCommentAnchor
   }
 ): Promise<void> {
   await apiFetch<void>(`/api/v1/documents/${documentId}/comments`, {
