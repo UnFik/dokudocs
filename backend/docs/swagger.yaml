@@ -391,6 +391,13 @@ definitions:
       user:
         $ref: '#/definitions/backend_internal_presentation_auth_presenter.ResponseUser'
     type: object
+  backend_internal_presentation_auth_presenter.PasswordLinkRequest:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
   backend_internal_presentation_auth_presenter.RegisterRequest:
     properties:
       email:
@@ -424,8 +431,11 @@ definitions:
     properties:
       password:
         type: string
+      token:
+        type: string
     required:
     - password
+    - token
     type: object
   backend_internal_presentation_auth_presenter.SignInMethods:
     properties:
@@ -901,7 +911,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: New password
+      - description: Link token and new password
         in: body
         name: request
         required: true
@@ -914,13 +924,58 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "409":
-          description: Conflict
+      security:
+      - BearerAuth: []
+      summary: Set or change the password
+      tags:
+      - Auth
+  /auth/password/check:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Link token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_auth_presenter.PasswordLinkRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
           schema:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
       security:
       - BearerAuth: []
-      summary: Set a password
+      summary: Check a set-password link
+      tags:
+      - Auth
+  /auth/password/link:
+    post:
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Send the set-password link
       tags:
       - Auth
   /auth/register:
