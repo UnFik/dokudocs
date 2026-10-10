@@ -41,7 +41,10 @@ func googleProvider(c *container.Container, cfg config.Config) repocontract.Iden
 	if c.IdentityProvider != nil {
 		return c.IdentityProvider
 	}
-	return google.NewProvider(cfg.GoogleClientID, cfg.GoogleClientSecret, strings.TrimRight(cfg.PublicAppURL, "/")+"/api/v1/auth/google/callback")
+	return google.NewProvider(
+		cfg.GoogleClientID, cfg.GoogleClientSecret, strings.TrimRight(cfg.PublicAppURL, "/")+"/api/v1/auth/google/callback",
+		google.WithEndpoints(google.Endpoints{Authorization: cfg.GoogleAuthURL, Token: cfg.GoogleTokenURL, JWKS: cfg.GoogleJWKSURL}),
+	)
 }
 
 func addAuthRoutes(f Router, c *container.Container, cfg config.Config) {
