@@ -1,6 +1,7 @@
 package handler
 
 import (
+	usecasecontract "backend/internal/domain/contract/usecase"
 	"context"
 	"github.com/google/uuid"
 
@@ -8,6 +9,7 @@ import (
 )
 
 type fakeAuthUseCase struct {
+	usecasecontract.IdentityUseCase
 	loginResp dto.LoginResponse
 	loginErr  error
 	user      dto.ResponseUser

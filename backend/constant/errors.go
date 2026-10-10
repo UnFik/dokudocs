@@ -24,4 +24,12 @@ var (
 	ErrVerificationTooSoon      = errors.New("a verification email was sent a moment ago")
 	ErrEmailNotConfigured       = errors.New("email sending is not configured")
 	ErrEmailNotSent             = errors.New("verification email could not be sent")
+
+	ErrIdentityNotFound         = errors.New("sign-in identity not linked")
+	ErrIdentityInUse            = errors.New("this account is linked to another user")
+	ErrProviderAlreadyLinked    = errors.New("a different account from this provider is already linked")
+	ErrOAuthTransactionNotFound = errors.New("sign-in attempt not found or expired")
+	ErrIdentityProviderNotSet   = errors.New("sign-in provider is not configured")
+	ErrIdentityEmailNotVerified = errors.New("the provider has not verified this email")
+	ErrLastSignInMethod         = errors.New("this is the only way to sign in")
 )
