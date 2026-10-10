@@ -13,6 +13,11 @@ type SignInMethods struct {
 	Identities  []LinkedIdentity `json:"identities"`
 }
 
+type PasswordLinkRequest struct {
+	Token string `json:"token" validate:"required"`
+}
+
 type SetPasswordRequest struct {
+	Token    string `json:"token" validate:"required"`
 	Password string `json:"password" validate:"required"`
 }

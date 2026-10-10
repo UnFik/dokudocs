@@ -27,8 +27,7 @@ type IdentityRepository interface {
 	HasPassword(ctx context.Context, userID uuid.UUID) (bool, error)
 	// Unlink removes the User's identity from the provider.
 	Unlink(ctx context.Context, userID uuid.UUID, provider string) error
-	// SetPassword stores a hash only for a User who has none, otherwise it gives
-	// constant.ErrPasswordAlreadySet.
+	// SetPassword stores the hash, replacing any password the User has.
 	SetPassword(ctx context.Context, userID uuid.UUID, hash string) error
 }
 

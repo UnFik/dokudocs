@@ -62,7 +62,7 @@ func (m *mockUserRepo) FindByID(ctx context.Context, id uuid.UUID) (model.UserPr
 func (m *mockUserRepo) Create(ctx context.Context, user model.AuthUser, fullName string) error {
 	return nil
 }
-func (m *mockUserRepo) UpdateProfile(ctx context.Context, id uuid.UUID, fullName, phone, bio, avatarURL string) error {
+func (m *mockUserRepo) UpdateProfile(ctx context.Context, id uuid.UUID, fullName, phone, bio string) error {
 	return nil
 }
 func (m *mockUserRepo) GetSettings(ctx context.Context, userID uuid.UUID) (model.UserSettings, error) {

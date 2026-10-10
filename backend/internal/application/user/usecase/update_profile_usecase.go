@@ -15,7 +15,7 @@ func (u *useCase) UpdateProfile(ctx context.Context, input dto.UpdateProfileInpu
 	if !policy.ValidDisplayName(fullName) {
 		return data, constant.ErrInvalidDisplayName
 	}
-	if err = u.repo.UpdateProfile(ctx, input.UserID, fullName, input.PhoneNumber, input.Bio, input.AvatarURL); err != nil {
+	if err = u.repo.UpdateProfile(ctx, input.UserID, fullName, input.PhoneNumber, input.Bio); err != nil {
 		return data, err
 	}
 	data, err = u.repo.FindByID(ctx, input.UserID)

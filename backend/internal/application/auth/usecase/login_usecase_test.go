@@ -33,7 +33,7 @@ func (s fakeUserStore) FindByID(context.Context, uuid.UUID) (model.UserProfile, 
 func (s fakeUserStore) Create(context.Context, model.AuthUser, string) error {
 	return nil
 }
-func (s fakeUserStore) UpdateProfile(context.Context, uuid.UUID, string, string, string, string) error {
+func (s fakeUserStore) UpdateProfile(context.Context, uuid.UUID, string, string, string) error {
 	return nil
 }
 func (s fakeUserStore) GetSettings(context.Context, uuid.UUID) (model.UserSettings, error) {

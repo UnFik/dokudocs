@@ -391,6 +391,13 @@ definitions:
       user:
         $ref: '#/definitions/backend_internal_presentation_auth_presenter.ResponseUser'
     type: object
+  backend_internal_presentation_auth_presenter.PasswordLinkRequest:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
   backend_internal_presentation_auth_presenter.RegisterRequest:
     properties:
       email:
@@ -424,8 +431,11 @@ definitions:
     properties:
       password:
         type: string
+      token:
+        type: string
     required:
     - password
+    - token
     type: object
   backend_internal_presentation_auth_presenter.SignInMethods:
     properties:
@@ -597,8 +607,6 @@ definitions:
     type: object
   backend_internal_presentation_user_presenter.UpdateProfileRequest:
     properties:
-      avatarUrl:
-        type: string
       bio:
         type: string
       fullName:
@@ -901,7 +909,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: New password
+      - description: Link token and new password
         in: body
         name: request
         required: true
@@ -914,13 +922,58 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "409":
-          description: Conflict
+      security:
+      - BearerAuth: []
+      summary: Set or change the password
+      tags:
+      - Auth
+  /auth/password/check:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Link token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_auth_presenter.PasswordLinkRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
           schema:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
       security:
       - BearerAuth: []
-      summary: Set a password
+      summary: Check a set-password link
+      tags:
+      - Auth
+  /auth/password/link:
+    post:
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Send the set-password link
       tags:
       - Auth
   /auth/register:
@@ -962,6 +1015,30 @@ paths:
       summary: User registration
       tags:
       - Auth
+  /avatars/{key}:
+    get:
+      parameters:
+      - description: Avatar key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - image/png
+      - image/jpeg
+      - image/webp
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      summary: Fetch an avatar
+      tags:
+      - User
   /catalog:
     get:
       produces:
@@ -3156,6 +3233,58 @@ paths:
       security:
       - BearerAuth: []
       summary: Update user settings
+      tags:
+      - User
+  /users/me/avatar:
+    delete:
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Remove the avatar
+      tags:
+      - User
+    put:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: PNG, JPEG or WebP, up to 512 KB and 1024 by 1024 pixels
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.UserProfile'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Upload an avatar
       tags:
       - User
   /workspaces:

@@ -6,11 +6,9 @@ import (
 	"errors"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"backend/constant"
 	"backend/internal/application/auth/dto"
-	"backend/internal/application/utils"
 	repocontract "backend/internal/domain/contract/repository"
 	"backend/internal/domain/model"
 	"backend/internal/domain/policy"
@@ -300,15 +298,4 @@ func (u *useCase) UnlinkIdentity(ctx context.Context, userID uuid.UUID, provider
 		}
 		return repo.Unlink(ctx, userID, provider)
 	})
-}
-
-func (u *useCase) SetPassword(ctx context.Context, userID uuid.UUID, password string) error {
-	if utf8.RuneCountInString(password) < 15 || len([]byte(password)) > 72 {
-		return constant.ErrInvalidPassword
-	}
-	hash, err := utils.HashPassword(password)
-	if err != nil {
-		return err
-	}
-	return u.identities(u.db).SetPassword(ctx, userID, hash)
 }

@@ -51,6 +51,7 @@ func addAuthRoutes(f Router, c *container.Container, cfg config.Config) {
 	authUseCase := appauth.NewUseCase(c.DB, cfg.JWTSecret, cfg.AccessTokenTTL, appauth.WithMailer(c.Mailer, cfg.PublicAppURL), appauth.WithIdentityProvider("google", googleProvider(c, cfg)))
 	authHandler := authhandler.NewHandler(authUseCase, c.Validator)
 	authRequired := middleware.ValidateToken(authUseCase)
+	verifiedUser := signedIn(authUseCase, cfg)
 
 	authGroup := f.Group("/auth")
 	credentials := rateLimit(cfg.RateLimitCredentialsPerMin, cfg)
@@ -65,6 +66,8 @@ func addAuthRoutes(f Router, c *container.Container, cfg config.Config) {
 	authGroup.Post("/email/verify", authHandler.VerifyEmail, credentials)
 	authGroup.Get("/identities", authHandler.SignInMethods, authRequired)
 	authGroup.Delete("/identities/{provider}", authHandler.UnlinkIdentity, authRequired)
-	authGroup.Post("/password", authHandler.SetPassword, credentials, authRequired)
+	authGroup.Post("/password/link", authHandler.SendPasswordLink, credentials, verifiedUser)
+	authGroup.Post("/password/check", authHandler.CheckPasswordLink, credentials, verifiedUser)
+	authGroup.Post("/password", authHandler.SetPassword, credentials, verifiedUser)
 	authGroup.Get("/me", authHandler.Me, authRequired)
 }

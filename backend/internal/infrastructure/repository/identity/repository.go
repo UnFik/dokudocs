@@ -101,12 +101,12 @@ func (r *Repository) Unlink(ctx context.Context, userID uuid.UUID, provider stri
 }
 
 func (r *Repository) SetPassword(ctx context.Context, userID uuid.UUID, hash string) error {
-	result, err := r.db.ExecContext(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 AND password_hash IS NULL`, userID, hash)
+	result, err := r.db.ExecContext(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, hash)
 	if err != nil {
 		return err
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
-		return constant.ErrPasswordAlreadySet
+		return constant.ErrUserNotFound
 	}
 	return nil
 }

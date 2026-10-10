@@ -3,15 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth-store'
 import { ApiError } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  setPasswordApi,
-  signInMethodsApi,
-  startGoogleApi,
-  unlinkIdentityApi,
-} from '../api/auth-api'
-import { registerSchema } from '../api/auth-schema'
+import { signInMethodsApi, startGoogleApi } from '../api/auth-api'
+import { GoogleIcon } from '../google-icon'
+import { DisconnectGoogleDialog } from './disconnect-google-dialog'
+import { PasswordLinkDialog } from './password-link-dialog'
 
 const RETURN_TO = '/settings/account'
 
@@ -56,10 +51,12 @@ function errorTitle(error: unknown, fallback: string) {
 export function SignInMethods({
   linked,
   linkError,
+  passwordResult,
   navigate = (url: string) => window.location.assign(url),
 }: {
   linked?: string
   linkError?: string
+  passwordResult?: 'set' | 'changed'
   navigate?: (url: string) => void
 }) {
   const user = useAuthStore((state) => state.auth.user)
@@ -80,34 +77,9 @@ export function SignInMethods({
     },
     retry: false,
   })
-  const disconnect = useMutation({
-    mutationFn: () => unlinkIdentityApi('google'),
-    onSuccess: refresh,
-    retry: false,
-  })
-  const [password, setPassword] = useState('')
-  const [passwordError, setPasswordError] = useState('')
-  const setNewPassword = useMutation({
-    mutationFn: (value: string) => setPasswordApi(value),
-    onSuccess: () => {
-      setPassword('')
-      return refresh()
-    },
-    retry: false,
-  })
+  const [passwordOpen, setPasswordOpen] = useState(false)
   const result = linkResult(linked, linkError)
   const google = methods.data?.identities.find((i) => i.provider === 'google')
-
-  function submitPassword(event: React.FormEvent) {
-    event.preventDefault()
-    const parsed = registerSchema.shape.password.safeParse(password)
-    if (!parsed.success) {
-      setPasswordError(parsed.error.issues[0]?.message ?? 'Invalid password.')
-      return
-    }
-    setPasswordError('')
-    setNewPassword.mutate(password)
-  }
 
   return (
     <section aria-labelledby='sign-in-methods' className='space-y-4'>
@@ -115,6 +87,11 @@ export function SignInMethods({
         Sign-in methods
       </h2>
       {result && <p role={result.role}>{result.text}</p>}
+      {passwordResult && (
+        <p role='status'>
+          {passwordResult === 'set' ? 'Password set.' : 'Password changed.'}
+        </p>
+      )}
       {methods.isPending && <p role='status'>Loading sign-in methods...</p>}
       {methods.isError && (
         <div role='alert'>
@@ -127,20 +104,22 @@ export function SignInMethods({
       {methods.data && (
         <>
           <div className='flex flex-wrap items-center justify-between gap-2'>
-            <div>
-              <p className='font-medium'>Google</p>
-              <p className='text-sm text-muted-foreground'>
-                {google ? google.email : 'Not connected'}
-              </p>
+            <div className='flex items-center gap-3'>
+              <GoogleIcon />
+              <div>
+                <p className='font-medium'>Google</p>
+                <p className='text-sm text-muted-foreground'>
+                  {google ? google.email : 'Not connected'}
+                </p>
+              </div>
             </div>
             {google ? (
-              <Button
-                variant='outline'
-                disabled={disconnect.isPending}
-                onClick={() => disconnect.mutate()}
-              >
-                Disconnect Google
-              </Button>
+              <DisconnectGoogleDialog
+                email={google.email}
+                hasPassword={methods.data.hasPassword}
+                onDisconnected={refresh}
+                onSetPassword={() => setPasswordOpen(true)}
+              />
             ) : (
               <Button
                 variant='outline'
@@ -156,45 +135,23 @@ export function SignInMethods({
               {errorTitle(connect.error, 'Could not start connecting Google.')}
             </p>
           )}
-          {disconnect.isError && (
-            <p role='alert'>
-              {errorTitle(disconnect.error, 'Could not disconnect Google.')}
-            </p>
-          )}
-          {methods.data.hasPassword ? (
-            <p className='text-sm text-muted-foreground'>
-              You can sign in with your email and password.
-            </p>
-          ) : (
-            <form onSubmit={submitPassword} className='space-y-2' noValidate>
-              <Label htmlFor='new-password'>New password</Label>
-              <Input
-                id='new-password'
-                type='password'
-                autoComplete='new-password'
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                aria-invalid={!!passwordError}
-              />
+          <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div>
+              <p className='font-medium'>Password</p>
               <p className='text-sm text-muted-foreground'>
-                You sign in with Google only. Set a password to also sign in
-                with your email.
+                {methods.data.hasPassword ? 'Password is set' : 'Not set'}
               </p>
-              {(passwordError || setNewPassword.isError) && (
-                <p role='alert'>
-                  {passwordError ||
-                    errorTitle(
-                      setNewPassword.error,
-                      'Could not set the password.'
-                    )}
-                </p>
-              )}
-              <Button type='submit' disabled={setNewPassword.isPending}>
-                Set password
-              </Button>
-            </form>
-          )}
-          {setNewPassword.isSuccess && <p role='status'>Password set.</p>}
+            </div>
+            <Button variant='outline' onClick={() => setPasswordOpen(true)}>
+              {methods.data.hasPassword ? 'Change password' : 'Set password'}
+            </Button>
+          </div>
+          <PasswordLinkDialog
+            open={passwordOpen}
+            onOpenChange={setPasswordOpen}
+            email={user?.email ?? ''}
+            hasPassword={methods.data.hasPassword}
+          />
         </>
       )}
     </section>
