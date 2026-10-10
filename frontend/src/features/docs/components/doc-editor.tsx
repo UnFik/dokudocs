@@ -15,6 +15,7 @@ import { ArchitectureDocEditor } from '@/features/architecture/components/archit
 import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { useDocEditor } from '../hooks/use-doc-editor'
+import { useToggleDocumentStar } from '../hooks/use-toggle-document-star'
 import {
   copyDiagramSvg,
   exportDiagramPng,
@@ -237,9 +238,7 @@ function ScopedDocEditor({ docId }: { docId: string }) {
   const [isMermaidExportOpen, setIsMermaidExportOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
-  const toggleStarDocument = useDokudocsStore(
-    (state) => state.toggleStarDocument
-  )
+  const starMutation = useToggleDocumentStar()
   const isSidebarOpen = useCommentStore((state) => state.isSidebarOpen)
   const toggleSidebar = useCommentStore((state) => state.toggleSidebar)
   const unresolvedCount = useCommentStore((state) =>
@@ -247,9 +246,8 @@ function ScopedDocEditor({ docId }: { docId: string }) {
   )
 
   const handleToggleStar = () => {
-    if (!doc) return
-    toggleStarDocument(doc.id)
-    toast.success(doc.isStarred ? 'Document unstarred' : 'Document starred')
+    if (!doc || starMutation.isPending) return
+    starMutation.mutate(doc)
   }
 
   if (!doc) {

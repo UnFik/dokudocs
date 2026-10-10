@@ -911,6 +911,18 @@ export function createDocumentBodyEditor(
   }
 
   const dispatchTransaction = (transaction: Transaction) => {
+    const currentView = viewHolder.current
+    // Metadata redraws can land before the browser selectionchange is handled.
+    if (
+      currentView &&
+      currentView.hasFocus() &&
+      !transaction.docChanged &&
+      !transaction.selectionSet
+    ) {
+      const selection = selectionNow(currentView)
+      if (!selection.eq(state.selection))
+        transaction = transaction.setSelection(selection)
+    }
     const remote = transaction.getMeta(ySyncPluginKey)?.isChangeOrigin === true
     const tracked = transaction.getMeta(trackedMeta) === true
     if (
