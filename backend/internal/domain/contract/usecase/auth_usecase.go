@@ -24,9 +24,18 @@ type IdentityUseCase interface {
 	// UnlinkIdentity gives constant.ErrIdentityNotFound for a provider that is not
 	// linked and constant.ErrLastSignInMethod when it is the only way to sign in.
 	UnlinkIdentity(ctx context.Context, userID uuid.UUID, provider string) error
-	// SetPassword gives a User who has none a password; constant.ErrInvalidPassword
-	// for one that breaks the rules, constant.ErrPasswordAlreadySet if one exists.
-	SetPassword(ctx context.Context, userID uuid.UUID, password string) error
+	// SendPasswordLink mails the User a one-time link to set or change the
+	// password. It gives constant.ErrPasswordLinkTooSoon inside the cooldown,
+	// constant.ErrEmailNotConfigured without a mailer and constant.ErrEmailNotSent
+	// when the mail could not be sent.
+	SendPasswordLink(ctx context.Context, userID uuid.UUID) error
+	// CheckPasswordLink says whether the link is usable by the User, without using
+	// it up; otherwise constant.ErrInvalidPasswordLink.
+	CheckPasswordLink(ctx context.Context, userID uuid.UUID, token string) error
+	// ResetPassword uses the link up and replaces the password: constant.ErrInvalidPassword
+	// for one that breaks the rules (the link stays usable), constant.ErrInvalidPasswordLink
+	// for a link that is unknown, used, expired or someone else's.
+	ResetPassword(ctx context.Context, userID uuid.UUID, token, password string) error
 }
 
 // AccountUseCase is what the auth routes need on top of checking a token.

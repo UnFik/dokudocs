@@ -420,10 +420,10 @@ const docTemplate = `{
                 "tags": [
                     "Auth"
                 ],
-                "summary": "Set a password",
+                "summary": "Set or change the password",
                 "parameters": [
                     {
-                        "description": "New password",
+                        "description": "Link token and new password",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -441,9 +441,83 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
                         }
+                    }
+                }
+            }
+        },
+        "/auth/password/check": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Check a set-password link",
+                "parameters": [
+                    {
+                        "description": "Link token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_auth_presenter.PasswordLinkRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     },
-                    "409": {
-                        "description": "Conflict",
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/password/link": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Send the set-password link",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
                         "schema": {
                             "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
                         }
@@ -5252,6 +5326,17 @@ const docTemplate = `{
                 }
             }
         },
+        "backend_internal_presentation_auth_presenter.PasswordLinkRequest": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
         "backend_internal_presentation_auth_presenter.RegisterRequest": {
             "type": "object",
             "required": [
@@ -5299,10 +5384,14 @@ const docTemplate = `{
         "backend_internal_presentation_auth_presenter.SetPasswordRequest": {
             "type": "object",
             "required": [
-                "password"
+                "password",
+                "token"
             ],
             "properties": {
                 "password": {
+                    "type": "string"
+                },
+                "token": {
                     "type": "string"
                 }
             }

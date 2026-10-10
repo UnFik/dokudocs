@@ -80,15 +80,77 @@ func (h *Handler) UnlinkIdentity(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// SetPassword gives a User who signs in with an outside provider a password.
-// @Summary Set a password
+// SendPasswordLink mails the signed-in User a link to set or change the password.
+// @Summary Send the set-password link
+// @Tags Auth
+// @Security BearerAuth
+// @Success 204
+// @Failure 401 {object} response.ErrorEnvelope
+// @Failure 429 {object} response.ErrorEnvelope
+// @Failure 502 {object} response.ErrorEnvelope
+// @Failure 503 {object} response.ErrorEnvelope
+// @Router /auth/password/link [post]
+func (h *Handler) SendPasswordLink(w http.ResponseWriter, r *http.Request) {
+	id, ok := currentUserID(w, r)
+	if !ok {
+		return
+	}
+	switch err := h.service.SendPasswordLink(r.Context(), id); {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, constant.ErrPasswordLinkTooSoon):
+		w.Header().Set("Retry-After", "60")
+		response.Error(w, http.StatusTooManyRequests, err.Error())
+	case errors.Is(err, constant.ErrEmailNotConfigured):
+		response.Error(w, http.StatusServiceUnavailable, err.Error())
+	case errors.Is(err, constant.ErrEmailNotSent):
+		response.Error(w, http.StatusBadGateway, constant.ErrEmailNotSent.Error())
+	default:
+		response.Error(w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
+// CheckPasswordLink says whether a link is still usable, without using it up.
+// @Summary Check a set-password link
 // @Tags Auth
 // @Security BearerAuth
 // @Accept json
-// @Param request body presenter.SetPasswordRequest true "New password"
+// @Param request body presenter.PasswordLinkRequest true "Link token"
 // @Success 204
 // @Failure 400 {object} response.ErrorEnvelope
-// @Failure 409 {object} response.ErrorEnvelope
+// @Router /auth/password/check [post]
+func (h *Handler) CheckPasswordLink(w http.ResponseWriter, r *http.Request) {
+	id, ok := currentUserID(w, r)
+	if !ok {
+		return
+	}
+	var req presenter.PasswordLinkRequest
+	if err := response.DecodeJSON(r, &req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, http.StatusBadRequest, request.ValidationTitle(err))
+		return
+	}
+	switch err := h.service.CheckPasswordLink(r.Context(), id, req.Token); {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, constant.ErrInvalidPasswordLink):
+		response.Error(w, http.StatusBadRequest, err.Error())
+	default:
+		response.Error(w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
+// SetPassword sets or changes the password with a link mailed to the User.
+// @Summary Set or change the password
+// @Tags Auth
+// @Security BearerAuth
+// @Accept json
+// @Param request body presenter.SetPasswordRequest true "Link token and new password"
+// @Success 204
+// @Failure 400 {object} response.ErrorEnvelope
 // @Router /auth/password [post]
 func (h *Handler) SetPassword(w http.ResponseWriter, r *http.Request) {
 	id, ok := currentUserID(w, r)
@@ -104,13 +166,11 @@ func (h *Handler) SetPassword(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, request.ValidationTitle(err))
 		return
 	}
-	switch err := h.service.SetPassword(r.Context(), id, req.Password); {
+	switch err := h.service.ResetPassword(r.Context(), id, req.Token, req.Password); {
 	case err == nil:
 		w.WriteHeader(http.StatusNoContent)
-	case errors.Is(err, constant.ErrInvalidPassword):
+	case errors.Is(err, constant.ErrInvalidPassword), errors.Is(err, constant.ErrInvalidPasswordLink):
 		response.Error(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, constant.ErrPasswordAlreadySet):
-		response.Error(w, http.StatusConflict, err.Error())
 	default:
 		response.Error(w, http.StatusInternalServerError, "internal server error")
 	}

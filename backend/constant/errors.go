@@ -23,7 +23,10 @@ var (
 	ErrInvalidVerificationToken = errors.New("verification link is invalid or has expired")
 	ErrVerificationTooSoon      = errors.New("a verification email was sent a moment ago")
 	ErrEmailNotConfigured       = errors.New("email sending is not configured")
-	ErrEmailNotSent             = errors.New("verification email could not be sent")
+	ErrEmailNotSent             = errors.New("email could not be sent")
+
+	ErrInvalidPasswordLink = errors.New("password link is invalid or has expired")
+	ErrPasswordLinkTooSoon = errors.New("a password link was sent a moment ago")
 
 	ErrIdentityNotFound         = errors.New("sign-in identity not linked")
 	ErrIdentityInUse            = errors.New("this account is linked to another user")
@@ -32,6 +35,5 @@ var (
 	ErrIdentityProviderNotSet   = errors.New("sign-in provider is not configured")
 	ErrIdentityEmailNotVerified = errors.New("the provider has not verified this email")
 	ErrLastSignInMethod         = errors.New("this is the only way to sign in")
-	ErrPasswordAlreadySet       = errors.New("a password is already set")
 	ErrInvalidPassword          = errors.New("password must be at least 15 characters and at most 72 bytes")
 )
