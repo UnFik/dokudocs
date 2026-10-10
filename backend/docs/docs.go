@@ -15,6 +15,291 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/auth/email/resend": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Send the email verification link again",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/email/verify": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Verify an email address",
+                "parameters": [
+                    {
+                        "description": "Link token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_auth_presenter.VerifyEmailRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/backend_internal_presentation_auth_presenter.LoginResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/google/callback": {
+            "get": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Provider callback",
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    }
+                }
+            }
+        },
+        "/auth/google/exchange": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Exchange the sign-in code for a token",
+                "parameters": [
+                    {
+                        "description": "Code from the callback redirect",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_auth_presenter.ExchangeIdentityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/backend_internal_presentation_auth_presenter.ExchangeIdentityResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/google/start": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Start signing in with an outside provider",
+                "parameters": [
+                    {
+                        "description": "Where to return",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_auth_presenter.StartIdentityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/backend_internal_presentation_auth_presenter.StartIdentityResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/identities": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "List sign-in methods",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/backend_internal_presentation_auth_presenter.SignInMethods"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/identities/{provider}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Unlink an account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider name",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "Authenticate user with credentials and return JWT token",
@@ -122,6 +407,50 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Set a password",
+                "parameters": [
+                    {
+                        "description": "New password",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_auth_presenter.SetPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/register": {
             "post": {
                 "description": "Register a new user with email, password, and full name",
@@ -179,6 +508,84 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/catalog": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "List the Architecture catalog",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                        }
+                    },
+                    "304": {
+                        "description": "Not Modified"
+                    }
+                }
+            }
+        },
+        "/catalog/requests": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Catalog"
+                ],
+                "summary": "Request a catalog entry",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
                         "schema": {
                             "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
                         }
@@ -4325,6 +4732,10 @@ const docTemplate = `{
                 "projectName": {
                     "type": "string"
                 },
+                "replacementId": {
+                    "description": "ReplacementID names the record the body's collaboration room writes to; only a\nrestore changes it. Only the single-document read fills it.",
+                    "type": "string"
+                },
                 "starredAt": {
                     "type": "string"
                 },
@@ -4350,11 +4761,19 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "type": {
-                    "description": "markdown, dbdiagram, mermaid",
+                    "description": "markdown, dbdiagram, mermaid, architecture",
                     "type": "string"
                 },
                 "updatedAt": {
                     "type": "string"
+                },
+                "updatedBy": {
+                    "description": "UpdatedBy is the person whose edit was stored last; nil before the first edit. Only the single-document read fills it.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/backend_internal_domain_model.UserAuthor"
+                        }
+                    ]
                 },
                 "viewCount": {
                     "type": "integer"
@@ -4396,6 +4815,10 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "documentId": {
+                    "type": "string"
+                },
+                "replacementId": {
+                    "description": "ReplacementID is the record the restore made; editors reopen the document on it.",
                     "type": "string"
                 },
                 "revisionId": {
@@ -4639,6 +5062,10 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "emailVerified": {
+                    "description": "EmailVerified is read from the database, unlike the flag in the access token.",
+                    "type": "boolean"
+                },
                 "fullName": {
                     "type": "string"
                 },
@@ -4760,6 +5187,45 @@ const docTemplate = `{
                 }
             }
         },
+        "backend_internal_presentation_auth_presenter.ExchangeIdentityRequest": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
+        "backend_internal_presentation_auth_presenter.ExchangeIdentityResponse": {
+            "type": "object",
+            "properties": {
+                "accessToken": {
+                    "type": "string"
+                },
+                "redirect": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/backend_internal_presentation_auth_presenter.ResponseUser"
+                }
+            }
+        },
+        "backend_internal_presentation_auth_presenter.LinkedIdentity": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "linkedAt": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                }
+            }
+        },
         "backend_internal_presentation_auth_presenter.LoginRequest": {
             "type": "object",
             "required": [
@@ -4813,6 +5279,9 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "emailVerified": {
+                    "type": "boolean"
+                },
                 "exp": {
                     "type": "integer"
                 },
@@ -4824,6 +5293,58 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "backend_internal_presentation_auth_presenter.SetPasswordRequest": {
+            "type": "object",
+            "required": [
+                "password"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "backend_internal_presentation_auth_presenter.SignInMethods": {
+            "type": "object",
+            "properties": {
+                "hasPassword": {
+                    "type": "boolean"
+                },
+                "identities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/backend_internal_presentation_auth_presenter.LinkedIdentity"
+                    }
+                }
+            }
+        },
+        "backend_internal_presentation_auth_presenter.StartIdentityRequest": {
+            "type": "object",
+            "properties": {
+                "redirect": {
+                    "type": "string"
+                }
+            }
+        },
+        "backend_internal_presentation_auth_presenter.StartIdentityResponse": {
+            "type": "object",
+            "properties": {
+                "authorizationUrl": {
+                    "type": "string"
+                }
+            }
+        },
+        "backend_internal_presentation_auth_presenter.VerifyEmailRequest": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
+                    "type": "string"
                 }
             }
         },
@@ -5035,6 +5556,10 @@ const docTemplate = `{
         "backend_internal_presentation_response.ErrorEnvelope": {
             "type": "object",
             "properties": {
+                "code": {
+                    "description": "Code is a stable machine-readable reason, set only where a client acts on it.",
+                    "type": "string"
+                },
                 "title": {
                     "type": "string"
                 }
