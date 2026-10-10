@@ -573,6 +573,36 @@ export async function setDocumentSuggestionResolved(
   )
 }
 
+export type MentionCandidate = {
+  userId: string
+  name: string
+  email: string
+  canRead: boolean
+}
+
+/** Whom a comment on the document may name, and whether they can read it. */
+export async function listMentionable(
+  workspaceId: string,
+  documentId: string,
+  signal?: AbortSignal
+): Promise<MentionCandidate[]> {
+  return z
+    .array(
+      z.object({
+        userId: z.guid(),
+        name: z.string(),
+        email: z.string(),
+        canRead: z.boolean(),
+      })
+    )
+    .parse(
+      await apiFetch<unknown>(`/api/v1/documents/${documentId}/mentionable`, {
+        headers: workspaceHeaders(workspaceId),
+        signal,
+      })
+    )
+}
+
 export const maxCommentLength = 2000
 export const maxCommentSelection = 500
 

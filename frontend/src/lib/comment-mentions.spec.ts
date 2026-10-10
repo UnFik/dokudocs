@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import fixture from '../../../../../fixtures/comment-mentions.json'
+import fixture from '../../../fixtures/comment-mentions.json'
 import {
   activeMentionQuery,
   deserialize,
@@ -40,7 +40,10 @@ describe('deserialize and serialize', () => {
   })
 
   it('leaves text without a token alone', () => {
-    expect(deserialize('plain @ text')).toEqual({ text: 'plain @ text', mentions: [] })
+    expect(deserialize('plain @ text')).toEqual({
+      text: 'plain @ text',
+      mentions: [],
+    })
     expect(serialize('plain @ text', [])).toBe('plain @ text')
   })
 
@@ -53,19 +56,31 @@ describe('deserialize and serialize', () => {
     for (const testCase of fixture.cases) {
       const { text, mentions } = deserialize(testCase.content)
       expect(text).toBe(testCase.visible)
-      expect(serialize(text, mentions)).toBe(testCase.content.replace(/user:([0-9A-F-]{36})/g, (_m, id: string) => `user:${id.toLowerCase()}`))
+      expect(serialize(text, mentions)).toBe(
+        testCase.content.replace(
+          /user:([0-9A-F-]{36})/g,
+          (_m, id: string) => `user:${id.toLowerCase()}`
+        )
+      )
     }
   })
 })
 
 describe('trackEdit', () => {
-  const start = deserialize(`${mentionToken(ANA, 'Ana Bo')} said ${mentionToken(BO, 'Bo Ca')}`)
+  const start = deserialize(
+    `${mentionToken(ANA, 'Ana Bo')} said ${mentionToken(BO, 'Bo Ca')}`
+  )
 
   it('moves a mention along when text is typed before it', () => {
     const typed = `oh ${start.text}`
     const next = trackEdit(start.mentions, start.text, typed)
-    expect(next.map((m) => [m.start, m.end])).toEqual([[3, 10], [16, 22]])
-    expect(serialize(typed, next)).toBe(`oh ${mentionToken(ANA, 'Ana Bo')} said ${mentionToken(BO, 'Bo Ca')}`)
+    expect(next.map((m) => [m.start, m.end])).toEqual([
+      [3, 10],
+      [16, 22],
+    ])
+    expect(serialize(typed, next)).toBe(
+      `oh ${mentionToken(ANA, 'Ana Bo')} said ${mentionToken(BO, 'Bo Ca')}`
+    )
   })
 
   it('keeps a mention when text is typed after it', () => {
@@ -83,16 +98,22 @@ describe('trackEdit', () => {
     const edited = start.text.replace('@Ana Bo', '@Ana Bx')
     const next = trackEdit(start.mentions, start.text, edited)
     expect(next.map((m) => m.userID)).toEqual([BO])
-    expect(serialize(edited, next)).toBe(`@Ana Bx said ${mentionToken(BO, 'Bo Ca')}`)
+    expect(serialize(edited, next)).toBe(
+      `@Ana Bx said ${mentionToken(BO, 'Bo Ca')}`
+    )
   })
 
   it('turns a mention into plain text when text is typed inside it', () => {
     const edited = start.text.replace('@Ana Bo', '@Ana, Bo')
-    expect(trackEdit(start.mentions, start.text, edited).map((m) => m.userID)).toEqual([BO])
+    expect(
+      trackEdit(start.mentions, start.text, edited).map((m) => m.userID)
+    ).toEqual([BO])
   })
 
   it('does nothing when the text did not change', () => {
-    expect(trackEdit(start.mentions, start.text, start.text)).toEqual(start.mentions)
+    expect(trackEdit(start.mentions, start.text, start.text)).toEqual(
+      start.mentions
+    )
   })
 
   it('handles a replaced selection spanning several mentions', () => {
@@ -120,6 +141,12 @@ describe('activeMentionQuery', () => {
     ['hi @', 0],
   ])('finds none in %j with the caret at %i', (text, caret) => {
     expect(activeMentionQuery(text, caret)).toBeNull()
+  })
+
+  it('finds none at an @ that already is a mention', () => {
+    const { text, mentions } = deserialize(`hi ${mentionToken(ANA, 'Ana Bo')} `)
+    expect(activeMentionQuery(text, text.length)).not.toBeNull()
+    expect(activeMentionQuery(text, text.length, mentions)).toBeNull()
   })
 
   it('finds none once the query grows past a name', () => {
