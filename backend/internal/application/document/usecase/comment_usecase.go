@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"backend/internal/domain/contract/repository"
+	"backend/internal/domain/mention"
 	"backend/internal/domain/model"
 	"backend/internal/domain/policy"
 
@@ -21,6 +22,11 @@ const (
 	MaxCommentLength = 2000
 	// MaxCommentSelection bounds the quoted text kept with a thread.
 	MaxCommentSelection = 500
+	// MaxCommentRawLength bounds the stored text, in which a mention is longer
+	// than the name it shows.
+	MaxCommentRawLength = 6000
+	// MaxMentionsPerComment bounds how many people one comment or reply names.
+	MaxMentionsPerComment = 20
 	// MaxCommentAnchorBytes bounds the stored anchor.
 	MaxCommentAnchorBytes = 4096
 )
@@ -51,10 +57,8 @@ type CommentInput struct {
 }
 
 func (u *CommentUseCase) Create(ctx context.Context, input CommentInput) error {
-	content := strings.TrimSpace(input.Content)
 	if input.WorkspaceID == uuid.Nil || input.DocumentID == uuid.Nil || input.ThreadID == uuid.Nil ||
-		input.AuthorID == uuid.Nil || content == "" || utf8.RuneCountInString(content) > MaxCommentLength ||
-		utf8.RuneCountInString(input.SelectedText) > MaxCommentSelection {
+		input.AuthorID == uuid.Nil || utf8.RuneCountInString(input.SelectedText) > MaxCommentSelection {
 		return ErrInvalidComment
 	}
 	if string(input.Anchor) == "null" {
@@ -73,6 +77,10 @@ func (u *CommentUseCase) Create(ctx context.Context, input CommentInput) error {
 	if policy.ValidateCommentAnchor(docType, input.Anchor) != nil {
 		return ErrInvalidComment
 	}
+	content, err := u.prepareContent(ctx, input.WorkspaceID, input.DocumentID, input.Content)
+	if err != nil {
+		return err
+	}
 	return u.comments.CreateComment(ctx, input.WorkspaceID, model.CommentThread{
 		ID: input.ThreadID, DocumentID: input.DocumentID, AuthorID: input.AuthorID,
 		SelectedText: input.SelectedText, Content: content, Anchor: input.Anchor,
@@ -89,11 +97,13 @@ type CommentReplyInput struct {
 }
 
 func (u *CommentUseCase) Reply(ctx context.Context, input CommentReplyInput) error {
-	content := strings.TrimSpace(input.Content)
 	if input.WorkspaceID == uuid.Nil || input.DocumentID == uuid.Nil || input.ThreadID == uuid.Nil ||
-		input.ReplyID == uuid.Nil || input.AuthorID == uuid.Nil || content == "" ||
-		utf8.RuneCountInString(content) > MaxCommentLength {
+		input.ReplyID == uuid.Nil || input.AuthorID == uuid.Nil {
 		return ErrInvalidComment
+	}
+	content, err := u.prepareContent(ctx, input.WorkspaceID, input.DocumentID, input.Content)
+	if err != nil {
+		return err
 	}
 	return u.comments.CreateCommentReply(ctx, input.WorkspaceID, input.DocumentID, model.CommentReply{
 		ID: input.ReplyID, ThreadID: input.ThreadID, AuthorID: input.AuthorID, Content: content,
@@ -107,27 +117,67 @@ func (u *CommentUseCase) Resolve(ctx context.Context, workspaceID, documentID, t
 	return u.comments.SetCommentResolved(ctx, workspaceID, documentID, threadID, actorID, resolved)
 }
 
-func validContent(content string) (string, bool) {
-	trimmed := strings.TrimSpace(content)
-	return trimmed, trimmed != "" && utf8.RuneCountInString(trimmed) <= MaxCommentLength
+// prepareContent checks the text of a comment and returns what to store: the
+// mentions in it name members who can read the document, and each carries that
+// member's name as it is now, so a label sent by a client cannot say otherwise.
+func (u *CommentUseCase) prepareContent(ctx context.Context, workspaceID, documentID uuid.UUID, content string) (string, error) {
+	content = strings.TrimSpace(content)
+	if content == "" || utf8.RuneCountInString(content) > MaxCommentRawLength {
+		return "", ErrInvalidComment
+	}
+	if mentions := mention.Parse(content); len(mentions) > 0 {
+		if len(mentions) > MaxMentionsPerComment {
+			return "", ErrInvalidComment
+		}
+		ids := make([]uuid.UUID, 0, len(mentions))
+		for _, named := range mentions {
+			ids = append(ids, named.UserID)
+		}
+		targets, err := u.comments.ResolveMentions(ctx, workspaceID, documentID, ids)
+		if err != nil {
+			return "", err
+		}
+		labels := make(map[uuid.UUID]string, len(targets))
+		for _, target := range targets {
+			if target.CanRead {
+				labels[target.UserID] = policy.CleanDisplayName(target.Name, target.Email)
+			}
+		}
+		for _, id := range ids {
+			if _, ok := labels[id]; !ok {
+				return "", ErrInvalidComment
+			}
+		}
+		content = mention.Rewrite(content, func(id uuid.UUID) string { return labels[id] })
+	}
+	if utf8.RuneCountInString(mention.Visible(content)) > MaxCommentLength {
+		return "", ErrInvalidComment
+	}
+	return content, nil
 }
 
 // Edit changes the text of a thread's first message.
 func (u *CommentUseCase) Edit(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, content string) error {
-	trimmed, ok := validContent(content)
-	if !ok || workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || actorID == uuid.Nil {
+	if workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || actorID == uuid.Nil {
 		return ErrInvalidComment
 	}
-	return u.comments.UpdateComment(ctx, workspaceID, documentID, threadID, actorID, trimmed)
+	stored, err := u.prepareContent(ctx, workspaceID, documentID, content)
+	if err != nil {
+		return err
+	}
+	return u.comments.UpdateComment(ctx, workspaceID, documentID, threadID, actorID, stored)
 }
 
 // EditReply changes the text of a reply.
 func (u *CommentUseCase) EditReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID, content string) error {
-	trimmed, ok := validContent(content)
-	if !ok || workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || replyID == uuid.Nil || actorID == uuid.Nil {
+	if workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || replyID == uuid.Nil || actorID == uuid.Nil {
 		return ErrInvalidComment
 	}
-	return u.comments.UpdateCommentReply(ctx, workspaceID, documentID, threadID, replyID, actorID, trimmed)
+	stored, err := u.prepareContent(ctx, workspaceID, documentID, content)
+	if err != nil {
+		return err
+	}
+	return u.comments.UpdateCommentReply(ctx, workspaceID, documentID, threadID, replyID, actorID, stored)
 }
 
 // Delete removes a thread with its replies.

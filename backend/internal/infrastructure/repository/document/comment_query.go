@@ -153,6 +153,36 @@ func (r *Repository) CommentDocumentType(ctx context.Context, workspaceID, docum
 	return docType, err
 }
 
+func (r *Repository) ResolveMentions(ctx context.Context, workspaceID, documentID uuid.UUID, userIDs []uuid.UUID) ([]model.MentionTarget, error) {
+	if r.tx == nil {
+		return nil, errors.New("commenting requires a transaction-capable database")
+	}
+	var targets []model.MentionTarget
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		seen := make(map[uuid.UUID]bool, len(userIDs))
+		for _, userID := range userIDs {
+			if seen[userID] {
+				continue
+			}
+			seen[userID] = true
+			doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, userID, false, nil)
+			if errors.Is(err, constant.ErrForbidden) {
+				continue // not a member of the workspace
+			}
+			if err != nil {
+				return err
+			}
+			target := model.MentionTarget{UserID: userID, CanRead: policy.CanReadDocument(doc, access)}
+			if err := tx.QueryRowContext(ctx, `SELECT full_name, email FROM users WHERE id = $1`, userID).Scan(&target.Name, &target.Email); err != nil {
+				return err
+			}
+			targets = append(targets, target)
+		}
+		return nil
+	})
+	return targets, err
+}
+
 func (r *Repository) CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error {
 	if r.tx == nil {
 		return errors.New("commenting requires a transaction-capable database")

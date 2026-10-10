@@ -61,6 +61,23 @@ func TestCommentThreadsRepliesAndResolve(t *testing.T) {
 		t.Fatalf("type through another workspace = %v, want not found", err)
 	}
 
+	outsiderID := insertAccessTestUser(t, ctx, db)
+	t.Cleanup(func() { _, _ = db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, outsiderID) })
+	targets, err := repo.ResolveMentions(ctx, workspaceID, documentID, []uuid.UUID{commenterID, viewerID, outsiderID, commenterID})
+	if err != nil {
+		t.Fatalf("resolve mentions: %v", err)
+	}
+	byID := map[uuid.UUID]model.MentionTarget{}
+	for _, target := range targets {
+		byID[target.UserID] = target
+	}
+	if len(targets) != 2 || !byID[commenterID].CanRead || !byID[viewerID].CanRead || byID[commenterID].Name == "" || byID[commenterID].Email == "" {
+		t.Fatalf("resolved %+v, want the commenter and the viewer once each, both able to read, and no outsider", targets)
+	}
+	if _, err := repo.ResolveMentions(ctx, uuid.New(), documentID, []uuid.UUID{commenterID}); !errors.Is(err, constant.ErrDocumentNotFound) {
+		t.Fatalf("resolve through another workspace = %v, want not found", err)
+	}
+
 	reply := func(authorID uuid.UUID, content string) model.CommentReply {
 		return model.CommentReply{ID: uuid.New(), ThreadID: thread.ID, AuthorID: authorID, Content: content}
 	}
