@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
+import { joinWorkspace } from "../../../support/workspace-invites";
 
 test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste are suggestions the owner accepts or rejects", async ({
   page,
@@ -120,11 +121,7 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     },
   );
   expect(registerResponse.status()).toBe(201);
-  const inviteResponse = await page.request.post(
-    `${apiURL}/api/v1/workspaces/${workspaceID}/invites`,
-    { headers: ownerHeaders, data: { email: commenterEmail, role: "member" } },
-  );
-  expect(inviteResponse.status()).toBe(201);
+  await joinWorkspace({ apiURL, authorization: ownerHeaders.Authorization, workspaceId: workspaceID, email: commenterEmail });
   const grantResponse = await page.request.post(
     `${apiURL}/api/v1/documents/${documentID}/accesses`,
     {

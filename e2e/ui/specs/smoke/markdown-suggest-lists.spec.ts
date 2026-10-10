@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
+import { joinWorkspace } from "../../../support/workspace-invites";
 
 // Skipped until the "/" menu can be opened in Suggest mode. The "/" key makes
 // the block menu insert a "/" with an opening signal, and Suggest mode records
@@ -197,11 +198,7 @@ test.fixme("@live @smoke @suggestlists: a commenter's Enter opens a list item or
     },
   );
   expect(registerResponse.status()).toBe(201);
-  const inviteResponse = await page.request.post(
-    `${apiURL}/api/v1/workspaces/${workspaceID}/invites`,
-    { headers: ownerHeaders, data: { email: commenterEmail, role: "member" } },
-  );
-  expect(inviteResponse.status()).toBe(201);
+  await joinWorkspace({ apiURL, authorization: ownerHeaders.Authorization, workspaceId: workspaceID, email: commenterEmail });
   const grantResponse = await page.request.post(
     `${apiURL}/api/v1/documents/${documentID}/accesses`,
     {

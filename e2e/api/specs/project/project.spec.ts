@@ -1,5 +1,6 @@
 import { test, expect } from '../../fixtures/test-base'
 import { generateProject, generateUser, generateWorkspace } from '../../helpers/factory'
+import { joinWorkspace } from '../../../support/workspace-invites'
 
 test.describe('Project: CRUD & Star /api/v1/projects', () => {
   test('private project readers can star it but cannot edit or delete it', async ({
@@ -24,10 +25,7 @@ test.describe('Project: CRUD & Star /api/v1/projects', () => {
     const registerRes = await request.post('/api/v1/auth/register', { data: readerData })
     expect(registerRes.status()).toBe(201)
     const reader = (await registerRes.json()).data
-    const inviteRes = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: readerData.email, role: 'member' },
-    })
-    expect(inviteRes.status()).toBe(201)
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: readerData.email, role: 'member' })
 
     const projectRes = await ownerRequest.post('/api/v1/projects', {
       data: { ...generateProject('Private project read access'), visibility: 'private' },

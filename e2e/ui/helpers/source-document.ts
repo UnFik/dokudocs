@@ -7,6 +7,8 @@ export type SourceDocument = {
   documentID: string;
   workspaceID: string;
   documentURL: string;
+  /** Authorization header value of the signed-in admin. */
+  authorization: string;
   /** Calls the API as the signed-in admin. */
   api: (path: string, init?: { method?: string; data?: unknown; headers?: Record<string, string> }) => ReturnType<APIRequestContext["fetch"]>;
 };
@@ -63,7 +65,7 @@ export async function openSourceDocument(
 
   await page.goto(`/docs/${documentID}`);
   await expect(page.getByText("Editing together")).toBeVisible({ timeout: 20000 });
-  return { documentID, workspaceID, documentURL: page.url(), api };
+  return { documentID, workspaceID, documentURL: page.url(), authorization: `Bearer ${accessCookie!.value}`, api };
 }
 
 /** The source the editor on this page shows. Monaco renders spaces as no-break spaces. */
