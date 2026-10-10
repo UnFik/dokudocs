@@ -1,11 +1,44 @@
 import { describe, expect, it } from 'vitest'
 import {
+  computeCleanedOrthogonalPointsWithSegments,
   getDefaultEdgeJoints,
   getGhostJointCandidates,
+  snapJointsToPath,
   type JointPoint,
 } from './dbml-visual-canvas'
 
 describe('DBML edge joints', () => {
+  it('keeps every joint dot on the drawn path after a neighbour is dragged past it', () => {
+    const joints: JointPoint[] = [
+      { x: 139, y: 45, axis: 'y' },
+      { x: 247, y: 148, axis: 'x' },
+      { x: 293, y: 60, axis: 'y' },
+    ]
+    const { cleaned } = computeCleanedOrthogonalPointsWithSegments(
+      28,
+      113,
+      405,
+      182,
+      true,
+      joints
+    )
+    const snapped = snapJointsToPath(joints, cleaned)
+
+    for (const joint of snapped) {
+      const onPath = cleaned.slice(1).some((end, i) => {
+        const start = cleaned[i]
+        return (
+          joint.x >= Math.min(start.x, end.x) - 0.5 &&
+          joint.x <= Math.max(start.x, end.x) + 0.5 &&
+          joint.y >= Math.min(start.y, end.y) - 0.5 &&
+          joint.y <= Math.max(start.y, end.y) + 0.5
+        )
+      })
+      expect(onPath).toBe(true)
+    }
+    expect(snapped.map((j) => j.axis)).toEqual(['y', 'x', 'y'])
+  })
+
   it('places five default joints and one ghost between every adjacent pair', () => {
     const path: JointPoint[] = [
       { x: 0, y: 0 },
