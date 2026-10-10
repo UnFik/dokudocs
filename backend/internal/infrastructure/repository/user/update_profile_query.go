@@ -6,12 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r *Repository) UpdateProfile(ctx context.Context, id uuid.UUID, fullName, phone, bio, avatarURL string) error {
+func (r *Repository) UpdateProfile(ctx context.Context, id uuid.UUID, fullName, phone, bio string) error {
 	const query = `
 		UPDATE users
-		SET full_name = $2, phone_number = $3, bio = $4, avatar_url = $5, updated_at = NOW()
+		SET full_name = $2, phone_number = $3, bio = $4, updated_at = NOW()
 		WHERE id = $1
 	`
-	_, err := r.db.ExecContext(ctx, query, id, fullName, phone, bio, avatarURL)
+	_, err := r.db.ExecContext(ctx, query, id, fullName, phone, bio)
 	return err
 }

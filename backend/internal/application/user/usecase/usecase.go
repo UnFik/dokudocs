@@ -8,13 +8,28 @@ import (
 )
 
 type useCase struct {
-	repo repository.UserRepository
+	repo    repository.UserRepository
+	avatars repository.AvatarRepository
+	store   repository.AvatarStore
 }
 
-func NewUseCase(db database.DB) usecasecontract.UserUseCase {
-	return NewUseCaseWithRepo(userrepo.NewRepository(db))
+// Option configures what the use case reaches beyond the database.
+type Option func(*useCase)
+
+// WithAvatarStore is where uploaded avatars are kept.
+func WithAvatarStore(store repository.AvatarStore) Option {
+	return func(u *useCase) { u.store = store }
 }
 
-func NewUseCaseWithRepo(repo repository.UserRepository) usecasecontract.UserUseCase {
-	return &useCase{repo: repo}
+func NewUseCase(db database.DB, options ...Option) usecasecontract.UserUseCase {
+	return NewUseCaseWithRepo(userrepo.NewRepository(db), options...)
+}
+
+func NewUseCaseWithRepo(repo repository.UserRepository, options ...Option) usecasecontract.UserUseCase {
+	u := &useCase{repo: repo}
+	u.avatars, _ = repo.(repository.AvatarRepository)
+	for _, option := range options {
+		option(u)
+	}
+	return u
 }

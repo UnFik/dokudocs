@@ -589,6 +589,42 @@ const docTemplate = `{
                 }
             }
         },
+        "/avatars/{key}": {
+            "get": {
+                "produces": [
+                    "image/png",
+                    "image/jpeg",
+                    "image/webp"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Fetch an avatar",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Avatar key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/catalog": {
             "get": {
                 "security": [
@@ -4146,6 +4182,94 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/me/avatar": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Upload an avatar",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "PNG, JPEG or WebP, up to 512 KB and 1024 by 1024 pixels",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/backend_internal_domain_model.UserProfile"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Remove the avatar",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/workspaces": {
             "get": {
                 "security": [
@@ -5657,9 +5781,6 @@ const docTemplate = `{
         "backend_internal_presentation_user_presenter.UpdateProfileRequest": {
             "type": "object",
             "properties": {
-                "avatarUrl": {
-                    "type": "string"
-                },
                 "bio": {
                     "type": "string"
                 },

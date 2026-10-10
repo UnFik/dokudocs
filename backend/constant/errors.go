@@ -25,6 +25,10 @@ var (
 	ErrEmailNotConfigured       = errors.New("email sending is not configured")
 	ErrEmailNotSent             = errors.New("email could not be sent")
 
+	ErrInvalidAvatar  = errors.New("avatar must be a PNG, JPEG or WebP picture up to 1024 by 1024 pixels")
+	ErrAvatarTooLarge = errors.New("avatar must be 512 KB or smaller")
+	ErrAvatarNotFound = errors.New("avatar not found")
+
 	ErrInvalidPasswordLink = errors.New("password link is invalid or has expired")
 	ErrPasswordLinkTooSoon = errors.New("a password link was sent a moment ago")
 

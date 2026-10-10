@@ -8,7 +8,7 @@ import (
 )
 
 func (u *useCase) UpdateProfile(ctx context.Context, input dto.UpdateProfileInput) (data model.UserProfile, err error) {
-	if err = u.repo.UpdateProfile(ctx, input.UserID, input.FullName, input.PhoneNumber, input.Bio, input.AvatarURL); err != nil {
+	if err = u.repo.UpdateProfile(ctx, input.UserID, input.FullName, input.PhoneNumber, input.Bio); err != nil {
 		return data, err
 	}
 	data, err = u.repo.FindByID(ctx, input.UserID)

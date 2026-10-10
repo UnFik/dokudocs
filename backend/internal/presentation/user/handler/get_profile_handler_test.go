@@ -37,6 +37,13 @@ func (m *mockUserUseCase) UpdateSettings(ctx context.Context, settings model.Use
 	m.settings = settings
 	return m.settings, nil
 }
+func (m *mockUserUseCase) SetAvatar(ctx context.Context, userID uuid.UUID, data []byte) (model.UserProfile, error) {
+	return m.profile, nil
+}
+func (m *mockUserUseCase) RemoveAvatar(ctx context.Context, userID uuid.UUID) error { return nil }
+func (m *mockUserUseCase) OpenAvatar(ctx context.Context, key string) ([]byte, string, error) {
+	return nil, "", nil
+}
 func (m *mockUserUseCase) SearchUsers(ctx context.Context, query string, limit int) ([]model.UserSummary, error) {
 	return m.users, nil
 }
