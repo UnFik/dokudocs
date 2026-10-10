@@ -28,9 +28,9 @@ test('live smoke @smoke: creates a document and reads it from the backend after 
   await expect(page.getByRole('button', { name: new RegExp(workspaceName) })).toBeVisible()
 
   await page.getByRole('button', { name: /new/i }).first().click()
-  await page.getByRole('menuitem', { name: /db diagram/i }).click()
+  await page.getByRole('menuitem', { name: 'DBML' }).click()
   await page.getByLabel(/document title/i).fill(documentTitle)
-  await page.getByRole('button', { name: 'Database Diagram' }).click()
+  await page.getByRole('button', { name: 'DBML' }).click()
   await page.getByRole('button', { name: 'Create Document' }).click()
   await page.waitForURL(/\/docs\/[0-9a-f-]{36}$/i)
 
