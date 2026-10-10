@@ -43,6 +43,7 @@ import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_a
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects/$projectId'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
+import { Route as AuthenticatedSettingsAccountSetPasswordRouteImport } from './routes/_authenticated/settings/account_.set-password'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -226,6 +227,12 @@ const AuthenticatedErrorsErrorRoute =
     path: '/errors/$error',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSettingsAccountSetPasswordRoute =
+  AuthenticatedSettingsAccountSetPasswordRouteImport.update({
+    id: '/account_/set-password',
+    path: '/account/set-password',
+    getParentRoute: () => AuthenticatedSettingsRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -261,6 +268,7 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/trash/': typeof AuthenticatedTrashIndexRoute
   '/users/': typeof AuthenticatedUsersIndexRoute
+  '/settings/account/set-password': typeof AuthenticatedSettingsAccountSetPasswordRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -295,6 +303,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/trash': typeof AuthenticatedTrashIndexRoute
   '/users': typeof AuthenticatedUsersIndexRoute
+  '/settings/account/set-password': typeof AuthenticatedSettingsAccountSetPasswordRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -332,6 +341,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/trash/': typeof AuthenticatedTrashIndexRoute
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
+  '/_authenticated/settings/account_/set-password': typeof AuthenticatedSettingsAccountSetPasswordRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -369,6 +379,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/trash/'
     | '/users/'
+    | '/settings/account/set-password'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -403,6 +414,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/trash'
     | '/users'
+    | '/settings/account/set-password'
   id:
     | '__root__'
     | '/'
@@ -439,6 +451,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/'
     | '/_authenticated/trash/'
     | '/_authenticated/users/'
+    | '/_authenticated/settings/account_/set-password'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -702,6 +715,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedErrorsErrorRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings/account_/set-password': {
+      id: '/_authenticated/settings/account_/set-password'
+      path: '/account/set-password'
+      fullPath: '/settings/account/set-password'
+      preLoaderRoute: typeof AuthenticatedSettingsAccountSetPasswordRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
   }
 }
 
@@ -711,6 +731,7 @@ interface AuthenticatedSettingsRouteRouteChildren {
   AuthenticatedSettingsDisplayRoute: typeof AuthenticatedSettingsDisplayRoute
   AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
+  AuthenticatedSettingsAccountSetPasswordRoute: typeof AuthenticatedSettingsAccountSetPasswordRoute
 }
 
 const AuthenticatedSettingsRouteRouteChildren: AuthenticatedSettingsRouteRouteChildren =
@@ -721,6 +742,8 @@ const AuthenticatedSettingsRouteRouteChildren: AuthenticatedSettingsRouteRouteCh
     AuthenticatedSettingsNotificationsRoute:
       AuthenticatedSettingsNotificationsRoute,
     AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+    AuthenticatedSettingsAccountSetPasswordRoute:
+      AuthenticatedSettingsAccountSetPasswordRoute,
   }
 
 const AuthenticatedSettingsRouteRouteWithChildren =

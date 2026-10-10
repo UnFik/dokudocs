@@ -10,9 +10,11 @@ import { SignInMethods } from '@/features/auth/sign-in-methods'
 export function AccountPage({
   linked,
   linkError,
+  passwordResult,
 }: {
   linked?: string
   linkError?: string
+  passwordResult?: 'set' | 'changed'
 }) {
   const user = useCurrentProfile()
   return (
@@ -53,7 +55,11 @@ export function AccountPage({
           <Textarea id='profile-bio' value={user.bio} readOnly />
         </div>
         <Button disabled>Save Changes (not available)</Button>
-        <SignInMethods linked={linked} linkError={linkError} />
+        <SignInMethods
+          linked={linked}
+          linkError={linkError}
+          passwordResult={passwordResult}
+        />
       </div>
     </main>
   )

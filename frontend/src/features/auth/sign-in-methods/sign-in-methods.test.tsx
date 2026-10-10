@@ -75,7 +75,17 @@ it('offers to connect Google and sends the User to Google signed in', async () =
   expect(JSON.parse(start[1].body)).toEqual({ redirect: '/settings/account' })
 })
 
-it('lists the connected account and disconnects it', async () => {
+it('shows the Google icon beside the connected account', async () => {
+  vi.stubGlobal('fetch', fakeApi({ hasPassword: true, identities: [linked] }))
+  const screen = await mount()
+  await expect.element(screen.getByText('me@gmail.test')).toBeVisible()
+  const row = screen.getByText('me@gmail.test').element().closest('div')
+  expect(
+    row?.parentElement?.querySelector('[data-slot="google-icon"]')
+  ).not.toBeNull()
+})
+
+it('asks before disconnecting Google and only then removes it', async () => {
   const state: State = { hasPassword: true, identities: [linked] }
   const fetch = fakeApi(state)
   vi.stubGlobal('fetch', fetch)
@@ -87,67 +97,128 @@ it('lists the connected account and disconnects it', async () => {
       .getByRole('button', { name: 'Connect Google', exact: true })
       .elements()
   ).toHaveLength(0)
+  await screen.getByRole('button', { name: 'Disconnect Google' }).click()
+  const dialog = screen.getByRole('alertdialog')
+  await expect.element(dialog).toHaveTextContent('Disconnect Google?')
+  await expect.element(dialog).toHaveTextContent('me@gmail.test')
+  await expect.element(dialog).toHaveTextContent('connected apps')
+  expect(calls(fetch, 'DELETE /api/v1/auth/identities/google')).toHaveLength(0)
+
+  await screen.getByRole('button', { name: 'Cancel' }).click()
+  expect(calls(fetch, 'DELETE /api/v1/auth/identities/google')).toHaveLength(0)
+
   state.identities = []
   await screen.getByRole('button', { name: 'Disconnect Google' }).click()
+  await screen
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Disconnect', exact: true })
+    .click()
   await expect
     .element(screen.getByRole('button', { name: 'Connect Google' }))
     .toBeVisible()
   expect(calls(fetch, 'DELETE /api/v1/auth/identities/google')).toHaveLength(1)
+  expect(screen.getByRole('alertdialog').elements()).toHaveLength(0)
 })
 
-it('says why the only way to sign in cannot be removed', async () => {
+it('keeps the dialog open and says why when the server refuses the disconnect', async () => {
   vi.stubGlobal(
     'fetch',
     fakeApi(
-      { hasPassword: false, identities: [linked] },
+      { hasPassword: true, identities: [linked] },
       {
         'DELETE /api/v1/auth/identities/google': () =>
-          jsonResponse({ title: 'Set a password first' }, 409),
+          jsonResponse({ title: 'Set a password before unlinking' }, 409),
       }
     )
   )
   const screen = await mount()
   await screen.getByRole('button', { name: 'Disconnect Google' }).click()
+  await screen
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Disconnect', exact: true })
+    .click()
   await expect
-    .element(screen.getByRole('alert'))
-    .toHaveTextContent('Set a password first')
+    .element(screen.getByRole('alertdialog').getByRole('alert'))
+    .toHaveTextContent('Set a password before unlinking')
 })
 
-it('lets a User without a password set one, and then stops asking', async () => {
-  const state: State = { hasPassword: false, identities: [linked] }
-  const fetch = fakeApi(state)
+it('offers the set-password link instead of disconnecting the only way to sign in', async () => {
+  const fetch = fakeApi({ hasPassword: false, identities: [linked] })
   vi.stubGlobal('fetch', fetch)
   const screen = await mount()
-
-  const field = screen.getByLabelText('New password')
-  await field.fill('too short')
-  await screen.getByRole('button', { name: 'Set password' }).click()
-  await expect
-    .element(screen.getByRole('alert'))
-    .toHaveTextContent('at least 15')
-  expect(calls(fetch, 'POST /api/v1/auth/password')).toHaveLength(0)
-
-  state.hasPassword = true
-  await field.fill('a long enough password')
-  await screen.getByRole('button', { name: 'Set password' }).click()
-  await expect
-    .element(screen.getByRole('status'))
-    .toHaveTextContent('Password set')
+  await screen.getByRole('button', { name: 'Disconnect Google' }).click()
+  const dialog = screen.getByRole('alertdialog')
+  await expect.element(dialog).toHaveTextContent('only way you sign in')
   expect(
-    JSON.parse(calls(fetch, 'POST /api/v1/auth/password')[0][1].body)
-  ).toEqual({
-    password: 'a long enough password',
-  })
-  expect(screen.getByLabelText('New password').elements()).toHaveLength(0)
+    dialog.getByRole('button', { name: 'Disconnect', exact: true }).elements()
+  ).toHaveLength(0)
+  expect(calls(fetch, 'DELETE /api/v1/auth/identities/google')).toHaveLength(0)
+
+  await dialog.getByRole('button', { name: 'Send set-password link' }).click()
+  const passwordDialog = screen.getByRole('dialog')
+  await expect.element(passwordDialog).toHaveTextContent('Set a password')
+  await expect.element(passwordDialog).toHaveTextContent('user@example.com')
 })
 
-it('does not offer a password to a User who has one', async () => {
+it('sends the link to the account email from a confirmation dialog', async () => {
+  const fetch = fakeApi({ hasPassword: false, identities: [linked] })
+  vi.stubGlobal('fetch', fetch)
+  const screen = await mount()
+  await expect.element(screen.getByText('Not set')).toBeVisible()
+  await screen.getByRole('button', { name: 'Set password' }).click()
+  const dialog = screen.getByRole('dialog')
+  await expect.element(dialog).toHaveTextContent('Set a password')
+  await expect.element(dialog).toHaveTextContent('user@example.com')
+  await expect.element(dialog).toHaveTextContent('expires in 1 hour')
+  expect(calls(fetch, 'POST /api/v1/auth/password/link')).toHaveLength(0)
+
+  await dialog.getByRole('button', { name: 'Send link' }).click()
+  await expect.element(dialog).toHaveTextContent('Check your inbox')
+  expect(calls(fetch, 'POST /api/v1/auth/password/link')).toHaveLength(1)
+  await expect
+    .element(dialog.getByRole('button', { name: /Send again/ }))
+    .toBeDisabled()
+})
+
+it('offers Change password to a User who already has one', async () => {
   vi.stubGlobal('fetch', fakeApi({ hasPassword: true, identities: [] }))
   const screen = await mount()
+  await expect.element(screen.getByText('Password is set')).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Set password' }).elements()
+  ).toHaveLength(0)
+  await screen.getByRole('button', { name: 'Change password' }).click()
   await expect
-    .element(screen.getByRole('button', { name: 'Connect Google' }))
-    .toBeVisible()
-  expect(screen.getByLabelText('New password').elements()).toHaveLength(0)
+    .element(screen.getByRole('dialog'))
+    .toHaveTextContent('Change your password')
+})
+
+it.each([
+  [429, 'Wait a minute before asking again.'],
+  [403, 'Verify your email before'],
+  [502, 'could not be sent'],
+  [503, 'not set up'],
+  [500, 'Could not send the link'],
+])('explains a %s when sending the link', async (status, message) => {
+  vi.stubGlobal(
+    'fetch',
+    fakeApi(
+      { hasPassword: true, identities: [] },
+      {
+        'POST /api/v1/auth/password/link': () =>
+          jsonResponse({ title: 'x' }, status),
+      }
+    )
+  )
+  const screen = await mount()
+  await screen.getByRole('button', { name: 'Change password' }).click()
+  await screen
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Send link' })
+    .click()
+  await expect
+    .element(screen.getByRole('dialog').getByRole('alert'))
+    .toHaveTextContent(message)
 })
 
 it.each([

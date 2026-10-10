@@ -70,6 +70,12 @@ describe('session route guards', () => {
       expect(safeRedirect(path)).toBe('/dashboard')
     expect(safeRedirect('/docs/one?mode=edit')).toBe('/docs/one?mode=edit')
   })
+  it('keeps the token of a set-password link through sign-in', () => {
+    expect(safeRedirect('/settings/account/set-password?token=abc_-1')).toBe(
+      '/settings/account/set-password?token=abc_-1'
+    )
+    expect(safeRedirect('/settings/account/other')).toBe('/dashboard')
+  })
 })
 
 describe('opening a document with no connection', () => {
