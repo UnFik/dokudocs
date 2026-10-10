@@ -4,7 +4,9 @@
 // characters of noise, so there a mention reads as @Name and is tracked by
 // position until it is serialized back.
 
+// The label excludes control characters on purpose, as the backend grammar does.
 const TOKEN =
+  // eslint-disable-next-line no-control-regex
   /@\[([^[\]()\u0000-\u001f\u007f]{1,100})\]\(user:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)/g
 
 /** The longest name fragment that still counts as typing a mention. */
@@ -126,17 +128,20 @@ export function trackEdit(
 /**
  * The name being typed after an @ just before the caret, or null. The @ has to
  * open a word, so an email address does not open the list, and the name may
- * hold spaces so it can narrow to a full name.
+ * hold spaces so it can narrow to a full name. An @ that already is a mention
+ * opens nothing.
  */
 export function activeMentionQuery(
   text: string,
-  caret: number
+  caret: number,
+  mentions: PlacedMention[] = []
 ): { start: number; query: string } | null {
   for (let at = caret - 1; at >= 0; at--) {
     const char = text[at]
     if (char === '\n') return null
     if (char !== '@') continue
     if (at > 0 && !/\s/.test(text[at - 1])) return null
+    if (mentions.some((mention) => mention.start === at)) return null
     const query = text.slice(at + 1, caret)
     if (query.length > MAX_QUERY || /^\s|[[\]()]/.test(query)) return null
     return { start: at, query }

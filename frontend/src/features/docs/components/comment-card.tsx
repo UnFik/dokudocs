@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { visibleText } from '@/lib/comment-mentions'
 import {
   createDocumentComment,
   deleteDocumentComment,
@@ -14,8 +15,9 @@ import {
   type CommentThread,
 } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
+import { CommentText } from '@/components/comment-text'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { MentionTextarea } from '@/components/mention-textarea'
 import { CardIconButton, ReviewCardHeader, revealOnHover } from './review-card'
 
 /** Compact actions in the review rail: 12px text, 28px high, aligned to the text edge. */
@@ -31,6 +33,8 @@ function Quote({ text }: { text: string }) {
 }
 
 function CommentForm({
+  workspaceID,
+  documentID,
   id,
   label,
   submitLabel,
@@ -40,6 +44,8 @@ function CommentForm({
   autoFocus,
   initial = '',
 }: {
+  workspaceID: string
+  documentID: string
   id: string
   label: string
   submitLabel: string
@@ -51,7 +57,8 @@ function CommentForm({
 }) {
   const [draft, setDraft] = useState(initial)
   const trimmed = draft.trim()
-  const tooLong = draft.length > maxCommentLength
+  const reads = visibleText(draft).length
+  const tooLong = reads > maxCommentLength
   const send = () => {
     if (trimmed && !tooLong && !pending) onSubmit(trimmed)
   }
@@ -66,13 +73,15 @@ function CommentForm({
       <label className='block text-muted-foreground' htmlFor={id}>
         {label}
       </label>
-      <Textarea
+      <MentionTextarea
         id={id}
+        workspaceID={workspaceID}
+        documentID={documentID}
         className='min-h-14 text-xs md:text-xs'
         value={draft}
         autoFocus={autoFocus}
         aria-invalid={tooLong}
-        onChange={(event) => setDraft(event.target.value)}
+        onValueChange={setDraft}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
             event.preventDefault()
@@ -87,7 +96,7 @@ function CommentForm({
       {tooLong ? (
         <p role='alert' className='text-destructive'>
           Comments can be up to {maxCommentLength} characters. Cut{' '}
-          {draft.length - maxCommentLength} to send it.
+          {reads - maxCommentLength} to send it.
         </p>
       ) : null}
       <div className='flex gap-1.5'>
@@ -155,6 +164,8 @@ export function NewCommentCard({
     >
       <Quote text={selectedText} />
       <CommentForm
+        workspaceID={workspaceID}
+        documentID={documentID}
         id='new-comment'
         label='Comment'
         submitLabel='Comment'
@@ -313,6 +324,8 @@ export function CommentCard({
       {orphaned ? <Quote text={thread.selectedText} /> : null}
       {editing === 'thread' ? (
         <CommentForm
+          workspaceID={workspaceID}
+          documentID={documentID}
           id={`comment-edit-${thread.id}`}
           label='Edit comment'
           submitLabel='Save'
@@ -335,13 +348,13 @@ export function CommentCard({
               onClick={() => setEditing('thread')}
             >
               <span className='break-words whitespace-pre-wrap'>
-                {thread.content}
+                <CommentText content={thread.content} />
               </span>
             </Button>
           ) : orphaned ? (
             // Nothing to show in the document, so this is plain text.
             <p className='mt-1 py-1.5 break-words whitespace-pre-wrap'>
-              {thread.content}
+              <CommentText content={thread.content} />
             </p>
           ) : (
             <Button
@@ -349,11 +362,11 @@ export function CommentCard({
               variant='ghost'
               size='sm'
               className='-mx-2 mt-1 h-auto min-h-9 w-[calc(100%_+_1rem)] justify-start px-2 py-1.5 text-left text-xs font-normal whitespace-normal text-foreground'
-              aria-label={`Show in document: ${thread.selectedText || thread.content}`}
+              aria-label={`Show in document: ${thread.selectedText || visibleText(thread.content)}`}
               onClick={() => onSelect(thread.id)}
             >
               <span className='break-words whitespace-pre-wrap'>
-                {thread.content}
+                <CommentText content={thread.content} />
               </span>
             </Button>
           )}
@@ -394,6 +407,8 @@ export function CommentCard({
               </p>
               {editing === item.id ? (
                 <CommentForm
+                  workspaceID={workspaceID}
+                  documentID={documentID}
                   id={`comment-edit-${item.id}`}
                   label='Edit reply'
                   submitLabel='Save'
@@ -408,7 +423,7 @@ export function CommentCard({
               ) : (
                 <>
                   <p className='break-words whitespace-pre-wrap'>
-                    {item.content}
+                    <CommentText content={item.content} />
                   </p>
                   {canChange(item.authorId) ? (
                     <div className={`-ml-2 flex gap-1 ${revealOnHover}`}>
@@ -440,6 +455,8 @@ export function CommentCard({
       ) : null}
       {canInteract && !resolved && focused ? (
         <CommentForm
+          workspaceID={workspaceID}
+          documentID={documentID}
           key={thread.replies.length}
           id={`comment-reply-${thread.id}`}
           label='Reply'

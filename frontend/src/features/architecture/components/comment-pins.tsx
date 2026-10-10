@@ -13,7 +13,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { Textarea } from '@/components/ui/textarea'
+import { CommentText } from '@/components/comment-text'
+import { MentionTextarea } from '@/components/mention-textarea'
 import type { ArchitectureJSON } from '../lib/canvas-model'
 import { pinPoint, type PinAnchor } from '../lib/comment-pins'
 import type { Point } from '../lib/layout'
@@ -122,7 +123,9 @@ function Pin(props: {
                   </span>
                 </div>
                 <p className='line-clamp-2 whitespace-pre-line'>
-                  {thread.content.split('\n').slice(0, 2).join('\n')}
+                  <CommentText
+                    content={thread.content.split('\n').slice(0, 2).join('\n')}
+                  />
                 </p>
                 {replies > 0 && (
                   <p className='font-mono text-[10.5px] text-muted-foreground'>
@@ -218,11 +221,13 @@ function DraftPin(props: {
             >
               New comment on {props.on}
             </label>
-            <Textarea
+            <MentionTextarea
               id={fieldID}
+              workspaceID={props.workspaceID}
+              documentID={props.documentID}
               autoFocus
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onValueChange={setDraft}
               placeholder={`Ask or note something about ${props.on}`}
               maxLength={2000}
               className='min-h-16 text-[12.5px]'
