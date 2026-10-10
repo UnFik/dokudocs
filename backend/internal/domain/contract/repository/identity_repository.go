@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -19,4 +20,20 @@ type IdentityRepository interface {
 	TakeOver(ctx context.Context, userID uuid.UUID) error
 	// FillAvatar sets the avatar only when the User has none.
 	FillAvatar(ctx context.Context, userID uuid.UUID, url string) error
+	// LockUser serializes changes to a User's ways of signing in; call it first
+	// in a transaction.
+	LockUser(ctx context.Context, userID uuid.UUID) error
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]LinkedIdentity, error)
+	HasPassword(ctx context.Context, userID uuid.UUID) (bool, error)
+	// Unlink removes the User's identity from the provider.
+	Unlink(ctx context.Context, userID uuid.UUID, provider string) error
+	// SetPassword stores a hash only for a User who has none, otherwise it gives
+	// constant.ErrPasswordAlreadySet.
+	SetPassword(ctx context.Context, userID uuid.UUID, hash string) error
+}
+
+type LinkedIdentity struct {
+	Provider string
+	Email    string
+	LinkedAt time.Time
 }

@@ -19,6 +19,14 @@ type IdentityUseCase interface {
 	// ExchangeIdentity trades the one-time code for a token, once, for the browser
 	// that started; otherwise it gives constant.ErrOAuthTransactionNotFound.
 	ExchangeIdentity(ctx context.Context, code, binding string) (dto.IdentityExchange, error)
+	// SignInMethods lists how a User can sign in.
+	SignInMethods(ctx context.Context, userID uuid.UUID) (dto.SignInMethods, error)
+	// UnlinkIdentity gives constant.ErrIdentityNotFound for a provider that is not
+	// linked and constant.ErrLastSignInMethod when it is the only way to sign in.
+	UnlinkIdentity(ctx context.Context, userID uuid.UUID, provider string) error
+	// SetPassword gives a User who has none a password; constant.ErrInvalidPassword
+	// for one that breaks the rules, constant.ErrPasswordAlreadySet if one exists.
+	SetPassword(ctx context.Context, userID uuid.UUID, password string) error
 }
 
 // AccountUseCase is what the auth routes need on top of checking a token.

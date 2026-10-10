@@ -32,4 +32,6 @@ var (
 	ErrIdentityProviderNotSet   = errors.New("sign-in provider is not configured")
 	ErrIdentityEmailNotVerified = errors.New("the provider has not verified this email")
 	ErrLastSignInMethod         = errors.New("this is the only way to sign in")
+	ErrPasswordAlreadySet       = errors.New("a password is already set")
+	ErrInvalidPassword          = errors.New("password must be at least 15 characters and at most 72 bytes")
 )

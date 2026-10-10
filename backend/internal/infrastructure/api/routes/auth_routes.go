@@ -60,5 +60,8 @@ func addAuthRoutes(f Router, c *container.Container, cfg config.Config) {
 	authGroup.Post("/google/exchange", identityHandler.Exchange, googleCallback)
 	authGroup.Post("/email/resend", authHandler.ResendVerificationEmail, credentials, authRequired)
 	authGroup.Post("/email/verify", authHandler.VerifyEmail, credentials)
+	authGroup.Get("/identities", authHandler.SignInMethods, authRequired)
+	authGroup.Delete("/identities/{provider}", authHandler.UnlinkIdentity, authRequired)
+	authGroup.Post("/password", authHandler.SetPassword, credentials, authRequired)
 	authGroup.Get("/me", authHandler.Me, authRequired)
 }
