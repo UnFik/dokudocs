@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
+import { joinWorkspace } from "../../../support/workspace-invites";
 
 test("@live @smoke @comments: a commenter's comment reaches the owner at once, is replied to, resolved, and survives the text it was about", async ({
   page,
@@ -122,11 +123,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     },
   );
   expect(registerResponse.status()).toBe(201);
-  const inviteResponse = await page.request.post(
-    `${apiURL}/api/v1/workspaces/${workspaceID}/invites`,
-    { headers: ownerHeaders, data: { email: commenterEmail, role: "member" } },
-  );
-  expect(inviteResponse.status()).toBe(201);
+  await joinWorkspace({ apiURL, authorization: ownerHeaders.Authorization, workspaceId: workspaceID, email: commenterEmail });
   const grantResponse = await page.request.post(
     `${apiURL}/api/v1/documents/${documentID}/accesses`,
     {
@@ -147,11 +144,7 @@ test("@live @smoke @comments: a commenter's comment reaches the owner at once, i
     },
   );
   expect(viewerRegisterResponse.status()).toBe(201);
-  const viewerInviteResponse = await page.request.post(
-    `${apiURL}/api/v1/workspaces/${workspaceID}/invites`,
-    { headers: ownerHeaders, data: { email: viewerEmail, role: "member" } },
-  );
-  expect(viewerInviteResponse.status()).toBe(201);
+  await joinWorkspace({ apiURL, authorization: ownerHeaders.Authorization, workspaceId: workspaceID, email: viewerEmail });
   const viewerGrantResponse = await page.request.post(
     `${apiURL}/api/v1/documents/${documentID}/accesses`,
     {

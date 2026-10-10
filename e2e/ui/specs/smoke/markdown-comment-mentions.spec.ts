@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { createdDocumentID, documentPayload } from "../../helpers/markdown-document";
+import { joinWorkspace } from "../../../support/workspace-invites";
 
 // A comment on words in a Markdown document names a member with @; the member is
 // told in the sidebar and lands on the thread.
@@ -34,11 +35,7 @@ test("@live @smoke @comments: @ in a Markdown comment mentions a member, who ope
   });
   expect(registered.status()).toBe(201);
   const memberID = ((await registered.json()) as { data: { user: { id: string } } }).data.user.id;
-  const invite = await page.request.post(`${apiURL}/api/v1/workspaces/${workspaceID}/invites`, {
-    headers: owner,
-    data: { email: memberEmail, role: "member" },
-  });
-  expect(invite.status()).toBe(201);
+  await joinWorkspace({ apiURL, authorization: owner.Authorization, workspaceId: workspaceID, email: memberEmail });
 
   const root = randomUUID();
   const paragraph = randomUUID();

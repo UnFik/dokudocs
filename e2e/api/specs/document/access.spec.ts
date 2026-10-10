@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { test, expect } from '../../fixtures/test-base'
 import { generateDocument, generateProject, generateUser, generateWorkspace } from '../../helpers/factory'
+import { joinWorkspace } from '../../../support/workspace-invites'
 
 test.describe('Document: Collaborator Access Control', () => {
   test('list and detail enforce private grants and draft edit access', async ({
@@ -25,10 +26,7 @@ test.describe('Document: Collaborator Access Control', () => {
     const adminRegisterRes = await request.post('/api/v1/auth/register', { data: adminData })
     expect(adminRegisterRes.status()).toBe(201)
     const registeredAdmin = (await adminRegisterRes.json()).data
-    const adminInviteRes = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: adminData.email, role: 'admin' },
-    })
-    expect(adminInviteRes.status()).toBe(201)
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: adminData.email, role: 'admin' })
     const adminRequest = await playwright.request.newContext({
       baseURL: process.env.API_URL || 'http://localhost:8080',
       extraHTTPHeaders: {
@@ -42,10 +40,7 @@ test.describe('Document: Collaborator Access Control', () => {
     const registerRes = await request.post('/api/v1/auth/register', { data: userBData })
     expect(registerRes.status()).toBe(201)
     const registered = (await registerRes.json()).data
-    const inviteRes = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: userBData.email, role: 'member' },
-    })
-    expect(inviteRes.ok()).toBeTruthy()
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: userBData.email, role: 'member' })
 
     const memberRequest = await playwright.request.newContext({
       baseURL: process.env.API_URL || 'http://localhost:8080',
@@ -286,10 +281,7 @@ test.describe('Document: Collaborator Access Control', () => {
     const registerRes = await request.post('/api/v1/auth/register', { data: viewerData })
     expect(registerRes.status()).toBe(201)
     const viewer = (await registerRes.json()).data
-    const inviteRes = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: viewerData.email, role: 'member' },
-    })
-    expect(inviteRes.status()).toBe(201)
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: viewerData.email, role: 'member' })
     const viewerRequest = await playwright.request.newContext({
       baseURL: process.env.API_URL || 'http://localhost:8080',
       extraHTTPHeaders: {
@@ -369,9 +361,7 @@ test.describe('Document: Collaborator Access Control', () => {
     const regBRes = await request.post('/api/v1/auth/register', { data: userBData })
     const userB = (await regBRes.json()).data
 
-    await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: userBData.email, role: 'member' },
-    })
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: userBData.email, role: 'member' })
     const userBRequest = await playwright.request.newContext({
       baseURL: process.env.API_URL || 'http://localhost:8080',
       extraHTTPHeaders: {
@@ -383,9 +373,7 @@ test.describe('Document: Collaborator Access Control', () => {
     const userCData = generateUser()
     const regCRes = await request.post('/api/v1/auth/register', { data: userCData })
     expect(regCRes.status()).toBe(201)
-    await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: userCData.email, role: 'member' },
-    })
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: userCData.email, role: 'member' })
 
     // 5. User A adds User B as 'edit' collaborator
     const addAccRes = await wsRequestA.post(`/api/v1/documents/${docId}/accesses`, {

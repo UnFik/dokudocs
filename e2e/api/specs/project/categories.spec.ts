@@ -1,5 +1,6 @@
 import { test, expect } from '../../fixtures/test-base'
 import { generateCategory, generateProject, generateUser, generateWorkspace } from '../../helpers/factory'
+import { joinWorkspace } from '../../../support/workspace-invites'
 
 test.describe('Project: Categories Management', () => {
   test('project viewers can read categories but cannot mutate them', async ({
@@ -24,10 +25,7 @@ test.describe('Project: Categories Management', () => {
     const registerRes = await request.post('/api/v1/auth/register', { data: viewerData })
     expect(registerRes.status()).toBe(201)
     const viewer = (await registerRes.json()).data
-    const inviteRes = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: viewerData.email, role: 'member' },
-    })
-    expect(inviteRes.status()).toBe(201)
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: viewerData.email, role: 'member' })
 
     const projectRes = await ownerRequest.post('/api/v1/projects', {
       data: { ...generateProject('Private Category Viewer'), visibility: 'private' },

@@ -1,5 +1,6 @@
 import { test, expect } from '../../fixtures/test-base'
 import { generateUser, generateWorkspace } from '../../helpers/factory'
+import { inviteToWorkspace, joinWorkspace } from '../../../support/workspace-invites'
 
 test.describe('Workspace: Member Management', () => {
   test('should manage workspace members: list, invite, and remove', async ({
@@ -42,14 +43,13 @@ test.describe('Workspace: Member Management', () => {
     const preInviteRes = await userBRequest.get(`/api/v1/workspaces/${workspaceId}/members`)
     expect(preInviteRes.status()).toBe(403)
 
-    // 4. User A invites User B as 'member'
-    const inviteRes = await userRequest.post(`/api/v1/workspaces/${workspaceId}/invites`, {
-      data: {
-        email: userBData.email,
-        role: 'member',
-      },
+    // 4. User A invites User B as 'member'; User B joins by the mailed link
+    await joinWorkspace({
+      authorization: `Bearer ${userContext.token}`,
+      workspaceId,
+      email: userBData.email,
+      role: 'member',
     })
-    expect(inviteRes.status()).toBe(201)
 
     const workspaceDetailRes = await userBRequest.get(`/api/v1/workspaces/${workspaceId}`)
     expect(workspaceDetailRes.status()).toBe(200)
@@ -97,19 +97,15 @@ test.describe('Workspace: Member Management', () => {
     await userBRequest.dispose()
   })
 
-  test('should return 404 when inviting a non-existent email', async ({ userRequest }) => {
-    const wsData = generateWorkspace()
-    const createWsRes = await userRequest.post('/api/v1/workspaces', { data: wsData })
+  test('should answer the same for an address without an account', async ({ userRequest }) => {
+    const createWsRes = await userRequest.post('/api/v1/workspaces', { data: generateWorkspace() })
     expect(createWsRes.status()).toBe(201)
     const ws = (await createWsRes.json()).data
 
     const inviteRes = await userRequest.post(`/api/v1/workspaces/${ws.id}/invites`, {
-      data: {
-        email: 'nobody-does-not-exist@example.com',
-        role: 'member',
-      },
+      data: { email: `nobody-${Date.now()}@example.invalid`, role: 'member' },
     })
-    expect(inviteRes.status()).toBe(404)
+    expect(inviteRes.status()).toBe(201)
   })
 
   test('should return 400 when invite payload is missing email', async ({ userRequest }) => {
@@ -124,5 +120,86 @@ test.describe('Workspace: Member Management', () => {
       },
     })
     expect(inviteRes.status()).toBe(400)
+  })
+
+  test('should keep a link tied to the invited email and let it be resent or revoked', async ({
+    userRequest,
+    userContext,
+    request,
+  }) => {
+    const createWsRes = await userRequest.post('/api/v1/workspaces', { data: generateWorkspace() })
+    const ws = (await createWsRes.json()).data
+    const invitesPath = `/api/v1/workspaces/${ws.id}/invites`
+    const authorization = `Bearer ${userContext.token}`
+
+    const invitee = generateUser()
+    const other = generateUser()
+    for (const person of [invitee, other]) {
+      expect((await request.post('/api/v1/auth/register', { data: person })).status()).toBe(201)
+    }
+    const token = await inviteToWorkspace({ authorization, workspaceId: ws.id, email: invitee.email })
+
+    // Anyone with the link sees what it offers, with the email masked.
+    const previewRes = await request.post('/api/v1/invites/preview', { data: { token } })
+    expect(previewRes.status()).toBe(200)
+    const preview = (await previewRes.json()).data
+    expect(preview.workspaceName).toBe(ws.name)
+    expect(preview.role).toBe('member')
+    expect(preview.email).not.toBe(invitee.email)
+    expect(preview.email.endsWith(invitee.email.slice(invitee.email.indexOf('@')))).toBe(true)
+    expect((await request.post('/api/v1/invites/preview', { data: { token: 'nope' } })).status()).toBe(404)
+
+    // Someone else, even verified, cannot use it.
+    const otherLogin = await request.post('/api/v1/auth/login', { data: { email: other.email, password: other.password } })
+    const otherToken = (await otherLogin.json()).data.accessToken
+    const otherAccept = await request.post('/api/v1/invites/accept', {
+      data: { token },
+      headers: { Authorization: `Bearer ${otherToken}` },
+    })
+    expect(otherAccept.status()).toBe(403)
+
+    // Resend: not twice within a minute; a new link replaces the old one.
+    const listed = (await (await userRequest.get(invitesPath)).json()).data
+    expect(listed).toHaveLength(1)
+    expect(JSON.stringify(listed)).not.toContain(token)
+    const resendPath = `${invitesPath}/${listed[0].id}/resend`
+    const tooSoon = await userRequest.post(resendPath)
+    expect(tooSoon.status()).toBe(429)
+    expect(tooSoon.headers()['retry-after']).toBeTruthy()
+
+    // Revoked: the link is dead and the invitation is gone from the list.
+    expect((await userRequest.delete(`${invitesPath}/${listed[0].id}`)).status()).toBe(204)
+    expect((await request.post('/api/v1/invites/preview', { data: { token } })).status()).toBe(404)
+    expect((await (await userRequest.get(invitesPath)).json()).data ?? []).toHaveLength(0)
+  })
+
+  test('should limit who may invite and which roles', async ({ userRequest, userContext, request, playwright }) => {
+    const createWsRes = await userRequest.post('/api/v1/workspaces', { data: generateWorkspace() })
+    const ws = (await createWsRes.json()).data
+    const invitesPath = `/api/v1/workspaces/${ws.id}/invites`
+
+    const adminData = generateUser()
+    const adminReg = await request.post('/api/v1/auth/register', { data: adminData })
+    const admin = (await adminReg.json()).data
+    await joinWorkspace({
+      authorization: `Bearer ${userContext.token}`,
+      workspaceId: ws.id,
+      email: adminData.email,
+      role: 'admin',
+    })
+    const adminRequest = await playwright.request.newContext({
+      baseURL: process.env.API_URL || 'http://localhost:8080',
+      extraHTTPHeaders: { Authorization: `Bearer ${admin.accessToken}`, 'Content-Type': 'application/json' },
+    })
+
+    const target = `target-${Date.now()}@example.invalid`
+    expect((await adminRequest.post(invitesPath, { data: { email: target, role: 'admin' } })).status()).toBe(403)
+    expect((await adminRequest.post(invitesPath, { data: { email: target, role: 'member' } })).status()).toBe(201)
+    expect((await userRequest.post(invitesPath, { data: { email: target, role: 'owner' } })).status()).toBe(400)
+    expect((await userRequest.post(invitesPath, { data: { email: 'not an email', role: 'member' } })).status()).toBe(400)
+    // The owner's own address, and a current member's, are refused.
+    expect((await userRequest.post(invitesPath, { data: { email: adminData.email } })).status()).toBe(409)
+
+    await adminRequest.dispose()
   })
 })
