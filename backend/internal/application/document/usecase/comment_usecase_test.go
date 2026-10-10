@@ -14,6 +14,19 @@ import (
 type recordingComments struct {
 	created []model.CommentThread
 	replies []model.CommentReply
+	// docType is what the document reports; markdown when left empty.
+	docType    string
+	docTypeErr error
+}
+
+func (r *recordingComments) CommentDocumentType(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (string, error) {
+	if r.docTypeErr != nil {
+		return "", r.docTypeErr
+	}
+	if r.docType == "" {
+		return "markdown", nil
+	}
+	return r.docType, nil
 }
 
 func (r *recordingComments) ListComments(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) ([]model.CommentThread, error) {
@@ -83,7 +96,7 @@ func TestCommentUseCaseRejectsInvalidInputBeforeTheRepository(t *testing.T) {
 	repo := &recordingComments{}
 	good := with(func(i *CommentInput) {
 		i.Content = "  trimmed  "
-		i.Anchor = []byte(`{"nodeID":"n"}`)
+		i.Anchor = []byte(`{"nodeID":"n","start":"AA==","end":"AQ=="}`)
 	})
 	if err := NewCommentUseCase(repo).Create(context.Background(), good); err != nil {
 		t.Fatalf("Create() = %v", err)
@@ -97,6 +110,51 @@ func TestCommentUseCaseRejectsInvalidInputBeforeTheRepository(t *testing.T) {
 	}
 	if len(repo.created) != 2 || repo.created[0].Content != "trimmed" {
 		t.Fatalf("stored %+v, want one thread with trimmed content", repo.created)
+	}
+}
+
+func TestCommentUseCaseChecksTheAnchorAgainstTheDocumentType(t *testing.T) {
+	const (
+		text    = `{"nodeID":"n","start":"AA==","end":"AQ=="}`
+		element = `{"kind":"element","elementId":"node-1"}`
+		source  = `{"kind":"source","start":"AA==","end":"AQ=="}`
+	)
+	input := func(anchor string) CommentInput {
+		return CommentInput{
+			WorkspaceID: uuid.New(), DocumentID: uuid.New(), ThreadID: uuid.New(), AuthorID: uuid.New(),
+			Content: "a comment", Anchor: []byte(anchor),
+		}
+	}
+	for _, tc := range []struct {
+		docType, anchor string
+		valid           bool
+	}{
+		{"markdown", text, true},
+		{"markdown", element, false},
+		{"architecture", element, true},
+		{"architecture", text, false},
+		{"architecture", "", false},
+		{"dbdiagram", source, true},
+		{"mermaid", source, true},
+		{"mermaid", element, false},
+	} {
+		repo := &recordingComments{docType: tc.docType}
+		err := NewCommentUseCase(repo).Create(context.Background(), input(tc.anchor))
+		if tc.valid && err != nil {
+			t.Errorf("%s %s: Create() = %v, want nil", tc.docType, tc.anchor, err)
+		}
+		if !tc.valid && !errors.Is(err, ErrInvalidComment) {
+			t.Errorf("%s %s: Create() = %v, want ErrInvalidComment", tc.docType, tc.anchor, err)
+		}
+		if got := len(repo.created) == 1; got != tc.valid {
+			t.Errorf("%s %s: reached the repository = %v, want %v", tc.docType, tc.anchor, got, tc.valid)
+		}
+	}
+
+	denied := errors.New("no access")
+	repo := &recordingComments{docTypeErr: denied}
+	if err := NewCommentUseCase(repo).Create(context.Background(), input(text)); !errors.Is(err, denied) {
+		t.Fatalf("a document the actor cannot discuss = %v, want that error, not a verdict on the anchor", err)
 	}
 }
 

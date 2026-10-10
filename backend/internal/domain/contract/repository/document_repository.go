@@ -52,6 +52,9 @@ type SuggestionRepository interface {
 }
 
 type CommentRepository interface {
+	// CommentDocumentType is the type of a document the actor may comment on;
+	// an actor who may not gets the same error as CreateComment would give.
+	CommentDocumentType(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) (string, error)
 	ListComments(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.CommentThread, error)
 	CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error
 	CreateCommentReply(ctx context.Context, workspaceID, documentID uuid.UUID, reply model.CommentReply) error
