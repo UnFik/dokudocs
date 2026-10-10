@@ -37,8 +37,23 @@ func (m *mockWorkspaceService) DeleteWorkspace(ctx context.Context, id uuid.UUID
 func (m *mockWorkspaceService) GetMembers(ctx context.Context, workspaceID, userID uuid.UUID) ([]model.WorkspaceMember, error) {
 	return nil, nil
 }
-func (m *mockWorkspaceService) AddMember(ctx context.Context, input workspacedto.AddMemberInput) error {
+func (m *mockWorkspaceService) InviteMember(ctx context.Context, input workspacedto.InviteMemberInput) (model.WorkspaceInvite, error) {
+	return model.WorkspaceInvite{}, nil
+}
+func (m *mockWorkspaceService) ListInvites(ctx context.Context, workspaceID, actorID uuid.UUID) ([]model.WorkspaceInvite, error) {
+	return nil, nil
+}
+func (m *mockWorkspaceService) ResendInvite(ctx context.Context, workspaceID, inviteID, actorID uuid.UUID) (model.WorkspaceInvite, error) {
+	return model.WorkspaceInvite{}, nil
+}
+func (m *mockWorkspaceService) RevokeInvite(ctx context.Context, workspaceID, inviteID, actorID uuid.UUID) error {
 	return nil
+}
+func (m *mockWorkspaceService) PreviewInvite(ctx context.Context, token string) (model.InvitePreview, error) {
+	return model.InvitePreview{}, nil
+}
+func (m *mockWorkspaceService) AcceptInvite(ctx context.Context, token string, userID uuid.UUID) (uuid.UUID, error) {
+	return uuid.Nil, nil
 }
 func (m *mockWorkspaceService) RemoveMember(ctx context.Context, workspaceID, memberUserID, actorID uuid.UUID) error {
 	return nil

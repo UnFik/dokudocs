@@ -332,6 +332,25 @@ definitions:
       updatedAt:
         type: string
     type: object
+  backend_internal_domain_model.WorkspaceInvite:
+    properties:
+      createdAt:
+        type: string
+      email:
+        type: string
+      expiresAt:
+        type: string
+      id:
+        type: string
+      invitedBy:
+        type: string
+      lastSentAt:
+        type: string
+      role:
+        type: string
+      workspaceId:
+        type: string
+    type: object
   backend_internal_domain_model.WorkspaceMember:
     properties:
       avatarUrl:
@@ -633,14 +652,10 @@ definitions:
       theme:
         type: string
     type: object
-  backend_internal_presentation_workspace_presenter.AddMemberRequest:
+  backend_internal_presentation_workspace_presenter.AcceptInviteResponse:
     properties:
-      email:
+      workspaceId:
         type: string
-      role:
-        type: string
-    required:
-    - email
     type: object
   backend_internal_presentation_workspace_presenter.CreateWorkspaceRequest:
     properties:
@@ -652,6 +667,33 @@ definitions:
         type: string
     required:
     - name
+    type: object
+  backend_internal_presentation_workspace_presenter.InviteMemberRequest:
+    properties:
+      email:
+        type: string
+      role:
+        type: string
+    required:
+    - email
+    type: object
+  backend_internal_presentation_workspace_presenter.InvitePreviewResponse:
+    properties:
+      email:
+        type: string
+      inviterName:
+        type: string
+      role:
+        type: string
+      workspaceName:
+        type: string
+    type: object
+  backend_internal_presentation_workspace_presenter.InviteTokenRequest:
+    properties:
+      token:
+        type: string
+    required:
+    - token
     type: object
   backend_internal_presentation_workspace_presenter.UpdateWorkspaceRequest:
     properties:
@@ -2174,6 +2216,72 @@ paths:
       summary: Health check
       tags:
       - Health
+  /invites/accept:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Link token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_workspace_presenter.InviteTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_presentation_workspace_presenter.AcceptInviteResponse'
+              type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Accept a workspace invitation
+      tags:
+      - Workspace
+  /invites/preview:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Link token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_workspace_presenter.InviteTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_presentation_workspace_presenter.InvitePreviewResponse'
+              type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      summary: Preview a workspace invitation
+      tags:
+      - Workspace
   /projects:
     get:
       description: Get all projects accessible to the user within the active workspace
@@ -3500,22 +3608,53 @@ paths:
       tags:
       - Workspace
   /workspaces/{id}/invites:
-    post:
-      consumes:
-      - application/json
-      description: Add a member by email to the workspace
+    get:
       parameters:
       - description: Workspace ID (UUID)
         in: path
         name: id
         required: true
         type: string
-      - description: Add member payload
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.WorkspaceInvite'
+                  type: array
+              type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List pending workspace invitations
+      tags:
+      - Workspace
+    post:
+      consumes:
+      - application/json
+      description: Sends a single-use link to the email. The reply is the same whether
+        or not the address has an account.
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Invitation
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/backend_internal_presentation_workspace_presenter.AddMemberRequest'
+          $ref: '#/definitions/backend_internal_presentation_workspace_presenter.InviteMemberRequest'
       produces:
       - application/json
       responses:
@@ -3526,18 +3665,49 @@ paths:
             - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
             - properties:
                 data:
-                  additionalProperties:
-                    type: string
-                  type: object
+                  $ref: '#/definitions/backend_internal_domain_model.WorkspaceInvite'
               type: object
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "401":
-          description: Unauthorized
+        "403":
+          description: Forbidden
           schema:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Invite a person to the workspace
+      tags:
+      - Workspace
+  /workspaces/{id}/invites/{inviteId}:
+    delete:
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Invitation ID (UUID)
+        in: path
+        name: inviteId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
         "403":
           description: Forbidden
           schema:
@@ -3546,13 +3716,42 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
-        "500":
-          description: Internal Server Error
+      security:
+      - BearerAuth: []
+      summary: Revoke a workspace invitation
+      tags:
+      - Workspace
+  /workspaces/{id}/invites/{inviteId}/resend:
+    post:
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Invitation ID (UUID)
+        in: path
+        name: inviteId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "429":
+          description: Too Many Requests
           schema:
             $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
       security:
       - BearerAuth: []
-      summary: Add workspace member
+      summary: Send a workspace invitation again
       tags:
       - Workspace
   /workspaces/{id}/members:

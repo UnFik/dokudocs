@@ -2453,6 +2453,119 @@ const docTemplate = `{
                 }
             }
         },
+        "/invites/accept": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace"
+                ],
+                "summary": "Accept a workspace invitation",
+                "parameters": [
+                    {
+                        "description": "Link token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_workspace_presenter.InviteTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/backend_internal_presentation_workspace_presenter.AcceptInviteResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/invites/preview": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace"
+                ],
+                "summary": "Preview a workspace invitation",
+                "parameters": [
+                    {
+                        "description": "Link token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_workspace_presenter.InviteTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/backend_internal_presentation_workspace_presenter.InvitePreviewResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
         "/projects": {
             "get": {
                 "security": [
@@ -4623,13 +4736,65 @@ const docTemplate = `{
             }
         },
         "/workspaces/{id}/invites": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace"
+                ],
+                "summary": "List pending workspace invitations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/backend_internal_presentation_response.Envelope"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/backend_internal_domain_model.WorkspaceInvite"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Add a member by email to the workspace",
+                "description": "Sends a single-use link to the email. The reply is the same whether or not the address has an account.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4639,7 +4804,7 @@ const docTemplate = `{
                 "tags": [
                     "Workspace"
                 ],
-                "summary": "Add workspace member",
+                "summary": "Invite a person to the workspace",
                 "parameters": [
                     {
                         "type": "string",
@@ -4649,12 +4814,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Add member payload",
+                        "description": "Invitation",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/backend_internal_presentation_workspace_presenter.AddMemberRequest"
+                            "$ref": "#/definitions/backend_internal_presentation_workspace_presenter.InviteMemberRequest"
                         }
                     }
                 ],
@@ -4670,10 +4835,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object",
-                                            "additionalProperties": {
-                                                "type": "string"
-                                            }
+                                            "$ref": "#/definitions/backend_internal_domain_model.WorkspaceInvite"
                                         }
                                     }
                                 }
@@ -4686,11 +4848,109 @@ const docTemplate = `{
                             "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
+                    "403": {
+                        "description": "Forbidden",
                         "schema": {
                             "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
                         }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{id}/invites/{inviteId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Workspace"
+                ],
+                "summary": "Revoke a workspace invitation",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Invitation ID (UUID)",
+                        "name": "inviteId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{id}/invites/{inviteId}/resend": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Workspace"
+                ],
+                "summary": "Send a workspace invitation again",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Invitation ID (UUID)",
+                        "name": "inviteId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     },
                     "403": {
                         "description": "Forbidden",
@@ -4704,8 +4964,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "429": {
+                        "description": "Too Many Requests",
                         "schema": {
                             "$ref": "#/definitions/backend_internal_presentation_response.ErrorEnvelope"
                         }
@@ -5359,6 +5619,35 @@ const docTemplate = `{
                 }
             }
         },
+        "backend_internal_domain_model.WorkspaceInvite": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invitedBy": {
+                    "type": "string"
+                },
+                "lastSentAt": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "workspaceId": {
+                    "type": "string"
+                }
+            }
+        },
         "backend_internal_domain_model.WorkspaceMember": {
             "type": "object",
             "properties": {
@@ -5821,16 +6110,10 @@ const docTemplate = `{
                 }
             }
         },
-        "backend_internal_presentation_workspace_presenter.AddMemberRequest": {
+        "backend_internal_presentation_workspace_presenter.AcceptInviteResponse": {
             "type": "object",
-            "required": [
-                "email"
-            ],
             "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "role": {
+                "workspaceId": {
                     "type": "string"
                 }
             }
@@ -5848,6 +6131,48 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "plan": {
+                    "type": "string"
+                }
+            }
+        },
+        "backend_internal_presentation_workspace_presenter.InviteMemberRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                }
+            }
+        },
+        "backend_internal_presentation_workspace_presenter.InvitePreviewResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "inviterName": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "workspaceName": {
+                    "type": "string"
+                }
+            }
+        },
+        "backend_internal_presentation_workspace_presenter.InviteTokenRequest": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
                     "type": "string"
                 }
             }
