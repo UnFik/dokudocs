@@ -3,5 +3,8 @@ import { LegalPage } from '@/features/legal'
 
 export const Route = createFileRoute('/terms')({
   component: () => <LegalPage kind='terms' />,
-  head: () => ({ meta: [{ title: 'Terms of use | DokuDocs' }] }),
+  head: () => ({
+    meta: [{ title: 'Terms of use | DokuDocs' }],
+    links: [{ rel: 'canonical', href: 'https://unfik.my.id/terms' }],
+  }),
 })
