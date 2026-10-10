@@ -51,6 +51,16 @@ func TestCommentThreadsRepliesAndResolve(t *testing.T) {
 		t.Fatalf("thread by a viewer = %v, want forbidden", err)
 	}
 
+	if docType, err := repo.CommentDocumentType(ctx, workspaceID, documentID, commenterID); err != nil || docType != "markdown" {
+		t.Fatalf("type for a commenter = %q, %v, want markdown", docType, err)
+	}
+	if _, err := repo.CommentDocumentType(ctx, workspaceID, documentID, viewerID); !errors.Is(err, constant.ErrForbidden) {
+		t.Fatalf("type for a viewer = %v, want forbidden", err)
+	}
+	if _, err := repo.CommentDocumentType(ctx, uuid.New(), documentID, commenterID); !errors.Is(err, constant.ErrDocumentNotFound) {
+		t.Fatalf("type through another workspace = %v, want not found", err)
+	}
+
 	reply := func(authorID uuid.UUID, content string) model.CommentReply {
 		return model.CommentReply{ID: uuid.New(), ThreadID: thread.ID, AuthorID: authorID, Content: content}
 	}

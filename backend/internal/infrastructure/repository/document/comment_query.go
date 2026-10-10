@@ -135,6 +135,24 @@ func threadInDocument(ctx context.Context, tx database.Queryer, documentID, thre
 }
 
 // CreateComment starts a thread. Retrying the same thread ID is a no-op.
+func (r *Repository) CommentDocumentType(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) (string, error) {
+	if r.tx == nil {
+		return "", errors.New("commenting requires a transaction-capable database")
+	}
+	var docType string
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
+		if err != nil {
+			return err
+		}
+		if err := canDiscuss(doc, access); err != nil {
+			return err
+		}
+		return tx.QueryRowContext(ctx, `SELECT type FROM documents WHERE id = $1`, documentID).Scan(&docType)
+	})
+	return docType, err
+}
+
 func (r *Repository) CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error {
 	if r.tx == nil {
 		return errors.New("commenting requires a transaction-capable database")

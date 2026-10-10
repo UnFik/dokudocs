@@ -9,6 +9,7 @@ import (
 
 	"backend/internal/domain/contract/repository"
 	"backend/internal/domain/model"
+	"backend/internal/domain/policy"
 
 	"github.com/google/uuid"
 )
@@ -64,6 +65,13 @@ func (u *CommentUseCase) Create(ctx context.Context, input CommentInput) error {
 		if len(input.Anchor) > MaxCommentAnchorBytes || json.Unmarshal(input.Anchor, &object) != nil || object == nil {
 			return ErrInvalidComment
 		}
+	}
+	docType, err := u.comments.CommentDocumentType(ctx, input.WorkspaceID, input.DocumentID, input.AuthorID)
+	if err != nil {
+		return err
+	}
+	if policy.ValidateCommentAnchor(docType, input.Anchor) != nil {
+		return ErrInvalidComment
 	}
 	return u.comments.CreateComment(ctx, input.WorkspaceID, model.CommentThread{
 		ID: input.ThreadID, DocumentID: input.DocumentID, AuthorID: input.AuthorID,
