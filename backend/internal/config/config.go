@@ -22,12 +22,15 @@ type Config struct {
 	AllowedOrigin      string
 	GoogleClientID     string
 	GoogleClientSecret string
-	OpenAIAPIKey       string
-	RAGEmbeddingModel  string
-	RAGAnswerModel     string
-	RAGRequestTimeout  time.Duration
-	PublicAppURL       string
-	JWTSecret          string
+	// The Google endpoints are Google's own when empty. Only the end-to-end tests set
+	// them, to point sign-in at a local stand-in.
+	GoogleAuthURL, GoogleTokenURL, GoogleJWKSURL string
+	OpenAIAPIKey                                 string
+	RAGEmbeddingModel                            string
+	RAGAnswerModel                               string
+	RAGRequestTimeout                            time.Duration
+	PublicAppURL                                 string
+	JWTSecret                                    string
 	// CollabServiceSecret is shared with the collaboration service; the internal
 	// endpoints it calls are off while it is empty.
 	CollabServiceSecret string
@@ -81,6 +84,9 @@ func LoadConfig() (Config, error) {
 		AllowedOrigin:       env.GetString("ALLOWED_ORIGIN", "http://localhost:5173"),
 		GoogleClientID:      env.GetString("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:  env.GetString("GOOGLE_CLIENT_SECRET", ""),
+		GoogleAuthURL:       env.GetString("GOOGLE_AUTH_URL", ""),
+		GoogleTokenURL:      env.GetString("GOOGLE_TOKEN_URL", ""),
+		GoogleJWKSURL:       env.GetString("GOOGLE_JWKS_URL", ""),
 		OpenAIAPIKey:        embeddingKey,
 		RAGEmbeddingModel:   embeddingModel,
 		RAGAnswerModel:      answerModel,

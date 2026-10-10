@@ -203,3 +203,25 @@ func TestEmailVerificationNeedsAMailServer(t *testing.T) {
 		t.Fatalf("gate with SMTP configured: %v", err)
 	}
 }
+
+func TestLoadConfigReadsGoogleEndpointOverrides(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GoogleAuthURL != "" || cfg.GoogleTokenURL != "" || cfg.GoogleJWKSURL != "" {
+		t.Fatalf("the Google endpoints must default to Google's own (empty here): %+v", cfg)
+	}
+	t.Setenv("GOOGLE_AUTH_URL", "http://127.0.0.1:4399/auth")
+	t.Setenv("GOOGLE_TOKEN_URL", "http://127.0.0.1:4399/token")
+	t.Setenv("GOOGLE_JWKS_URL", "http://127.0.0.1:4399/certs")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GoogleAuthURL != "http://127.0.0.1:4399/auth" || cfg.GoogleTokenURL != "http://127.0.0.1:4399/token" || cfg.GoogleJWKSURL != "http://127.0.0.1:4399/certs" {
+		t.Fatalf("overrides not read: %+v", cfg)
+	}
+}
