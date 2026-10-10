@@ -93,6 +93,23 @@ describe('NotificationsInbox', () => {
     })
   })
 
+  it('reads the list again when a push arrives while the page is open', async () => {
+    const fetch = stub([])
+    await mount()
+    const listCalls = () =>
+      fetch.mock.calls.filter(([input]) =>
+        String(input).endsWith('/notifications')
+      ).length
+    await vi.waitFor(() => expect(listCalls()).toBe(1))
+    // Let the first answer land: a push that arrives later finds a loaded list.
+    await fetch.mock.results[0].value
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    navigator.serviceWorker.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'dokudocs-push' } })
+    )
+    await vi.waitFor(() => expect(listCalls()).toBe(2))
+  })
+
   it('opens the document on the thread when a mention is clicked', async () => {
     stub([note({})])
     const screen = await mount()
