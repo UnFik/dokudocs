@@ -46,6 +46,14 @@ func (u *CommentUseCase) List(ctx context.Context, workspaceID, documentID, acto
 	return u.comments.ListComments(ctx, workspaceID, documentID, actorID)
 }
 
+// MentionCandidates lists whom a comment on the document may name.
+func (u *CommentUseCase) MentionCandidates(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.MentionTarget, error) {
+	if workspaceID == uuid.Nil || documentID == uuid.Nil || actorID == uuid.Nil {
+		return nil, ErrInvalidComment
+	}
+	return u.comments.ListMentionCandidates(ctx, workspaceID, documentID, actorID)
+}
+
 type CommentInput struct {
 	WorkspaceID  uuid.UUID
 	DocumentID   uuid.UUID

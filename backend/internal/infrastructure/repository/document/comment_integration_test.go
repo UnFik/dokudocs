@@ -78,6 +78,24 @@ func TestCommentThreadsRepliesAndResolve(t *testing.T) {
 		t.Fatalf("resolve through another workspace = %v, want not found", err)
 	}
 
+	candidates, err := repo.ListMentionCandidates(ctx, workspaceID, documentID, commenterID)
+	if err != nil {
+		t.Fatalf("list mention candidates: %v", err)
+	}
+	listed := map[uuid.UUID]bool{}
+	for _, candidate := range candidates {
+		listed[candidate.UserID] = candidate.CanRead
+	}
+	if !listed[commenterID] || !listed[viewerID] || !listed[ownerID] {
+		t.Fatalf("candidates %+v, want the owner, the commenter and the viewer, all able to read", candidates)
+	}
+	if _, ok := listed[outsiderID]; ok {
+		t.Fatal("someone outside the workspace was offered")
+	}
+	if _, err := repo.ListMentionCandidates(ctx, workspaceID, documentID, viewerID); !errors.Is(err, constant.ErrForbidden) {
+		t.Fatalf("candidates for a viewer = %v, want forbidden", err)
+	}
+
 	reply := func(authorID uuid.UUID, content string) model.CommentReply {
 		return model.CommentReply{ID: uuid.New(), ThreadID: thread.ID, AuthorID: authorID, Content: content}
 	}

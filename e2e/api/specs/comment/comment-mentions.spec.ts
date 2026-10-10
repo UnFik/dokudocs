@@ -48,6 +48,15 @@ test.describe('Comment: mentions', () => {
     const url = `/api/v1/documents/${documentID}/comments`
     const list = async () => (await (await owner.get(url)).json()).data as { id: string; content: string; replies: { content: string }[] }[]
 
+    const offered = (await (await owner.get(`/api/v1/documents/${documentID}/mentionable`)).json()).data as {
+      userId: string
+      name: string
+      canRead: boolean
+    }[]
+    expect(offered.find((person) => person.userId === member.id)).toMatchObject({ name: member.fullName, canRead: true })
+    expect(offered.some((person) => person.userId === outsider.id)).toBe(false)
+    expect((await (await request.get(`/api/v1/documents/${documentID}/mentionable`, { headers: { Authorization: `Bearer ${outsider.token}`, 'X-Workspace-Id': workspace.id } })).status())).toBeGreaterThanOrEqual(403)
+
     const threadID = randomUUID()
     const first = await owner.post(url, {
       data: { threadID, selectedText: 'x', content: `hello ${token('A made-up name', member.id)}`, anchor: textAnchor },

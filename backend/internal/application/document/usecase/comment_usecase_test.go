@@ -21,6 +21,13 @@ type recordingComments struct {
 	// members are who a mention may name; anyone else is not in the workspace.
 	members map[uuid.UUID]model.MentionTarget
 	edits   []string
+	// candidates are what the document offers to mention.
+	candidates    []model.MentionTarget
+	candidatesErr error
+}
+
+func (r *recordingComments) ListMentionCandidates(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) ([]model.MentionTarget, error) {
+	return r.candidates, r.candidatesErr
 }
 
 func (r *recordingComments) ResolveMentions(_ context.Context, _, _ uuid.UUID, ids []uuid.UUID) ([]model.MentionTarget, error) {
@@ -287,5 +294,23 @@ func TestCommentUseCaseRepliesAndEditsResolveMentionsToo(t *testing.T) {
 	}
 	if err := usecase.EditReply(context.Background(), ws, doc, thread, uuid.New(), actor, mention.Token(stranger, "Who")); !errors.Is(err, ErrInvalidComment) {
 		t.Fatalf("EditReply() naming a stranger = %v, want ErrInvalidComment", err)
+	}
+}
+
+func TestCommentUseCaseListsWhoCanBeMentioned(t *testing.T) {
+	ana, anaTarget := mentionedMember("Ana Bo", true)
+	_, lockedTarget := mentionedMember("Locked Out", false)
+	repo := &recordingComments{candidates: []model.MentionTarget{anaTarget, lockedTarget}}
+	usecase := NewCommentUseCase(repo)
+	got, err := usecase.MentionCandidates(context.Background(), uuid.New(), uuid.New(), uuid.New())
+	if err != nil || len(got) != 2 || got[0].UserID != ana || got[1].CanRead {
+		t.Fatalf("MentionCandidates() = %+v, %v, want both members with their access", got, err)
+	}
+	if _, err := usecase.MentionCandidates(context.Background(), uuid.Nil, uuid.New(), uuid.New()); !errors.Is(err, ErrInvalidComment) {
+		t.Fatalf("MentionCandidates() without a workspace = %v, want ErrInvalidComment", err)
+	}
+	denied := errors.New("no access")
+	if _, err := NewCommentUseCase(&recordingComments{candidatesErr: denied}).MentionCandidates(context.Background(), uuid.New(), uuid.New(), uuid.New()); !errors.Is(err, denied) {
+		t.Fatalf("MentionCandidates() = %v, want the repository's refusal", err)
 	}
 }
