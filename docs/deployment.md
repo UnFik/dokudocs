@@ -87,6 +87,11 @@ on in this order:
 2. Register a test account and check that the email arrives and the link works.
 3. Set `REQUIRE_EMAIL_VERIFICATION=true` and run `make build` (or the Deploy workflow).
 
+Workspace invitations are email too: with no `SMTP_HOST` and `SMTP_FROM`, inviting
+someone answers 503 and nothing is stored (ADR-0036). `RATE_LIMIT_INVITE_SEND_PER_MIN`
+(default 10) limits sending and sending again, and `RATE_LIMIT_INVITE_LOOKUP_PER_MIN`
+(default 30) limits opening and accepting a link.
+
 Sign-in endpoints are limited per client address (`RATE_LIMIT_LOGIN_PER_MIN`,
 `RATE_LIMIT_GOOGLE_START_PER_MIN`, `RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN`; `0` turns
 one off). The counters live in the API process, so they hold for one API
