@@ -86,6 +86,46 @@ test.describe('Comment: mentions', () => {
     expect(editBad.status()).toBe(400)
     expect((await list()).find((thread) => thread.id === threadID)?.content).toBe(`edited ${token(member.fullName, member.id)}`)
 
+    // The member is told, once per message, and again when it is edited.
+    const memberApi = await as(member.token)
+    const inbox = async () =>
+      ((await (await memberApi.get('/api/v1/notifications')).json()).data as {
+        id: string
+        kind: string
+        title: string
+        body: string
+        read: boolean
+        path?: string
+      }[]).filter((note) => note.kind === 'comment_mention')
+    const told = await inbox()
+    expect(told).toHaveLength(2) // the thread's first message and the reply
+    const forThread = told.find((note) => note.body.startsWith('edited'))
+    expect(forThread).toBeDefined()
+    expect(forThread?.title).toContain('mentioned you')
+    expect(forThread?.body).toBe(`edited @${member.fullName}`)
+    expect(forThread?.path).toBe(`/docs/${documentID}?workspaceId=${workspace.id}&thread=${threadID}`)
+    expect(told.every((note) => !note.read)).toBe(true)
+
+    await owner.patch(`${url}/${threadID}`, { data: { content: `edited again ${token('Old', member.id)}` } })
+    const afterEdit = await inbox()
+    expect(afterEdit).toHaveLength(2)
+    expect(afterEdit.some((note) => note.body === `edited again @${member.fullName}`)).toBe(true)
+
+    // Reading the catalog answers leaves mentions unread; reading mentions clears them.
+    expect((await memberApi.post('/api/v1/notifications/read', { data: { kind: 'catalog_request' } })).status()).toBe(204)
+    expect((await inbox()).every((note) => !note.read)).toBe(true)
+    expect((await memberApi.post('/api/v1/notifications/read', { data: { kind: 'comment_mention' } })).status()).toBe(204)
+    expect((await inbox()).every((note) => note.read)).toBe(true)
+
+    // Naming oneself tells no one.
+    const self = await owner.post(url, {
+      data: { threadID: randomUUID(), selectedText: '', content: `note ${token('Me', userContext.user.id)}`, anchor: textAnchor },
+    })
+    expect(self.status()).toBe(201)
+    const ownerNotes = ((await (await userRequest.get('/api/v1/notifications')).json()).data as { kind: string }[]) ?? []
+    expect(ownerNotes.filter((note) => note.kind === 'comment_mention')).toHaveLength(0)
+    await memberApi.dispose()
+
     // Tokens that are not well formed are plain text, not mentions.
     const plain = await bad('write to a@b.id or @[Cut off](user:')
     expect(plain.status()).toBe(201)

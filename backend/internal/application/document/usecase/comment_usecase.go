@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"backend/internal/domain/contract/notification"
 	"backend/internal/domain/contract/repository"
 	"backend/internal/domain/mention"
 	"backend/internal/domain/model"
@@ -32,7 +33,22 @@ const (
 )
 
 type CommentUseCase struct {
-	comments repository.CommentRepository
+	comments  repository.CommentRepository
+	deliverer notification.MentionDeliverer
+}
+
+// WithDeliverer sends email and push for the mentions a write reports.
+func (u *CommentUseCase) WithDeliverer(deliverer notification.MentionDeliverer) *CommentUseCase {
+	u.deliverer = deliverer
+	return u
+}
+
+// deliver hands on what a write that saved reports; a write that failed owes nothing.
+func (u *CommentUseCase) deliver(ctx context.Context, deliveries []model.MentionDelivery, err error) error {
+	if err == nil && len(deliveries) > 0 && u.deliverer != nil {
+		u.deliverer.Deliver(ctx, deliveries)
+	}
+	return err
 }
 
 func NewCommentUseCase(comments repository.CommentRepository) *CommentUseCase {
@@ -85,14 +101,15 @@ func (u *CommentUseCase) Create(ctx context.Context, input CommentInput) error {
 	if policy.ValidateCommentAnchor(docType, input.Anchor) != nil {
 		return ErrInvalidComment
 	}
-	content, err := u.prepareContent(ctx, input.WorkspaceID, input.DocumentID, input.Content)
+	content, mentioned, err := u.prepareContent(ctx, input.WorkspaceID, input.DocumentID, input.Content)
 	if err != nil {
 		return err
 	}
-	return u.comments.CreateComment(ctx, input.WorkspaceID, model.CommentThread{
+	deliveries, err := u.comments.CreateComment(ctx, input.WorkspaceID, model.CommentThread{
 		ID: input.ThreadID, DocumentID: input.DocumentID, AuthorID: input.AuthorID,
-		SelectedText: input.SelectedText, Content: content, Anchor: input.Anchor,
+		SelectedText: input.SelectedText, Content: content, Anchor: input.Anchor, Mentioned: mentioned,
 	})
+	return u.deliver(ctx, deliveries, err)
 }
 
 type CommentReplyInput struct {
@@ -109,13 +126,14 @@ func (u *CommentUseCase) Reply(ctx context.Context, input CommentReplyInput) err
 		input.ReplyID == uuid.Nil || input.AuthorID == uuid.Nil {
 		return ErrInvalidComment
 	}
-	content, err := u.prepareContent(ctx, input.WorkspaceID, input.DocumentID, input.Content)
+	content, mentioned, err := u.prepareContent(ctx, input.WorkspaceID, input.DocumentID, input.Content)
 	if err != nil {
 		return err
 	}
-	return u.comments.CreateCommentReply(ctx, input.WorkspaceID, input.DocumentID, model.CommentReply{
-		ID: input.ReplyID, ThreadID: input.ThreadID, AuthorID: input.AuthorID, Content: content,
+	deliveries, err := u.comments.CreateCommentReply(ctx, input.WorkspaceID, input.DocumentID, model.CommentReply{
+		ID: input.ReplyID, ThreadID: input.ThreadID, AuthorID: input.AuthorID, Content: content, Mentioned: mentioned,
 	})
+	return u.deliver(ctx, deliveries, err)
 }
 
 func (u *CommentUseCase) Resolve(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, resolved bool) error {
@@ -128,22 +146,27 @@ func (u *CommentUseCase) Resolve(ctx context.Context, workspaceID, documentID, t
 // prepareContent checks the text of a comment and returns what to store: the
 // mentions in it name members who can read the document, and each carries that
 // member's name as it is now, so a label sent by a client cannot say otherwise.
-func (u *CommentUseCase) prepareContent(ctx context.Context, workspaceID, documentID uuid.UUID, content string) (string, error) {
+// It also returns whom the text names, each once, in order.
+func (u *CommentUseCase) prepareContent(ctx context.Context, workspaceID, documentID uuid.UUID, content string) (string, []uuid.UUID, error) {
 	content = strings.TrimSpace(content)
 	if content == "" || utf8.RuneCountInString(content) > MaxCommentRawLength {
-		return "", ErrInvalidComment
+		return "", nil, ErrInvalidComment
 	}
+	var ids []uuid.UUID
 	if mentions := mention.Parse(content); len(mentions) > 0 {
 		if len(mentions) > MaxMentionsPerComment {
-			return "", ErrInvalidComment
+			return "", nil, ErrInvalidComment
 		}
-		ids := make([]uuid.UUID, 0, len(mentions))
-		for _, named := range mentions {
-			ids = append(ids, named.UserID)
+		named := make(map[uuid.UUID]bool, len(mentions))
+		for _, mentioned := range mentions {
+			if !named[mentioned.UserID] {
+				named[mentioned.UserID] = true
+				ids = append(ids, mentioned.UserID)
+			}
 		}
 		targets, err := u.comments.ResolveMentions(ctx, workspaceID, documentID, ids)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 		labels := make(map[uuid.UUID]string, len(targets))
 		for _, target := range targets {
@@ -153,15 +176,15 @@ func (u *CommentUseCase) prepareContent(ctx context.Context, workspaceID, docume
 		}
 		for _, id := range ids {
 			if _, ok := labels[id]; !ok {
-				return "", ErrInvalidComment
+				return "", nil, ErrInvalidComment
 			}
 		}
 		content = mention.Rewrite(content, func(id uuid.UUID) string { return labels[id] })
 	}
 	if utf8.RuneCountInString(mention.Visible(content)) > MaxCommentLength {
-		return "", ErrInvalidComment
+		return "", nil, ErrInvalidComment
 	}
-	return content, nil
+	return content, ids, nil
 }
 
 // Edit changes the text of a thread's first message.
@@ -169,11 +192,12 @@ func (u *CommentUseCase) Edit(ctx context.Context, workspaceID, documentID, thre
 	if workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || actorID == uuid.Nil {
 		return ErrInvalidComment
 	}
-	stored, err := u.prepareContent(ctx, workspaceID, documentID, content)
+	stored, mentioned, err := u.prepareContent(ctx, workspaceID, documentID, content)
 	if err != nil {
 		return err
 	}
-	return u.comments.UpdateComment(ctx, workspaceID, documentID, threadID, actorID, stored)
+	deliveries, err := u.comments.UpdateComment(ctx, workspaceID, documentID, threadID, actorID, stored, mentioned)
+	return u.deliver(ctx, deliveries, err)
 }
 
 // EditReply changes the text of a reply.
@@ -181,11 +205,12 @@ func (u *CommentUseCase) EditReply(ctx context.Context, workspaceID, documentID,
 	if workspaceID == uuid.Nil || documentID == uuid.Nil || threadID == uuid.Nil || replyID == uuid.Nil || actorID == uuid.Nil {
 		return ErrInvalidComment
 	}
-	stored, err := u.prepareContent(ctx, workspaceID, documentID, content)
+	stored, mentioned, err := u.prepareContent(ctx, workspaceID, documentID, content)
 	if err != nil {
 		return err
 	}
-	return u.comments.UpdateCommentReply(ctx, workspaceID, documentID, threadID, replyID, actorID, stored)
+	deliveries, err := u.comments.UpdateCommentReply(ctx, workspaceID, documentID, threadID, replyID, actorID, stored, mentioned)
+	return u.deliver(ctx, deliveries, err)
 }
 
 // Delete removes a thread with its replies.

@@ -131,6 +131,8 @@ type CommentThread struct {
 	ResolvedAt   *time.Time      `json:"resolvedAt,omitempty"`
 	ResolvedBy   *uuid.UUID      `json:"resolvedBy,omitempty"`
 	Replies      []CommentReply  `json:"replies"`
+	// Mentioned are the people the text names, to notify; never read back.
+	Mentioned []uuid.UUID `json:"-"`
 }
 
 // MentionTarget is a person a comment names: who they are and whether they may
@@ -152,4 +154,20 @@ type CommentReply struct {
 	CreatedAt  time.Time `json:"createdAt"`
 	// EditedAt is set once the author has changed the text.
 	EditedAt *time.Time `json:"editedAt,omitempty"`
+	// Mentioned are the people the text names, to notify; never read back.
+	Mentioned []uuid.UUID `json:"-"`
+}
+
+// MentionDelivery is a notification a person is owed for a mention, and by
+// which channels beyond the app it should reach them.
+type MentionDelivery struct {
+	UserID uuid.UUID
+	Email  string
+	Name   string
+	Title  string
+	Body   string
+	// Path opens the comment: the document with the thread to show.
+	Path      string
+	SendEmail bool
+	SendPush  bool
 }

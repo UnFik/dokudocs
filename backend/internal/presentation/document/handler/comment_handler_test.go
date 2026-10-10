@@ -32,17 +32,17 @@ func (f commentRepoFake) ResolveMentions(context.Context, uuid.UUID, uuid.UUID, 
 func (f commentRepoFake) CommentDocumentType(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (string, error) {
 	return "markdown", f.err
 }
-func (f commentRepoFake) CreateComment(context.Context, uuid.UUID, model.CommentThread) error {
-	return f.err
+func (f commentRepoFake) CreateComment(context.Context, uuid.UUID, model.CommentThread) ([]model.MentionDelivery, error) {
+	return nil, f.err
 }
-func (f commentRepoFake) CreateCommentReply(context.Context, uuid.UUID, uuid.UUID, model.CommentReply) error {
-	return f.err
+func (f commentRepoFake) CreateCommentReply(context.Context, uuid.UUID, uuid.UUID, model.CommentReply) ([]model.MentionDelivery, error) {
+	return nil, f.err
 }
-func (f commentRepoFake) UpdateComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
-	return f.err
+func (f commentRepoFake) UpdateComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string, []uuid.UUID) ([]model.MentionDelivery, error) {
+	return nil, f.err
 }
-func (f commentRepoFake) UpdateCommentReply(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string) error {
-	return f.err
+func (f commentRepoFake) UpdateCommentReply(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, string, []uuid.UUID) ([]model.MentionDelivery, error) {
+	return nil, f.err
 }
 func (f commentRepoFake) DeleteComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) error {
 	return f.err

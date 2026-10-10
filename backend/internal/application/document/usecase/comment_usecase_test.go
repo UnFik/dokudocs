@@ -24,6 +24,16 @@ type recordingComments struct {
 	// candidates are what the document offers to mention.
 	candidates    []model.MentionTarget
 	candidatesErr error
+	// deliveries and writeErr are what a write reports back.
+	deliveries    []model.MentionDelivery
+	writeErr      error
+	editMentioned [][]uuid.UUID
+}
+
+type recordingDeliverer struct{ sent [][]model.MentionDelivery }
+
+func (d *recordingDeliverer) Deliver(_ context.Context, deliveries []model.MentionDelivery) {
+	d.sent = append(d.sent, deliveries)
 }
 
 func (r *recordingComments) ListMentionCandidates(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) ([]model.MentionTarget, error) {
@@ -54,24 +64,26 @@ func (r *recordingComments) ListComments(context.Context, uuid.UUID, uuid.UUID, 
 	return nil, nil
 }
 
-func (r *recordingComments) CreateComment(_ context.Context, _ uuid.UUID, thread model.CommentThread) error {
+func (r *recordingComments) CreateComment(_ context.Context, _ uuid.UUID, thread model.CommentThread) ([]model.MentionDelivery, error) {
 	r.created = append(r.created, thread)
-	return nil
+	return r.deliveries, r.writeErr
 }
 
-func (r *recordingComments) CreateCommentReply(_ context.Context, _, _ uuid.UUID, reply model.CommentReply) error {
+func (r *recordingComments) CreateCommentReply(_ context.Context, _, _ uuid.UUID, reply model.CommentReply) ([]model.MentionDelivery, error) {
 	r.replies = append(r.replies, reply)
-	return nil
+	return r.deliveries, r.writeErr
 }
 
-func (r *recordingComments) UpdateComment(_ context.Context, _, _, _, _ uuid.UUID, content string) error {
+func (r *recordingComments) UpdateComment(_ context.Context, _, _, _, _ uuid.UUID, content string, mentioned []uuid.UUID) ([]model.MentionDelivery, error) {
 	r.edits = append(r.edits, content)
-	return nil
+	r.editMentioned = append(r.editMentioned, mentioned)
+	return r.deliveries, r.writeErr
 }
 
-func (r *recordingComments) UpdateCommentReply(_ context.Context, _, _, _, _, _ uuid.UUID, content string) error {
+func (r *recordingComments) UpdateCommentReply(_ context.Context, _, _, _, _, _ uuid.UUID, content string, mentioned []uuid.UUID) ([]model.MentionDelivery, error) {
 	r.edits = append(r.edits, content)
-	return nil
+	r.editMentioned = append(r.editMentioned, mentioned)
+	return r.deliveries, r.writeErr
 }
 
 func (r *recordingComments) DeleteComment(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID) error {
@@ -312,5 +324,52 @@ func TestCommentUseCaseListsWhoCanBeMentioned(t *testing.T) {
 	denied := errors.New("no access")
 	if _, err := NewCommentUseCase(&recordingComments{candidatesErr: denied}).MentionCandidates(context.Background(), uuid.New(), uuid.New(), uuid.New()); !errors.Is(err, denied) {
 		t.Fatalf("MentionCandidates() = %v, want the repository's refusal", err)
+	}
+}
+
+func TestCommentUseCaseHandsMentionsToTheRepositoryAndDeliveriesOn(t *testing.T) {
+	ana, anaTarget := mentionedMember("Ana Bo", true)
+	bo, boTarget := mentionedMember("Bo Ca", true)
+	owed := []model.MentionDelivery{{UserID: ana, Email: "ana@example.com", SendEmail: true}}
+	repo := &recordingComments{members: map[uuid.UUID]model.MentionTarget{ana: anaTarget, bo: boTarget}, deliveries: owed}
+	sent := &recordingDeliverer{}
+	usecase := NewCommentUseCase(repo).WithDeliverer(sent)
+	ws, doc, thread, actor := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	text := mention.Token(ana, "x") + " and " + mention.Token(bo, "x") + " and " + mention.Token(ana, "x")
+
+	if err := usecase.Create(context.Background(), CommentInput{
+		WorkspaceID: ws, DocumentID: doc, ThreadID: thread, AuthorID: actor, Content: text,
+		Anchor: []byte(`{"nodeID":"n","start":"AA==","end":"AQ=="}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := repo.created[0].Mentioned; len(got) != 2 || got[0] != ana || got[1] != bo {
+		t.Fatalf("thread mentions %v, want each person once, in order", got)
+	}
+	if err := usecase.Reply(context.Background(), CommentReplyInput{WorkspaceID: ws, DocumentID: doc, ThreadID: thread, ReplyID: uuid.New(), AuthorID: actor, Content: text}); err != nil {
+		t.Fatal(err)
+	}
+	if got := repo.replies[0].Mentioned; len(got) != 2 {
+		t.Fatalf("reply mentions %v, want two people", got)
+	}
+	if err := usecase.Edit(context.Background(), ws, doc, thread, actor, text); err != nil {
+		t.Fatal(err)
+	}
+	if err := usecase.EditReply(context.Background(), ws, doc, thread, uuid.New(), actor, "no one"); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.editMentioned[0]) != 2 || len(repo.editMentioned[1]) != 0 {
+		t.Fatalf("edits mention %v, want two people then none", repo.editMentioned)
+	}
+	if len(sent.sent) != 4 || len(sent.sent[0]) != 1 || sent.sent[0][0].UserID != ana {
+		t.Fatalf("delivered %+v, want what each write reported, handed on", sent.sent)
+	}
+
+	// A comment that fails to save delivers nothing.
+	failing := &recordingComments{deliveries: owed, writeErr: errors.New("down")}
+	failed := &recordingDeliverer{}
+	err := NewCommentUseCase(failing).WithDeliverer(failed).Reply(context.Background(), CommentReplyInput{WorkspaceID: ws, DocumentID: doc, ThreadID: thread, ReplyID: uuid.New(), AuthorID: actor, Content: "hi"})
+	if err == nil || len(failed.sent) != 0 {
+		t.Fatalf("Reply() = %v, delivered %+v, want the failure and no delivery", err, failed.sent)
 	}
 }
