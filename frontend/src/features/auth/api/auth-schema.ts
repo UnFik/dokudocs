@@ -13,6 +13,7 @@ export const authUserSchema = z.object({
   email: z.email(),
   role: z.array(z.string()),
   exp: z.number().int().positive(),
+  emailVerified: z.boolean().default(false),
 })
 export const authResponseSchema = z.object({
   accessToken: z.string().min(1),

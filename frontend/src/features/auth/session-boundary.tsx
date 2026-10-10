@@ -9,10 +9,7 @@ export function SessionBoundary({
   allowOffline?: boolean
 }) {
   const { status, revision } = useAuthStore((state) => state.auth)
-  if (
-    status !== 'authenticated' &&
-    !(allowOffline && status === 'offline')
-  )
+  if (status !== 'authenticated' && !(allowOffline && status === 'offline'))
     return <SessionPending />
   return (
     <div key={revision} className='contents'>
