@@ -52,15 +52,27 @@ type Config struct {
 	// verified, everywhere except the endpoints that verify it.
 	RequireEmailVerification bool
 	// SMTP settings for outgoing email; with no host or sender, nothing is sent.
-	SMTPHost        string
-	SMTPPort        int
-	SMTPUser        string
-	SMTPPassword    string
-	SMTPFrom        string
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
-	IdleTimeout     time.Duration
-	ShutdownTimeout time.Duration
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
+	// Firebase Cloud Messaging sends web push. The service account is given as a
+	// file or as its JSON; the web settings are what the browser needs to
+	// register, and are public by design. With none of them set, push is off.
+	FirebaseCredentialsFile string
+	FirebaseCredentialsJSON string
+	FirebaseProjectID       string
+	FirebaseWebAPIKey       string
+	FirebaseWebAppID        string
+	FirebaseWebSenderID     string
+	FirebaseVAPIDKey        string
+	// FirebaseFCMEndpoint replaces the FCM address, for a proxy or a test double.
+	FirebaseFCMEndpoint string
+	ReadTimeout         time.Duration
+	WriteTimeout        time.Duration
+	IdleTimeout         time.Duration
+	ShutdownTimeout     time.Duration
 }
 
 func LoadConfig() (Config, error) {
@@ -109,6 +121,14 @@ func LoadConfig() (Config, error) {
 		SMTPUser:                      env.GetString("SMTP_USER", ""),
 		SMTPPassword:                  env.GetString("SMTP_PASSWORD", ""),
 		SMTPFrom:                      strings.TrimSpace(env.GetString("SMTP_FROM", "")),
+		FirebaseCredentialsFile:       strings.TrimSpace(env.GetString("FIREBASE_CREDENTIALS_FILE", "")),
+		FirebaseCredentialsJSON:       strings.TrimSpace(env.GetString("FIREBASE_CREDENTIALS_JSON", "")),
+		FirebaseProjectID:             strings.TrimSpace(env.GetString("FIREBASE_PROJECT_ID", "")),
+		FirebaseWebAPIKey:             strings.TrimSpace(env.GetString("FIREBASE_WEB_API_KEY", "")),
+		FirebaseWebAppID:              strings.TrimSpace(env.GetString("FIREBASE_WEB_APP_ID", "")),
+		FirebaseWebSenderID:           strings.TrimSpace(env.GetString("FIREBASE_WEB_SENDER_ID", "")),
+		FirebaseVAPIDKey:              strings.TrimSpace(env.GetString("FIREBASE_WEB_VAPID_KEY", "")),
+		FirebaseFCMEndpoint:           strings.TrimSpace(env.GetString("FIREBASE_FCM_ENDPOINT", "")),
 		ReadTimeout:                   env.GetDuration("READ_TIMEOUT", 5*time.Second),
 		WriteTimeout:                  env.GetDuration("WRITE_TIMEOUT", 10*time.Second),
 		IdleTimeout:                   env.GetDuration("IDLE_TIMEOUT", 60*time.Second),
@@ -133,7 +153,31 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("REQUIRE_EMAIL_VERIFICATION needs SMTP_HOST and SMTP_FROM")
 	}
 
+	if cfg.pushPartlyConfigured() {
+		return Config{}, fmt.Errorf("push needs a service account (FIREBASE_CREDENTIALS_FILE or FIREBASE_CREDENTIALS_JSON) and FIREBASE_WEB_API_KEY, FIREBASE_WEB_APP_ID, FIREBASE_WEB_SENDER_ID and FIREBASE_WEB_VAPID_KEY")
+	}
+
 	return cfg, nil
+}
+
+func (c Config) hasFirebaseCredentials() bool {
+	return c.FirebaseCredentialsFile != "" || c.FirebaseCredentialsJSON != ""
+}
+
+func (c Config) hasFirebaseWebSettings() bool {
+	return c.FirebaseWebAPIKey != "" && c.FirebaseWebAppID != "" && c.FirebaseWebSenderID != "" && c.FirebaseVAPIDKey != ""
+}
+
+// pushPartlyConfigured catches a half-set Firebase setup, which would otherwise
+// fail quietly the first time someone turns notifications on.
+func (c Config) pushPartlyConfigured() bool {
+	anyWeb := c.FirebaseWebAPIKey != "" || c.FirebaseWebAppID != "" || c.FirebaseWebSenderID != "" || c.FirebaseVAPIDKey != ""
+	return (c.hasFirebaseCredentials() || anyWeb) && !c.PushConfigured()
+}
+
+// PushConfigured is whether web push can be sent and browsers can register.
+func (c Config) PushConfigured() bool {
+	return c.hasFirebaseCredentials() && c.hasFirebaseWebSettings()
 }
 
 // MailerConfigured is whether there is a server to send email through.

@@ -199,8 +199,19 @@ func TestAnAdminAnswersARequestAndEveryVoterIsNotified(t *testing.T) {
 			t.Fatalf("my requests of %s = (%+v, %v)", voter, mine, err)
 		}
 	}
-	if err := store.MarkNotificationsRead(ctx, alice); err != nil {
+	// A mention in the same inbox, which reading the catalog answers must not clear.
+	if _, err := db.ExecContext(ctx, `INSERT INTO notifications (user_id, kind, title) VALUES ($1, 'comment_mention', 'Someone mentioned you')`, alice); err != nil {
+		t.Fatalf("insert a mention notification: %v", err)
+	}
+	if err := store.MarkNotificationsRead(ctx, alice, "catalog_request"); err != nil {
 		t.Fatalf("MarkNotificationsRead(): %v", err)
+	}
+	var unreadMentions int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND kind = 'comment_mention' AND read_at IS NULL`, alice).Scan(&unreadMentions); err != nil || unreadMentions != 1 {
+		t.Fatalf("unread mentions after reading catalog answers = %d, %v, want 1", unreadMentions, err)
+	}
+	if err := store.MarkNotificationsRead(ctx, alice, ""); err != nil {
+		t.Fatalf("MarkNotificationsRead(all): %v", err)
 	}
 	if notes, _ := store.Notifications(ctx, alice); notes[0].Read != true {
 		t.Fatalf("after reading: %+v", notes)

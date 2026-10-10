@@ -191,7 +191,18 @@ func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.service.MarkNotificationsRead(r.Context(), userID); err != nil {
+	// The body is optional: with a kind only that kind is marked, so reading the
+	// catalog answers does not clear mentions.
+	var body struct {
+		Kind string `json:"kind"`
+	}
+	if r.ContentLength != 0 {
+		if err := response.DecodeJSON(r, &body); err != nil {
+			response.Error(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+	}
+	if err := h.service.MarkNotificationsRead(r.Context(), userID, body.Kind); err != nil {
 		response.Error(w, http.StatusServiceUnavailable, "notifications could not be updated; try again")
 		return
 	}

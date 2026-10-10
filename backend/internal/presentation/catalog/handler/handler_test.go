@@ -24,6 +24,7 @@ type fakeStore struct {
 	notAdmin bool
 	answers  []appcatalog.Answer
 	read     bool
+	readKind string
 }
 
 func (f *fakeStore) ListEntries(context.Context) ([]appcatalog.Entry, error) { return f.entries, nil }
@@ -49,7 +50,10 @@ func (f *fakeStore) AnswerRequest(_ context.Context, _, _ uuid.UUID, a appcatalo
 func (f *fakeStore) Notifications(context.Context, uuid.UUID) ([]appcatalog.Notification, error) {
 	return []appcatalog.Notification{{Title: "“Acme MQ” is in the catalog"}}, nil
 }
-func (f *fakeStore) MarkNotificationsRead(context.Context, uuid.UUID) error { f.read = true; return nil }
+func (f *fakeStore) MarkNotificationsRead(_ context.Context, _ uuid.UUID, kind string) error {
+	f.read, f.readKind = true, kind
+	return nil
+}
 func (f *fakeStore) AddRequest(_ context.Context, in appcatalog.RequestInput, _ string) (appcatalog.RequestResult, error) {
 	if f.addError != nil {
 		return appcatalog.RequestResult{}, f.addError
@@ -169,7 +173,10 @@ func TestReviewingRequestsAndReadingNotifications(t *testing.T) {
 	if rec := call(h.Notifications, http.MethodGet, "/api/v1/notifications", nil, nil); rec.Code != http.StatusOK {
 		t.Fatalf("notifications = %d", rec.Code)
 	}
-	if rec := call(h.MarkRead, http.MethodPost, "/api/v1/notifications/read", nil, nil); rec.Code != http.StatusNoContent || !store.read {
-		t.Fatalf("mark read = %d", rec.Code)
+	if rec := call(h.MarkRead, http.MethodPost, "/api/v1/notifications/read", nil, nil); rec.Code != http.StatusNoContent || !store.read || store.readKind != "" {
+		t.Fatalf("mark read = %d of kind %q, want all kinds", rec.Code, store.readKind)
+	}
+	if rec := call(h.MarkRead, http.MethodPost, "/api/v1/notifications/read", map[string]string{"kind": "comment_mention"}, nil); rec.Code != http.StatusNoContent || store.readKind != "comment_mention" {
+		t.Fatalf("mark read of one kind = %d of kind %q", rec.Code, store.readKind)
 	}
 }
