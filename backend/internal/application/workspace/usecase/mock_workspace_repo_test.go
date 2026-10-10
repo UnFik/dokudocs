@@ -74,3 +74,5 @@ func (m *mockUserRepo) UpdateSettings(ctx context.Context, settings model.UserSe
 func (m *mockUserRepo) Search(ctx context.Context, query string, limit int) ([]model.UserSummary, error) {
 	return nil, nil
 }
+
+func (m *mockUserRepo) MarkEmailVerified(ctx context.Context, id uuid.UUID) error { return nil }

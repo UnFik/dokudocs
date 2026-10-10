@@ -45,6 +45,56 @@ whenever `collab` is replaced.
 Pull request CI is the only test gate: a merge to `main` deploys without
 waiting for another run.
 
+## Signing in and email
+
+Google sign-in needs, in `/opt/dokudocs/.env`:
+
+```dotenv
+PUBLIC_APP_URL=https://<the public address, no trailing slash>
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+```
+
+The OAuth client in Google Cloud Console (Google Auth Platform → Clients, a
+*Web application*) must list `https://<address>` as an authorized JavaScript
+origin and `https://<address>/api/v1/auth/google/callback` as the redirect URI.
+The API builds that callback from `PUBLIC_APP_URL`, so the two cannot differ. With
+either credential empty the server still starts and `Continue with Google`
+answers 503.
+
+Verification emails go out over SMTP (STARTTLS on port 587; port 465 is not
+supported):
+
+```dotenv
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=Dokudocs <no-reply@<your domain>>
+```
+
+Add SPF and DKIM records for the sending domain at the DNS provider, or the mail
+lands in spam. `make dev` starts Mailpit instead; read its mail at
+http://localhost:8025.
+
+`REQUIRE_EMAIL_VERIFICATION` closes the app to a User whose email is not
+verified (ADR-0035). It is off by default, and the API refuses to start with it
+on and no `SMTP_HOST` and `SMTP_FROM`. Existing accounts are not marked verified,
+so turning it on sends every one of them through the verification page. Turn it
+on in this order:
+
+1. Deploy with the flag off and SMTP filled in.
+2. Register a test account and check that the email arrives and the link works.
+3. Set `REQUIRE_EMAIL_VERIFICATION=true` and run `make build` (or the Deploy workflow).
+
+Sign-in endpoints are limited per client address (`RATE_LIMIT_LOGIN_PER_MIN`,
+`RATE_LIMIT_GOOGLE_START_PER_MIN`, `RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN`; `0` turns
+one off). The counters live in the API process, so they hold for one API
+instance: with more than one, put the limit in front, for example a Cloudflare
+rate rule on `/api/v1/auth/`. The client address comes from `X-Real-IP`, which
+nginx sets, and is trusted only with `TRUST_PROXY_HEADERS=true` (set in
+`docker-compose.yaml`, where nginx is the only way in).
+
 ## Rolling back
 
 Run the `Deploy` workflow by hand (Actions → Deploy → Run workflow, on `main`)

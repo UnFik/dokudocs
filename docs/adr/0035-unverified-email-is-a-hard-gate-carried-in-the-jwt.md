@@ -1,0 +1,5 @@
+# An unverified email is a hard gate, carried as a claim in the access token
+
+A User registered with email and password can sign in but may call only `/auth/me`, `/auth/email/verify` and `/auth/email/resend` until the address is verified; every other API answers 403 `email_not_verified`. The access token carries an `ev` claim, so the gate reads no database row per request; verifying issues a new token, and a token without the claim counts as unverified. `REQUIRE_EMAIL_VERIFICATION` (default off) switches the gate on, so the code can ship before SMTP is configured, and existing accounts are never marked verified automatically. Users created through Google are verified at creation, because Google already verified the address.
+
+Rejected: a partial restriction (every feature would need its own rule and one would be missed), a banner only (does not close the pre-hijack hole in [ADR-0034](0034-oauth-identities-link-by-provider-subject.md)), and reading `email_verified_at` on every request (an extra query on the hot path). The claim goes stale until the token is replaced, which is why verifying returns one.

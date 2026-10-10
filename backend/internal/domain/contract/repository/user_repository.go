@@ -15,4 +15,6 @@ type UserRepository interface {
 	GetSettings(ctx context.Context, userID uuid.UUID) (model.UserSettings, error)
 	UpdateSettings(ctx context.Context, settings model.UserSettings) error
 	Search(ctx context.Context, query string, limit int) ([]model.UserSummary, error)
+	// MarkEmailVerified records that the address was proven; it keeps an earlier date.
+	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 }

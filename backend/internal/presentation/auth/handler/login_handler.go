@@ -48,11 +48,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	_ = response.Data(w, http.StatusOK, presenter.LoginResponse{
 		AccessToken: resp.AccessToken,
 		User: presenter.ResponseUser{
-			ID:        resp.User.ID,
-			AccountNo: resp.User.AccountNo,
-			Email:     resp.User.Email,
-			Role:      resp.User.Role,
-			Exp:       resp.User.Exp,
+			ID:            resp.User.ID,
+			AccountNo:     resp.User.AccountNo,
+			Email:         resp.User.Email,
+			Role:          resp.User.Role,
+			Exp:           resp.User.Exp,
+			EmailVerified: resp.User.EmailVerified,
 		},
 	})
 }

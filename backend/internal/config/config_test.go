@@ -141,3 +141,87 @@ func TestLoadConfigExportsTracesOnlyWhenAnEndpointIsSet(t *testing.T) {
 		t.Fatalf("OTLPEndpoint = %q, %v", cfg.OTLPEndpoint, err)
 	}
 }
+
+func TestLoadConfigRateLimitDefaultsAndOverrides(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RateLimitCredentialsPerMin != 10 || cfg.RateLimitGoogleStartPerMin != 20 || cfg.RateLimitGoogleCallbackPerMin != 30 || cfg.TrustProxyHeaders {
+		t.Fatalf("unexpected defaults: %+v", cfg)
+	}
+
+	t.Setenv("RATE_LIMIT_LOGIN_PER_MIN", "3")
+	t.Setenv("RATE_LIMIT_GOOGLE_START_PER_MIN", "0")
+	t.Setenv("TRUST_PROXY_HEADERS", "true")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RateLimitCredentialsPerMin != 3 || cfg.RateLimitGoogleStartPerMin != 0 || !cfg.TrustProxyHeaders {
+		t.Fatalf("overrides not applied: %+v", cfg)
+	}
+}
+
+func TestLoadConfigReadsSMTPSettings(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SMTPHost != "" || cfg.SMTPPort != 587 || cfg.MailerConfigured() {
+		t.Fatalf("SMTP should be off by default on port 587: %+v", cfg)
+	}
+
+	t.Setenv("SMTP_HOST", "smtp.example.test")
+	t.Setenv("SMTP_PORT", "2525")
+	t.Setenv("SMTP_USER", "user")
+	t.Setenv("SMTP_PASSWORD", "pass")
+	t.Setenv("SMTP_FROM", "Dokudocs <no-reply@example.test>")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SMTPHost != "smtp.example.test" || cfg.SMTPPort != 2525 || cfg.SMTPUser != "user" || cfg.SMTPPassword != "pass" || !cfg.MailerConfigured() {
+		t.Fatalf("SMTP settings not read: %+v", cfg)
+	}
+}
+
+func TestEmailVerificationNeedsAMailServer(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("REQUIRE_EMAIL_VERIFICATION", "true")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("turning the gate on with no way to send email would lock every User out; want an error")
+	}
+	t.Setenv("SMTP_HOST", "smtp.example.test")
+	t.Setenv("SMTP_FROM", "no-reply@example.test")
+	if _, err := LoadConfig(); err != nil {
+		t.Fatalf("gate with SMTP configured: %v", err)
+	}
+}
+
+func TestLoadConfigReadsGoogleEndpointOverrides(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GoogleAuthURL != "" || cfg.GoogleTokenURL != "" || cfg.GoogleJWKSURL != "" {
+		t.Fatalf("the Google endpoints must default to Google's own (empty here): %+v", cfg)
+	}
+	t.Setenv("GOOGLE_AUTH_URL", "http://127.0.0.1:4399/auth")
+	t.Setenv("GOOGLE_TOKEN_URL", "http://127.0.0.1:4399/token")
+	t.Setenv("GOOGLE_JWKS_URL", "http://127.0.0.1:4399/certs")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GoogleAuthURL != "http://127.0.0.1:4399/auth" || cfg.GoogleTokenURL != "http://127.0.0.1:4399/token" || cfg.GoogleJWKSURL != "http://127.0.0.1:4399/certs" {
+		t.Fatalf("overrides not read: %+v", cfg)
+	}
+}

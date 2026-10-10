@@ -43,6 +43,11 @@ definitions:
         type: string
       projectName:
         type: string
+      replacementId:
+        description: |-
+          ReplacementID names the record the body's collaboration room writes to; only a
+          restore changes it. Only the single-document read fills it.
+        type: string
       starredAt:
         type: string
       tags:
@@ -60,10 +65,15 @@ definitions:
       title:
         type: string
       type:
-        description: markdown, dbdiagram, mermaid
+        description: markdown, dbdiagram, mermaid, architecture
         type: string
       updatedAt:
         type: string
+      updatedBy:
+        allOf:
+        - $ref: '#/definitions/backend_internal_domain_model.UserAuthor'
+        description: UpdatedBy is the person whose edit was stored last; nil before
+          the first edit. Only the single-document read fills it.
       viewCount:
         type: integer
       visibility:
@@ -91,6 +101,10 @@ definitions:
       bodyVersion:
         type: integer
       documentId:
+        type: string
+      replacementId:
+        description: ReplacementID is the record the restore made; editors reopen
+          the document on it.
         type: string
       revisionId:
         type: string
@@ -251,6 +265,10 @@ definitions:
         type: string
       email:
         type: string
+      emailVerified:
+        description: EmailVerified is read from the database, unlike the flag in the
+          access token.
+        type: boolean
       fullName:
         type: string
       id:
@@ -331,6 +349,31 @@ definitions:
       workspaceId:
         type: string
     type: object
+  backend_internal_presentation_auth_presenter.ExchangeIdentityRequest:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
+  backend_internal_presentation_auth_presenter.ExchangeIdentityResponse:
+    properties:
+      accessToken:
+        type: string
+      redirect:
+        type: string
+      user:
+        $ref: '#/definitions/backend_internal_presentation_auth_presenter.ResponseUser'
+    type: object
+  backend_internal_presentation_auth_presenter.LinkedIdentity:
+    properties:
+      email:
+        type: string
+      linkedAt:
+        type: string
+      provider:
+        type: string
+    type: object
   backend_internal_presentation_auth_presenter.LoginRequest:
     properties:
       email:
@@ -366,6 +409,8 @@ definitions:
         type: string
       email:
         type: string
+      emailVerified:
+        type: boolean
       exp:
         type: integer
       id:
@@ -374,6 +419,39 @@ definitions:
         items:
           type: string
         type: array
+    type: object
+  backend_internal_presentation_auth_presenter.SetPasswordRequest:
+    properties:
+      password:
+        type: string
+    required:
+    - password
+    type: object
+  backend_internal_presentation_auth_presenter.SignInMethods:
+    properties:
+      hasPassword:
+        type: boolean
+      identities:
+        items:
+          $ref: '#/definitions/backend_internal_presentation_auth_presenter.LinkedIdentity'
+        type: array
+    type: object
+  backend_internal_presentation_auth_presenter.StartIdentityRequest:
+    properties:
+      redirect:
+        type: string
+    type: object
+  backend_internal_presentation_auth_presenter.StartIdentityResponse:
+    properties:
+      authorizationUrl:
+        type: string
+    type: object
+  backend_internal_presentation_auth_presenter.VerifyEmailRequest:
+    properties:
+      token:
+        type: string
+    required:
+    - token
     type: object
   backend_internal_presentation_document_presenter.AddAccessRequest:
     properties:
@@ -510,6 +588,10 @@ definitions:
     type: object
   backend_internal_presentation_response.ErrorEnvelope:
     properties:
+      code:
+        description: Code is a stable machine-readable reason, set only where a client
+          acts on it.
+        type: string
       title:
         type: string
     type: object
@@ -583,6 +665,174 @@ info:
   title: Dokudocs API
   version: "1.0"
 paths:
+  /auth/email/resend:
+    post:
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Send the email verification link again
+      tags:
+      - Auth
+  /auth/email/verify:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Link token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_auth_presenter.VerifyEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_presentation_auth_presenter.LoginResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      summary: Verify an email address
+      tags:
+      - Auth
+  /auth/google/callback:
+    get:
+      responses:
+        "302":
+          description: Found
+      summary: Provider callback
+      tags:
+      - Auth
+  /auth/google/exchange:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Code from the callback redirect
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_auth_presenter.ExchangeIdentityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_presentation_auth_presenter.ExchangeIdentityResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      summary: Exchange the sign-in code for a token
+      tags:
+      - Auth
+  /auth/google/start:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Where to return
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_auth_presenter.StartIdentityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_presentation_auth_presenter.StartIdentityResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      summary: Start signing in with an outside provider
+      tags:
+      - Auth
+  /auth/identities:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_presentation_auth_presenter.SignInMethods'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: List sign-in methods
+      tags:
+      - Auth
+  /auth/identities/{provider}:
+    delete:
+      parameters:
+      - description: Provider name
+        in: path
+        name: provider
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Unlink an account
+      tags:
+      - Auth
   /auth/login:
     post:
       consumes:
@@ -646,6 +896,33 @@ paths:
       summary: Get current user
       tags:
       - Auth
+  /auth/password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: New password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/backend_internal_presentation_auth_presenter.SetPasswordRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Set a password
+      tags:
+      - Auth
   /auth/register:
     post:
       consumes:
@@ -685,6 +962,54 @@ paths:
       summary: User registration
       tags:
       - Auth
+  /catalog:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+        "304":
+          description: Not Modified
+      security:
+      - BearerAuth: []
+      summary: List the Architecture catalog
+      tags:
+      - Catalog
+  /catalog/requests:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Request a catalog entry
+      tags:
+      - Catalog
   /documents:
     get:
       description: Get list of documents in the active workspace

@@ -53,6 +53,7 @@ func (u *useCase) Register(ctx context.Context, req dto.RegisterRequest) (data d
 			return u.factory(tx).Create(ctx, user, fullName)
 		})
 		if err == nil {
+			u.sendVerificationAfterRegister(ctx, user.ID)
 			return u.tokens.Issue(user)
 		}
 		if isUniqueConstraint(err, "users_email_key") {
