@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Bell } from 'lucide-react'
@@ -54,6 +54,18 @@ export function NotificationsInbox() {
     refetchInterval: 120_000,
     retry: false,
   })
+  // The service worker says so when a push arrives and this page is open.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'dokudocs-push') {
+        void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () =>
+      navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [queryClient])
   const mentions = (notifications.data ?? []).filter((n) => n.kind === KIND)
   const unread = mentions.filter((n) => !n.read).length
   const markRead = useMutation({
