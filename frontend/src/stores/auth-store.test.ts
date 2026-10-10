@@ -8,6 +8,7 @@ const user = {
   email: 'user@example.com',
   role: ['member'],
   exp: Math.floor(Date.now() / 1000) + 3600,
+  emailVerified: true,
 }
 const token = `${btoa(JSON.stringify({ alg: 'HS256' }))}.${btoa(JSON.stringify({ ...user, sub: user.id }))}.signature`
 

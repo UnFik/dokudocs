@@ -4,8 +4,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
+import { SignInMethods } from '@/features/auth/sign-in-methods'
 
-export function AccountPage() {
+/** `linked` and `linkError` are what the server put in the address after connecting an account. */
+export function AccountPage({
+  linked,
+  linkError,
+}: {
+  linked?: string
+  linkError?: string
+}) {
   const user = useCurrentProfile()
   return (
     <main className='flex flex-1 flex-col overflow-y-auto p-6'>
@@ -45,6 +53,7 @@ export function AccountPage() {
           <Textarea id='profile-bio' value={user.bio} readOnly />
         </div>
         <Button disabled>Save Changes (not available)</Button>
+        <SignInMethods linked={linked} linkError={linkError} />
       </div>
     </main>
   )

@@ -19,14 +19,18 @@ import (
 
 const secret = "test-collab-secret"
 
-type fakeVerifier struct{ users map[string]string }
+type fakeVerifier struct {
+	users map[string]string
+	// unverified lists the tokens whose email is not verified.
+	unverified map[string]bool
+}
 
 func (f fakeVerifier) VerifyToken(token string) (appauth.ResponseUser, error) {
 	id, ok := f.users[token]
 	if !ok {
 		return appauth.ResponseUser{}, errors.New("invalid token")
 	}
-	return appauth.ResponseUser{ID: id}, nil
+	return appauth.ResponseUser{ID: id, EmailVerified: !f.unverified[token]}, nil
 }
 
 type fakeAccess struct {
@@ -152,6 +156,25 @@ func TestAuthorizeReturnsWhatTheUserMayDo(t *testing.T) {
 	// 401 is reserved for a wrong service secret; a token that is not valid is 403.
 	if code, _ = ask("tok-unknown"); code != http.StatusForbidden {
 		t.Fatalf("an unknown token = %d, want 403", code)
+	}
+}
+
+func TestAuthorizeRefusesAnUnverifiedEmailWhenTheGateIsOn(t *testing.T) {
+	authorize := func(requireVerified bool) int {
+		h := NewInternalHandler(
+			fakeVerifier{users: map[string]string{"tok-editor": editorID.String()}, unverified: map[string]bool{"tok-editor": true}},
+			fakeAccess{access: map[uuid.UUID]collaboration.RoomAccess{editorID: {CanRead: true, CanEdit: true}}},
+			&fakeStore{states: map[uuid.UUID][]byte{}, contents: map[uuid.UUID]json.RawMessage{}, missing: map[uuid.UUID]bool{}},
+			secret,
+		).RequireVerifiedEmail(requireVerified)
+		return do(h, http.MethodPost, "/internal/collab/authorize",
+			map[string]string{"token": "tok-editor", "workspaceID": workspaceID.String(), "documentID": documentID.String()}, true).Code
+	}
+	if got := authorize(true); got != http.StatusForbidden {
+		t.Fatalf("gate on: want 403 so an unverified User cannot edit over the socket, got %d", got)
+	}
+	if got := authorize(false); got != http.StatusOK {
+		t.Fatalf("gate off: want 200, got %d", got)
 	}
 }
 

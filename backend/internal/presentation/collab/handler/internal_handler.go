@@ -52,10 +52,18 @@ type InternalHandler struct {
 	access   AccessReader
 	store    StateStore
 	secret   string
+	// verifiedOnly refuses a User whose email is not verified, as the API does.
+	verifiedOnly bool
 }
 
 func NewInternalHandler(verifier TokenVerifier, access AccessReader, store StateStore, secret string) *InternalHandler {
 	return &InternalHandler{verifier: verifier, access: access, store: store, secret: secret}
+}
+
+// RequireVerifiedEmail makes authorize refuse a User whose email is not verified.
+func (h *InternalHandler) RequireVerifiedEmail(on bool) *InternalHandler {
+	h.verifiedOnly = on
+	return h
 }
 
 func (h *InternalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +103,10 @@ func (h *InternalHandler) authorize(w http.ResponseWriter, r *http.Request) {
 	user, err := h.verifier.VerifyToken(request.Token)
 	if err != nil {
 		http.Error(w, "invalid token", http.StatusForbidden)
+		return
+	}
+	if h.verifiedOnly && !user.EmailVerified {
+		http.Error(w, "email not verified", http.StatusForbidden)
 		return
 	}
 	userID, err := uuid.Parse(user.ID)

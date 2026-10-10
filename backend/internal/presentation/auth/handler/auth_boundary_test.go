@@ -48,6 +48,8 @@ func (authBoundaryUsers) Search(context.Context, string, int) ([]model.UserSumma
 	return nil, nil
 }
 
+func (authBoundaryUsers) MarkEmailVerified(context.Context, uuid.UUID) error { return nil }
+
 func newAuthBoundaryHandler() *Handler {
 	var _ repocontract.UserRepository = authBoundaryUsers{}
 	uc := appauth.NewUseCaseWithFactory(authBoundaryDB{}, "test-secret", time.Hour, func(database.Queryer) repocontract.UserRepository {

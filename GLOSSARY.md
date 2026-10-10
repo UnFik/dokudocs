@@ -57,3 +57,20 @@ _Avoid_: Embed, attachment, child document
 **Architecture version**:
 A labelled, frozen state of an Architecture document together with the state of every document it links to at that moment ("Prod v2.0"). Its content never changes; its label and description may.
 _Avoid_: Tag (the control, not the concept), release, snapshot
+
+## Accounts
+
+**Linked identity**:
+An account at an outside provider (Google now, GitHub later) tied to one User. It is matched by the provider's own id for the person, never by email alone.
+_Avoid_: OAuth account, social login, SSO
+
+**Sign-in method**:
+A way a User can sign in: a password, or a Linked identity. A User always keeps at least one.
+_Avoid_: Auth type, login option
+
+**Verified email**:
+An address the User has proven to be theirs, by opening the link we mailed or because the provider they signed in with reported it as verified. Until it is verified, the app is closed to the User except for verifying.
+_Avoid_: Confirmed email, activated account
+
+**Takeover**:
+Signing in with a provider whose verified email matches a local account that never verified its email. The account is kept, its password is dropped, and the Linked identity is added (ADR-0034).

@@ -19,6 +19,6 @@ func addCollabInternalRoutes(mux *http.ServeMux, c *container.Container, cfg con
 		docrepo.NewRepository(c.DB),
 		docrepo.NewCollabStateStore(c.DB),
 		cfg.CollabServiceSecret,
-	)
+	).RequireVerifiedEmail(cfg.RequireEmailVerification)
 	mux.Handle("/internal/collab/", handler)
 }

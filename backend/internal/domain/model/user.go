@@ -12,8 +12,10 @@ type AuthUser struct {
 	Email        string
 	PasswordHash string
 	Roles        []string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// EmailVerified is whether the address has been proven to belong to the User.
+	EmailVerified bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type UserProfile struct {
@@ -26,6 +28,8 @@ type UserProfile struct {
 	AvatarURL   string    `json:"avatarUrl"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+	// EmailVerified is read from the database, unlike the flag in the access token.
+	EmailVerified bool `json:"emailVerified"`
 }
 
 type UserSettings struct {

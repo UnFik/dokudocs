@@ -5,13 +5,12 @@ import (
 	appws "backend/internal/application/workspace/usecase"
 	"backend/internal/config"
 	"backend/internal/infrastructure/runtime/container"
-	"backend/internal/presentation/middleware"
 	wshandler "backend/internal/presentation/workspace/handler"
 )
 
 func addWorkspaceRoutes(f Router, c *container.Container, cfg config.Config) {
 	authUseCase := appauth.NewUseCase(c.DB, cfg.JWTSecret, cfg.AccessTokenTTL)
-	authRequired := middleware.ValidateToken(authUseCase)
+	authRequired := signedIn(authUseCase, cfg)
 
 	workspaceUseCase := appws.NewUseCase(c.DB)
 	workspaceHandler := wshandler.NewHandler(workspaceUseCase, c.Validator)

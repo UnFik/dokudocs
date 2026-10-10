@@ -87,7 +87,7 @@ test-e2e-with-backend:
 		collab_url="http://127.0.0.1:$$collab_port"; \
 		collab_secret=test-collab-secret; \
 		(cd backend && go build -o "$$tmpdir/server" ./cmd/server); \
-		DATABASE_URL="$$database_url" JWT_SECRET=test-secret ALLOWED_ORIGIN=http://127.0.0.1:4173 APP_ADDR="127.0.0.1:$$api_port" COLLAB_SERVICE_SECRET="$$collab_secret" COLLAB_SERVICE_URL="$$collab_url" "$$tmpdir/server" >"$$tmpdir/backend.log" 2>&1 & \
+		DATABASE_URL="$$database_url" JWT_SECRET=test-secret ALLOWED_ORIGIN=http://127.0.0.1:4173 PUBLIC_APP_URL=http://127.0.0.1:4173 RATE_LIMIT_LOGIN_PER_MIN=0 RATE_LIMIT_GOOGLE_START_PER_MIN=0 RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN=0 GOOGLE_CLIENT_ID=e2e-client GOOGLE_CLIENT_SECRET=e2e-secret GOOGLE_AUTH_URL=http://127.0.0.1:4399/auth GOOGLE_TOKEN_URL=http://127.0.0.1:4399/token GOOGLE_JWKS_URL=http://127.0.0.1:4399/certs APP_ADDR="127.0.0.1:$$api_port" COLLAB_SERVICE_SECRET="$$collab_secret" COLLAB_SERVICE_URL="$$collab_url" "$$tmpdir/server" >"$$tmpdir/backend.log" 2>&1 & \
 		backend_pid=$$!; \
 		ready=0; \
 		for attempt in $$(seq 1 60); do \

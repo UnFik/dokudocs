@@ -32,11 +32,12 @@ export async function registerApi(payload: RegisterPayload) {
 export async function currentUserApi(signal?: AbortSignal) {
   return authUserSchema.parse(await apiFetch('/api/v1/auth/me', { signal }))
 }
-export async function startGoogleApi(redirect: string) {
+/** With `authenticated`, the User is already signed in and links the Google account instead of signing in. */
+export async function startGoogleApi(redirect: string, authenticated = false) {
   return z.object({ authorizationUrl: z.url() }).parse(
     await apiFetch('/api/v1/auth/google/start', {
       method: 'POST',
-      authenticated: false,
+      authenticated,
       body: JSON.stringify({ redirect }),
     })
   )
@@ -49,4 +50,43 @@ export async function exchangeGoogleApi(code: string) {
       body: JSON.stringify({ code }),
     })
   )
+}
+export async function verifyEmailApi(token: string) {
+  return authResponseSchema.parse(
+    await apiFetch('/api/v1/auth/email/verify', {
+      method: 'POST',
+      authenticated: false,
+      body: JSON.stringify({ token }),
+    })
+  )
+}
+export async function resendVerificationApi() {
+  await apiFetch('/api/v1/auth/email/resend', { method: 'POST' })
+}
+
+const signInMethodsSchema = z.object({
+  hasPassword: z.boolean(),
+  identities: z.array(
+    z.object({
+      provider: z.string(),
+      email: z.string(),
+      linkedAt: z.string(),
+    })
+  ),
+})
+export async function signInMethodsApi(signal?: AbortSignal) {
+  return signInMethodsSchema.parse(
+    await apiFetch('/api/v1/auth/identities', { signal })
+  )
+}
+export async function unlinkIdentityApi(provider: string) {
+  await apiFetch(`/api/v1/auth/identities/${encodeURIComponent(provider)}`, {
+    method: 'DELETE',
+  })
+}
+export async function setPasswordApi(password: string) {
+  await apiFetch('/api/v1/auth/password', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
 }
