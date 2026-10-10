@@ -399,6 +399,130 @@ export async function listWorkspaceMembers(
   }))
 }
 
+const rosterSchema = z.array(
+  z.object({
+    userId: z.string().min(1),
+    email: z.string(),
+    fullName: z.string().optional().default(''),
+    avatarUrl: z.string().optional().default(''),
+    role: z.string(),
+    joinedAt: z.string(),
+  })
+)
+
+export type WorkspaceMemberRow = z.infer<typeof rosterSchema>[number]
+
+/** Everyone in a workspace, with the role each one holds. */
+export async function listWorkspaceRoster(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceMemberRow[]> {
+  return rosterSchema.parse(
+    await apiFetch<unknown>(`/api/v1/workspaces/${workspaceId}/members`, {
+      signal,
+    })
+  )
+}
+
+export async function removeWorkspaceMember(
+  workspaceId: string,
+  userId: string
+): Promise<void> {
+  await apiFetch(`/api/v1/workspaces/${workspaceId}/members/${userId}`, {
+    method: 'DELETE',
+  })
+}
+
+const inviteSchema = z.object({
+  id: z.string().min(1),
+  email: z.string(),
+  role: z.string(),
+  expiresAt: z.string(),
+  lastSentAt: z.string(),
+})
+
+export type WorkspaceInviteRow = z.infer<typeof inviteSchema>
+
+export type InviteRole = 'member' | 'admin'
+
+export async function inviteWorkspaceMember(
+  workspaceId: string,
+  input: { email: string; role: InviteRole }
+): Promise<WorkspaceInviteRow> {
+  return inviteSchema.parse(
+    await apiFetch<unknown>(`/api/v1/workspaces/${workspaceId}/invites`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  )
+}
+
+/** Invitations nobody has used yet. Only an owner or admin may ask. */
+export async function listWorkspaceInvites(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<WorkspaceInviteRow[]> {
+  const rows = await apiFetch<unknown>(
+    `/api/v1/workspaces/${workspaceId}/invites`,
+    { signal }
+  )
+  return z.array(inviteSchema).parse(rows ?? [])
+}
+
+export async function resendWorkspaceInvite(
+  workspaceId: string,
+  inviteId: string
+): Promise<void> {
+  await apiFetch(
+    `/api/v1/workspaces/${workspaceId}/invites/${inviteId}/resend`,
+    { method: 'POST' }
+  )
+}
+
+export async function revokeWorkspaceInvite(
+  workspaceId: string,
+  inviteId: string
+): Promise<void> {
+  await apiFetch(`/api/v1/workspaces/${workspaceId}/invites/${inviteId}`, {
+    method: 'DELETE',
+  })
+}
+
+const invitePreviewSchema = z.object({
+  workspaceName: z.string(),
+  inviterName: z.string(),
+  role: z.string(),
+  email: z.string(),
+})
+
+export type InvitePreview = z.infer<typeof invitePreviewSchema>
+
+/** What an invitation link offers. Needs no sign-in. */
+export async function previewInvite(
+  token: string,
+  signal?: AbortSignal
+): Promise<InvitePreview> {
+  return invitePreviewSchema.parse(
+    await apiFetch<unknown>('/api/v1/invites/preview', {
+      method: 'POST',
+      authenticated: false,
+      body: JSON.stringify({ token }),
+      signal,
+    })
+  )
+}
+
+/** Joins the workspace as the signed-in User; resolves to the workspace id. */
+export async function acceptInvite(token: string): Promise<string> {
+  const { workspaceId } = z.object({ workspaceId: postgresUUIDSchema }).parse(
+    await apiFetch<unknown>('/api/v1/invites/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    })
+  )
+  return workspaceId
+}
+
 function toProject(project: z.infer<typeof projectSchema>): ProjectItem {
   return {
     id: project.id,
