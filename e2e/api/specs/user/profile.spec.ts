@@ -20,7 +20,6 @@ test.describe('User: Profile endpoints', () => {
       fullName: 'Updated Name ' + userContext.user.accountNo,
       phoneNumber: '+1234567890',
       bio: 'Staff Technical Lead & Architect',
-      avatarUrl: 'https://example.com/avatar-updated.png',
     }
 
     // Update profile
@@ -35,7 +34,6 @@ test.describe('User: Profile endpoints', () => {
     expect(updated.fullName).toBe(updatePayload.fullName)
     expect(updated.phoneNumber).toBe(updatePayload.phoneNumber)
     expect(updated.bio).toBe(updatePayload.bio)
-    expect(updated.avatarUrl).toBe(updatePayload.avatarUrl)
 
     // Verify GET reflects the changes
     const getRes = await userRequest.get('/api/v1/users/me/profile')
@@ -45,6 +43,41 @@ test.describe('User: Profile endpoints', () => {
 
     expect(refreshed.fullName).toBe(updatePayload.fullName)
     expect(refreshed.bio).toBe(updatePayload.bio)
+  })
+
+  test('should refuse avatarUrl on a profile save: the picture changes only through the avatar endpoints', async ({ userRequest }) => {
+    const res = await userRequest.put('/api/v1/users/me/profile', {
+      data: { fullName: 'Same Name', avatarUrl: 'https://tracker.example.test/pixel.png' },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test('should upload, serve and remove an avatar', async ({ userRequest, request }) => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+      'base64'
+    )
+    const putRes = await userRequest.put('/api/v1/users/me/avatar', {
+      multipart: { file: { name: 'me.png', mimeType: 'image/png', buffer: png } },
+    })
+    expect(putRes.status()).toBe(200)
+    const profile = ((await putRes.json()).data ?? {}) as { avatarUrl: string }
+    expect(profile.avatarUrl).toMatch(/^\/api\/v1\/avatars\/[0-9a-f]{32}$/)
+
+    // An <img> sends no bearer token, so the picture is public by its key.
+    const fetched = await request.get(profile.avatarUrl)
+    expect(fetched.status()).toBe(200)
+    expect(fetched.headers()['content-type']).toBe('image/png')
+    expect(fetched.headers()['cache-control']).toContain('immutable')
+
+    const bad = await userRequest.put('/api/v1/users/me/avatar', {
+      multipart: { file: { name: 'me.png', mimeType: 'image/png', buffer: Buffer.from('not a picture') } },
+    })
+    expect(bad.status()).toBe(400)
+
+    const del = await userRequest.delete('/api/v1/users/me/avatar')
+    expect(del.status()).toBe(204)
+    expect((await request.get(profile.avatarUrl)).status()).toBe(404)
   })
 
   test('should reject unauthenticated profile requests with 401 Unauthorized', async ({ request }) => {
