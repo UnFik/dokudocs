@@ -80,6 +80,8 @@ type Notification struct {
 	Body      string    `json:"body"`
 	Read      bool      `json:"read"`
 	CreatedAt time.Time `json:"createdAt"`
+	// Path opens what the notification is about, when it is about something.
+	Path string `json:"path,omitempty"`
 }
 
 var (
@@ -106,7 +108,8 @@ type Store interface {
 	MyRequests(ctx context.Context, userID uuid.UUID) ([]MyRequest, error)
 	AnswerRequest(ctx context.Context, actorID, requestID uuid.UUID, answer Answer) error
 	Notifications(ctx context.Context, userID uuid.UUID) ([]Notification, error)
-	MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error
+	// MarkNotificationsRead marks the unread ones of a kind as read, or all of them for kind "".
+	MarkNotificationsRead(ctx context.Context, userID uuid.UUID, kind string) error
 }
 
 var notAlnum = regexp.MustCompile(`[^a-z0-9]+`)
@@ -162,6 +165,6 @@ func (s *Service) Notifications(ctx context.Context, userID uuid.UUID) ([]Notifi
 	return s.store.Notifications(ctx, userID)
 }
 
-func (s *Service) MarkNotificationsRead(ctx context.Context, userID uuid.UUID) error {
-	return s.store.MarkNotificationsRead(ctx, userID)
+func (s *Service) MarkNotificationsRead(ctx context.Context, userID uuid.UUID, kind string) error {
+	return s.store.MarkNotificationsRead(ctx, userID, kind)
 }

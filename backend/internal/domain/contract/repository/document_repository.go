@@ -62,12 +62,13 @@ type CommentRepository interface {
 	ListMentionCandidates(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.MentionTarget, error)
 	ResolveMentions(ctx context.Context, workspaceID, documentID uuid.UUID, userIDs []uuid.UUID) ([]model.MentionTarget, error)
 	ListComments(ctx context.Context, workspaceID, documentID, actorID uuid.UUID) ([]model.CommentThread, error)
-	CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) error
-	CreateCommentReply(ctx context.Context, workspaceID, documentID uuid.UUID, reply model.CommentReply) error
+	// The writes that can name people return whom email or push should reach.
+	CreateComment(ctx context.Context, workspaceID uuid.UUID, thread model.CommentThread) ([]model.MentionDelivery, error)
+	CreateCommentReply(ctx context.Context, workspaceID, documentID uuid.UUID, reply model.CommentReply) ([]model.MentionDelivery, error)
 	SetCommentResolved(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, resolved bool) error
 	// UpdateComment and UpdateCommentReply change the text; only its author may.
-	UpdateComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, content string) error
-	UpdateCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID, content string) error
+	UpdateComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID, content string, mentioned []uuid.UUID) ([]model.MentionDelivery, error)
+	UpdateCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID, content string, mentioned []uuid.UUID) ([]model.MentionDelivery, error)
 	// DeleteComment removes a thread with its replies; its author or an editor may.
 	DeleteComment(ctx context.Context, workspaceID, documentID, threadID, actorID uuid.UUID) error
 	DeleteCommentReply(ctx context.Context, workspaceID, documentID, threadID, replyID, actorID uuid.UUID) error
