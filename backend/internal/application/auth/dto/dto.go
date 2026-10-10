@@ -1,6 +1,10 @@
 package dto
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type LoginRequest struct {
 	Email    string
@@ -59,4 +63,15 @@ type IdentityOutcome struct {
 type IdentityExchange struct {
 	Login    LoginResponse
 	Redirect string
+}
+
+type LinkedIdentity struct {
+	Provider string
+	Email    string
+	LinkedAt time.Time
+}
+
+type SignInMethods struct {
+	HasPassword bool
+	Identities  []LinkedIdentity
 }

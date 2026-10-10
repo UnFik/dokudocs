@@ -10,6 +10,7 @@ import (
 
 	"backend/constant"
 	"backend/internal/application/auth/dto"
+	"backend/internal/application/utils"
 	repocontract "backend/internal/domain/contract/repository"
 	"backend/internal/domain/model"
 	"backend/internal/infrastructure/database"
@@ -262,3 +263,59 @@ func profileName(name, email string) string {
 }
 
 func newSecret() (string, error) { return newVerificationToken() }
+
+func (u *useCase) SignInMethods(ctx context.Context, userID uuid.UUID) (dto.SignInMethods, error) {
+	repo := u.identities(u.db)
+	hasPassword, err := repo.HasPassword(ctx, userID)
+	if err != nil {
+		return dto.SignInMethods{}, err
+	}
+	linked, err := repo.ListByUser(ctx, userID)
+	if err != nil {
+		return dto.SignInMethods{}, err
+	}
+	methods := dto.SignInMethods{HasPassword: hasPassword, Identities: make([]dto.LinkedIdentity, 0, len(linked))}
+	for _, item := range linked {
+		methods.Identities = append(methods.Identities, dto.LinkedIdentity{Provider: item.Provider, Email: item.Email, LinkedAt: item.LinkedAt})
+	}
+	return methods, nil
+}
+
+func (u *useCase) UnlinkIdentity(ctx context.Context, userID uuid.UUID, provider string) error {
+	return u.db.WithTransaction(ctx, func(tx database.Queryer) error {
+		repo := u.identities(tx)
+		if err := repo.LockUser(ctx, userID); err != nil {
+			return err
+		}
+		linked, err := repo.ListByUser(ctx, userID)
+		if err != nil {
+			return err
+		}
+		found := false
+		for _, item := range linked {
+			found = found || item.Provider == provider
+		}
+		if !found {
+			return constant.ErrIdentityNotFound
+		}
+		hasPassword, err := repo.HasPassword(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if !hasPassword && len(linked) <= 1 {
+			return constant.ErrLastSignInMethod
+		}
+		return repo.Unlink(ctx, userID, provider)
+	})
+}
+
+func (u *useCase) SetPassword(ctx context.Context, userID uuid.UUID, password string) error {
+	if utf8.RuneCountInString(password) < 15 || len([]byte(password)) > 72 {
+		return constant.ErrInvalidPassword
+	}
+	hash, err := utils.HashPassword(password)
+	if err != nil {
+		return err
+	}
+	return u.identities(u.db).SetPassword(ctx, userID, hash)
+}
