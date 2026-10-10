@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { DocumentItem } from '@/types/dokudocs'
-import { Database, FileText, GitFork, Network } from 'lucide-react'
+import { getDocumentType } from '@/lib/document-types'
 import { DocThumbnailPreview } from '@/features/docs/components/doc-thumbnail-preview'
 
 interface ProjectSubCardProps {
@@ -8,25 +8,7 @@ interface ProjectSubCardProps {
 }
 
 export function ProjectSubCard({ document }: ProjectSubCardProps) {
-  const icons = {
-    markdown: FileText,
-    dbdiagram: Database,
-    mermaid: GitFork,
-    architecture: Network,
-  }
-
-  const colors = {
-    markdown:
-      'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-    dbdiagram:
-      'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-    mermaid:
-      'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
-    architecture: 'bg-muted text-foreground border-border',
-  }
-
-  const Icon = icons[document.type] || FileText
-  const badgeStyle = colors[document.type] || colors.markdown
+  const Icon = getDocumentType(document.type).icon
 
   return (
     <Link
@@ -46,9 +28,7 @@ export function ProjectSubCard({ document }: ProjectSubCardProps) {
           }
           className='h-full w-full'
         />
-        <div
-          className={`absolute top-1.5 left-1.5 flex size-5 items-center justify-center rounded border ${badgeStyle}`}
-        >
+        <div className='absolute top-1.5 left-1.5 flex size-5 items-center justify-center rounded border border-border bg-muted text-foreground'>
           <Icon className='size-3' />
         </div>
       </div>
