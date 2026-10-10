@@ -258,7 +258,7 @@ interface RawPointWithMeta {
   insertIndex: number
 }
 
-function computeCleanedOrthogonalPointsWithSegments(
+export function computeCleanedOrthogonalPointsWithSegments(
   startX: number,
   startY: number,
   endX: number,
@@ -407,6 +407,39 @@ function computeCleanedOrthogonalPointsWithSegments(
     cleaned: cleaned.map((c) => ({ x: c.x, y: c.y })),
     segments,
   }
+}
+
+// A joint dragged past its neighbours leaves the path doubling back on itself;
+// the cleanup drops that spike, so the stored joint can sit off the drawn line.
+export function snapJointsToPath(
+  joints: JointPoint[],
+  path: JointPoint[]
+): JointPoint[] {
+  return joints.map((joint) => {
+    const axis = joint.axis || 'x'
+    let best: JointPoint | null = null
+    let bestGap = Infinity
+
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i]
+      const b = path[i + 1]
+      const isVertical = Math.abs(a.x - b.x) < 0.5
+      if (isVertical !== (axis === 'x')) continue
+
+      const lo = Math.min(isVertical ? a.y : a.x, isVertical ? b.y : b.x)
+      const hi = Math.max(isVertical ? a.y : a.x, isVertical ? b.y : b.x)
+      const along = isVertical ? joint.y : joint.x
+      const clamped = Math.min(hi, Math.max(lo, along))
+      const point = isVertical ? { x: a.x, y: clamped } : { x: clamped, y: a.y }
+      const gap = Math.hypot(joint.x - point.x, joint.y - point.y)
+      if (gap < bestGap) {
+        bestGap = gap
+        best = point
+      }
+    }
+
+    return best ? { ...joint, x: best.x, y: best.y } : joint
+  })
 }
 
 function generateRoundedOrthogonalPathFromPoints(
@@ -1367,7 +1400,7 @@ export function DbmlVisualCanvas({
               )
         const joints = [
           { x: startX, y: startY },
-          ...interiorJoints,
+          ...snapJointsToPath(interiorJoints, cleaned),
           { x: endX, y: endY },
         ]
         const ghostCandidates = getGhostJointCandidates(cleaned, joints)
