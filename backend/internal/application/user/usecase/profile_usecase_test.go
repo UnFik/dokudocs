@@ -34,7 +34,6 @@ func TestUserProfile(t *testing.T) {
 		FullName:    "New Name",
 		PhoneNumber: "123456",
 		Bio:         "Bio",
-		AvatarURL:   "avatar.png",
 	})
 	if err != nil || updated.FullName != "New Name" {
 		t.Fatalf("unexpected updated profile: %#v, err: %v", updated, err)

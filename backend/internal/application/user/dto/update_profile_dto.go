@@ -7,5 +7,4 @@ type UpdateProfileInput struct {
 	FullName    string
 	PhoneNumber string
 	Bio         string
-	AvatarURL   string
 }
