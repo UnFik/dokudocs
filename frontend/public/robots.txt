@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /api/
+Disallow: /collab
+
+Sitemap: https://unfik.my.id/sitemap.xml

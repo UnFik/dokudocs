@@ -14,5 +14,6 @@ export const Route = createFileRoute('/')({
           'Write Markdown notes, DBML schemas, and Mermaid diagrams together in one workspace.',
       },
     ],
+    links: [{ rel: 'canonical', href: 'https://unfik.my.id/' }],
   }),
 })
