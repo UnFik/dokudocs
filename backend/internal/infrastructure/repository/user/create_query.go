@@ -13,10 +13,10 @@ func (r *Repository) Create(ctx context.Context, user model.AuthUser, fullName s
 		password = nil
 	}
 	const insertUser = `
-		INSERT INTO users (id, account_no, email, password_hash, full_name)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO users (id, account_no, email, password_hash, full_name, email_verified_at)
+		VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN now() END)
 	`
-	if _, err := r.db.ExecContext(ctx, insertUser, user.ID, user.AccountNo, user.Email, password, fullName); err != nil {
+	if _, err := r.db.ExecContext(ctx, insertUser, user.ID, user.AccountNo, user.Email, password, fullName, user.EmailVerified); err != nil {
 		return err
 	}
 

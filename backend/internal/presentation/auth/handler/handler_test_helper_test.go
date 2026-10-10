@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"github.com/google/uuid"
 
 	"backend/internal/application/auth/dto"
 )
@@ -23,4 +24,10 @@ func (f fakeAuthUseCase) Register(context.Context, dto.RegisterRequest) (dto.Log
 
 func (f fakeAuthUseCase) VerifyToken(string) (dto.ResponseUser, error) {
 	return f.user, f.verifyErr
+}
+
+func (f fakeAuthUseCase) SendVerificationEmail(context.Context, uuid.UUID) error { return nil }
+
+func (f fakeAuthUseCase) VerifyEmail(context.Context, string) (dto.LoginResponse, error) {
+	return f.loginResp, f.loginErr
 }

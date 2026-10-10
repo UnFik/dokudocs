@@ -39,6 +39,12 @@ services:
       timeout: 3s
       retries: 10
 
+  mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: dokudocs-mailpit
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
   migrate:
     build:
       context: ./backend
@@ -77,6 +83,16 @@ services:
       RAG_REQUEST_TIMEOUT: ${RAG_REQUEST_TIMEOUT:-120s}
       JWT_SECRET: ${JWT_SECRET:-dev-secret}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-24h}
+      # Mail goes to Mailpit (http://localhost:8025), nothing leaves the machine.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-Dokudocs <no-reply@localhost>}
+      REQUIRE_EMAIL_VERIFICATION: ${REQUIRE_EMAIL_VERIFICATION:-false}
+      RATE_LIMIT_LOGIN_PER_MIN: ${RATE_LIMIT_LOGIN_PER_MIN:-10}
+      RATE_LIMIT_GOOGLE_START_PER_MIN: ${RATE_LIMIT_GOOGLE_START_PER_MIN:-20}
+      RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN: ${RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN:-30}
       # Uploaded files live in their own volume, not in the bind-mounted source tree.
       ASSET_DIR: /var/lib/dokudocs/assets
       READ_TIMEOUT: ${READ_TIMEOUT:-5s}

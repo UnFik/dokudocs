@@ -46,6 +46,8 @@ func (s fakeUserStore) Search(context.Context, string, int) ([]model.UserSummary
 	return nil, nil
 }
 
+func (s fakeUserStore) MarkEmailVerified(context.Context, uuid.UUID) error { return nil }
+
 func (f fakeDB) WithTransaction(ctx context.Context, fn func(database.Queryer) error) error {
 	return fn(f.Queryer)
 }

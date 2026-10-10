@@ -19,4 +19,9 @@ var (
 	ErrAccessNotFound        = errors.New("document access not found")
 	ErrUnauthorized          = errors.New("unauthorized")
 	ErrForbidden             = errors.New("forbidden")
+
+	ErrInvalidVerificationToken = errors.New("verification link is invalid or has expired")
+	ErrVerificationTooSoon      = errors.New("a verification email was sent a moment ago")
+	ErrEmailNotConfigured       = errors.New("email sending is not configured")
+	ErrEmailNotSent             = errors.New("verification email could not be sent")
 )

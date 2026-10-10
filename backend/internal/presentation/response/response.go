@@ -14,6 +14,8 @@ type Envelope struct {
 
 type ErrorEnvelope struct {
 	Title string `json:"title"`
+	// Code is a stable machine-readable reason, set only where a client acts on it.
+	Code string `json:"code,omitempty"`
 }
 
 func Data(w http.ResponseWriter, status int, payload any) error {
@@ -22,6 +24,10 @@ func Data(w http.ResponseWriter, status int, payload any) error {
 
 func Error(w http.ResponseWriter, status int, title string) {
 	_ = writeJSON(w, status, ErrorEnvelope{Title: title})
+}
+
+func ErrorWithCode(w http.ResponseWriter, status int, code, title string) {
+	_ = writeJSON(w, status, ErrorEnvelope{Title: title, Code: code})
 }
 
 func DecodeJSON(r *http.Request, dst any) error {

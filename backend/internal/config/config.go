@@ -45,10 +45,19 @@ type Config struct {
 	// TrustProxyHeaders reads the client address from X-Real-IP; set it only
 	// when a proxy that overwrites the header is the sole way to reach the API.
 	TrustProxyHeaders bool
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
-	ShutdownTimeout   time.Duration
+	// RequireEmailVerification refuses a signed-in User whose email is not
+	// verified, everywhere except the endpoints that verify it.
+	RequireEmailVerification bool
+	// SMTP settings for outgoing email; with no host or sender, nothing is sent.
+	SMTPHost        string
+	SMTPPort        int
+	SMTPUser        string
+	SMTPPassword    string
+	SMTPFrom        string
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
+	IdleTimeout     time.Duration
+	ShutdownTimeout time.Duration
 }
 
 func LoadConfig() (Config, error) {
@@ -88,6 +97,12 @@ func LoadConfig() (Config, error) {
 		RateLimitGoogleStartPerMin:    env.GetInt("RATE_LIMIT_GOOGLE_START_PER_MIN", 20),
 		RateLimitGoogleCallbackPerMin: env.GetInt("RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN", 30),
 		TrustProxyHeaders:             env.GetBool("TRUST_PROXY_HEADERS", false),
+		RequireEmailVerification:      env.GetBool("REQUIRE_EMAIL_VERIFICATION", false),
+		SMTPHost:                      strings.TrimSpace(env.GetString("SMTP_HOST", "")),
+		SMTPPort:                      env.GetInt("SMTP_PORT", 587),
+		SMTPUser:                      env.GetString("SMTP_USER", ""),
+		SMTPPassword:                  env.GetString("SMTP_PASSWORD", ""),
+		SMTPFrom:                      strings.TrimSpace(env.GetString("SMTP_FROM", "")),
 		ReadTimeout:                   env.GetDuration("READ_TIMEOUT", 5*time.Second),
 		WriteTimeout:                  env.GetDuration("WRITE_TIMEOUT", 10*time.Second),
 		IdleTimeout:                   env.GetDuration("IDLE_TIMEOUT", 60*time.Second),
@@ -108,5 +123,14 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("JWT_SECRET is required")
 	}
 
+	if cfg.RequireEmailVerification && !cfg.MailerConfigured() {
+		return Config{}, fmt.Errorf("REQUIRE_EMAIL_VERIFICATION needs SMTP_HOST and SMTP_FROM")
+	}
+
 	return cfg, nil
+}
+
+// MailerConfigured is whether there is a server to send email through.
+func (c Config) MailerConfigured() bool {
+	return c.SMTPHost != "" && c.SMTPFrom != ""
 }

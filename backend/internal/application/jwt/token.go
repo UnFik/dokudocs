@@ -17,6 +17,8 @@ type Claims struct {
 	AccountNo string   `json:"accountNo"`
 	Email     string   `json:"email"`
 	Role      []string `json:"role"`
+	// EmailVerified is "ev"; a token issued before it existed reads as false.
+	EmailVerified bool `json:"ev"`
 	jwt.RegisteredClaims
 }
 
@@ -43,11 +45,14 @@ func (m *Manager) Issue(user model.AuthUser) (dto.LoginResponse, error) {
 		Email:     user.Email,
 		Role:      user.Roles,
 		Exp:       expiresAt.Unix(),
+
+		EmailVerified: user.EmailVerified,
 	}
 	claims := Claims{
-		AccountNo: user.AccountNo,
-		Email:     user.Email,
-		Role:      user.Roles,
+		AccountNo:     user.AccountNo,
+		Email:         user.Email,
+		Role:          user.Roles,
+		EmailVerified: user.EmailVerified,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   user.ID.String(),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
@@ -80,6 +85,8 @@ func (m *Manager) Verify(tokenString string) (dto.ResponseUser, error) {
 		Email:     claims.Email,
 		Role:      claims.Role,
 		Exp:       claims.ExpiresAt.Unix(),
+
+		EmailVerified: claims.EmailVerified,
 	}, nil
 }
 

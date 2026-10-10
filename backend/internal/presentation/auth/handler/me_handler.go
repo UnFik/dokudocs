@@ -25,10 +25,11 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = response.Data(w, http.StatusOK, presenter.ResponseUser{
-		ID:        user.ID,
-		AccountNo: user.AccountNo,
-		Email:     user.Email,
-		Role:      user.Role,
-		Exp:       user.Exp,
+		ID:            user.ID,
+		AccountNo:     user.AccountNo,
+		Email:         user.Email,
+		Role:          user.Role,
+		Exp:           user.Exp,
+		EmailVerified: user.EmailVerified,
 	})
 }
