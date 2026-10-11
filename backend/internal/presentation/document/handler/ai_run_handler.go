@@ -16,14 +16,14 @@ import (
 	"backend/internal/application/airuns"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/presentation/response"
+	"backend/internal/presentation/sse"
 
 	"github.com/google/uuid"
 )
 
 const (
-	runPollInterval  = 150 * time.Millisecond
-	runHeartbeat     = 15 * time.Second
-	runWriteDeadline = 30 * time.Second
+	runPollInterval = 150 * time.Millisecond
+	runHeartbeat    = 15 * time.Second
 )
 
 // startRun starts the conversation's answer as a run, or returns the run an
@@ -177,23 +177,11 @@ func (h *RunHandler) Events(w http.ResponseWriter, r *http.Request) {
 		writeRAGChatError(w, err)
 		return
 	}
-	rc := http.NewResponseController(w)
-	header := w.Header()
-	header.Set("Content-Type", "text/event-stream")
-	header.Set("Cache-Control", "no-cache, no-transform")
-	header.Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	write := func(format string, args ...any) bool {
-		_ = rc.SetWriteDeadline(time.Now().Add(runWriteDeadline))
-		if _, err := fmt.Fprintf(w, format, args...); err != nil {
-			return false
-		}
-		return rc.Flush() == nil
-	}
+	stream := sse.Open(w)
 	if after > run.Sequence {
 		// The client's cursor is from a run that no longer has those events.
 		snapshot, _ := json.Marshal(run)
-		if !write("id: %d\nevent: snapshot\ndata: %s\n\n", run.Sequence, snapshot) {
+		if !stream.Event(strconv.FormatInt(run.Sequence, 10), "snapshot", snapshot) {
 			return
 		}
 		after = run.Sequence
@@ -211,7 +199,7 @@ func (h *RunHandler) Events(w http.ResponseWriter, r *http.Request) {
 			if json.Compact(&data, event.Data) != nil {
 				return
 			}
-			if !write("id: %d\nevent: %s\ndata: %s\n\n", event.Sequence, event.Type, data.Bytes()) {
+			if !stream.Event(strconv.FormatInt(event.Sequence, 10), event.Type, data.Bytes()) {
 				return
 			}
 			lastWrite = time.Now()
@@ -224,7 +212,7 @@ func (h *RunHandler) Events(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if time.Since(lastWrite) > runHeartbeat {
-			if !write(": keep-alive\n\n") {
+			if !stream.Heartbeat() {
 				return
 			}
 			lastWrite = time.Now()

@@ -19,9 +19,18 @@ import (
 	"backend/internal/infrastructure/secretbox"
 )
 
-type scriptedTester struct{ err error }
+type scriptedTester struct {
+	err error
+	// during runs inside the test, like something else happening while it waits on the provider.
+	during func()
+}
 
-func (s *scriptedTester) Test(context.Context, string, aisettings.Config) error { return s.err }
+func (s *scriptedTester) Test(context.Context, string, aisettings.Config) (aisettings.TestReport, error) {
+	if s.during != nil {
+		s.during()
+	}
+	return aisettings.TestReport{Streaming: "supported"}, s.err
+}
 
 type aiEnv struct {
 	*signInEnv

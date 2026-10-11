@@ -43,5 +43,6 @@ func isWebSocketUpgrade(r *http.Request) bool {
 // isRunEventStream is the SSE route that follows an AI run. The run has its own
 // deadline, and TimeoutHandler would hold every event until the response ended.
 func isRunEventStream(r *http.Request) bool {
-	return r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/ai/runs/") && strings.HasSuffix(r.URL.Path, "/events")
+	return r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/events") &&
+		(strings.HasPrefix(r.URL.Path, "/api/v1/ai/runs/") || r.URL.Path == "/api/v1/platform/ai/embedding/events")
 }

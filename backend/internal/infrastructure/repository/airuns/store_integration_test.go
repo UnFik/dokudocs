@@ -205,14 +205,27 @@ func TestDraftIsAvailableWhileTheProviderIsStillWorking(t *testing.T) {
 }
 
 func TestExplicitStopCancelsServerWorkAndPreservesItsStatus(t *testing.T) {
- store,input:=fixture(t)
- runner:=app.NewService(context.Background(),store,4)
- defer runner.Close()
- started,stopped:=make(chan struct{}),make(chan struct{})
- run,_,err:=runner.Start(context.Background(),input,func(ctx context.Context)(json.RawMessage,error){close(started);<-ctx.Done();close(stopped);return nil,ctx.Err()})
- if err!=nil {t.Fatal(err)}
- <-started
- saved,err:=runner.Cancel(context.Background(),input.OwnerID,run.ID)
- if err!=nil || saved.Status!="cancelled" {t.Fatalf("cancel: %+v, %v",saved,err)}
- select {case <-stopped:case <-time.After(time.Second):t.Fatal("Stop did not cancel server work")}
+	store, input := fixture(t)
+	runner := app.NewService(context.Background(), store, 4)
+	defer runner.Close()
+	started, stopped := make(chan struct{}), make(chan struct{})
+	run, _, err := runner.Start(context.Background(), input, func(ctx context.Context) (json.RawMessage, error) {
+		close(started)
+		<-ctx.Done()
+		close(stopped)
+		return nil, ctx.Err()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	saved, err := runner.Cancel(context.Background(), input.OwnerID, run.ID)
+	if err != nil || saved.Status != "cancelled" {
+		t.Fatalf("cancel: %+v, %v", saved, err)
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not cancel server work")
+	}
 }

@@ -22,8 +22,10 @@ type Start struct {
 	OwnerID                           uuid.UUID
 	WorkspaceID, ConversationID       *uuid.UUID
 	Kind, IdempotencyKey, Fingerprint string
-	InstanceID                        uuid.UUID
-	Deadline                          time.Time
+	// Subject names what a platform run is about, e.g. the AI purpose it tests.
+	Subject    string
+	InstanceID uuid.UUID
+	Deadline   time.Time
 }
 
 type Event struct {
@@ -39,6 +41,7 @@ type Run struct {
 	WorkspaceID    *uuid.UUID      `json:"workspaceID,omitempty"`
 	ConversationID *uuid.UUID      `json:"conversationID,omitempty"`
 	Kind           string          `json:"kind"`
+	Subject        string          `json:"subject,omitempty"`
 	Status         string          `json:"status"`
 	Draft          string          `json:"draft"`
 	Sequence       int64           `json:"sequence"`
@@ -48,3 +51,8 @@ type Run struct {
 	UpdatedAt      time.Time       `json:"updatedAt"`
 	Deadline       time.Time       `json:"deadline"`
 }
+
+// PublicError is a failure whose message is safe to show to the person who started the run.
+type PublicError struct{ Message string }
+
+func (e *PublicError) Error() string { return e.Message }

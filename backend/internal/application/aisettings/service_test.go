@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -29,8 +30,20 @@ func (s *fakeStore) Get(_ context.Context, purpose string) (Record, bool, error)
 	r, ok := s.rows[purpose]
 	return r, ok, nil
 }
+func (s *fakeStore) Replace(_ context.Context, r Record, expected *time.Time) (bool, error) {
+	current, found := s.rows[r.Purpose]
+	if (expected == nil) != !found || (found && !current.UpdatedAt.Equal(*expected)) {
+		return false, nil
+	}
+	r.LastError, r.LastErrorAt = "", nil
+	r.UpdatedAt = time.Now()
+	s.rows[r.Purpose] = r
+	return true, nil
+}
+
 func (s *fakeStore) Put(_ context.Context, r Record) error {
 	r.LastError, r.LastErrorAt = "", nil
+	r.UpdatedAt = time.Now()
 	s.rows[r.Purpose] = r
 	return nil
 }
@@ -62,15 +75,20 @@ func (fakeCipher) Open(sealed []byte) (string, error) {
 }
 
 type fakeTester struct {
-	err   error
-	calls []Config
-	purps []string
+	err error
+	// during runs inside the test, as another admin's change would.
+	during func()
+	calls  []Config
+	purps  []string
 }
 
-func (t *fakeTester) Test(_ context.Context, purpose string, cfg Config) error {
+func (t *fakeTester) Test(_ context.Context, purpose string, cfg Config) (TestReport, error) {
 	t.calls = append(t.calls, cfg)
 	t.purps = append(t.purps, purpose)
-	return t.err
+	if t.during != nil {
+		t.during()
+	}
+	return TestReport{Streaming: "unverified"}, t.err
 }
 
 type fakeIndex struct {
@@ -413,5 +431,49 @@ func TestAStoredKeyIsNeverSentToAnotherAddress(t *testing.T) {
 	}
 	if got := e.tester.calls[len(e.tester.calls)-1]; got.APIKey != "sk-for-the-new-address" {
 		t.Fatalf("tested with %+v", got)
+	}
+}
+
+func TestASaveThatWasTestingWhileAnotherSaveLandedIsNotApplied(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.svc.Save(context.Background(), e.admin, PurposeAnswer, answerInput()); err != nil {
+		t.Fatal(err)
+	}
+	newer := answerInput()
+	newer.Model = "m-newer"
+	e.tester.during = func() {
+		e.tester.during = nil
+		if _, err := e.svc.Save(context.Background(), e.admin, PurposeAnswer, newer); err != nil {
+			t.Errorf("newer save: %v", err)
+		}
+	}
+	slow := answerInput()
+	slow.Model = "m-slow"
+	_, err := e.svc.SaveChecked(context.Background(), e.admin, PurposeAnswer, slow)
+	if !errors.Is(err, ErrStale) {
+		t.Fatalf("SaveChecked() error = %v, want ErrStale", err)
+	}
+	if got := e.store.rows[PurposeAnswer].Model; got != "m-newer" {
+		t.Errorf("stored model = %q, want the newer save to stay", got)
+	}
+}
+
+func TestSaveReportsWhatTheTestLearnedAboutStreaming(t *testing.T) {
+	e := newEnv(t)
+	saved, err := e.svc.SaveChecked(context.Background(), e.admin, PurposeAnswer, answerInput())
+	if err != nil || saved.Report.Streaming != "unverified" || saved.Overview.Answer == nil {
+		t.Fatalf("SaveChecked() = %+v, %v", saved, err)
+	}
+}
+
+func TestSaveStopsWhenTheActorLostTheRoleDuringTheTest(t *testing.T) {
+	e := newEnv(t)
+	e.tester.during = func() { delete(e.store.superadmin, e.admin) }
+	_, err := e.svc.SaveChecked(context.Background(), e.admin, PurposeAnswer, answerInput())
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("SaveChecked() error = %v, want ErrForbidden", err)
+	}
+	if _, found := e.store.rows[PurposeAnswer]; found {
+		t.Error("a setting was stored for an actor who is no longer a superadmin")
 	}
 }

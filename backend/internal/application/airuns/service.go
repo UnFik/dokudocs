@@ -21,6 +21,7 @@ type Store interface {
 	Recover(context.Context, time.Time) (int64, error)
 	Events(context.Context, uuid.UUID, uuid.UUID, int64) ([]Event, error)
 	Latest(context.Context, uuid.UUID, uuid.UUID) (Run, error)
+	LatestBySubject(context.Context, uuid.UUID, []string, string) (Run, error)
 	Cleanup(context.Context, time.Time) (int64, error)
 }
 
@@ -131,6 +132,10 @@ func (s *Service) execute(ctx context.Context, handle *activeRun, run Run, work 
 	if err != nil {
 		result = nil
 		status, message = "failed", "AI run failed"
+		var public *PublicError
+		if errors.As(err, &public) && len(public.Message) <= 1000 {
+			message = public.Message
+		}
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			message = "AI run timed out"
 		}
@@ -181,6 +186,11 @@ func (s *Service) Events(ctx context.Context, owner, id uuid.UUID, after int64) 
 // Latest is the active run of a conversation, or else its most recent one.
 func (s *Service) Latest(ctx context.Context, owner, conversation uuid.UUID) (Run, error) {
 	return s.store.Latest(ctx, owner, conversation)
+}
+
+// LatestBySubject is the newest run of the given kinds about a subject.
+func (s *Service) LatestBySubject(ctx context.Context, owner uuid.UUID, kinds []string, subject string) (Run, error) {
+	return s.store.LatestBySubject(ctx, owner, kinds, subject)
 }
 
 // Wait blocks until a run started on this server has finished and returns the

@@ -14,10 +14,15 @@ func addAISettingsRoutes(f Router, c *container.Container, cfg config.Config) {
 		return
 	}
 	authRequired := signedIn(appauth.NewUseCase(c.DB, cfg.JWTSecret, cfg.AccessTokenTTL), cfg)
-	h := aihandler.New(c.AISettings)
+	h := aihandler.New(c.AISettings).WithRuns(aiRuns(c))
 	group := f.Group("/platform/ai", authRequired)
 	group.Get("", h.Overview)
 	group.Get("/changes", h.Changes)
 	group.Put("/{purpose}", h.Save)
 	group.Post("/{purpose}/test", h.Test)
+	if aiRuns(c) != nil {
+		group.Post("/{purpose}/runs", h.StartRun)
+		group.Get("/{purpose}/runs/latest", h.LatestRun)
+		group.Get("/embedding/events", h.ProgressEvents)
+	}
 }
