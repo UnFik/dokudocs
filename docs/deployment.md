@@ -100,6 +100,33 @@ rate rule on `/api/v1/auth/`. The client address comes from `X-Real-IP`, which
 nginx sets, and is trusted only with `TRUST_PROXY_HEADERS=true` (set in
 `docker-compose.yaml`, where nginx is the only way in).
 
+## AI provider
+
+The chatbot's answer and embedding models, base URLs, protocol and API keys live in
+the database, not in `.env`. A Superadmin changes them under **Platform → AI**
+(`/platform/ai`), and the change applies within about 30 seconds without a restart
+([ADR-0038](adr/0038-ai-provider-settings-live-in-the-database-with-an-encrypted-key.md)).
+
+- `AI_SETTINGS_ENCRYPTION_KEY` is **required**: the API server refuses to start
+  without it, and `docker-compose.yaml` fails to start with it unset. Generate one
+  with `openssl rand -base64 32` and keep it with the other secrets. It seals the
+  API keys stored in the database. There is no rotation: if the key is lost or
+  replaced, a Superadmin enters the API keys again.
+- `OPENAI_API_KEY`, `RAG_ANSWER_MODEL` and `RAG_EMBEDDING_MODEL` only seed an empty
+  table on the first boot. After that the database wins and changing them in `.env`
+  does nothing.
+- If the provider fails, the chatbot says the AI service is unavailable and the
+  Platform → AI page shows the last error. It does not fall back to `.env`.
+- `AI_ALLOW_PRIVATE_HOSTS=true` lets a Superadmin use a base URL on a private or local
+  address (for example a model server in the same Docker network). Leave it `false`
+  on a server that reaches internal services.
+- Changing the embedding model re-embeds every document in the background. The old
+  model keeps answering until the last document is done, then the old vectors are
+  deleted ([ADR-0039](adr/0039-embedding-model-switch-keeps-the-old-model-active-until-re-embedding-finishes.md)).
+  Only 1536-dimension models are accepted.
+- A user becomes a Superadmin through the `superadmin` role in `user_roles`; the
+  seeder gives it to the admin user. Nothing in the UI grants it.
+
 ## Rolling back
 
 Run the `Deploy` workflow by hand (Actions → Deploy → Run workflow, on `main`)

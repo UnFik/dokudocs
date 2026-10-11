@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"backend/internal/application/aisettings"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/domain/model"
 	documentrepo "backend/internal/infrastructure/repository/document"
@@ -56,4 +57,38 @@ func embedRAGBacklog(ctx context.Context, store ragEmbeddingStore, embedder appc
 		}
 	}
 	return nil
+}
+
+// embedderSource hands out the embedding client for the active and the pending model.
+type embedderSource interface {
+	Snapshot(ctx context.Context, purpose string) (appchat.EmbeddingModel, bool, error)
+}
+
+type transitionAdvancer interface {
+	Advance(ctx context.Context) (bool, error)
+}
+
+// embedConfiguredModels embeds the backlog for the active model and, while a switch is in
+// progress, for the pending one as well; then lets the switch complete if it is done. A
+// failing pending model never holds back the active one.
+func embedConfiguredModels(ctx context.Context, store ragEmbeddingStore, source embedderSource, advance transitionAdvancer) error {
+	var failures []error
+	for _, purpose := range []string{aisettings.PurposeEmbedding, aisettings.PurposeEmbeddingPending} {
+		embedder, ok, err := source.Snapshot(ctx, purpose)
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if err := embedRAGBacklog(ctx, store, embedder); err != nil {
+			failures = append(failures, err)
+		}
+	}
+	if len(failures) > 0 {
+		return errors.Join(failures...)
+	}
+	_, err := advance.Advance(ctx)
+	return err
 }

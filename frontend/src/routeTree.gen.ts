@@ -43,6 +43,7 @@ import { Route as AuthenticatedSettingsDisplayRouteImport } from './routes/_auth
 import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects/$projectId'
+import { Route as AuthenticatedPlatformAiRouteImport } from './routes/_authenticated/platform/ai'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedSettingsAccountSetPasswordRouteImport } from './routes/_authenticated/settings/account_.set-password'
 
@@ -227,6 +228,11 @@ const AuthenticatedProjectsProjectIdRoute =
     path: '/projects/$projectId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPlatformAiRoute = AuthenticatedPlatformAiRouteImport.update({
+  id: '/platform/ai',
+  path: '/platform/ai',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedErrorsErrorRoute =
   AuthenticatedErrorsErrorRouteImport.update({
     id: '/errors/$error',
@@ -262,6 +268,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/docs/$docId': typeof DocsDocIdRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/platform/ai': typeof AuthenticatedPlatformAiRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
@@ -298,6 +305,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/docs/$docId': typeof DocsDocIdRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/platform/ai': typeof AuthenticatedPlatformAiRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
@@ -337,6 +345,7 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/docs/$docId': typeof DocsDocIdRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/_authenticated/platform/ai': typeof AuthenticatedPlatformAiRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
@@ -376,6 +385,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/docs/$docId'
     | '/errors/$error'
+    | '/platform/ai'
     | '/projects/$projectId'
     | '/settings/account'
     | '/settings/appearance'
@@ -412,6 +422,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/docs/$docId'
     | '/errors/$error'
+    | '/platform/ai'
     | '/projects/$projectId'
     | '/settings/account'
     | '/settings/appearance'
@@ -450,6 +461,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/docs/$docId'
     | '/_authenticated/errors/$error'
+    | '/_authenticated/platform/ai'
     | '/_authenticated/projects/$projectId'
     | '/_authenticated/settings/account'
     | '/_authenticated/settings/appearance'
@@ -728,6 +740,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/platform/ai': {
+      id: '/_authenticated/platform/ai'
+      path: '/platform/ai'
+      fullPath: '/platform/ai'
+      preLoaderRoute: typeof AuthenticatedPlatformAiRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/errors/$error': {
       id: '/_authenticated/errors/$error'
       path: '/errors/$error'
@@ -776,6 +795,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
+  AuthenticatedPlatformAiRoute: typeof AuthenticatedPlatformAiRoute
   AuthenticatedProjectsProjectIdRoute: typeof AuthenticatedProjectsProjectIdRoute
   AuthenticatedAssistantIndexRoute: typeof AuthenticatedAssistantIndexRoute
   AuthenticatedDraftsIndexRoute: typeof AuthenticatedDraftsIndexRoute
@@ -790,6 +810,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
+  AuthenticatedPlatformAiRoute: AuthenticatedPlatformAiRoute,
   AuthenticatedProjectsProjectIdRoute: AuthenticatedProjectsProjectIdRoute,
   AuthenticatedAssistantIndexRoute: AuthenticatedAssistantIndexRoute,
   AuthenticatedDraftsIndexRoute: AuthenticatedDraftsIndexRoute,

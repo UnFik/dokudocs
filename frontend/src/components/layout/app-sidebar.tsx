@@ -1,4 +1,5 @@
 import { Fragment } from 'react'
+import { useAuthStore } from '@/stores/auth-store'
 import { useLayout } from '@/context/layout-provider'
 import {
   Sidebar,
@@ -9,6 +10,7 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar'
 import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
+import { platformNavGroup } from './data/platform-nav'
 import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
 import { NavUser } from './nav-user'
@@ -20,6 +22,8 @@ import { StarredNavGroup } from './starred-nav-group'
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
   const currentUser = useCurrentProfile()
+  const roles = useAuthStore((state) => state.auth.user?.role)
+  const platform = platformNavGroup(roles)
 
   return (
     <Sidebar collapsible={collapsible} variant={variant}>
@@ -37,6 +41,12 @@ export function AppSidebar() {
         ))}
         <SidebarSeparator className='mx-2 my-1' />
         <StarredNavGroup />
+        {platform && (
+          <>
+            <SidebarSeparator className='mx-2 my-1' />
+            <NavGroup {...platform} />
+          </>
+        )}
       </SidebarContent>
       <SidebarFooter className='p-2'>
         <NotificationsInbox />

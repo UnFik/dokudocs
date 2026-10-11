@@ -1,0 +1,5 @@
+# AI provider settings live in the database, with the API key encrypted by an env-held key
+
+The chatbot's base URL, protocol, model and API key are read from `ai_provider_settings` (one row for answering, one for embedding), cached for about 30 seconds, so a Superadmin changes them without a restart. The API key is stored with AES-GCM under `AI_SETTINGS_ENCRYPTION_KEY`, which is required at boot, and it is never sent back to the browser. The old `OPENAI_API_KEY` and `RAG_*_MODEL` variables only seed an empty table once; after that the database wins and there is no fallback to env when the provider fails, so the two never silently disagree.
+
+Rejected: keeping the key in env (changing provider would need a redeploy, which defeats the point), plaintext in the database, and an automatic env fallback (hides a broken setting). The cost is that losing the encryption key means the Superadmin re-enters the keys; rotation is out of scope. A save only succeeds after a connection test, and base URLs must be `https` and not point at private hosts unless the operator sets `AI_ALLOW_PRIVATE_HOSTS`.
