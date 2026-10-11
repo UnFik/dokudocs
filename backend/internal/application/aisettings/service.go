@@ -18,6 +18,8 @@ const (
 	PurposeAnswer           = "answer"
 	PurposeEmbedding        = "embedding"
 	PurposeEmbeddingPending = "embedding_pending"
+	// PurposeAgent is the model the Agent thinks and calls tools with; without it chat answers from documents only.
+	PurposeAgent = "agent"
 
 	ProtocolResponses       = "openai_responses"
 	ProtocolChatCompletions = "openai_chat_completions"
@@ -126,6 +128,7 @@ type Overview struct {
 	Answer           *View     `json:"answer"`
 	Embedding        *View     `json:"embedding"`
 	EmbeddingPending *View     `json:"embeddingPending"`
+	Agent            *View     `json:"agent"`
 	Progress         *Progress `json:"progress"`
 }
 
@@ -151,6 +154,7 @@ func (s *Service) overview(ctx context.Context) (Overview, error) {
 	var out Overview
 	for purpose, target := range map[string]**View{
 		PurposeAnswer: &out.Answer, PurposeEmbedding: &out.Embedding, PurposeEmbeddingPending: &out.EmbeddingPending,
+		PurposeAgent: &out.Agent,
 	} {
 		record, found, err := s.d.Store.Get(ctx, purpose)
 		if err != nil {
@@ -205,7 +209,7 @@ type prepared struct {
 }
 
 func (s *Service) prepare(ctx context.Context, purpose string, in Input) (prepared, error) {
-	if purpose != PurposeAnswer && purpose != PurposeEmbedding {
+	if purpose != PurposeAnswer && purpose != PurposeEmbedding && purpose != PurposeAgent {
 		return prepared{}, fmt.Errorf("%w: unknown purpose", ErrInvalid)
 	}
 	baseURL, err := netguard.ValidateBaseURL(in.BaseURL, s.d.AllowPrivate)

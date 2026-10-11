@@ -11,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	agentapp "backend/internal/application/agent"
 	app "backend/internal/application/aisettings"
+	"backend/internal/application/aiusage"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/domain/model"
 
@@ -211,5 +213,74 @@ func TestEmbedderSnapshotsAreFixedToOneModel(t *testing.T) {
 	}
 	if _, ok, _ := resolver.Snapshot(context.Background(), "nothing"); ok {
 		t.Fatal("a purpose without a row has a snapshot")
+	}
+}
+
+type usageMem struct {
+	mu      sync.Mutex
+	records []aiusage.Record
+}
+
+func (u *usageMem) RecordUsage(_ context.Context, r aiusage.Record) error {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.records = append(u.records, r)
+	return nil
+}
+func (u *usageMem) UsageSummary(context.Context, time.Time, int) (aiusage.Summary, error) {
+	return aiusage.Summary{}, nil
+}
+
+func TestTheAgentModelComesFromItsSettingAndCountsUsageForTheUser(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"content": "done"}}},
+			"usage":   map[string]any{"prompt_tokens": 11, "completion_tokens": 2},
+		})
+	}))
+	defer server.Close()
+	reader := &memReader{rows: map[string]app.Record{}}
+	usage := &usageMem{}
+	resolver := NewResolver(reader, plainCipher{}, true).WithUsage(usage)
+	if resolver.AgentReady(context.Background()) {
+		t.Fatal("an agent is ready without a setting")
+	}
+	if _, err := resolver.Step(context.Background(), nil, nil); !errors.Is(err, agentapp.ErrAgentNotConfigured) {
+		t.Fatalf("Step() without a setting = %v", err)
+	}
+	reader.rows[app.PurposeAgent] = record(app.PurposeAgent, server.URL, "agent-m")
+	resolver.Invalidate()
+	user, workspace := uuid.New(), uuid.New()
+	ctx := aiusage.With(context.Background(), aiusage.Attribution{Feature: aiusage.FeatureChatDocument, UserID: user, WorkspaceID: workspace})
+	reply, err := resolver.Step(ctx, []agentapp.Message{{Role: "user", Content: "hi"}}, nil)
+	if err != nil || reply.Content != "done" || !resolver.AgentReady(ctx) {
+		t.Fatalf("Step() = %+v, %v", reply, err)
+	}
+	if len(usage.records) != 1 {
+		t.Fatalf("usage = %+v", usage.records)
+	}
+	got := usage.records[0]
+	if got.Purpose != app.PurposeAgent || got.Model != "agent-m" || got.Feature != aiusage.FeatureChatDocument || got.UserID != user || got.WorkspaceID != workspace || got.InputTokens != 11 || !got.OK {
+		t.Fatalf("usage record = %+v", got)
+	}
+}
+
+func TestTheTesterRequiresTheAgentModelToCallATool(t *testing.T) {
+	calls := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		message := map[string]any{"content": "pong"}
+		if calls {
+			message["tool_calls"] = []any{map[string]any{"id": "c", "type": "function", "function": map[string]any{"name": "ping", "arguments": "{}"}}}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": message}}})
+	}))
+	defer server.Close()
+	cfg := app.Config{BaseURL: server.URL, Protocol: app.ProtocolChatCompletions, Model: "m", APIKey: "k"}
+	if err := NewTester(true).Test(context.Background(), app.PurposeAgent, cfg); err == nil || !strings.Contains(err.Error(), "tool") {
+		t.Fatalf("a model that answers without calling a tool passed: %v", err)
+	}
+	calls = true
+	if err := NewTester(true).Test(context.Background(), app.PurposeAgent, cfg); err != nil {
+		t.Fatalf("Test(): %v", err)
 	}
 }

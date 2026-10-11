@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
+	agentapp "backend/internal/application/agent"
 	app "backend/internal/application/aisettings"
+	"backend/internal/application/aiusage"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/infrastructure/openai"
 )
@@ -26,6 +28,7 @@ type entry struct {
 	hasError  bool
 	answer    *openai.AnswerModel
 	embedding *openai.EmbeddingModel
+	agent     *openai.AgentModel
 }
 
 // Resolver hands out clients built from the stored settings. It reads the store at most
@@ -37,6 +40,13 @@ type Resolver struct {
 	now          func() time.Time
 	mu           sync.Mutex
 	entries      map[string]entry
+	usage        aiusage.Store
+}
+
+// WithUsage counts every model call in the usage store.
+func (r *Resolver) WithUsage(store aiusage.Store) *Resolver {
+	r.usage = store
+	return r
 }
 
 func NewResolver(reader Reader, cipher app.Cipher, allowPrivate bool) *Resolver {
@@ -67,9 +77,19 @@ func (r *Resolver) load(ctx context.Context, purpose string) (entry, error) {
 			return entry{}, err
 		}
 		cfg := openai.Config{BaseURL: record.BaseURL, APIKey: key, Model: record.Model, Protocol: record.Protocol, AllowPrivate: r.allowPrivate}
-		if purpose == app.PurposeAnswer {
+		if r.usage != nil {
+			usagePurpose := purpose
+			if usagePurpose == app.PurposeEmbeddingPending {
+				usagePurpose = app.PurposeEmbedding
+			}
+			cfg.OnUsage = aiusage.Recorder(r.usage, openai.ProviderName(record.BaseURL), record.Model, usagePurpose)
+		}
+		switch purpose {
+		case app.PurposeAnswer:
 			loaded.answer = openai.NewAnswer(cfg)
-		} else {
+		case app.PurposeAgent:
+			loaded.agent = openai.NewAgent(cfg)
+		default:
 			loaded.embedding = openai.NewEmbedding(cfg)
 		}
 	}
@@ -173,4 +193,26 @@ func (v *embedderView) Embed(ctx context.Context, inputs []string) ([][]float32,
 		v.r.settle(v.purpose, err)
 	}
 	return vectors, err
+}
+
+// AgentReady says whether an agent model is set up.
+func (r *Resolver) AgentReady(ctx context.Context) bool {
+	loaded, err := r.load(ctx, app.PurposeAgent)
+	return err == nil && loaded.agent != nil
+}
+
+// Step implements agent.Model with the current agent setting.
+func (r *Resolver) Step(ctx context.Context, messages []agentapp.Message, tools []agentapp.ToolSpec) (agentapp.Message, error) {
+	loaded, err := r.load(ctx, app.PurposeAgent)
+	if err != nil {
+		return agentapp.Message{}, err
+	}
+	if loaded.agent == nil {
+		return agentapp.Message{}, agentapp.ErrAgentNotConfigured
+	}
+	reply, err := loaded.agent.Step(ctx, messages, tools)
+	if err == nil || isProviderError(err) {
+		r.settle(app.PurposeAgent, err)
+	}
+	return reply, err
 }

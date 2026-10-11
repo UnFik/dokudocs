@@ -372,3 +372,19 @@ func TestTestingWithoutSavingTouchesNothing(t *testing.T) {
 		t.Fatalf("Test() error = %v, want a ConnectionError", err)
 	}
 }
+
+func TestTheAgentModelIsAThirdSettingTestedLikeTheOthers(t *testing.T) {
+	e := newEnv(t)
+	in := Input{BaseURL: "https://api.example.com/v1", Protocol: ProtocolChatCompletions, Model: "agent-1", APIKey: "sk-agent-0001"}
+	overview, err := e.svc.Save(context.Background(), e.admin, PurposeAgent, in)
+	if err != nil || overview.Agent == nil || overview.Agent.Model != "agent-1" || overview.Agent.KeyHint != "••••0001" {
+		t.Fatalf("Save(agent) = %+v, %v", overview.Agent, err)
+	}
+	if e.tester.purps[0] != PurposeAgent {
+		t.Fatalf("tested as %v", e.tester.purps)
+	}
+	e.tester.err = errors.New("the model did not call a tool")
+	if _, err := e.svc.Save(context.Background(), e.admin, PurposeAgent, in); err == nil {
+		t.Fatal("an agent model that cannot call tools was saved")
+	}
+}
