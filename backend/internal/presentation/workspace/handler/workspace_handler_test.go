@@ -42,8 +42,23 @@ func (m *mockWorkspaceUseCase) DeleteWorkspace(ctx context.Context, id uuid.UUID
 func (m *mockWorkspaceUseCase) GetMembers(ctx context.Context, workspaceID, userID uuid.UUID) ([]model.WorkspaceMember, error) {
 	return m.members, nil
 }
-func (m *mockWorkspaceUseCase) AddMember(ctx context.Context, input workspacedto.AddMemberInput) error {
+func (m *mockWorkspaceUseCase) InviteMember(ctx context.Context, input workspacedto.InviteMemberInput) (model.WorkspaceInvite, error) {
+	return model.WorkspaceInvite{}, nil
+}
+func (m *mockWorkspaceUseCase) ListInvites(ctx context.Context, workspaceID, actorID uuid.UUID) ([]model.WorkspaceInvite, error) {
+	return nil, nil
+}
+func (m *mockWorkspaceUseCase) ResendInvite(ctx context.Context, workspaceID, inviteID, actorID uuid.UUID) (model.WorkspaceInvite, error) {
+	return model.WorkspaceInvite{}, nil
+}
+func (m *mockWorkspaceUseCase) RevokeInvite(ctx context.Context, workspaceID, inviteID, actorID uuid.UUID) error {
 	return nil
+}
+func (m *mockWorkspaceUseCase) PreviewInvite(ctx context.Context, token string) (model.InvitePreview, error) {
+	return model.InvitePreview{}, nil
+}
+func (m *mockWorkspaceUseCase) AcceptInvite(ctx context.Context, token string, userID uuid.UUID) (uuid.UUID, error) {
+	return uuid.Nil, nil
 }
 func (m *mockWorkspaceUseCase) RemoveMember(ctx context.Context, workspaceID, memberUserID, actorID uuid.UUID) error {
 	return nil

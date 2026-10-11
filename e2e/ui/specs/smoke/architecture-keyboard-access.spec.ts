@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { joinWorkspace } from "../../../support/workspace-invites";
 
 // The canvas without a mouse, and for someone who may only comment.
 
@@ -59,7 +60,7 @@ test("@live @smoke: keyboard editing, undo, and a commenter's read-only canvas",
     data: { email: memberEmail, password: "password12345678", fullName: "Canvas Commenter" },
   });
   expect(registered.status()).toBe(201);
-  expect((await page.request.post(`${apiURL()}/api/v1/workspaces/${workspaceID}/invites`, { headers: owner, data: { email: memberEmail, role: "member" } })).ok()).toBeTruthy();
+  await joinWorkspace({ apiURL: apiURL(), authorization: owner.Authorization, workspaceId: workspaceID, email: memberEmail });
   expect((await page.request.post(`${apiURL()}/api/v1/documents/${documentID}/accesses`, { headers: owner, data: { email: memberEmail, level: "comment" } })).status()).toBe(201);
 
   const other = await browser.newContext();

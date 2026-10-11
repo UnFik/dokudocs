@@ -39,14 +39,4 @@ func TestWorkspaceCRUD(t *testing.T) {
 	if err != nil || len(list) != 1 {
 		t.Fatalf("expected 1 workspace, got %d", len(list))
 	}
-
-	// Add member
-	if err := uc.AddMember(context.Background(), dto.AddMemberInput{
-		WorkspaceID: ws.ID,
-		Email:       "collab@example.com",
-		Role:        "editor",
-		ActorID:     userID,
-	}); err != nil {
-		t.Fatalf("AddMember failed: %v", err)
-	}
 }

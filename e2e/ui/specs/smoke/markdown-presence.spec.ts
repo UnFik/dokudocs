@@ -1,6 +1,7 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { createdDocumentID, documentPayload } from "../../helpers/markdown-document";
+import { joinWorkspace } from "../../../support/workspace-invites";
 
 const apiURL = process.env.API_URL ?? "http://localhost:8080";
 
@@ -54,11 +55,7 @@ test("@live @smoke: users in the same Markdown document see each other's presenc
   expect(
     (await owner.page.request.post(`${apiURL}/api/v1/auth/register`, { data: guest })).status(),
   ).toBe(201);
-  const invite = await owner.page.request.post(
-    `${apiURL}/api/v1/workspaces/${workspaceID}/invites`,
-    { headers: ownerHeaders, data: { email: guest.email, role: "member" } },
-  );
-  expect(invite.status()).toBe(201);
+  await joinWorkspace({ apiURL, authorization: ownerHeaders.Authorization, workspaceId: workspaceID, email: guest.email });
 
   let documentID = "";
   const rootID = randomUUID();

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import { joinWorkspace } from "../../../support/workspace-invites";
 
 // Typing @ in a canvas comment offers the people of the workspace, narrows as the
 // name is typed, and stores the person as a token that shows as a name.
@@ -38,11 +39,7 @@ test("@live @smoke @comments: @ in a canvas comment offers the workspace, narrow
   const dimas = await person("Dimas Anggara");
   const outsider = await person("Zed Outsider");
   for (const member of [dewi, dimas]) {
-    const invite = await page.request.post(`${apiURL()}/api/v1/workspaces/${workspaceID}/invites`, {
-      headers: owner,
-      data: { email: member.email, role: "member" },
-    });
-    expect(invite.status()).toBe(201);
+    await joinWorkspace({ apiURL: apiURL(), authorization: owner.Authorization, workspaceId: workspaceID, email: member.email });
   }
 
   const system = randomUUID();
