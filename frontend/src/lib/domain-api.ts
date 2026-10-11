@@ -257,16 +257,6 @@ const ragHistorySchema = z.object({
   messages: z.array(ragMessageSchema),
   actions: z.array(agentActionSchema).optional(),
 })
-const ragAnswerSchema = z.object({
-  conversationId: z.string().uuid(),
-  text: z.string(),
-  citations: z.array(ragCitationSchema),
-  coveragePartial: z.boolean(),
-  sourcesMayBeIncomplete: z.boolean(),
-  agent: z.boolean().optional().default(false),
-  tools: z.array(z.string()).optional().default([]),
-  actions: z.array(agentActionSchema).optional().default([]),
-})
 const skillSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -332,7 +322,6 @@ export type RAGCitation = z.infer<typeof ragCitationSchema>
 export type RAGConversation = z.infer<typeof ragConversationSchema>
 export type RAGMessage = z.infer<typeof ragMessageSchema>
 export type RAGConversationHistory = z.infer<typeof ragHistorySchema>
-export type RAGAnswer = z.infer<typeof ragAnswerSchema>
 export type AgentAction = z.infer<typeof agentActionSchema>
 export type Skill = z.infer<typeof skillSchema>
 export type CreateWorkspaceInput = {
@@ -1062,27 +1051,6 @@ export async function listSkills(signal?: AbortSignal): Promise<Skill[]> {
   return z
     .object({ skills: z.array(skillSchema) })
     .parse(await apiFetch<unknown>('/api/v1/skills', { signal })).skills
-}
-
-export async function askRAGQuestion(
-  workspaceId: string,
-  conversationID: string,
-  input: {
-    question: string
-    language: 'id' | 'en'
-    publicLinkTokens?: string[]
-  }
-): Promise<RAGAnswer> {
-  return ragAnswerSchema.parse(
-    await apiFetch<unknown>(
-      `/api/v1/rag/conversations/${conversationID}/messages`,
-      {
-        method: 'POST',
-        headers: workspaceHeaders(workspaceId),
-        body: JSON.stringify(input),
-      }
-    )
-  )
 }
 
 export async function deleteRAGConversation(
