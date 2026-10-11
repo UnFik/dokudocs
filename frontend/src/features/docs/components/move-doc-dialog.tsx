@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DocumentItem } from '@/types/dokudocs'
 import { Check, FileEdit, Folder, FolderInput, Search } from 'lucide-react'
-import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,6 +13,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
+import { useMoveDocument } from '../hooks/use-document-actions'
 
 interface MoveDocDialogProps {
   open: boolean
@@ -27,7 +27,8 @@ export function MoveDocDialog({
   onOpenChange,
   document,
 }: MoveDocDialogProps) {
-  const { projects, activeOrgId, moveDocumentToProject } = useDokudocsStore()
+  const { projects, activeOrgId } = useDokudocs()
+  const moveDocument = useMoveDocument()
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     document.projectId || null
   )
@@ -53,19 +54,20 @@ export function MoveDocDialog({
   const currentProject = projects.find((p) => p.id === document.projectId)
   const targetProject = projects.find((p) => p.id === selectedProjectId)
 
-  const executeMove = (targetId: string | null) => {
-    moveDocumentToProject(document.id, targetId)
-    if (targetId) {
-      const targetProj = projects.find((p) => p.id === targetId)
-      toast.success(
-        `Moved "${document.title}" to project "${targetProj?.name || 'Project'}"`
-      )
-    } else {
-      toast.success(`Moved "${document.title}" to Drafts`)
-    }
-    setConfirmOpen(false)
-    onOpenChange(false)
-  }
+  const executeMove = (targetId: string | null) =>
+    moveDocument.mutate(
+      {
+        document,
+        targetProjectId: targetId,
+        targetName: projects.find((p) => p.id === targetId)?.name,
+      },
+      {
+        onSuccess: () => {
+          setConfirmOpen(false)
+          onOpenChange(false)
+        },
+      }
+    )
 
   const handleConfirm = () => {
     if (document.projectId && selectedProjectId !== document.projectId) {

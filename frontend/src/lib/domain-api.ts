@@ -1074,6 +1074,57 @@ export async function updateDocumentMetadata(
   )
 }
 
+export async function duplicateDocument(
+  workspaceId: string,
+  documentId: string,
+  requestID: string
+): Promise<DocumentItem> {
+  return toDocument(
+    await apiFetch<unknown>(`/api/v1/documents/${documentId}/duplicate`, {
+      method: 'POST',
+      headers: {
+        ...workspaceHeaders(workspaceId),
+        'Idempotency-Key': requestID,
+      },
+    })
+  )
+}
+
+export async function moveDocument(
+  workspaceId: string,
+  documentId: string,
+  targetProjectId: string | null
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/documents/${documentId}/move`, {
+    method: 'PUT',
+    headers: workspaceHeaders(workspaceId),
+    body: JSON.stringify({ targetProjectId }),
+  })
+}
+
+export async function recordDocumentView(
+  workspaceId: string,
+  documentId: string
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/documents/${documentId}/view`, {
+    method: 'POST',
+    headers: workspaceHeaders(workspaceId),
+  })
+}
+
+export async function addProjectCategory(
+  workspaceId: string,
+  projectId: string,
+  name: string,
+  colorId = 'blue'
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/projects/${projectId}/categories`, {
+    method: 'POST',
+    headers: workspaceHeaders(workspaceId),
+    body: JSON.stringify({ name, colorId }),
+  })
+}
+
 export async function listDocumentBacklinks(
   workspaceId: string,
   documentId: string
