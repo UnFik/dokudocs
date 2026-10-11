@@ -37,7 +37,7 @@ func TestChatCompletionsAgentSendsToolsAndReadsToolCalls(t *testing.T) {
 		_ = json.NewDecoder(r.Body).Decode(&sent)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []any{map[string]any{"message": map[string]any{
-				"content": "",
+				"content":    "",
 				"tool_calls": []any{map[string]any{"id": "c2", "type": "function", "function": map[string]any{"name": "read_document", "arguments": `{"document_id":"e"}`}}},
 			}}},
 			"usage": map[string]any{"prompt_tokens": 120, "completion_tokens": 7},
