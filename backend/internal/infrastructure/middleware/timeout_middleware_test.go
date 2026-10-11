@@ -69,14 +69,24 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestTimeoutWithRAGUsesLongerModelRequestDeadline(t *testing.T) {
-	handler := middleware.TimeoutWithRAG(20*time.Millisecond, 100*time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(50 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-	}))
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/rag/conversations/id/messages", nil)
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("RAG request status = %d, want %d", recorder.Code, http.StatusOK)
+	cases := []struct{ method, path string }{
+		{http.MethodPost, "/api/v1/rag/conversations/id/messages"},
+	}
+	for _, purpose := range []string{"answer", "agent", "embedding"} {
+		path := "/api/v1/platform/ai/" + purpose
+		cases = append(cases, struct{ method, path string }{http.MethodPost, path + "/test"}, struct{ method, path string }{http.MethodPut, path})
+	}
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			handler := middleware.TimeoutWithRAG(20*time.Millisecond, 100*time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(50 * time.Millisecond)
+				w.WriteHeader(http.StatusOK)
+			}))
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(tc.method, tc.path, nil))
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("model request status = %d, want %d", recorder.Code, http.StatusOK)
+			}
+		})
 	}
 }
