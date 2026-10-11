@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode"
 
+	"backend/internal/application/aiusage"
 	"backend/internal/domain/model"
 
 	"github.com/google/uuid"
@@ -54,6 +55,9 @@ type ChatRepository interface {
 	SearchRAGChunksWithEmbedding(context.Context, uuid.UUID, uuid.UUID, string, []float32, string, string, int, []string) ([]model.RAGChunk, error)
 	HasStaleReadableRAGIndex(context.Context, uuid.UUID, uuid.UUID, []string, string, string) (bool, error)
 	StoreRAGAnswer(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, string, string, bool, bool, []model.RAGCitation, []string) error
+	CreateDocumentRAGConversation(ctx context.Context, workspaceID, actorID, documentID uuid.UUID) (model.RAGConversation, error)
+	ListDocumentRAGConversations(ctx context.Context, actorID, documentID uuid.UUID) ([]model.RAGConversation, error)
+	ListRAGChunksForDocument(ctx context.Context, workspaceID, actorID, documentID uuid.UUID, limit int) ([]model.RAGChunk, error)
 }
 
 type AskInput struct {
@@ -88,6 +92,22 @@ func (u *ChatUseCase) CreateConversation(ctx context.Context, workspaceID, actor
 		return model.RAGConversation{}, ErrInvalidChatRequest
 	}
 	return u.repository.CreateRAGConversation(ctx, workspaceID, actorID)
+}
+
+// CreateDocumentConversation opens a Conversation on one document the actor may read.
+func (u *ChatUseCase) CreateDocumentConversation(ctx context.Context, workspaceID, actorID, documentID uuid.UUID) (model.RAGConversation, error) {
+	if workspaceID == uuid.Nil || actorID == uuid.Nil || documentID == uuid.Nil {
+		return model.RAGConversation{}, ErrInvalidChatRequest
+	}
+	return u.repository.CreateDocumentRAGConversation(ctx, workspaceID, actorID, documentID)
+}
+
+// ListDocumentConversations lists the actor's own Conversations on one document.
+func (u *ChatUseCase) ListDocumentConversations(ctx context.Context, actorID, documentID uuid.UUID) ([]model.RAGConversation, error) {
+	if actorID == uuid.Nil || documentID == uuid.Nil {
+		return nil, ErrInvalidChatRequest
+	}
+	return u.repository.ListDocumentRAGConversations(ctx, actorID, documentID)
 }
 
 func (u *ChatUseCase) ListConversations(ctx context.Context, actorID uuid.UUID) ([]model.RAGConversation, error) {
@@ -146,7 +166,19 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	var chunks []model.RAGChunk
 	embedder := u.embedder
 	var vector []float32
-	if embedder != nil {
+	feature := aiusage.FeatureChatWorkspace
+	if history.Conversation.DocumentID != nil {
+		feature = aiusage.FeatureChatDocument
+	}
+	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: feature, UserID: input.ActorID, WorkspaceID: input.WorkspaceID})
+	if history.Conversation.DocumentID != nil {
+		// A document Conversation draws on its document alone.
+		chunks, err = u.repository.ListRAGChunksForDocument(ctx, input.WorkspaceID, input.ActorID, *history.Conversation.DocumentID, 40)
+		if err != nil {
+			return Answer{}, err
+		}
+		embedder = nil
+	} else if embedder != nil {
 		vectors, embedErr := embedder.Embed(ctx, []string{retrievalQuery})
 		switch {
 		case errors.Is(embedErr, ErrEmbeddingNotConfigured):
@@ -159,9 +191,11 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 			vector = vectors[0]
 		}
 	}
-	if embedder == nil {
+	switch {
+	case history.Conversation.DocumentID != nil:
+	case embedder == nil:
 		chunks, err = u.repository.SearchRAGChunksWithPublicLinkTokens(ctx, input.WorkspaceID, input.ActorID, retrievalQuery, 20, linkTokens)
-	} else {
+	default:
 		chunks, err = u.repository.SearchRAGChunksWithEmbedding(ctx, input.WorkspaceID, input.ActorID, retrievalQuery, vector, embedder.Provider(), embedder.Model(), 20, linkTokens)
 	}
 	if err != nil {

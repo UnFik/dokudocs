@@ -32,6 +32,7 @@ var answerSchema = map[string]any{
 }
 
 type AnswerModel struct {
+	cfg      Config
 	baseURL  string
 	apiKey   string
 	model    string
@@ -50,10 +51,12 @@ func NewAnswer(cfg Config) *AnswerModel {
 	if protocol == "" {
 		protocol = ProtocolResponses
 	}
-	return &AnswerModel{baseURL: cfg.baseURL(), apiKey: cfg.APIKey, model: cfg.Model, protocol: protocol, client: cfg.client(55 * time.Second)}
+	return &AnswerModel{cfg: cfg, baseURL: cfg.baseURL(), apiKey: cfg.APIKey, model: cfg.Model, protocol: protocol, client: cfg.client(55 * time.Second)}
 }
 
-func (m *AnswerModel) Answer(ctx context.Context, input appchat.ModelInput) (appchat.ModelOutput, error) {
+func (m *AnswerModel) Answer(ctx context.Context, input appchat.ModelInput) (out appchat.ModelOutput, err error) {
+	var usage tokenUsage
+	defer func() { m.cfg.report(ctx, usage.in(), usage.out(), err == nil) }()
 	if strings.TrimSpace(m.apiKey) == "" || strings.TrimSpace(m.model) == "" || len(input.Sources) == 0 {
 		return appchat.ModelOutput{}, errors.New("answer request is invalid")
 	}
@@ -63,9 +66,9 @@ func (m *AnswerModel) Answer(ctx context.Context, input appchat.ModelInput) (app
 	}
 	var text string
 	if m.protocol == ProtocolChatCompletions {
-		text, err = m.chatText(ctx, question)
+		text, usage, err = m.chatText(ctx, question)
 	} else {
-		text, err = m.responsesText(ctx, question)
+		text, usage, err = m.responsesText(ctx, question)
 	}
 	if err != nil {
 		return appchat.ModelOutput{}, err
@@ -98,7 +101,7 @@ func answerPrompt(input appchat.ModelInput) (string, error) {
 	return string(question), err
 }
 
-func (m *AnswerModel) responsesText(ctx context.Context, question string) (string, error) {
+func (m *AnswerModel) responsesText(ctx context.Context, question string) (string, tokenUsage, error) {
 	body, status, err := m.post(ctx, "/responses", map[string]any{
 		"model":             m.model,
 		"store":             false,
@@ -110,13 +113,14 @@ func (m *AnswerModel) responsesText(ctx context.Context, question string) (strin
 		},
 	})
 	if err != nil {
-		return "", err
+		return "", tokenUsage{}, err
 	}
 	if status != http.StatusOK {
-		return "", fmt.Errorf("%w: answer provider returned HTTP %d", appchat.ErrRAGProviderUnavailable, status)
+		return "", tokenUsage{}, fmt.Errorf("%w: answer provider returned HTTP %d", appchat.ErrRAGProviderUnavailable, status)
 	}
 	var response struct {
-		Status string `json:"status"`
+		Usage  tokenUsage `json:"usage"`
+		Status string     `json:"status"`
 		Output []struct {
 			Type    string `json:"type"`
 			Content []struct {
@@ -126,7 +130,7 @@ func (m *AnswerModel) responsesText(ctx context.Context, question string) (strin
 		} `json:"output"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil || response.Status != "completed" {
-		return "", fmt.Errorf("%w: answer provider returned an invalid response", appchat.ErrRAGProviderUnavailable)
+		return "", tokenUsage{}, fmt.Errorf("%w: answer provider returned an invalid response", appchat.ErrRAGProviderUnavailable)
 	}
 	var text string
 	for _, item := range response.Output {
@@ -139,10 +143,10 @@ func (m *AnswerModel) responsesText(ctx context.Context, question string) (strin
 			}
 		}
 	}
-	return text, nil
+	return text, response.Usage, nil
 }
 
-func (m *AnswerModel) chatText(ctx context.Context, question string) (string, error) {
+func (m *AnswerModel) chatText(ctx context.Context, question string) (string, tokenUsage, error) {
 	request := func(plain bool) (map[string]any, string) {
 		instructions := answerInstructions
 		format := map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "dokudocs_grounded_answer", "strict": true, "schema": answerSchema}}
@@ -164,19 +168,20 @@ func (m *AnswerModel) chatText(ctx context.Context, question string) (string, er
 	payload, _ := request(plain)
 	body, status, err := m.post(ctx, "/chat/completions", payload)
 	if err != nil {
-		return "", err
+		return "", tokenUsage{}, err
 	}
 	if !plain && (status == http.StatusBadRequest || status == http.StatusUnprocessableEntity) {
 		m.plainJSON.Store(true)
 		payload, _ = request(true)
 		if body, status, err = m.post(ctx, "/chat/completions", payload); err != nil {
-			return "", err
+			return "", tokenUsage{}, err
 		}
 	}
 	if status != http.StatusOK {
-		return "", fmt.Errorf("%w: answer provider returned HTTP %d", appchat.ErrRAGProviderUnavailable, status)
+		return "", tokenUsage{}, fmt.Errorf("%w: answer provider returned HTTP %d", appchat.ErrRAGProviderUnavailable, status)
 	}
 	var response struct {
+		Usage   tokenUsage `json:"usage"`
 		Choices []struct {
 			Message struct {
 				Content string `json:"content"`
@@ -184,9 +189,9 @@ func (m *AnswerModel) chatText(ctx context.Context, question string) (string, er
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil || len(response.Choices) == 0 {
-		return "", fmt.Errorf("%w: answer provider returned an invalid response", appchat.ErrRAGProviderUnavailable)
+		return "", tokenUsage{}, fmt.Errorf("%w: answer provider returned an invalid response", appchat.ErrRAGProviderUnavailable)
 	}
-	return response.Choices[0].Message.Content, nil
+	return response.Choices[0].Message.Content, response.Usage, nil
 }
 
 func (m *AnswerModel) post(ctx context.Context, path string, payload map[string]any) ([]byte, int, error) {
@@ -230,3 +235,14 @@ func decodeAnswer(text string) (appchat.ModelOutput, error) {
 	}
 	return result, nil
 }
+
+// tokenUsage reads both the Responses and the Chat Completions usage shapes.
+type tokenUsage struct {
+	InputTokens      int `json:"input_tokens"`
+	OutputTokens     int `json:"output_tokens"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+}
+
+func (u tokenUsage) in() int  { return u.InputTokens + u.PromptTokens }
+func (u tokenUsage) out() int { return u.OutputTokens + u.CompletionTokens }

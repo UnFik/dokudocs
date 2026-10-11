@@ -6,7 +6,9 @@ import (
 	"errors"
 	"time"
 
+	agentapp "backend/internal/application/agent"
 	app "backend/internal/application/aisettings"
+	"backend/internal/application/aiusage"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/domain/model"
 	"backend/internal/infrastructure/openai"
@@ -15,25 +17,49 @@ import (
 )
 
 // Tester checks a setting by making one small real request.
-type Tester struct{ allowPrivate bool }
+type Tester struct {
+	allowPrivate bool
+	usage        aiusage.Store
+}
 
 func NewTester(allowPrivate bool) *Tester { return &Tester{allowPrivate: allowPrivate} }
 
-func openaiConfig(cfg app.Config, allowPrivate bool) openai.Config {
-	return openai.Config{BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model, Protocol: cfg.Protocol, AllowPrivate: allowPrivate}
+// WithUsage counts connection tests in the usage store.
+func (t *Tester) WithUsage(store aiusage.Store) *Tester {
+	t.usage = store
+	return t
+}
+
+func (t *Tester) openaiConfig(purpose string, cfg app.Config) openai.Config {
+	out := openai.Config{BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model, Protocol: cfg.Protocol, AllowPrivate: t.allowPrivate}
+	if t.usage != nil {
+		out.OnUsage = aiusage.Recorder(t.usage, openai.ProviderName(cfg.BaseURL), cfg.Model, purpose)
+	}
+	return out
 }
 
 func (t *Tester) Test(ctx context.Context, purpose string, cfg app.Config) error {
 	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()
+	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: aiusage.FeatureConnectionTest})
 	var err error
-	if purpose == app.PurposeAnswer {
-		_, err = openai.NewAnswer(openaiConfig(cfg, t.allowPrivate)).Answer(ctx, appchat.ModelInput{
+	switch purpose {
+	case app.PurposeAnswer:
+		_, err = openai.NewAnswer(t.openaiConfig(purpose, cfg)).Answer(ctx, appchat.ModelInput{
 			Question: "Where is the service deployed?", Language: "en",
 			Sources: []model.RAGChunk{{ChunkID: uuid.New(), Text: "The service is deployed on a single server."}},
 		})
-	} else {
-		_, err = openai.NewEmbedding(openaiConfig(cfg, t.allowPrivate)).Embed(ctx, []string{"connection test"})
+	case app.PurposeAgent:
+		var reply agentapp.Message
+		reply, err = openai.NewAgent(t.openaiConfig(purpose, cfg)).Step(ctx, []agentapp.Message{
+			{Role: "system", Content: "This is a connection test. Call the ping tool once."},
+			{Role: "user", Content: "ping"},
+		}, []agentapp.ToolSpec{{Name: "ping", Description: "Answers pong.", Parameters: map[string]any{"type": "object", "properties": map[string]any{}}}})
+		if err == nil && len(reply.ToolCalls) == 0 {
+			return errors.New("the model answered without calling a tool; pick a model and protocol that support tool calling")
+		}
+	default:
+		_, err = openai.NewEmbedding(t.openaiConfig(purpose, cfg)).Embed(ctx, []string{"connection test"})
 	}
 	if err != nil {
 		return errors.New(trimPrefix(err.Error()))

@@ -1,4 +1,4 @@
-import { Server } from 'lucide-react'
+import { BarChart3, BookOpenCheck, Server, Unplug } from 'lucide-react'
 import { type NavGroup } from '../types'
 
 /**
@@ -11,6 +11,11 @@ export function platformNavGroup(
   if (!roles?.includes('superadmin')) return null
   return {
     title: 'Platform',
-    items: [{ title: 'AI provider', url: '/platform/ai', icon: Server }],
+    items: [
+      { title: 'AI provider', url: '/platform/ai', icon: Server },
+      { title: 'MCP', url: '/platform/mcp', icon: Unplug },
+      { title: 'Skills', url: '/platform/skills', icon: BookOpenCheck },
+      { title: 'Model usage', url: '/platform/usage', icon: BarChart3 },
+    ],
   }
 }

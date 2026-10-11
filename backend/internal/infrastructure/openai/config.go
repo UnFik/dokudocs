@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -27,6 +28,14 @@ type Config struct {
 	Protocol string
 	// AllowPrivate lets the client reach loopback and private networks (an operator choice).
 	AllowPrivate bool
+	// OnUsage, when set, hears the tokens of every call and whether it worked.
+	OnUsage func(ctx context.Context, inputTokens, outputTokens int, ok bool)
+}
+
+func (c Config) report(ctx context.Context, in, out int, ok bool) {
+	if c.OnUsage != nil {
+		c.OnUsage(ctx, in, out, ok)
+	}
 }
 
 func (c Config) baseURL() string {

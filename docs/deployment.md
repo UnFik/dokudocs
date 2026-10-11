@@ -127,6 +127,40 @@ the database, not in `.env`. A Superadmin changes them under **Platform → AI**
 - A user becomes a Superadmin through the `superadmin` role in `user_roles`; the
   seeder gives it to the admin user. Nothing in the UI grants it.
 
+## AI agent and MCP
+
+The assistant can act, not only answer, once a Superadmin sets an **Agent** model
+under **Platform → AI** (a third setting next to Answer and Embedding). The model
+must support tool calling: the connection test asks it to call a tool and refuses
+the save if it does not. Without an agent model, chat answers from documents as
+before.
+
+- What the assistant may do for a User is the User's **AI permissions** (Settings →
+  AI and MCP), intersected with the User's own access to each document or project
+  ([ADR-0044](adr/0044-ai-permissions-are-one-set-per-user-intersected-with-document-access.md)).
+  Only reading is on until the User changes it. Deleting projects, permanent
+  deletion, emptying the trash, public links, sharing and workspace settings are
+  never available to AI.
+- In Dokudocs chat, Markdown edits become suggestions labelled **AI assisted**, and
+  every other change waits for the User to approve it in the chat. Through MCP, an
+  editor's edit goes straight into the body after a named version is saved
+  ([ADR-0043](adr/0043-agent-writes-follow-the-users-own-document-rights.md)).
+  Content edits go through the collaboration service (`/internal/agent-read` and
+  `/internal/agent-edit`, behind `COLLAB_SERVICE_SECRET`), so `COLLAB_SERVICE_URL`
+  must reach it from the API.
+- Outside AI apps connect to **`/api/v1/mcp`** (Streamable HTTP) with a User's
+  **MCP key** in `Authorization: Bearer <key>`
+  ([ADR-0045](adr/0045-mcp-api-keys-belong-to-a-user-not-a-workspace.md)). The
+  `/api` proxy rule already reaches it. A key reaches every workspace its owner is
+  in, with the owner's access, and may never expire; its owner can revoke it.
+- **Platform → MCP** holds the switch that stops every key, the per-key read and
+  write limits per minute, the largest tool result, and how many days of call
+  history to keep (pruned hourly). The limits are counted per API instance.
+- **Platform → Skills** holds instructions every User calls with `/name` in chat;
+  MCP apps see them as prompts. A skill never adds access.
+- **Platform → Model usage** shows tokens per day, model, use and User for the
+  Dokudocs models. MCP apps use their own models and are not counted.
+
 ## Rolling back
 
 Run the `Deploy` workflow by hand (Actions → Deploy → Run workflow, on `main`)

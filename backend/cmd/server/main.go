@@ -70,6 +70,9 @@ func main() {
 				if _, err := routes.SweepAssets(workerCtx, c, cfg, 24*time.Hour); err != nil {
 					log.Errorf("sweep assets: %v", err)
 				}
+				if _, err := pruneMCPAudit(workerCtx, c); err != nil {
+					log.Errorf("prune MCP audit: %v", err)
+				}
 			}
 		}
 	}()

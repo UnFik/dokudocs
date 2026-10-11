@@ -1,0 +1,5 @@
+# AI permissions are one set per User, intersected with document access on every call
+
+What the Agent may do for a User is the User's AI permissions (one set, edited in User Settings, covering every MCP API key and the Agent inside Dokudocs) intersected with the User's effective access from ADR-0005, evaluated on every call. A new User has only reading on. The groups follow Dokudocs features: reading, documents (create, metadata, move, duplicate, trash, restore), document content, comments, and projects (create, update, categories, members). Some actions are never available to the Agent whatever the User allows: deleting a project, permanent deletion, emptying the trash, creating a public link, changing document grants, any workspace action (create, delete, members, invites), the account and password, and Platform settings.
+
+Rejected: permissions per key (more to manage than the owner asked for; a key is still revoked on its own), separate permissions for outside clients and the in-app Agent (the same tools do the same things), and allowing public links or grant changes (the easiest way for a prompt hidden in a document to send data out).

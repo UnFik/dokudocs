@@ -6,6 +6,7 @@ import {
   LogOut,
   Moon,
   Sun,
+  KeyRound,
   User,
 } from 'lucide-react'
 import { useTheme } from '@/context/theme-provider'
@@ -132,6 +133,13 @@ export function NavUser({ user }: NavUserProps) {
                 >
                   <User className='mr-2 size-4' />
                   Account Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => navigate({ to: '/settings/ai' })}
+                  className='cursor-pointer'
+                >
+                  <KeyRound className='mr-2 size-4' />
+                  AI and MCP
                 </DropdownMenuItem>
               </DropdownMenuGroup>
 

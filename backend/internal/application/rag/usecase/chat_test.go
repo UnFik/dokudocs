@@ -82,3 +82,34 @@ func TestChatReportsAnEmbeddingProviderThatIsDown(t *testing.T) {
 		t.Fatal("a provider outage silently fell back to text search")
 	}
 }
+
+type docChatRepo struct {
+	chatRepo
+	documentID uuid.UUID
+	docCalls   int
+}
+
+func (r *docChatRepo) GetRAGConversation(context.Context, uuid.UUID, uuid.UUID) (model.RAGConversationHistory, error) {
+	return model.RAGConversationHistory{Conversation: model.RAGConversation{DocumentID: &r.documentID}}, nil
+}
+func (r *docChatRepo) ListRAGChunksForDocument(_ context.Context, _, _, documentID uuid.UUID, _ int) ([]model.RAGChunk, error) {
+	r.docCalls++
+	return nil, nil
+}
+
+func TestADocumentConversationOnlyDrawsOnItsDocument(t *testing.T) {
+	repo := &docChatRepo{documentID: uuid.New()}
+	if err := ask(t, &repo.chatRepo, unconfiguredEmbedder{}); err != nil {
+		t.Fatal(err)
+	}
+	repo.chatRepo = chatRepo{}
+	_, err := NewChatUseCase(repo, nil, unconfiguredEmbedder{}).Ask(context.Background(), AskInput{
+		WorkspaceID: uuid.New(), ConversationID: uuid.New(), ActorID: uuid.New(), Question: "what does it say",
+	})
+	if err != nil {
+		t.Fatalf("Ask(): %v", err)
+	}
+	if repo.docCalls != 1 || repo.lexicalCalls != 0 || repo.semanticCalls != 0 {
+		t.Fatalf("document chunks %d, lexical %d, semantic %d", repo.docCalls, repo.lexicalCalls, repo.semanticCalls)
+	}
+}

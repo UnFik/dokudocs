@@ -42,7 +42,7 @@ func actor(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 // purpose accepts only the two purposes a person can write; pending is the server's own.
 func purpose(w http.ResponseWriter, r *http.Request) (string, bool) {
 	switch p := r.PathValue("purpose"); p {
-	case aisettings.PurposeAnswer, aisettings.PurposeEmbedding:
+	case aisettings.PurposeAnswer, aisettings.PurposeEmbedding, aisettings.PurposeAgent:
 		return p, true
 	}
 	response.Error(w, http.StatusNotFound, "there is no such AI setting")
