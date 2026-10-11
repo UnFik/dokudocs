@@ -169,6 +169,16 @@ func (s *ContentService) Edit(ctx context.Context, actor Actor, workspaceID, doc
 		return EditResult{}, constant.ErrForbidden
 	}
 	result := EditResult{Mode: mode}
+	if mode == "direct" && version != "" {
+		// Refuse a stale edit before saving a version for it.
+		live, err := s.rooms.Read(ctx, roomName(workspaceID, documentID, head), head.DocumentType)
+		if err != nil {
+			return EditResult{}, err
+		}
+		if live.Version != version {
+			return EditResult{}, &ToolError{Message: "the document changed since you read it; read it again and retry with the new version"}
+		}
+	}
 	if mode == "direct" {
 		title := "Before AI edit from chat"
 		if actor.Channel == ChannelMCP {
