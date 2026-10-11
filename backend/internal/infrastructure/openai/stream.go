@@ -64,10 +64,22 @@ func noteStream(ctx context.Context, streamed bool) {
 	}
 }
 
+// streamPost asks for an event stream. Some compatible providers refuse the
+// stream_options that ask for token usage; none has shown any output by then, so
+// the request is repeated once without it and usage stays unknown.
 func streamPost(ctx context.Context, client *http.Client, url, key string, payload map[string]any, answer bool) ([]byte, int, error) {
+	body, status, err := streamPostOnce(ctx, client, url, key, payload, answer, true)
+	if err == nil && (status == http.StatusBadRequest || status == http.StatusUnprocessableEntity) && !strings.HasSuffix(url, "/responses") {
+		return streamPostOnce(ctx, client, url, key, payload, answer, false)
+	}
+	return body, status, err
+}
+
+func streamPostOnce(ctx context.Context, client *http.Client, url, key string, payload map[string]any, answer, withUsage bool) ([]byte, int, error) {
 	payload["stream"] = true
 	responses := strings.HasSuffix(url, "/responses")
-	if !responses {
+	delete(payload, "stream_options")
+	if !responses && withUsage {
 		payload["stream_options"] = map[string]bool{"include_usage": true}
 	}
 	raw, err := json.Marshal(payload)

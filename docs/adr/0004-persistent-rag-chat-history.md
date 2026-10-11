@@ -1,6 +1,6 @@
 # Keep private RAG chat answers as user history
 
-The source access/fingerprint recheck requirement below is superseded for the planned streaming implementation by [ADR-0046](0046-streamed-answers-use-the-request-source-snapshot.md). Its remaining history and deletion policies still apply. The current code must be migrated explicitly; this note does not imply streaming is already implemented.
+The source access/fingerprint recheck requirement below is superseded by [ADR-0046](0046-streamed-answers-use-the-request-source-snapshot.md), which `StoreRAGAnswer` now follows: it checks only the conversation, holds each cited document against deletion until commit, and leaves out a citation whose document was deleted. Its remaining history and deletion policies still apply.
 
 Dokudocs stores each workspace chatbot conversation privately for its creator across sessions. A former workspace member can read their old conversation but cannot ask new questions there; revoking access to one source document does not erase an answer already saved. Permanent deletion of a source document removes its citations and derived index data, while the historical answer text remains, even when it contains facts from that document. This favors a durable personal record over complete erasure of derived answer text; therefore document deletion must not be described as removing every copy of its information. Permanent workspace deletion removes its conversations. New retrieval always checks current access and body version, independent of historical chat visibility.
 

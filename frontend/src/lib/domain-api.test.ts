@@ -143,6 +143,23 @@ describe('Dokudocs domain API adapter', () => {
     expect(new Headers(calls[4][1].headers).has('X-Workspace-Id')).toBe(false)
   })
 
+  it('lists a conversation made by the seeded admin, whose id is not an RFC UUID', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse([
+        {
+          id: '65b7593c-3a2d-45a4-a47d-47e8a1c8136b',
+          workspaceId,
+          creatorId: '00000000-0000-0000-0000-000000000001',
+          title: '',
+          createdAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+        },
+      ])
+    )
+    vi.stubGlobal('fetch', fetch)
+    await expect(listRAGConversations()).resolves.toHaveLength(1)
+  })
+
   it('lists suggestions decided by the seeded system user, whose id is not an RFC UUID', async () => {
     const seededUser = '00000000-0000-0000-0000-000000000001'
     const fetch = vi.fn().mockResolvedValue(

@@ -87,20 +87,16 @@ test('@live @rag: /assistant answers from an indexed Markdown block with a click
   await page
     .getByRole('textbox', { name: 'Ask a question' })
     .fill(`What is the recovery codeword for the ${codeword} vault?`)
-  const asked = page.waitForResponse(
+  const started = page.waitForResponse(
     (response) =>
       response.request().method() === 'POST' &&
-      /\/api\/v1\/rag\/conversations\/[^/]+\/messages$/.test(new URL(response.url()).pathname),
+      /\/api\/v1\/rag\/conversations\/[^/]+\/runs$/.test(new URL(response.url()).pathname),
   )
   await page.getByRole('button', { name: 'Send' }).click()
-  const askResponse = await asked
-  expect(askResponse.status()).toBe(200)
-  const answer = (await askResponse.json()).data
-  expect(answer.citations[0].documentId).toBe(documentID)
-  expect(answer.citations[0].nodeId).toBe(paragraphNodeID)
+  expect((await started).status()).toBe(202)
 
-  await expect(page.getByText(answer.text, { exact: false }).first()).toBeVisible()
-  await expect(page.locator('blockquote').filter({ hasText: codeword })).toBeVisible()
+  // The answer joins the chat once the run ends; its citation is the indexed block.
+  await expect(page.locator('blockquote').filter({ hasText: codeword })).toBeVisible({ timeout: 120_000 })
   const link = page.getByRole('link', { name: 'Open block' })
   await expect(link).toHaveAttribute('href', new RegExp(`/docs/${documentID}.*nodeId=${paragraphNodeID}`))
   await link.click()
