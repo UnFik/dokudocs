@@ -67,11 +67,13 @@ export function AgentActionCard({
             aria-hidden
             className={`size-1.5 rounded-[1px] ${status === 'approved' ? 'bg-ok' : status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground'}`}
           />
-          {status === 'approved'
-            ? 'Approved and done.'
-            : status === 'failed'
-              ? `Approved, but it failed: ${result}`
-              : 'Declined. Nothing was changed.'}
+          {status === 'approved' && !result
+            ? 'Approved, but the result was never recorded (the server may have stopped). It is not run again. Check the document before relying on it.'
+            : status === 'approved'
+              ? 'Approved and done.'
+              : status === 'failed'
+                ? `Approved, but it failed: ${result}`
+                : 'Declined. Nothing was changed.'}
         </p>
       )}
       {decide.error ? (

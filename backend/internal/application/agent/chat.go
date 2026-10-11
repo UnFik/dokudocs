@@ -275,6 +275,11 @@ func (c *ChatService) Decide(ctx context.Context, userID, actionID uuid.UUID, ap
 		action.Status, action.Result = "failed", errorText(err)
 	} else {
 		action.Result = out.Text
+		if action.Result == "" {
+			// An approved action with no result at all means it started and never
+			// reported back; a finished one always says something.
+			action.Result = "Done."
+		}
 	}
 	if err := c.actions.FinishPendingAction(ctx, actionID, action.Status, action.Result); err != nil {
 		return action, err

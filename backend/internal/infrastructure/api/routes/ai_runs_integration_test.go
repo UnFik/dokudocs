@@ -339,3 +339,46 @@ func TestClosingTheEventStreamDoesNotStopTheRun(t *testing.T) {
 		t.Fatalf("messages = %d, want 2", e.messages())
 	}
 }
+
+func TestDeletingAConversationStopsItsRunAndStoresNoAnswer(t *testing.T) {
+	e := newRunEnv(t)
+	_, run := e.start("delete", "Akan dihapus")
+	<-e.gate.firstSent
+	res := e.do(http.MethodDelete, "/api/v1/rag/conversations/"+e.conv, nil, e.headers(e.owner, ""), "")
+	if res.Code != http.StatusNoContent {
+		t.Fatalf("delete conversation = %d %s", res.Code, res.Body.String())
+	}
+	select {
+	case <-e.gate.stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the model call kept going after its conversation was deleted")
+	}
+	var messages int
+	_ = e.db.QueryRow(`SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, e.conv).Scan(&messages)
+	if messages != 0 {
+		t.Fatalf("messages stored for a deleted conversation = %d", messages)
+	}
+	if code, _ := e.snapshot(e.owner, run.Data.ID); code != http.StatusNotFound {
+		t.Fatalf("run of a deleted conversation = %d, want it gone with the conversation", code)
+	}
+}
+
+func TestStoppingTheServerMarksARunInterruptedAndDoesNotFinishIt(t *testing.T) {
+	e := newRunEnv(t)
+	_, run := e.start("shutdown", "Server berhenti")
+	<-e.gate.firstSent
+	e.app.AIRuns.Close()
+	waitFor(t, "the run to be marked interrupted", func() bool {
+		var status string
+		_ = e.db.QueryRow(`SELECT status FROM ai_runs WHERE id = $1`, run.Data.ID).Scan(&status)
+		return status == "interrupted"
+	})
+	if e.messages() != 0 {
+		t.Fatal("an interrupted run stored an answer")
+	}
+	var draft string
+	_ = e.db.QueryRow(`SELECT draft FROM ai_runs WHERE id = $1`, run.Data.ID).Scan(&draft)
+	if draft != "Halo " {
+		t.Fatalf("draft kept after the interruption = %q, want what had been shown", draft)
+	}
+}
