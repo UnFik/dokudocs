@@ -1,5 +1,7 @@
 # SLO dan hasil uji beban kolaborasi (G6, issue #2)
 
+> **Historis.** Harness Go di bawah (`TestWebSocketCollaborationLoad`, `make test-backend-load`, job CI `collab-load`) dihapus bersama server WebSocket Go ketika kolaborasi pindah ke layanan Node (`collab/`). Angka di sini mengukur server lama. Uji beban untuk layanan Node belum ada.
+
 Status: **hasil pengukuran LOKAL, bukan lingkungan mirip produksi.** Klien, server WebSocket, PostgreSQL 16 (tmpfs), dan Redis 7 berjalan di satu mesin 12 core yang juga dipakai pekerjaan lain (load average 20 saat sebagian run). Angka di bawah menunjukkan perilaku relatif dan titik patah, bukan kapasitas produksi. Load average mesin selama run 7 sampai 18 pada 12 core karena ada pekerjaan lain; tiap baris mencatat `loadAvgAtEnd` di JSON. Pengukuran di infrastruktur terkelola (jaringan nyata, Redis dan PostgreSQL terkelola, beberapa instance di mesin terpisah) belum dilakukan.
 
 ## Harness

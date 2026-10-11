@@ -128,6 +128,53 @@ describe('a DBML or Mermaid editor on a shared source', () => {
   })
 })
 
+describe('a Mermaid preview of a source that is mid-edit', () => {
+  beforeEach(() => switchLocalUser(userID))
+  afterEach(() => switchLocalUser(null))
+
+  it('keeps the last valid diagram and says so while the source does not parse', async () => {
+    const valid = 'graph TD\n  A --> B'
+    const broken = 'graph TD\n  A --> B\n  C -->'
+    const { text, collab } = shared(valid)
+    const screen = await render(
+      <div style={{ height: 500 }}>
+        <MermaidEditor
+          docId={documentID}
+          content={text.toString()}
+          onChange={vi.fn()}
+          collab={collab}
+        />
+      </div>
+    )
+    await vi.waitFor(
+      () => expect(document.querySelector('svg g.node')).toBeTruthy(),
+      { timeout: 15000 }
+    )
+    expect(document.body.textContent).not.toContain(
+      'Showing last valid preview'
+    )
+
+    await screen.rerender(
+      <div style={{ height: 500 }}>
+        <MermaidEditor
+          docId={documentID}
+          content={broken}
+          onChange={vi.fn()}
+          collab={collab}
+        />
+      </div>
+    )
+    await expect
+      .element(page.getByText('Showing last valid preview'), {
+        timeout: 15000,
+      })
+      .toBeVisible()
+    expect(document.querySelector('svg g.node')).toBeTruthy()
+    // Typing an unfinished line never reaches the shared source as a refusal.
+    expect(text.toString()).toBe(valid)
+  })
+})
+
 describe('the recovery copy notice', () => {
   beforeEach(() => switchLocalUser(userID))
   afterEach(() => switchLocalUser(null))

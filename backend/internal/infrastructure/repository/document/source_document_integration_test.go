@@ -209,3 +209,26 @@ func TestANamedRevisionOfASourceKeepsItExactly(t *testing.T) {
 		t.Fatalf("named revision = (%q, %s), want the stored source", named.Content, named.ContentJSON)
 	}
 }
+
+func TestAPublicLinkToASourceDocumentGivesItsSourceUntilItIsPrivate(t *testing.T) {
+	ctx := context.Background()
+	db := openIntegrationDB(t)
+	for _, documentType := range []string{"dbdiagram", "mermaid"} {
+		source := "Table café {\n  id int [pk\n"
+		_, documentID, _, repo := seedSourceDocument(t, ctx, db, documentType, source)
+		token := "src-" + uuid.NewString()
+		if _, err := db.ExecContext(ctx, `UPDATE documents SET share_token = $2, visibility = 'public_link', is_draft = FALSE WHERE id = $1`, documentID, token); err != nil {
+			t.Fatalf("share: %v", err)
+		}
+		got, err := repo.GetByShareToken(ctx, token)
+		if err != nil || string(got.Type) != documentType || got.Content != source {
+			t.Fatalf("%s GetByShareToken() = (%s, %q, %v), want the exact source as content", documentType, got.Type, got.Content, err)
+		}
+		if _, err := db.ExecContext(ctx, `UPDATE documents SET visibility = 'private' WHERE id = $1`, documentID); err != nil {
+			t.Fatalf("make private: %v", err)
+		}
+		if _, err := repo.GetByShareToken(ctx, token); err == nil {
+			t.Fatalf("%s GetByShareToken() after making it private succeeded, want a refusal", documentType)
+		}
+	}
+}
