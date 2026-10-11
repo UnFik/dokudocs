@@ -220,3 +220,30 @@ type PendingAction struct {
 	Status         string          `json:"status"`
 	Result         string          `json:"result"`
 }
+
+// Message is one turn of a Conversation with the model.
+type Message struct {
+	// Role is system, user, assistant or tool.
+	Role       string
+	Content    string
+	ToolCalls  []ToolCall
+	ToolCallID string
+}
+
+type ToolCall struct {
+	ID        string
+	Name      string
+	Arguments json.RawMessage
+}
+
+// ToolSpec is a tool as the model sees it.
+type ToolSpec struct {
+	Name        string
+	Description string
+	Parameters  map[string]any
+}
+
+// Model thinks one step: it answers, or asks for tools.
+type Model interface {
+	Step(ctx context.Context, messages []Message, tools []ToolSpec) (Message, error)
+}
