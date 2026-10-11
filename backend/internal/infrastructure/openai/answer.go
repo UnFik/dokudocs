@@ -224,7 +224,7 @@ func decodeAnswer(text string) (appchat.ModelOutput, error) {
 		Answer    *string   `json:"answer"`
 		SourceIDs *[]string `json:"source_ids"`
 	}
-	if err := json.Unmarshal([]byte(strings.TrimSpace(text)), &decoded); err != nil || decoded.Answer == nil || decoded.SourceIDs == nil {
+	if err := json.Unmarshal([]byte(unfence(text)), &decoded); err != nil || decoded.Answer == nil || decoded.SourceIDs == nil {
 		return appchat.ModelOutput{}, invalid
 	}
 	result := appchat.ModelOutput{Text: *decoded.Answer, SourceIDs: make([]uuid.UUID, 0, len(*decoded.SourceIDs))}
@@ -246,3 +246,19 @@ type tokenUsage struct {
 
 func (u tokenUsage) in() int  { return u.InputTokens + u.PromptTokens }
 func (u tokenUsage) out() int { return u.OutputTokens + u.CompletionTokens }
+
+// unfence returns the JSON of a reply, also when the model wrapped it in a Markdown code fence.
+func unfence(text string) string {
+	text = strings.TrimSpace(text)
+	if start := strings.Index(text, "```"); start >= 0 {
+		rest := text[start+3:]
+		if newline := strings.IndexByte(rest, '\n'); newline >= 0 {
+			rest = rest[newline+1:]
+		}
+		if end := strings.LastIndex(rest, "```"); end >= 0 {
+			rest = rest[:end]
+		}
+		return strings.TrimSpace(rest)
+	}
+	return text
+}

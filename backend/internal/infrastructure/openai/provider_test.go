@@ -181,3 +181,20 @@ func TestAGuardedClientWillNotAnswerFromAPrivateHost(t *testing.T) {
 		t.Fatalf("Answer() error = %v, want the provider reported unavailable", err)
 	}
 }
+
+func TestAnAnswerWrappedInACodeFenceIsStillRead(t *testing.T) {
+	id := uuid.New()
+	for name, content := range map[string]string{
+		"json fence":  "```json\n{\"answer\":\"On a VPS.\",\"source_ids\":[\"" + id.String() + "\"]}\n```",
+		"plain fence": "```\n{\"answer\":\"On a VPS.\",\"source_ids\":[\"" + id.String() + "\"]}\n```",
+		"with a lead": "Here is the JSON:\n```json\n{\"answer\":\"On a VPS.\",\"source_ids\":[\"" + id.String() + "\"]}\n```",
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(chatReply(content))) }))
+		answerer := NewAnswer(Config{BaseURL: server.URL, APIKey: "k", Model: "m", Protocol: ProtocolChatCompletions, AllowPrivate: true})
+		out, err := answerer.Answer(context.Background(), answerInput(id))
+		server.Close()
+		if err != nil || out.Text != "On a VPS." || len(out.SourceIDs) != 1 {
+			t.Errorf("%s: Answer() = %+v, %v", name, out, err)
+		}
+	}
+}

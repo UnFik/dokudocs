@@ -388,3 +388,30 @@ func TestTheAgentModelIsAThirdSettingTestedLikeTheOthers(t *testing.T) {
 		t.Fatal("an agent model that cannot call tools was saved")
 	}
 }
+
+func TestAStoredKeyIsNeverSentToAnotherAddress(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	if _, err := e.svc.Save(ctx, e.admin, PurposeAnswer, answerInput()); err != nil {
+		t.Fatal(err)
+	}
+	moved := answerInput()
+	moved.BaseURL, moved.APIKey = "https://other.example.org/v1", ""
+	calls := len(e.tester.calls)
+	if err := e.svc.Test(ctx, e.admin, PurposeAnswer, moved); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Test() with a new address and no key = %v, want ErrInvalid", err)
+	}
+	if _, err := e.svc.Save(ctx, e.admin, PurposeAnswer, moved); !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "key") {
+		t.Fatalf("Save() with a new address and no key = %v", err)
+	}
+	if len(e.tester.calls) != calls {
+		t.Fatal("the stored key was sent to the new address")
+	}
+	moved.APIKey = "sk-for-the-new-address"
+	if _, err := e.svc.Save(ctx, e.admin, PurposeAnswer, moved); err != nil {
+		t.Fatalf("Save() with a key for the new address: %v", err)
+	}
+	if got := e.tester.calls[len(e.tester.calls)-1]; got.APIKey != "sk-for-the-new-address" {
+		t.Fatalf("tested with %+v", got)
+	}
+}

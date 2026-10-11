@@ -21,6 +21,14 @@ const BLANK: SettingInput = {
   apiKey: '',
 }
 
+function hostOf(address: string) {
+  try {
+    return new URL(address.trim()).host
+  } catch {
+    return address.trim()
+  }
+}
+
 function problemText(error: unknown, fallback: string) {
   return error instanceof ApiError && error.title ? error.title : fallback
 }
@@ -56,10 +64,14 @@ export function ProviderSection({
       draft.protocol !== baseline.protocol ||
       draft.model !== baseline.model ||
       draft.apiKey !== '')
+  // A stored key belongs to the address it was made for; another address needs its own key.
+  const addressChanged =
+    setting !== null && hostOf(values.baseURL) !== hostOf(baseline.baseURL)
+  const needsKey = setting === null || addressChanged
   const ready =
     values.baseURL.trim() !== '' &&
     values.model.trim() !== '' &&
-    (setting !== null || values.apiKey.trim() !== '')
+    (!needsKey || values.apiKey.trim() !== '')
 
   const test = useMutation({
     mutationFn: () => testSettingApi(purpose, values),
@@ -173,7 +185,12 @@ export function ProviderSection({
             onChange={(event) => change({ apiKey: event.target.value })}
           />
           <p className='text-xs text-muted-foreground'>
-            {setting ? (
+            {addressChanged ? (
+              <>
+                Enter the API key for the new address. The stored key is not
+                sent there.
+              </>
+            ) : setting ? (
               <>
                 Stored key ends{' '}
                 <span className='font-mono'>{setting.keyHint}</span>. Leave this
