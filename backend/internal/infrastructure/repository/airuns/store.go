@@ -17,12 +17,12 @@ type Store struct{ db database.DB }
 
 func NewStore(db database.DB) *Store { return &Store{db: db} }
 
-const columns = `id,owner_id,fingerprint,workspace_id,conversation_id,kind,status,draft,sequence,result,error,started_at,updated_at,deadline`
+const columns = `id,owner_id,fingerprint,workspace_id,conversation_id,kind,subject,status,draft,sequence,result,error,started_at,updated_at,deadline`
 
 func scan(row *sql.Row) (app.Run, error) {
 	var r app.Run
 	var result []byte
-	err := row.Scan(&r.ID, &r.OwnerID, &r.Fingerprint, &r.WorkspaceID, &r.ConversationID, &r.Kind, &r.Status, &r.Draft, &r.Sequence, &result, &r.Error, &r.StartedAt, &r.UpdatedAt, &r.Deadline)
+	err := row.Scan(&r.ID, &r.OwnerID, &r.Fingerprint, &r.WorkspaceID, &r.ConversationID, &r.Kind, &r.Subject, &r.Status, &r.Draft, &r.Sequence, &result, &r.Error, &r.StartedAt, &r.UpdatedAt, &r.Deadline)
 	r.Result = result
 	if errors.Is(err, sql.ErrNoRows) {
 		err = app.ErrNotFound
@@ -31,8 +31,8 @@ func scan(row *sql.Row) (app.Run, error) {
 }
 
 func (s *Store) Start(ctx context.Context, in app.Start) (app.Run, bool, error) {
-	r, err := scan(s.db.QueryRowContext(ctx, `INSERT INTO ai_runs(owner_id,workspace_id,conversation_id,kind,idempotency_key,fingerprint,instance_id,deadline)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING `+columns, in.OwnerID, in.WorkspaceID, in.ConversationID, in.Kind, in.IdempotencyKey, in.Fingerprint, in.InstanceID, in.Deadline))
+	r, err := scan(s.db.QueryRowContext(ctx, `INSERT INTO ai_runs(owner_id,workspace_id,conversation_id,kind,subject,idempotency_key,fingerprint,instance_id,deadline)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING `+columns, in.OwnerID, in.WorkspaceID, in.ConversationID, in.Kind, in.Subject, in.IdempotencyKey, in.Fingerprint, in.InstanceID, in.Deadline))
 	if err == nil {
 		return r, true, nil
 	}
@@ -193,10 +193,10 @@ func (s *Store) Recover(ctx context.Context, at time.Time) (int64, error) {
    error=CASE WHEN deadline <= $1 THEN 'AI run timed out' ELSE 'The server processing this AI run is no longer available' END,
    sequence=sequence+1,updated_at=$1
   WHERE status='running' AND (lease_until <= $1 OR deadline <= $1)
-  RETURNING id,kind,status,draft,sequence,result,error,started_at,updated_at,deadline,workspace_id,conversation_id
+  RETURNING id,kind,subject,status,draft,sequence,result,error,started_at,updated_at,deadline,workspace_id,conversation_id
  ), events AS (
   INSERT INTO ai_run_events(run_id,sequence,type,data)
-  SELECT id,sequence,status,jsonb_build_object('id',id,'kind',kind,'status',status,'draft',draft,'sequence',sequence,
+  SELECT id,sequence,status,jsonb_build_object('id',id,'kind',kind,'subject',subject,'status',status,'draft',draft,'sequence',sequence,
     'result',result,'error',error,'startedAt',started_at,'updatedAt',updated_at,'deadline',deadline,
     'workspaceID',workspace_id,'conversationID',conversation_id)
   FROM recovered RETURNING run_id
@@ -215,4 +215,9 @@ func (s *Store) Cleanup(ctx context.Context, before time.Time) (int64, error) {
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// LatestBySubject is the newest platform run of a kind about one subject, e.g. the last test of an AI purpose.
+func (s *Store) LatestBySubject(ctx context.Context, owner uuid.UUID, kinds []string, subject string) (app.Run, error) {
+	return scan(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM ai_runs WHERE owner_id=$1 AND kind=ANY($2) AND subject=$3 ORDER BY (status='running') DESC, started_at DESC LIMIT 1`, owner, kinds, subject))
 }

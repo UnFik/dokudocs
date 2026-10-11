@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf16"
 	"unicode/utf8"
 
@@ -20,6 +21,48 @@ import (
 )
 
 var streamFinished = errors.New("provider stream completed")
+
+type reportKey struct{}
+
+// StreamReport says what a provider did with the last streaming request made
+// under its context: sent an event stream, or ignored the flag and answered whole.
+type StreamReport struct {
+	mu       sync.Mutex
+	streamed bool
+	whole    bool
+}
+
+// WithStreamReport lets a caller learn whether the provider streams.
+func WithStreamReport(ctx context.Context) (context.Context, *StreamReport) {
+	report := &StreamReport{}
+	return context.WithValue(ctx, reportKey{}, report), report
+}
+
+// Supported is "supported" after an event stream, "unsupported" after a whole
+// answer to a streaming request, and "unverified" when no request told either.
+func (r *StreamReport) Supported() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	switch {
+	case r.streamed:
+		return "supported"
+	case r.whole:
+		return "unsupported"
+	}
+	return "unverified"
+}
+
+func noteStream(ctx context.Context, streamed bool) {
+	if report, ok := ctx.Value(reportKey{}).(*StreamReport); ok {
+		report.mu.Lock()
+		defer report.mu.Unlock()
+		if streamed {
+			report.streamed = true
+		} else {
+			report.whole = true
+		}
+	}
+}
 
 func streamPost(ctx context.Context, client *http.Client, url, key string, payload map[string]any, answer bool) ([]byte, int, error) {
 	payload["stream"] = true
@@ -43,9 +86,13 @@ func streamPost(ctx context.Context, client *http.Client, url, key string, paylo
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK || !strings.Contains(res.Header.Get("Content-Type"), "text/event-stream") {
+		if res.StatusCode == http.StatusOK {
+			noteStream(ctx, false)
+		}
 		body, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))
 		return body, res.StatusCode, err
 	}
+	noteStream(ctx, true)
 	text, emitted := "", ""
 	var usage tokenUsage
 	complete := false

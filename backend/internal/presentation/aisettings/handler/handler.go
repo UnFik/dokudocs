@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"backend/internal/application/airuns"
 	"backend/internal/application/aisettings"
 	"backend/internal/presentation/middleware"
 	"backend/internal/presentation/response"
@@ -13,7 +14,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type Handler struct{ service *aisettings.Service }
+type Handler struct {
+	service *aisettings.Service
+	runs    *airuns.Service
+}
 
 func New(service *aisettings.Service) *Handler { return &Handler{service: service} }
 
