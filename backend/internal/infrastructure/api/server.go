@@ -48,6 +48,11 @@ func RunHTTPServer(ctx context.Context, cfg config.Config, c *container.Containe
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  cfg.IdleTimeout,
 	}
+	if c.AIRuns != nil {
+		// Stop the AI runs first: their watchers leave and the runs are marked
+		// interrupted, instead of holding Shutdown until its time is up.
+		server.RegisterOnShutdown(func() { go c.AIRuns.Close() })
+	}
 	errCh := make(chan error, 2)
 	go func() {
 		c.Logger.Printf("api listening on %s", cfg.Addr)

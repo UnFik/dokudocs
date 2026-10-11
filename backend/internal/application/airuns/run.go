@@ -12,6 +12,7 @@ var (
 	ErrNotFound = errors.New("AI run not found")
 	ErrConflict = errors.New("idempotency key already used for another request")
 	ErrBusy     = errors.New("an AI run is already active")
+	ErrCapacity = errors.New("the server is running too many AI runs")
 	ErrTerminal = errors.New("the AI run is no longer active")
 	ErrInvalid  = errors.New("invalid AI run event")
 	ErrLimit    = errors.New("AI run output limit exceeded")

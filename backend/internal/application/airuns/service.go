@@ -19,12 +19,22 @@ type Store interface {
 	Finish(context.Context, uuid.UUID, uuid.UUID, string, json.RawMessage, string) (Run, error)
 	Renew(context.Context, uuid.UUID, time.Time) error
 	Recover(context.Context, time.Time) (int64, error)
+	Events(context.Context, uuid.UUID, uuid.UUID, int64) ([]Event, error)
+	Latest(context.Context, uuid.UUID, uuid.UUID) (Run, error)
+	Cleanup(context.Context, time.Time) (int64, error)
 }
+
+// Retention is how long a finished run's draft and events stay replayable.
+const Retention = 7 * 24 * time.Hour
 
 type activeRun struct {
 	cancel   context.CancelFunc
 	stopped  atomic.Bool
 	finished chan struct{}
+	// owner, conversation and err are set before finished closes.
+	owner        uuid.UUID
+	conversation *uuid.UUID
+	err          error
 }
 
 type Work func(context.Context) (json.RawMessage, error)
@@ -71,7 +81,7 @@ func (s *Service) Start(ctx context.Context, in Start, work Work) (Run, bool, er
 	select {
 	case s.slots <- struct{}{}:
 	default:
-		return Run{}, false, ErrBusy
+		return Run{}, false, ErrCapacity
 	}
 	in.InstanceID = s.instance
 	run, created, err := s.store.Start(ctx, in)
@@ -81,7 +91,7 @@ func (s *Service) Start(ctx context.Context, in Start, work Work) (Run, bool, er
 	}
 	job, cancel := context.WithDeadline(s.ctx, run.Deadline)
 	s.mu.Lock()
-	handle := &activeRun{cancel: cancel, finished: make(chan struct{})}
+	handle := &activeRun{cancel: cancel, finished: make(chan struct{}), conversation: run.ConversationID, owner: run.OwnerID}
 	s.active[run.ID] = handle
 	s.mu.Unlock()
 	s.wg.Add(1)
@@ -114,8 +124,11 @@ func (s *Service) execute(ctx context.Context, handle *activeRun, run Run, work 
 	if outputErr := output.close(); err == nil {
 		err = outputErr
 	}
+	handle.err = err
 	status, message := "completed", ""
-	if err != nil || ctx.Err() != nil {
+	// Work that returned without an error already saved its result, so a Stop or
+	// deadline that arrives afterwards cannot turn it into a failure.
+	if err != nil {
 		result = nil
 		status, message = "failed", "AI run failed"
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -157,16 +170,73 @@ func (s *Service) Cancel(ctx context.Context, owner, id uuid.UUID) (Run, error) 
 	return s.store.Get(ctx, owner, id)
 }
 
+func (s *Service) Get(ctx context.Context, owner, id uuid.UUID) (Run, error) {
+	return s.store.Get(ctx, owner, id)
+}
+
+func (s *Service) Events(ctx context.Context, owner, id uuid.UUID, after int64) ([]Event, error) {
+	return s.store.Events(ctx, owner, id, after)
+}
+
+// Latest is the active run of a conversation, or else its most recent one.
+func (s *Service) Latest(ctx context.Context, owner, conversation uuid.UUID) (Run, error) {
+	return s.store.Latest(ctx, owner, conversation)
+}
+
+// Wait blocks until a run started on this server has finished and returns the
+// error its work gave. For any other run it returns its saved state at once.
+func (s *Service) Wait(ctx context.Context, owner, id uuid.UUID) (Run, error, error) {
+	s.mu.Lock()
+	handle := s.active[id]
+	s.mu.Unlock()
+	if handle != nil {
+		select {
+		case <-handle.finished:
+		case <-ctx.Done():
+			return Run{}, nil, ctx.Err()
+		}
+	}
+	run, err := s.store.Get(ctx, owner, id)
+	if handle != nil {
+		return run, handle.err, err
+	}
+	return run, nil, err
+}
+
+// CancelConversation stops the run in progress on a conversation that is being deleted.
+func (s *Service) CancelConversation(ctx context.Context, owner, conversation uuid.UUID) {
+	s.mu.Lock()
+	var ids []uuid.UUID
+	for id, handle := range s.active {
+		if handle.owner == owner && handle.conversation != nil && *handle.conversation == conversation {
+			ids = append(ids, id)
+		}
+	}
+	s.mu.Unlock()
+	for _, id := range ids {
+		_, _ = s.Cancel(ctx, owner, id)
+	}
+}
+
+// Done is closed once the server begins to stop, so observers can leave.
+func (s *Service) Done() <-chan struct{} { return s.ctx.Done() }
+
 func (s *Service) maintain() {
 	defer s.wg.Done()
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
+	var lastCleanup time.Time
 	for {
 		if s.ctx.Err() != nil {
 			return
 		}
 		_ = s.store.Renew(s.ctx, s.instance, time.Now().Add(30*time.Second))
 		_, _ = s.store.Recover(s.ctx, time.Now())
+		if time.Since(lastCleanup) > time.Hour {
+			if _, err := s.store.Cleanup(s.ctx, time.Now().Add(-Retention)); err == nil {
+				lastCleanup = time.Now()
+			}
+		}
 		select {
 		case <-s.ctx.Done():
 			return

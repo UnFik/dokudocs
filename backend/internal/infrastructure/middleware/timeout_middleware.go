@@ -13,7 +13,7 @@ func Timeout(duration time.Duration) func(http.Handler) http.Handler {
 func TimeoutWithRAG(duration, ragDuration time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isWebSocketUpgrade(r) {
+			if isWebSocketUpgrade(r) || isRunEventStream(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -38,4 +38,10 @@ func isWebSocketUpgrade(r *http.Request) bool {
 		}
 	}
 	return false
+}
+
+// isRunEventStream is the SSE route that follows an AI run. The run has its own
+// deadline, and TimeoutHandler would hold every event until the response ended.
+func isRunEventStream(r *http.Request) bool {
+	return r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/ai/runs/") && strings.HasSuffix(r.URL.Path, "/events")
 }
