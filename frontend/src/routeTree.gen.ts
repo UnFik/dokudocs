@@ -41,8 +41,12 @@ import { Route as PublicDocumentsShareTokenRouteImport } from './routes/public/d
 import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
 import { Route as AuthenticatedSettingsDisplayRouteImport } from './routes/_authenticated/settings/display'
 import { Route as AuthenticatedSettingsAppearanceRouteImport } from './routes/_authenticated/settings/appearance'
+import { Route as AuthenticatedSettingsAiRouteImport } from './routes/_authenticated/settings/ai'
 import { Route as AuthenticatedSettingsAccountRouteImport } from './routes/_authenticated/settings/account'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects/$projectId'
+import { Route as AuthenticatedPlatformUsageRouteImport } from './routes/_authenticated/platform/usage'
+import { Route as AuthenticatedPlatformSkillsRouteImport } from './routes/_authenticated/platform/skills'
+import { Route as AuthenticatedPlatformMcpRouteImport } from './routes/_authenticated/platform/mcp'
 import { Route as AuthenticatedPlatformAiRouteImport } from './routes/_authenticated/platform/ai'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedSettingsAccountSetPasswordRouteImport } from './routes/_authenticated/settings/account_.set-password'
@@ -216,6 +220,11 @@ const AuthenticatedSettingsAppearanceRoute =
     path: '/appearance',
     getParentRoute: () => AuthenticatedSettingsRouteRoute,
   } as any)
+const AuthenticatedSettingsAiRoute = AuthenticatedSettingsAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AuthenticatedSettingsRouteRoute,
+} as any)
 const AuthenticatedSettingsAccountRoute =
   AuthenticatedSettingsAccountRouteImport.update({
     id: '/account',
@@ -226,6 +235,24 @@ const AuthenticatedProjectsProjectIdRoute =
   AuthenticatedProjectsProjectIdRouteImport.update({
     id: '/projects/$projectId',
     path: '/projects/$projectId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPlatformUsageRoute =
+  AuthenticatedPlatformUsageRouteImport.update({
+    id: '/platform/usage',
+    path: '/platform/usage',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPlatformSkillsRoute =
+  AuthenticatedPlatformSkillsRouteImport.update({
+    id: '/platform/skills',
+    path: '/platform/skills',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPlatformMcpRoute =
+  AuthenticatedPlatformMcpRouteImport.update({
+    id: '/platform/mcp',
+    path: '/platform/mcp',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedPlatformAiRoute = AuthenticatedPlatformAiRouteImport.update({
@@ -269,8 +296,12 @@ export interface FileRoutesByFullPath {
   '/docs/$docId': typeof DocsDocIdRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/platform/ai': typeof AuthenticatedPlatformAiRoute
+  '/platform/mcp': typeof AuthenticatedPlatformMcpRoute
+  '/platform/skills': typeof AuthenticatedPlatformSkillsRoute
+  '/platform/usage': typeof AuthenticatedPlatformUsageRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
+  '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/settings/display': typeof AuthenticatedSettingsDisplayRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
@@ -306,8 +337,12 @@ export interface FileRoutesByTo {
   '/docs/$docId': typeof DocsDocIdRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/platform/ai': typeof AuthenticatedPlatformAiRoute
+  '/platform/mcp': typeof AuthenticatedPlatformMcpRoute
+  '/platform/skills': typeof AuthenticatedPlatformSkillsRoute
+  '/platform/usage': typeof AuthenticatedPlatformUsageRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/settings/account': typeof AuthenticatedSettingsAccountRoute
+  '/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/settings/display': typeof AuthenticatedSettingsDisplayRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
@@ -346,8 +381,12 @@ export interface FileRoutesById {
   '/docs/$docId': typeof DocsDocIdRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/platform/ai': typeof AuthenticatedPlatformAiRoute
+  '/_authenticated/platform/mcp': typeof AuthenticatedPlatformMcpRoute
+  '/_authenticated/platform/skills': typeof AuthenticatedPlatformSkillsRoute
+  '/_authenticated/platform/usage': typeof AuthenticatedPlatformUsageRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/_authenticated/settings/account': typeof AuthenticatedSettingsAccountRoute
+  '/_authenticated/settings/ai': typeof AuthenticatedSettingsAiRoute
   '/_authenticated/settings/appearance': typeof AuthenticatedSettingsAppearanceRoute
   '/_authenticated/settings/display': typeof AuthenticatedSettingsDisplayRoute
   '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
@@ -386,8 +425,12 @@ export interface FileRouteTypes {
     | '/docs/$docId'
     | '/errors/$error'
     | '/platform/ai'
+    | '/platform/mcp'
+    | '/platform/skills'
+    | '/platform/usage'
     | '/projects/$projectId'
     | '/settings/account'
+    | '/settings/ai'
     | '/settings/appearance'
     | '/settings/display'
     | '/settings/notifications'
@@ -423,8 +466,12 @@ export interface FileRouteTypes {
     | '/docs/$docId'
     | '/errors/$error'
     | '/platform/ai'
+    | '/platform/mcp'
+    | '/platform/skills'
+    | '/platform/usage'
     | '/projects/$projectId'
     | '/settings/account'
+    | '/settings/ai'
     | '/settings/appearance'
     | '/settings/display'
     | '/settings/notifications'
@@ -462,8 +509,12 @@ export interface FileRouteTypes {
     | '/docs/$docId'
     | '/_authenticated/errors/$error'
     | '/_authenticated/platform/ai'
+    | '/_authenticated/platform/mcp'
+    | '/_authenticated/platform/skills'
+    | '/_authenticated/platform/usage'
     | '/_authenticated/projects/$projectId'
     | '/_authenticated/settings/account'
+    | '/_authenticated/settings/ai'
     | '/_authenticated/settings/appearance'
     | '/_authenticated/settings/display'
     | '/_authenticated/settings/notifications'
@@ -726,6 +777,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsAppearanceRouteImport
       parentRoute: typeof AuthenticatedSettingsRouteRoute
     }
+    '/_authenticated/settings/ai': {
+      id: '/_authenticated/settings/ai'
+      path: '/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof AuthenticatedSettingsAiRouteImport
+      parentRoute: typeof AuthenticatedSettingsRouteRoute
+    }
     '/_authenticated/settings/account': {
       id: '/_authenticated/settings/account'
       path: '/account'
@@ -738,6 +796,27 @@ declare module '@tanstack/react-router' {
       path: '/projects/$projectId'
       fullPath: '/projects/$projectId'
       preLoaderRoute: typeof AuthenticatedProjectsProjectIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/platform/usage': {
+      id: '/_authenticated/platform/usage'
+      path: '/platform/usage'
+      fullPath: '/platform/usage'
+      preLoaderRoute: typeof AuthenticatedPlatformUsageRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/platform/skills': {
+      id: '/_authenticated/platform/skills'
+      path: '/platform/skills'
+      fullPath: '/platform/skills'
+      preLoaderRoute: typeof AuthenticatedPlatformSkillsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/platform/mcp': {
+      id: '/_authenticated/platform/mcp'
+      path: '/platform/mcp'
+      fullPath: '/platform/mcp'
+      preLoaderRoute: typeof AuthenticatedPlatformMcpRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/platform/ai': {
@@ -766,6 +845,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedSettingsRouteRouteChildren {
   AuthenticatedSettingsAccountRoute: typeof AuthenticatedSettingsAccountRoute
+  AuthenticatedSettingsAiRoute: typeof AuthenticatedSettingsAiRoute
   AuthenticatedSettingsAppearanceRoute: typeof AuthenticatedSettingsAppearanceRoute
   AuthenticatedSettingsDisplayRoute: typeof AuthenticatedSettingsDisplayRoute
   AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
@@ -776,6 +856,7 @@ interface AuthenticatedSettingsRouteRouteChildren {
 const AuthenticatedSettingsRouteRouteChildren: AuthenticatedSettingsRouteRouteChildren =
   {
     AuthenticatedSettingsAccountRoute: AuthenticatedSettingsAccountRoute,
+    AuthenticatedSettingsAiRoute: AuthenticatedSettingsAiRoute,
     AuthenticatedSettingsAppearanceRoute: AuthenticatedSettingsAppearanceRoute,
     AuthenticatedSettingsDisplayRoute: AuthenticatedSettingsDisplayRoute,
     AuthenticatedSettingsNotificationsRoute:
@@ -796,6 +877,9 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedPlatformAiRoute: typeof AuthenticatedPlatformAiRoute
+  AuthenticatedPlatformMcpRoute: typeof AuthenticatedPlatformMcpRoute
+  AuthenticatedPlatformSkillsRoute: typeof AuthenticatedPlatformSkillsRoute
+  AuthenticatedPlatformUsageRoute: typeof AuthenticatedPlatformUsageRoute
   AuthenticatedProjectsProjectIdRoute: typeof AuthenticatedProjectsProjectIdRoute
   AuthenticatedAssistantIndexRoute: typeof AuthenticatedAssistantIndexRoute
   AuthenticatedDraftsIndexRoute: typeof AuthenticatedDraftsIndexRoute
@@ -811,6 +895,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedPlatformAiRoute: AuthenticatedPlatformAiRoute,
+  AuthenticatedPlatformMcpRoute: AuthenticatedPlatformMcpRoute,
+  AuthenticatedPlatformSkillsRoute: AuthenticatedPlatformSkillsRoute,
+  AuthenticatedPlatformUsageRoute: AuthenticatedPlatformUsageRoute,
   AuthenticatedProjectsProjectIdRoute: AuthenticatedProjectsProjectIdRoute,
   AuthenticatedAssistantIndexRoute: AuthenticatedAssistantIndexRoute,
   AuthenticatedDraftsIndexRoute: AuthenticatedDraftsIndexRoute,

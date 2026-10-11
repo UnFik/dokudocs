@@ -26,7 +26,8 @@ func (r *Repository) ListSuggestions(ctx context.Context, workspaceID, documentI
 		rows, err := tx.QueryContext(ctx, `
 			SELECT s.document_id, s.suggestion_id, s.proposer_id, s.decider_id,
 			       s.conflict_reason, s.status, s.created_at, s.decided_at,
-			       s.resolved_at, s.resolved_by, u.full_name
+			       s.resolved_at, s.resolved_by, u.full_name,
+			       EXISTS (SELECT 1 FROM ai_assisted_suggestions a WHERE a.document_id = s.document_id AND a.suggestion_id = s.suggestion_id)
 			FROM document_suggestions s
 			JOIN users u ON u.id = s.proposer_id
 			WHERE s.document_id = $1
@@ -44,7 +45,7 @@ func (r *Repository) ListSuggestions(ctx context.Context, workspaceID, documentI
 			if err := rows.Scan(
 				&suggestion.DocumentID, &suggestion.SuggestionID, &suggestion.ProposerID,
 				&deciderID, &suggestion.ConflictReason, &suggestion.Status, &suggestion.CreatedAt,
-				&decidedAt, &resolvedAt, &resolvedBy, &suggestion.ProposerName,
+				&decidedAt, &resolvedAt, &resolvedBy, &suggestion.ProposerName, &suggestion.AIAssisted,
 			); err != nil {
 				return err
 			}

@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link2, MessageSquarePlus, Send, Trash2 } from 'lucide-react'
+import { MessageSquarePlus, Trash2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import {
   askRAGQuestion,
@@ -8,22 +8,19 @@ import {
   deleteRAGConversation,
   getRAGConversation,
   listRAGConversations,
-  type RAGCitation,
-  type RAGMessage,
 } from '@/lib/domain-api'
 import { getOpenedPublicLinkTokens } from '@/lib/public-link-session'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
+import { AskForm, ChatMessages } from './chat-thread'
 
 export function RAGChatPage() {
   const queryClient = useQueryClient()
   const userID = useAuthStore((state) => state.auth.user?.id ?? '')
   const { workspaces, activeWorkspaceId } = useWorkspaces()
   const [selectedID, setSelectedID] = useState<string>()
-  const [question, setQuestion] = useState('')
   const [language, setLanguage] = useState<'id' | 'en'>('en')
   const conversationsQuery = useQuery({
     queryKey: ['rag-conversations', userID],
@@ -63,7 +60,6 @@ export function RAGChatPage() {
         publicLinkTokens: getOpenedPublicLinkTokens(),
       }),
     onSuccess: async (_answer, input) => {
-      setQuestion('')
       await queryClient.invalidateQueries({
         queryKey: ['rag-conversation', userID, input.conversationID],
       })
@@ -92,11 +88,8 @@ export function RAGChatPage() {
     )
   )
 
-  const submitQuestion = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const text = question.trim()
-    if (!text || !selectedConversation || !canAsk || askMutation.isPending)
-      return
+  const submitQuestion = (text: string) => {
+    if (!selectedConversation || !canAsk || askMutation.isPending) return
     askMutation.reset()
     askMutation.mutate({
       workspaceID: selectedConversation.workspaceId,
@@ -222,67 +215,32 @@ export function RAGChatPage() {
                   {history.messages.length === 0 ? (
                     <p className='text-sm text-muted-foreground'>
                       Ask about policies, decisions, or details in this
-                      workspace’s Markdown documents.
+                      workspace’s documents. Type / to use a skill.
                     </p>
                   ) : (
-                    history.messages.map((message) => (
-                      <ChatMessage
-                        key={message.id}
-                        message={message}
-                        workspaceID={history.conversation.workspaceId}
-                      />
-                    ))
+                    <ChatMessages
+                      messages={history.messages}
+                      actions={history.actions}
+                      workspaceID={history.conversation.workspaceId}
+                      conversationID={history.conversation.id}
+                      queryKey={[
+                        'rag-conversation',
+                        userID,
+                        history.conversation.id,
+                      ]}
+                    />
                   )}
                 </div>
                 {canAsk ? (
-                  <form onSubmit={submitQuestion} className='border-t p-3'>
-                    <label
-                      htmlFor='rag-question'
-                      className='mb-2 block text-sm font-medium'
-                    >
-                      Ask a question
-                    </label>
-                    <Textarea
-                      id='rag-question'
-                      value={question}
-                      onChange={(event) => setQuestion(event.target.value)}
-                      placeholder='Ask about documents in this workspace…'
-                      maxLength={10000}
-                      disabled={askMutation.isPending}
-                      className='min-h-20 resize-y'
-                    />
-                    <div className='mt-2 flex flex-wrap items-center justify-between gap-2'>
-                      <label className='flex items-center gap-2 text-xs text-muted-foreground'>
-                        Answer language
-                        <select
-                          aria-label='Answer language'
-                          value={language}
-                          onChange={(event) =>
-                            setLanguage(event.target.value as 'id' | 'en')
-                          }
-                          className='h-8 rounded-md border bg-background px-2 text-foreground'
-                        >
-                          <option value='en'>English</option>
-                          <option value='id'>Bahasa Indonesia</option>
-                        </select>
-                      </label>
-                      <Button
-                        type='submit'
-                        size='sm'
-                        disabled={
-                          askMutation.isPending || !question.trim() || !canAsk
-                        }
-                      >
-                        <Send />
-                        {askMutation.isPending ? 'Searching…' : 'Send'}
-                      </Button>
-                    </div>
-                    {askMutation.error ? (
-                      <p role='alert' className='mt-2 text-sm text-destructive'>
-                        {askMutation.error.message}
-                      </p>
-                    ) : null}
-                  </form>
+                  <AskForm
+                    id='rag-question'
+                    pending={askMutation.isPending}
+                    error={askMutation.error}
+                    placeholder='Ask about documents in this workspace…'
+                    onAsk={submitQuestion}
+                    language={language}
+                    onLanguage={setLanguage}
+                  />
                 ) : (
                   <div
                     role='status'
@@ -319,91 +277,5 @@ export function RAGChatPage() {
         </div>
       </Main>
     </>
-  )
-}
-
-function ChatMessage({
-  message,
-  workspaceID,
-}: {
-  message: RAGMessage
-  workspaceID: string
-}) {
-  if (message.role === 'user')
-    return (
-      <article className='ml-auto max-w-3xl rounded-lg bg-primary/10 px-4 py-3'>
-        <h3 className='sr-only'>You</h3>
-        <p className='text-sm whitespace-pre-wrap'>{message.content}</p>
-      </article>
-    )
-
-  return (
-    <article className='max-w-4xl space-y-3'>
-      <h3 className='text-xs font-semibold tracking-wide text-muted-foreground uppercase'>
-        DokuDocs AI
-      </h3>
-      <p className='text-sm leading-6 whitespace-pre-wrap'>{message.content}</p>
-      {message.sourcesMayBeIncomplete ? (
-        <p role='status' className='text-xs text-warn'>
-          Some readable documents have stale indexes. This answer may be
-          incomplete.
-        </p>
-      ) : null}
-      {message.coveragePartial ? (
-        <p role='status' className='text-xs text-warn'>
-          Some document blocks could not be indexed, so coverage is partial.
-        </p>
-      ) : null}
-      {message.citations.length > 0 ? (
-        <div className='border-t pt-3'>
-          <h4 className='mb-2 text-xs font-semibold'>Sources</h4>
-          <ol className='space-y-2'>
-            {message.citations.map((citation) => (
-              <Citation
-                key={`${citation.documentId}:${citation.nodeId}`}
-                citation={citation}
-                workspaceID={workspaceID}
-              />
-            ))}
-          </ol>
-        </div>
-      ) : null}
-    </article>
-  )
-}
-
-function Citation({
-  citation,
-  workspaceID,
-}: {
-  citation: RAGCitation
-  workspaceID: string
-}) {
-  const href = `/docs/${encodeURIComponent(citation.documentId)}?workspaceId=${encodeURIComponent(workspaceID)}&nodeId=${encodeURIComponent(citation.nodeId)}#node-${encodeURIComponent(citation.nodeId)}`
-  return (
-    <li className='rounded-md border bg-background p-3 text-xs'>
-      <div className='flex flex-wrap items-center justify-between gap-2'>
-        <span className='font-medium'>
-          {citation.documentTitle || 'Workspace document'}
-          {citation.projectName ? ` · ${citation.projectName}` : ''}
-          {citation.breadcrumb ? ` · ${citation.breadcrumb}` : ''}
-        </span>
-        <a
-          href={href}
-          className='inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline'
-        >
-          <Link2 className='size-3.5' />
-          Open block
-        </a>
-      </div>
-      <blockquote className='mt-2 border-l-2 pl-3 text-muted-foreground'>
-        {citation.quotedText}
-      </blockquote>
-      {citation.sourceChanged ? (
-        <p role='status' className='mt-2 text-warn'>
-          This source changed after the answer was created.
-        </p>
-      ) : null}
-    </li>
   )
 }

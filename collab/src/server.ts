@@ -12,6 +12,7 @@ import { seedFromJSON } from './seed'
 import { seedSource, sourceToJSON } from './source'
 import { suggestionsIn } from './suggestions'
 import { inSpan } from './tracing'
+import { handleAgentRequest } from './agent-endpoints'
 
 // The editor binds its document to this fragment.
 const fragmentName = 'body'
@@ -188,6 +189,9 @@ function http(secret: string | null, metrics: Metrics): Extension {
           }
           response.writeHead(204).end()
         }
+      } else if (url.pathname.startsWith('/internal/agent-')) {
+        if (!secret || request.headers['x-collab-secret'] !== secret) response.writeHead(401).end()
+        else if (!(await handleAgentRequest(url, request, response, instance))) response.writeHead(404).end()
       } else {
         return
       }

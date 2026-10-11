@@ -109,6 +109,13 @@ export function PlatformAiPage() {
               setting={overview.data.embedding}
               note='Turns documents and questions into vectors. Only models that return 1536 numbers work. Choosing a different model re-embeds every document in the background.'
             />
+            <ProviderSection
+              purpose='agent'
+              title='Agent provider'
+              modelLabel='Agent model'
+              setting={overview.data.agent ?? null}
+              note='Thinks and calls Dokudocs tools in chat. The model must support tool calling; the connection test asks it to call one. Leave it empty to keep chat answering from documents only.'
+            />
             <PendingSwitch overview={overview.data} />
             <section aria-labelledby='recent-changes' className='space-y-3'>
               <h2 id='recent-changes' className='text-lg font-medium'>

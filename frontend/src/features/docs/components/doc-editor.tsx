@@ -13,6 +13,7 @@ import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
 import { ArchitectureDocEditor } from '@/features/architecture/components/architecture-editor'
 import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
+import { DocumentChatPanel } from '@/features/rag/document-chat-panel'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { useDocEditor } from '../hooks/use-doc-editor'
 import { useToggleDocumentStar } from '../hooks/use-toggle-document-star'
@@ -141,42 +142,57 @@ export function DocEditor() {
       />
     )
 
-  if (documentQuery.data.type === 'markdown')
-    return (
-      <RemoteMarkdownDocEditor
-        key={`${scope.generation}:${docId}:${citationNodeID ?? ''}`}
-        document={documentQuery.data}
-        workspaceID={workspaceID}
-        userID={scope.userId ?? auth.user?.id ?? ''}
-        focusNodeID={citationNodeID}
-        focusThreadID={focusThreadID}
-      />
-    )
+  function remoteDocumentEditor() {
+    const data = documentQuery.data!
+    if (data.type === 'markdown')
+      return (
+        <RemoteMarkdownDocEditor
+          key={`${scope.generation}:${docId}:${citationNodeID ?? ''}`}
+          document={data}
+          workspaceID={workspaceID}
+          userID={scope.userId ?? auth.user?.id ?? ''}
+          focusNodeID={citationNodeID}
+          focusThreadID={focusThreadID}
+        />
+      )
 
-  if (documentQuery.data.type === 'architecture')
-    return (
-      <ArchitectureDocEditor
-        key={`${scope.generation}:${docId}`}
-        document={documentQuery.data}
-        workspaceID={workspaceID}
-        userID={scope.userId ?? auth.user?.id ?? ''}
-        focusNodeID={citationNodeID}
-        focusThreadID={focusThreadID}
-      />
-    )
+    if (data.type === 'architecture')
+      return (
+        <ArchitectureDocEditor
+          key={`${scope.generation}:${docId}`}
+          document={data}
+          workspaceID={workspaceID}
+          userID={scope.userId ?? auth.user?.id ?? ''}
+          focusNodeID={citationNodeID}
+          focusThreadID={focusThreadID}
+        />
+      )
 
-  if (
-    documentQuery.data.type === 'dbdiagram' ||
-    documentQuery.data.type === 'mermaid'
-  )
+    if (data.type === 'dbdiagram' || data.type === 'mermaid')
+      return (
+        <RemoteSourceDocEditor
+          key={`${scope.generation}:${docId}`}
+          document={data}
+          workspaceID={workspaceID}
+          userID={scope.userId ?? auth.user?.id ?? ''}
+          focusThreadID={focusThreadID}
+        />
+      )
+
+    return null
+  }
+
+  const remoteEditor = remoteDocumentEditor()
+  if (remoteEditor)
     return (
-      <RemoteSourceDocEditor
-        key={`${scope.generation}:${docId}`}
-        document={documentQuery.data}
-        workspaceID={workspaceID}
-        userID={scope.userId ?? auth.user?.id ?? ''}
-        focusThreadID={focusThreadID}
-      />
+      <>
+        {remoteEditor}
+        <DocumentChatPanel
+          documentID={docId}
+          workspaceID={workspaceID}
+          title={documentQuery.data.title}
+        />
+      </>
     )
 
   return (

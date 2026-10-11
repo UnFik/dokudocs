@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
+func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit *agentKit) {
 	authUseCase := appauth.NewUseCase(c.DB, cfg.JWTSecret, cfg.AccessTokenTTL)
 	authRequired := signedIn(authUseCase, cfg)
 
@@ -31,7 +31,8 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
 	revisionHandler := dochandler.NewRevisionHandler(appdoc.NewDocumentRevisionUseCase(bodyRepository).WithRoomReloader(collabclient.New(cfg.CollabServiceURL, cfg.CollabServiceSecret)))
 	suggestionService := appdoc.NewSuggestionUseCase(bodyRepository)
 	suggestionHandler := dochandler.NewSuggestionHandler(suggestionService)
-	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel))
+	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel)).
+		WithAgent(kit.chat, kit.ready, kit.actions)
 	commentUseCase := appdoc.NewCommentUseCase(bodyRepository).
 		WithDeliverer(notification.NewMentionDeliverer(c.Mailer, c.Push, cfg.PublicAppURL))
 	commentHandler := dochandler.NewCommentHandler(commentUseCase)
@@ -103,6 +104,8 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config) {
 	privateChatGroup.Get("", ragChat.ListConversations)
 	privateChatGroup.Get("/{conversationID}", ragChat.GetConversation)
 	privateChatGroup.Delete("/{conversationID}", ragChat.DeleteConversation)
+	privateChatGroup.Post("/{conversationID}/actions/{actionID}", ragChat.DecideAction)
+	f.Group("/rag/documents", authRequired).Get("/{documentID}/conversations", ragChat.ListDocumentConversations)
 }
 
 func newAssetService(c *container.Container, cfg config.Config) *asset.Service {

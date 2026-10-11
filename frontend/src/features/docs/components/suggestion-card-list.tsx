@@ -147,6 +147,7 @@ export function SuggestionCardList({
                 <ReviewCardHeader
                   name={authorName}
                   createdAt={discussion?.createdAt}
+                  note={discussion?.aiAssisted ? 'AI assisted' : undefined}
                   ringColor={authorColor(card.author)}
                   actions={
                     canDecide ? (

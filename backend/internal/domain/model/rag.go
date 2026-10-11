@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,9 +38,11 @@ type RAGConversation struct {
 	ID          uuid.UUID `json:"id"`
 	WorkspaceID uuid.UUID `json:"workspaceId"`
 	CreatorID   uuid.UUID `json:"creatorId,omitempty"`
-	Title       string    `json:"title"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	// DocumentID is set on a Conversation opened from one document.
+	DocumentID *uuid.UUID `json:"documentId,omitempty"`
+	Title      string     `json:"title"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
 type RAGMessage struct {
@@ -50,7 +53,9 @@ type RAGMessage struct {
 	Citations              []RAGCitation `json:"citations,omitempty"`
 	CoveragePartial        bool          `json:"coveragePartial"`
 	SourcesMayBeIncomplete bool          `json:"sourcesMayBeIncomplete"`
-	CreatedAt              time.Time     `json:"createdAt"`
+	// Meta holds what the Agent did for this answer: tools used and actions asked for.
+	Meta      json.RawMessage `json:"meta,omitempty"`
+	CreatedAt time.Time       `json:"createdAt"`
 }
 
 type RAGConversationHistory struct {
