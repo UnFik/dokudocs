@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"backend/internal/application/airuns"
 	appchat "backend/internal/application/rag/usecase"
 
 	"github.com/google/uuid"
@@ -195,6 +196,9 @@ func (m *AnswerModel) chatText(ctx context.Context, question string) (string, to
 }
 
 func (m *AnswerModel) post(ctx context.Context, path string, payload map[string]any) ([]byte, int, error) {
+	if airuns.HasOutput(ctx) {
+		return streamPost(ctx, m.client, m.baseURL+path, m.apiKey, payload, true)
+	}
 	requestBody, err := json.Marshal(payload)
 	if err != nil {
 		return nil, 0, errors.New("answer request failed")
