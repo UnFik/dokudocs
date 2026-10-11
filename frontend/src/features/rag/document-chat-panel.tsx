@@ -37,7 +37,7 @@ export function DocumentChatPanel({
       <Button
         variant='outline'
         size='sm'
-        className='fixed right-4 bottom-4 z-40 bg-background'
+        className='fixed right-4 bottom-20 z-40 bg-background'
         onClick={() => setOpen(true)}
       >
         <MessageSquareText />

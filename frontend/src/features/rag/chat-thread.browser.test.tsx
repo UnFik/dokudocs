@@ -74,9 +74,9 @@ it('shows what the assistant did and runs an action only when approved', async (
       queryKey={['rag-conversation']}
     />
   )
-  await expect
-    .element(screen.getByText('The assistant read a document, trash document.'))
-    .toBeVisible()
+  await expect.element(screen.getByText('Tools used:')).toBeVisible()
+  await expect.element(screen.getByText('read_document')).toBeVisible()
+  await expect.element(screen.getByText('trash_document')).toBeVisible()
   await expect
     .element(screen.getByText('Move the document to the trash'))
     .toBeVisible()
