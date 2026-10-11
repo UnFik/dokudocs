@@ -4,7 +4,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { CATEGORY_COLOR_OPTIONS } from '@/lib/category-palette'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,6 +23,8 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
+import { useRenameCategory } from '../hooks/use-project-actions'
 
 const editCategorySchema = z.object({
   newCategoryName: z
@@ -50,7 +51,8 @@ export function EditCategoryDialog({
   categoryName,
   currentColorId = 'blue',
 }: EditCategoryDialogProps) {
-  const { renameProjectCategory } = useDokudocsStore()
+  const { projects } = useDokudocs()
+  const renameCategory = useRenameCategory()
 
   const form = useForm<EditCategoryFormValues>({
     resolver: zodResolver(editCategorySchema),
@@ -76,9 +78,22 @@ export function EditCategoryDialog({
       return
     }
 
-    renameProjectCategory(projectId, categoryName, trimmed, values.colorId)
-    toast.success(`Category "${trimmed}" updated`)
-    onOpenChange(false)
+    const project = projects.find((p) => p.id === projectId)
+    if (!project) return
+    renameCategory.mutate(
+      {
+        project,
+        name: categoryName,
+        newName: trimmed,
+        colorId: values.colorId,
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Category "${trimmed}" updated`)
+          onOpenChange(false)
+        },
+      }
+    )
   }
 
   return (

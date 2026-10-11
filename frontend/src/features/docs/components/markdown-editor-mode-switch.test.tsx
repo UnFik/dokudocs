@@ -1,4 +1,5 @@
-import { act } from 'react'
+import { act, createElement } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { DocumentItem, ProjectItem } from '@/types/dokudocs'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { renderHook } from 'vitest-browser-react'
@@ -6,6 +7,14 @@ import { useCommentStore } from '@/stores/comment-store'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { useEditorPreferenceStore } from '@/stores/editor-preference-store'
 import { useDocEditor } from '../hooks/use-doc-editor'
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  return createElement(
+    QueryClientProvider,
+    { client: new QueryClient() },
+    children
+  )
+}
 
 describe('Editor Mode Switching & Store Mutation Persistence', () => {
   const initialDoc: DocumentItem = {
@@ -65,7 +74,9 @@ describe('Editor Mode Switching & Store Mutation Persistence', () => {
   })
 
   it('immediately mutates useDokudocsStore when setContent is invoked in useDocEditor', async () => {
-    const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'))
+    const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'), {
+      wrapper,
+    })
 
     expect(result.current.content).toBe(
       '# Initial Content\n\nThis is initial text.'
@@ -86,7 +97,9 @@ describe('Editor Mode Switching & Store Mutation Persistence', () => {
   })
 
   it('preserves content when switching viewMode between editor, split, and preview', async () => {
-    const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'))
+    const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'), {
+      wrapper,
+    })
 
     act(() => {
       result.current.setContent('# Modified in Monaco\n\nTyping code here.')
@@ -126,7 +139,9 @@ describe('Editor Mode Switching & Store Mutation Persistence', () => {
   })
 
   it('switches previewMode between view and edit cleanly', async () => {
-    const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'))
+    const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'), {
+      wrapper,
+    })
 
     act(() => {
       result.current.setContent('# Phase 1 Draft\n\nContent in edit mode.')
@@ -152,7 +167,9 @@ describe('Editor Mode Switching & Store Mutation Persistence', () => {
   })
 
   it('immediately updates title and metadata in store on change', async () => {
-    const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'))
+    const { result } = await renderHook(() => useDocEditor('doc-mode-test-1'), {
+      wrapper,
+    })
 
     act(() => {
       result.current.setTitle('Renamed Document Title')

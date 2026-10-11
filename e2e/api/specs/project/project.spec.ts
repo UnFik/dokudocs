@@ -143,6 +143,19 @@ test.describe('Project: CRUD & Star /api/v1/projects', () => {
     const updated = (await updateRes.json()).data
     expect(updated.name).toBe(updatedName)
     expect(updated.colorBadge).toBe('#10b981')
+    expect(updated.description).toBe('New updated description')
+
+    // A field that is left out stays as it was; an empty string clears it.
+    const keepRes = await wsRequest.put(`/api/v1/projects/${projectId}`, {
+      data: { name: updatedName },
+    })
+    expect(keepRes.status()).toBe(200)
+    expect((await keepRes.json()).data.description).toBe('New updated description')
+    const clearRes = await wsRequest.put(`/api/v1/projects/${projectId}`, {
+      data: { description: '' },
+    })
+    expect(clearRes.status()).toBe(200)
+    expect((await clearRes.json()).data.description).toBe('')
 
     // 6. Toggle Star (Favorite)
     const starRes1 = await wsRequest.post(`/api/v1/projects/${projectId}/star`)
