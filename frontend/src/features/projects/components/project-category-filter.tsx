@@ -14,7 +14,6 @@ import {
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import {
   CATEGORY_COLOR_OPTIONS,
   getCategoryPalette,
@@ -43,6 +42,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
+import {
+  useAddCategory,
+  useDeleteCategory,
+  useReorderCategories,
+} from '../hooks/use-project-actions'
 import { EditCategoryDialog } from './edit-category-dialog'
 
 const addCategorySchema = z.object({
@@ -74,12 +79,10 @@ export function ProjectCategoryFilter({
   docCountsByCategory,
   totalDocsCount,
 }: ProjectCategoryFilterProps) {
-  const {
-    projects,
-    addProjectCategory,
-    removeProjectCategory,
-    reorderProjectCategories,
-  } = useDokudocsStore()
+  const { projects } = useDokudocs()
+  const addCategory = useAddCategory()
+  const deleteCategory = useDeleteCategory()
+  const reorderCategories = useReorderCategories()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false)
@@ -147,7 +150,7 @@ export function ProjectCategoryFilter({
     const [movedItem] = reordered.splice(draggedIndex, 1)
     reordered.splice(targetIndex, 0, movedItem)
 
-    reorderProjectCategories(projectId, reordered)
+    if (project) reorderCategories.mutate({ project, names: reordered })
     setDraggedIndex(null)
     setDragOverIndex(null)
   }
@@ -159,22 +162,36 @@ export function ProjectCategoryFilter({
       return
     }
 
-    addProjectCategory(projectId, trimmed, values.colorId)
-    toast.success(`Category "${trimmed}" added`)
-    form.reset({ categoryName: '', colorId: 'blue' })
-    setPopoverOpen(false)
-    onToggleCategory(trimmed)
+    if (!project) return
+    addCategory.mutate(
+      { project, name: trimmed, colorId: values.colorId },
+      {
+        onSuccess: () => {
+          toast.success(`Category "${trimmed}" added`)
+          form.reset({ categoryName: '', colorId: 'blue' })
+          setPopoverOpen(false)
+          onToggleCategory(trimmed)
+        },
+      }
+    )
   }
 
   const handleCategoryClick = (category: string) => {
     if (filterMode === 'edit') {
       setEditingCategory(category)
     } else if (filterMode === 'delete') {
-      removeProjectCategory(projectId, category)
-      if (selectedCategories.includes(category)) {
-        onToggleCategory(category)
-      }
-      toast.success(`Category "${category}" deleted`)
+      if (!project) return
+      deleteCategory.mutate(
+        { project, name: category },
+        {
+          onSuccess: () => {
+            if (selectedCategories.includes(category)) {
+              onToggleCategory(category)
+            }
+            toast.success(`Category "${category}" deleted`)
+          },
+        }
+      )
     } else {
       onToggleCategory(category)
     }

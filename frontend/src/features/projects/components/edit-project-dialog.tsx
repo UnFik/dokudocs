@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { ProjectItem } from '@/types/dokudocs'
 import { Pencil, UploadCloud, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -25,6 +24,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { useUpdateProject } from '../hooks/use-project-actions'
 
 const editProjectSchema = z.object({
   name: z.string().min(1, 'Please enter a project name'),
@@ -45,7 +45,7 @@ export function EditProjectDialog({
   onOpenChange,
   project,
 }: EditProjectDialogProps) {
-  const { updateProject } = useDokudocsStore()
+  const updateProject = useUpdateProject()
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -126,14 +126,23 @@ export function EditProjectDialog({
   }
 
   const onSubmit = (values: EditProjectFormValues) => {
-    updateProject(project.id, {
-      name: values.name.trim(),
-      description: values.description?.trim() || undefined,
-      logoUrl: values.logoUrl || undefined,
-    })
-
-    toast.success(`Project "${values.name.trim()}" updated successfully`)
-    onOpenChange(false)
+    const name = values.name.trim()
+    updateProject.mutate(
+      {
+        project,
+        input: {
+          name,
+          description: values.description?.trim() ?? '',
+          logoUrl: values.logoUrl ?? '',
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Project "${name}" updated successfully`)
+          onOpenChange(false)
+        },
+      }
+    )
   }
 
   return (
@@ -271,7 +280,12 @@ export function EditProjectDialog({
               >
                 Cancel
               </Button>
-              <Button type='submit' size='sm' className='h-8 text-xs'>
+              <Button
+                type='submit'
+                size='sm'
+                className='h-8 text-xs'
+                disabled={updateProject.isPending}
+              >
                 Save Changes
               </Button>
             </DialogFooter>

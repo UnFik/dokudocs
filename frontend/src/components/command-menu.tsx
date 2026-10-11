@@ -12,7 +12,6 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { getDocCategories } from '@/lib/doc-category-utils'
 import {
@@ -31,6 +30,7 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { CreateDocDialog } from '@/features/docs/components/create-doc-dialog'
 import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
 import { CreateProjectDialog } from '@/features/projects/components/create-project-dialog'
@@ -40,7 +40,7 @@ export function CommandMenu() {
   const navigate = useNavigate()
   const { setTheme } = useTheme()
   const { open, setOpen } = useSearch()
-  const { documents, projects, recordDocumentView } = useDokudocsStore()
+  const { activeDocuments: documents, projects } = useDokudocs()
 
   const [createDocOpen, setCreateDocOpen] = useState(false)
   const [importDocOpen, setImportDocOpen] = useState(false)
@@ -93,7 +93,6 @@ export function CommandMenu() {
                       value={uniqueValue}
                       onSelect={() => {
                         runCommand(() => {
-                          recordDocumentView(doc.id)
                           navigate({
                             to: '/docs/$docId',
                             params: { docId: doc.id },
@@ -196,7 +195,7 @@ export function CommandMenu() {
                             </span>
                             <span className='truncate text-[10px] text-muted-foreground'>
                               {proj.description ||
-                                `${proj.documentIds.length} documents`}
+                                `${documents.filter((d) => d.projectId === proj.id).length} documents`}
                             </span>
                           </div>
                         </div>

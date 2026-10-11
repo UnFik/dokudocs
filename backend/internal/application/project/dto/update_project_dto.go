@@ -7,8 +7,8 @@ type UpdateProjectInput struct {
 	WorkspaceID uuid.UUID
 	UserID      uuid.UUID
 	Name        string
-	Description string
-	LogoURL     string
+	Description *string // nil keeps the value, "" clears it
+	LogoURL     *string // nil keeps the value, "" clears it
 	ColorBadge  string
 	Visibility  string
 }

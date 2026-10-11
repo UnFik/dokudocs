@@ -58,6 +58,8 @@ export interface ProjectItem {
   logoUrl?: string
   categories?: string[]
   categoryColors?: Record<string, string>
+  /** Category name to server id, needed to rename, delete and reorder. */
+  categoryIds?: Record<string, string>
   workspaceId?: string
   orgId: string
   colorBadge?: string

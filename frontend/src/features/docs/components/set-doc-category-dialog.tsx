@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DocumentItem } from '@/types/dokudocs'
 import { Plus, Tag, X } from 'lucide-react'
-import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { getDocCategories } from '@/lib/doc-category-utils'
 import { Button } from '@/components/ui/button'
@@ -16,6 +14,11 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
+import {
+  useAddProjectCategory,
+  useUpdateDocument,
+} from '../hooks/use-document-actions'
 
 interface SetDocCategoryDialogProps {
   open: boolean
@@ -28,7 +31,9 @@ export function SetDocCategoryDialog({
   onOpenChange,
   document,
 }: SetDocCategoryDialogProps) {
-  const { projects, updateDocument, addProjectCategory } = useDokudocsStore()
+  const { projects } = useDokudocs()
+  const updateDocument = useUpdateDocument()
+  const addProjectCategory = useAddProjectCategory()
   const project = projects.find((p) => p.id === document.projectId)
   const availableCategories = project?.categories ?? []
 
@@ -61,24 +66,32 @@ export function SetDocCategoryDialog({
       setSelectedCategories((prev) => [...prev, trimmed])
     }
     if (document.projectId) {
-      addProjectCategory(document.projectId, trimmed)
+      addProjectCategory.mutate({
+        workspaceId: document.orgId,
+        projectId: document.projectId,
+        name: trimmed,
+      })
     }
     setCustomInput('')
   }
 
   const handleSave = () => {
-    updateDocument(document.id, {
-      categories: selectedCategories,
-      category: selectedCategories[0] ?? null,
-    })
-
-    toast.success(
-      selectedCategories.length > 0
-        ? `Updated categories (${selectedCategories.length})`
-        : 'Categories cleared'
+    updateDocument.mutate(
+      {
+        document,
+        input: { categories: selectedCategories },
+        message:
+          selectedCategories.length > 0
+            ? `Updated categories (${selectedCategories.length})`
+            : 'Categories cleared',
+      },
+      {
+        onSuccess: () => {
+          onOpenChange(false)
+          window.document.body.style.pointerEvents = ''
+        },
+      }
     )
-    onOpenChange(false)
-    window.document.body.style.pointerEvents = ''
   }
 
   return (

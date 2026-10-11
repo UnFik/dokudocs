@@ -23,11 +23,11 @@ func (u *useCase) UpdateProject(ctx context.Context, input dto.UpdateProjectInpu
 	if input.Name != "" {
 		p.Name = strings.TrimSpace(input.Name)
 	}
-	if input.Description != "" {
-		p.Description = input.Description
+	if input.Description != nil {
+		p.Description = strings.TrimSpace(*input.Description)
 	}
-	if input.LogoURL != "" {
-		p.LogoURL = input.LogoURL
+	if input.LogoURL != nil {
+		p.LogoURL = *input.LogoURL
 	}
 	if input.ColorBadge != "" {
 		p.ColorBadge = input.ColorBadge
