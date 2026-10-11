@@ -438,3 +438,80 @@ func TestUsageIsForSuperadminsOnly(t *testing.T) {
 		t.Fatalf("usage = %d %s", res.Code, res.Body.String())
 	}
 }
+
+func TestAnMCPCallGetsProgressOnlyWhenItAsksForIt(t *testing.T) {
+	e := newAgentEnv(t)
+	server := httptest.NewServer(e.api)
+	t.Cleanup(server.Close)
+	var mu sync.Mutex
+	var seen []*mcp.ProgressNotificationParams
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
+			mu.Lock()
+			defer mu.Unlock()
+			seen = append(seen, req.Params)
+		},
+	})
+	session, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{
+		Endpoint: server.URL + "/api/v1/mcp", HTTPClient: &http.Client{Transport: keyBearer{secret: e.newKey(), base: http.DefaultTransport}},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Connect(): %v", err)
+	}
+	defer session.Close()
+	args := map[string]any{"workspace_id": e.ws, "document_id": e.doc}
+
+	plain, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "read_document", Arguments: args})
+	if err != nil || plain.IsError || !strings.Contains(text(plain), "passkeys") {
+		t.Fatalf("call without a token = %+v, %v", text(plain), err)
+	}
+	mu.Lock()
+	if len(seen) != 0 {
+		t.Fatalf("progress was sent to a call that did not ask: %+v", seen)
+	}
+	mu.Unlock()
+
+	params := &mcp.CallToolParams{Name: "read_document", Arguments: args}
+	params.SetProgressToken("read-1")
+	withToken, err := session.CallTool(context.Background(), params)
+	if err != nil || withToken.IsError || text(withToken) != text(plain) {
+		t.Fatalf("call with a token = %+v, %v; want the same result", text(withToken), err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) < 2 {
+		t.Fatalf("progress notifications = %d, want at least a start and a finish", len(seen))
+	}
+	for i, n := range seen {
+		if n.ProgressToken != "read-1" || n.Total != 2 || (i > 0 && n.Progress <= seen[i-1].Progress) {
+			t.Fatalf("notification %d = %+v; the token must match and progress must rise", i, n)
+		}
+	}
+	// Each real call is audited once, with or without progress.
+	var audited int
+	_ = e.db.QueryRow(`SELECT COUNT(*) FROM mcp_audit WHERE tool = 'read_document' AND user_id = $1`, e.owner.id).Scan(&audited)
+	if audited != 2 {
+		t.Fatalf("audit rows for two calls = %d", audited)
+	}
+}
+
+func TestAnMCPCallWhoseClientLeavesDoesNotHangTheServer(t *testing.T) {
+	e := newAgentEnv(t)
+	session, err := e.connect(e.newKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	params := &mcp.CallToolParams{Name: "read_document", Arguments: map[string]any{"workspace_id": e.ws, "document_id": e.doc}}
+	params.SetProgressToken("gone")
+	if _, err := session.CallTool(ctx, params); err == nil {
+		t.Fatal("a cancelled call returned a result")
+	}
+	// The session still works for the next call.
+	again, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "read_document", Arguments: map[string]any{"workspace_id": e.ws, "document_id": e.doc}})
+	if err != nil || again.IsError {
+		t.Fatalf("call after a cancelled one = %v, %v", again, err)
+	}
+}
