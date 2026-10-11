@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,11 +7,15 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   PROTOCOLS,
-  saveSettingApi,
-  testSettingApi,
+  awaitJob,
+  getLatestJobApi,
+  jobResult,
+  runSettingJob,
+  type JobResult,
   type Purpose,
   type SettingInput,
   type SettingView,
+  type Streaming,
 } from './api/platform-ai-api'
 
 const BLANK: SettingInput = {
@@ -30,7 +34,65 @@ function hostOf(address: string) {
 }
 
 function problemText(error: unknown, fallback: string) {
-  return error instanceof ApiError && error.title ? error.title : fallback
+  if (error instanceof ApiError && error.title) return error.title
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
+const streamingText: Record<Streaming, string> = {
+  supported: 'Streaming works: answers arrive as they are written.',
+  unsupported:
+    'This provider answered the streaming request with a whole reply, so answers arrive at once.',
+  unverified: 'Streaming was not checked for this setting.',
+}
+
+const phaseText: Record<string, string> = {
+  testing: 'Testing the connection…',
+  saving: 'Saving…',
+}
+
+/** The outcome of the last test or save, kept on the server so it is still there after the page was closed. */
+function LastJob({ purpose, hidden }: { purpose: Purpose; hidden: boolean }) {
+  const queryClient = useQueryClient()
+  const key = ['platform-ai', 'job', purpose]
+  const latest = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => getLatestJobApi(purpose, signal),
+    retry: false,
+  })
+  const run = latest.data
+  const running = run?.status === 'running'
+  const runID = run?.id
+  useEffect(() => {
+    if (!run || !running) return
+    const controller = new AbortController()
+    awaitJob(run, { signal: controller.signal })
+      .then(async () => {
+        await queryClient.invalidateQueries({ queryKey: ['platform-ai'] })
+      })
+      .catch(() => undefined)
+    return () => controller.abort()
+    // Follow each run once; the data refreshes when it ends.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runID, running])
+  if (!run || hidden) return null
+  if (running)
+    return (
+      <p role='status' className='text-sm text-muted-foreground'>
+        A {run.kind} is still running on the server. The result shows here when
+        it ends.
+      </p>
+    )
+  const result = jobResult(run)
+  return (
+    <p role='status' className='text-xs text-muted-foreground'>
+      Last {run.kind}:{' '}
+      {run.status === 'completed' && result
+        ? `connection worked. ${streamingText[result.streaming]}`
+        : run.status === 'cancelled'
+          ? 'stopped.'
+          : `failed. ${run.error}`}
+    </p>
+  )
 }
 
 /** One provider setting: where the model lives, which model, and the key (never shown, only replaced). */
@@ -73,12 +135,15 @@ export function ProviderSection({
     values.model.trim() !== '' &&
     (!needsKey || values.apiKey.trim() !== '')
 
+  const [phase, setPhase] = useState('')
   const test = useMutation({
-    mutationFn: () => testSettingApi(purpose, values),
+    mutationFn: () =>
+      runSettingJob(purpose, 'test', values, { onPhase: setPhase }),
     retry: false,
   })
   const save = useMutation({
-    mutationFn: () => saveSettingApi(purpose, values),
+    mutationFn: () =>
+      runSettingJob(purpose, 'save', values, { onPhase: setPhase }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['platform-ai'] })
       setDraft(null)
@@ -206,16 +271,26 @@ export function ProviderSection({
             {failure}
           </p>
         )}
+        {busy && (
+          <p role='status' className='text-sm text-muted-foreground'>
+            {phaseText[phase] ?? 'Working…'}
+          </p>
+        )}
         {test.isSuccess && (
           <p role='status' className='text-sm'>
-            Connection works.
+            Connection works.{' '}
+            {streamingText[(test.data as JobResult).streaming]}
           </p>
         )}
         {save.isSuccess && !changed && (
           <p role='status' className='text-sm'>
-            Saved.
+            Saved. {streamingText[(save.data as JobResult).streaming]}
           </p>
         )}
+        <LastJob
+          purpose={purpose}
+          hidden={busy || test.isSuccess || save.isSuccess || Boolean(failure)}
+        />
         <div className='flex flex-wrap gap-2'>
           <Button
             type='button'
