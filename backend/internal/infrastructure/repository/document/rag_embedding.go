@@ -64,6 +64,36 @@ func (r *Repository) ListRAGChunksMissingEmbeddings(ctx context.Context, provide
 	return chunks, rows.Err()
 }
 
+// ragCurrentChunks is the set of chunks the worker embeds: those of an index that matches its document.
+const ragCurrentChunks = `
+		FROM rag_chunks c
+		JOIN documents d ON d.id = c.document_id
+		JOIN rag_document_indexes ri ON ri.document_id = d.id
+		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
+		WHERE d.type IN ('markdown', 'architecture') AND d.deleted_at IS NULL
+		  AND ri.indexed_body_version = d.body_version
+		  AND ri.source_fingerprint = c.source_fingerprint AND ri.indexed_title = d.title
+		  AND ri.indexed_project_id IS NOT DISTINCT FROM d.project_id
+		  AND ri.indexed_project_name = COALESCE(p.name, '') AND ri.renderer_version = 2`
+
+// RAGEmbeddingProgress counts the current chunks that already have a vector from the model.
+func (r *Repository) RAGEmbeddingProgress(ctx context.Context, provider, embeddingModel string) (done, total int, err error) {
+	err = r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FILTER (WHERE EXISTS (
+		         SELECT 1 FROM rag_embeddings e WHERE e.chunk_id = c.chunk_id AND e.provider = $1 AND e.model = $2)),
+		       COUNT(*)`+ragCurrentChunks, provider, embeddingModel).Scan(&done, &total)
+	return done, total, err
+}
+
+// DeleteRAGEmbeddingsExcept drops the vectors of every model other than the one given.
+func (r *Repository) DeleteRAGEmbeddingsExcept(ctx context.Context, provider, embeddingModel string) (int64, error) {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM rag_embeddings WHERE NOT (provider = $1 AND model = $2)`, provider, embeddingModel)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // StoreRAGChunkEmbeddings discards results if the canonical source changed during provider work.
 func (r *Repository) StoreRAGChunkEmbeddings(ctx context.Context, provider, embeddingModel string, embeddings []RAGChunkEmbedding) error {
 	if r.tx == nil || strings.TrimSpace(provider) == "" || strings.TrimSpace(embeddingModel) == "" {
@@ -95,7 +125,7 @@ func (r *Repository) StoreRAGChunkEmbeddings(ctx context.Context, provider, embe
 				  AND ri.source_fingerprint = c.source_fingerprint AND ri.indexed_title = d.title
 				  AND ri.indexed_project_id IS NOT DISTINCT FROM d.project_id
 				  AND ri.indexed_project_name = COALESCE(p.name, '') AND ri.renderer_version = 2
-				ON CONFLICT (chunk_id) DO UPDATE SET provider = EXCLUDED.provider, model = EXCLUDED.model,
+				ON CONFLICT (chunk_id, provider, model) DO UPDATE SET
 				  dimensions = EXCLUDED.dimensions, values = EXCLUDED.values, created_at = NOW()
 			`, embedding.ChunkID, embedding.DocumentID, embedding.BodyVersion, embedding.SourceFingerprint,
 				provider, embeddingModel, ragEmbeddingDimensions, literals[i]); err != nil {
