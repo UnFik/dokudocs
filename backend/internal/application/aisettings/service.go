@@ -239,6 +239,10 @@ func (s *Service) prepare(ctx context.Context, purpose string, in Input) (prepar
 		if !found {
 			continue
 		}
+		// A key belongs to the address it was made for: sending it to another address would hand it to a third party.
+		if s.d.ProviderName(record.BaseURL) != s.d.ProviderName(cfg.BaseURL) {
+			return prepared{}, fmt.Errorf("%w: the base URL changed, so enter the API key for the new address", ErrInvalid)
+		}
 		if cfg.APIKey, err = s.d.Cipher.Open(record.APIKeyCiphertext); err != nil {
 			return prepared{}, err
 		}
