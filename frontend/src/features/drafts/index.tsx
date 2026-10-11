@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import type { DocType } from '@/types/dokudocs'
 import { FileEdit, LayoutGrid, List, Plus, Search, Upload } from 'lucide-react'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { DOCUMENT_TYPES } from '@/lib/document-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { CreateDocDialog } from '@/features/docs/components/create-doc-dialog'
 import { DocCard } from '@/features/docs/components/doc-card'
 import { DocListRow } from '@/features/docs/components/doc-list-row'
@@ -13,7 +13,7 @@ import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
 import { DraftsEmptyState } from './components/drafts-empty-state'
 
 export function DraftsPage() {
-  const { documents, activeOrgId, viewMode, setViewMode } = useDokudocsStore()
+  const { documents, activeOrgId, viewMode, setViewMode } = useDokudocs()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
