@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { TrashItem } from '@/types/dokudocs'
 import { Folder, RotateCcw, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import {
   AlertDialog,
@@ -25,25 +23,27 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { DocTypeBadge } from '@/features/docs/components/doc-type-badge'
+import {
+  usePermanentlyDeleteDocument,
+  useRestoreDocument,
+} from '@/features/docs/hooks/use-document-trash'
 
 interface TrashTableProps {
   items: TrashItem[]
 }
 
 export function TrashTable({ items }: TrashTableProps) {
-  const { restoreFromTrash, permanentDeleteFromTrash, projects } =
-    useDokudocsStore()
+  const restore = useRestoreDocument()
+  const permanentDelete = usePermanentlyDeleteDocument()
   const [deleteTarget, setDeleteTarget] = useState<TrashItem | null>(null)
 
   const handleRestore = (item: TrashItem) => {
-    restoreFromTrash(item.id)
-    toast.success(`"${item.document.title}" restored successfully`)
+    restore.mutate(item.document)
   }
 
   const handleConfirmPermanentDelete = () => {
     if (!deleteTarget) return
-    permanentDeleteFromTrash(deleteTarget.id)
-    toast.success(`"${deleteTarget.document.title}" deleted permanently`)
+    permanentDelete.mutate(deleteTarget.document)
     setDeleteTarget(null)
   }
 
@@ -72,24 +72,16 @@ export function TrashTable({ items }: TrashTableProps) {
           </TableHeader>
           <TableBody>
             {items.map((item) => {
-              const project = projects.find(
-                (p) => p.id === item.document.projectId
-              )
               const category = item.document.category
-              const colorId = category
-                ? project?.categoryColors?.[category]
-                : undefined
               const categoryPalette = category
-                ? getCategoryPalette(category, colorId)
+                ? getCategoryPalette(category)
                 : null
 
               return (
                 <TableRow key={item.id} className='transition-colors'>
                   <TableCell className='font-medium'>
                     <div className='flex items-center gap-2.5'>
-                      <DocTypeBadge
-                        type={item.document.type}
-                      />
+                      <DocTypeBadge type={item.document.type} />
                       <div className='flex min-w-0 flex-col'>
                         <span className='truncate text-xs font-semibold text-foreground'>
                           {item.document.title}
@@ -136,7 +128,7 @@ export function TrashTable({ items }: TrashTableProps) {
                           {item.deletedBy.name}
                         </span>
                         <span className='text-[10px] text-muted-foreground'>
-                          {item.deletedAt}
+                          {new Date(item.deletedAt).toLocaleDateString()}
                         </span>
                       </div>
                     </div>

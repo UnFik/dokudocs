@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import { AlertCircle, Search, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,11 +12,18 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  useEmptyTrash,
+  useTrashItems,
+} from '@/features/docs/hooks/use-document-trash'
+import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { TrashEmptyState } from './components/trash-empty-state'
 import { TrashTable } from './components/trash-table'
 
 export function TrashPage() {
-  const { trash, emptyTrash } = useDokudocsStore()
+  const { activeWorkspaceId } = useWorkspaces()
+  const { data: trash = [], isError, refetch } = useTrashItems()
+  const emptyTrash = useEmptyTrash()
   const [emptyDialogOpen, setEmptyDialogOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -31,8 +36,7 @@ export function TrashPage() {
   )
 
   const handleConfirmEmpty = () => {
-    emptyTrash()
-    toast.success('Trash emptied successfully')
+    emptyTrash.mutate(activeWorkspaceId)
     setEmptyDialogOpen(false)
   }
 
@@ -90,7 +94,16 @@ export function TrashPage() {
         </div>
       )}
 
-      {trash.length === 0 ? (
+      {isError ? (
+        <div className='flex min-h-[30vh] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/80 p-8 text-center'>
+          <p className='text-xs text-muted-foreground'>
+            Could not load the trash
+          </p>
+          <Button variant='outline' size='sm' onClick={() => refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : trash.length === 0 ? (
         <TrashEmptyState />
       ) : filteredTrash.length === 0 ? (
         <div className='flex min-h-[30vh] flex-col items-center justify-center rounded-xl border border-dashed border-border/80 p-8 text-center'>
