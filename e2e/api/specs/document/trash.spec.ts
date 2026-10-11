@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { test, expect } from '../../fixtures/test-base'
 import { generateDocument, generateUser, generateWorkspace } from '../../helpers/factory'
+import { joinWorkspace } from '../../../support/workspace-invites'
 
 test.describe('Document: Trash Management', () => {
   test('does not expose workspace-visible trash metadata to ordinary members', async ({
@@ -25,10 +26,7 @@ test.describe('Document: Trash Management', () => {
     const registerRes = await request.post('/api/v1/auth/register', { data: memberData })
     expect(registerRes.status()).toBe(201)
     const member = (await registerRes.json()).data
-    const inviteRes = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: memberData.email, role: 'member' },
-    })
-    expect(inviteRes.ok()).toBeTruthy()
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: memberData.email, role: 'member' })
     const memberRequest = await playwright.request.newContext({
       baseURL: process.env.API_URL || 'http://localhost:8080',
       extraHTTPHeaders: {
@@ -76,10 +74,7 @@ test.describe('Document: Trash Management', () => {
     const registerRes = await request.post('/api/v1/auth/register', { data: editorData })
     expect(registerRes.status()).toBe(201)
     const editor = (await registerRes.json()).data
-    const inviteRes = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: editorData.email, role: 'member' },
-    })
-    expect(inviteRes.status()).toBe(201)
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: editorData.email, role: 'member' })
     const editorRequest = await playwright.request.newContext({
       baseURL: process.env.API_URL || 'http://localhost:8080',
       extraHTTPHeaders: {

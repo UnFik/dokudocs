@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Separator } from '@radix-ui/react-select'
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   Building2,
@@ -10,14 +11,11 @@ import {
   Key,
   Mail,
   Settings as SettingsIcon,
-  Trash2,
   Upload,
-  UserPlus,
-  Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { defaultOrganizations, useDokudocsStore } from '@/stores/dokudocs-store'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { listWorkspaceRoster } from '@/lib/domain-api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -30,67 +28,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-
-interface MemberItem {
-  id: string
-  name: string
-  email: string
-  avatar: string
-  role: 'Owner' | 'Admin' | 'Member' | 'Viewer'
-  joinedAt: string
-}
-
-const initialMembers: MemberItem[] = [
-  {
-    id: 'mem-1',
-    name: 'Fikri',
-    email: 'fikri@dokudocs.app',
-    avatar: '/avatars/01.png',
-    role: 'Owner',
-    joinedAt: 'Jan 15, 2026',
-  },
-  {
-    id: 'mem-2',
-    name: 'Sarah Jenkins',
-    email: 'sarah.j@dokudocs.app',
-    avatar: '/avatars/02.png',
-    role: 'Admin',
-    joinedAt: 'Feb 02, 2026',
-  },
-  {
-    id: 'mem-3',
-    name: 'Alex Rivera',
-    email: 'alex.r@dokudocs.app',
-    avatar: '/avatars/03.png',
-    role: 'Member',
-    joinedAt: 'Mar 10, 2026',
-  },
-  {
-    id: 'mem-4',
-    name: 'Elena Rostova',
-    email: 'elena.rostova@dokudocs.app',
-    avatar: '/avatars/04.png',
-    role: 'Viewer',
-    joinedAt: 'Apr 01, 2026',
-  },
-]
+import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
+import { WorkspaceMembers } from './workspace-members'
 
 export function Settings() {
   const storeOrganizations = useDokudocsStore((s) => s.organizations)
@@ -105,6 +46,14 @@ export function Settings() {
   const activeOrg =
     organizations.find((org) => org.id === activeOrgId) || organizations[0]
 
+  const { activeWorkspace } = useWorkspaces()
+  const roster = useQuery({
+    queryKey: ['workspace-roster', activeWorkspace?.id ?? ''],
+    queryFn: ({ signal }) => listWorkspaceRoster(activeWorkspace!.id, signal),
+    enabled: Boolean(activeWorkspace),
+  })
+  const memberCount = roster.data?.length
+
   const [activeTab, setActiveTab] = useState('general')
   const [workspaceName, setWorkspaceName] = useState(activeOrg?.name || '')
   const [copiedId, setCopiedId] = useState(false)
@@ -112,14 +61,6 @@ export function Settings() {
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteConfirmationName, setDeleteConfirmationName] = useState('')
-
-  const [members, setMembers] = useState<MemberItem[]>(initialMembers)
-  const [memberSearch, setMemberSearch] = useState('')
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<'Admin' | 'Member' | 'Viewer'>(
-    'Member'
-  )
 
   const [notifyDocUpdates, setNotifyDocUpdates] = useState(true)
   const [notifyComments, setNotifyComments] = useState(true)
@@ -179,60 +120,10 @@ export function Settings() {
     setDeleteConfirmationName('')
   }
 
-  const handleInviteMember = (e: React.FormEvent) => {
-    e.preventDefault()
-    const emailTrimmed = inviteEmail.trim()
-    if (!emailTrimmed || !emailTrimmed.includes('@')) {
-      toast.error('Please enter a valid email address')
-      return
-    }
-    if (
-      members.some((m) => m.email.toLowerCase() === emailTrimmed.toLowerCase())
-    ) {
-      toast.error('User is already a member of this workspace')
-      return
-    }
-
-    const newMember: MemberItem = {
-      id: `mem-${Date.now()}`,
-      name: emailTrimmed.split('@')[0],
-      email: emailTrimmed,
-      avatar: `/avatars/0${(members.length % 5) + 1}.png`,
-      role: inviteRole,
-      joinedAt: 'Just now',
-    }
-
-    setMembers([...members, newMember])
-    setInviteEmail('')
-    setInviteDialogOpen(false)
-    toast.success(`Invitation sent to ${emailTrimmed}`)
-  }
-
-  const handleRemoveMember = (id: string, name: string) => {
-    if (members.length <= 1) {
-      toast.error('Workspace must have at least one member')
-      return
-    }
-    setMembers(members.filter((m) => m.id !== id))
-    toast.success(`Removed ${name} from workspace`)
-  }
-
-  const handleRoleChange = (id: string, newRole: MemberItem['role']) => {
-    setMembers(members.map((m) => (m.id === id ? { ...m, role: newRole } : m)))
-    toast.success('Member role updated')
-  }
-
   const handlePlanChange = (planName: string) => {
     updateOrganization(activeOrg.id, { plan: planName })
     toast.success(`Switched to ${planName} plan!`)
   }
-
-  const filteredMembers = members.filter(
-    (m) =>
-      m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      m.email.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      m.role.toLowerCase().includes(memberSearch.toLowerCase())
-  )
 
   return (
     <div className='flex flex-1 flex-col gap-6 p-6'>
@@ -644,7 +535,7 @@ export function Settings() {
                       Workspace Members
                     </p>
                     <p className='text-base font-bold'>
-                      {members.length} members
+                      {memberCount ?? '–'} members
                     </p>
                   </div>
                   <div className='space-y-1'>
@@ -662,140 +553,7 @@ export function Settings() {
             value='members'
             className='space-y-6 focus-visible:outline-none'
           >
-            <div className='space-y-6 rounded-xl border border-border/70 bg-card/60 p-6'>
-              <div className='flex flex-col justify-between gap-4 sm:flex-row sm:items-center'>
-                <div className='flex items-start gap-3.5'>
-                  <div className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground'>
-                    <Users className='size-5 text-muted-foreground' />
-                  </div>
-                  <div>
-                    <h2 className='text-base leading-none font-semibold text-foreground'>
-                      Workspace Members
-                    </h2>
-                    <p className='mt-1 text-xs text-muted-foreground'>
-                      Manage team access, permissions, and invitations
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  size='sm'
-                  onClick={() => setInviteDialogOpen(true)}
-                  className='gap-1.5 self-start text-xs sm:self-auto'
-                >
-                  <UserPlus className='size-3.5' />
-                  <span>Invite Member</span>
-                </Button>
-              </div>
-
-              <div className='flex items-center gap-2'>
-                <Input
-                  placeholder='Filter members by name, email, or role...'
-                  value={memberSearch}
-                  onChange={(e) => setMemberSearch(e.target.value)}
-                  className='max-w-sm text-xs'
-                />
-              </div>
-
-              <div className='overflow-hidden rounded-lg border border-border/60'>
-                <Table>
-                  <TableHeader>
-                    <TableRow className='bg-muted/40 hover:bg-transparent'>
-                      <TableHead className='text-xs font-semibold text-foreground'>
-                        User
-                      </TableHead>
-                      <TableHead className='text-xs font-semibold text-foreground'>
-                        Role
-                      </TableHead>
-                      <TableHead className='hidden text-xs font-semibold text-foreground sm:table-cell'>
-                        Joined
-                      </TableHead>
-                      <TableHead className='text-end text-xs font-semibold text-foreground'>
-                        Action
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredMembers.map((member) => (
-                      <TableRow key={member.id}>
-                        <TableCell className='py-3'>
-                          <div className='flex items-center gap-3'>
-                            <Avatar className='h-8 w-8 rounded-lg'>
-                              <AvatarImage
-                                src={member.avatar}
-                                alt={member.name}
-                              />
-                              <AvatarFallback className='rounded-lg text-xs'>
-                                {member.name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className='grid text-start leading-tight'>
-                              <span className='truncate text-xs font-medium text-foreground'>
-                                {member.name}
-                              </span>
-                              <span className='truncate text-[11px] text-muted-foreground'>
-                                {member.email}
-                              </span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className='py-3'>
-                          <Select
-                            value={member.role}
-                            disabled={member.role === 'Owner'}
-                            onValueChange={(val) =>
-                              handleRoleChange(
-                                member.id,
-                                val as MemberItem['role']
-                              )
-                            }
-                          >
-                            <SelectTrigger className='h-7 w-28 text-[11px]'>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem
-                                value='Owner'
-                                disabled
-                                className='text-xs'
-                              >
-                                Owner
-                              </SelectItem>
-                              <SelectItem value='Admin' className='text-xs'>
-                                Admin
-                              </SelectItem>
-                              <SelectItem value='Member' className='text-xs'>
-                                Member
-                              </SelectItem>
-                              <SelectItem value='Viewer' className='text-xs'>
-                                Viewer
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell className='hidden py-3 text-xs text-muted-foreground sm:table-cell'>
-                          {member.joinedAt}
-                        </TableCell>
-                        <TableCell className='py-3 text-end'>
-                          {member.role !== 'Owner' && (
-                            <Button
-                              variant='ghost'
-                              size='icon'
-                              onClick={() =>
-                                handleRemoveMember(member.id, member.name)
-                              }
-                              className='size-7 text-muted-foreground hover:text-destructive'
-                              title='Remove Member'
-                            >
-                              <Trash2 className='size-3.5' />
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
+            <WorkspaceMembers />
           </TabsContent>
 
           <TabsContent
@@ -978,82 +736,6 @@ export function Settings() {
               Delete Workspace
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
-        <DialogContent className='sm:max-w-[420px]'>
-          <form onSubmit={handleInviteMember}>
-            <DialogHeader>
-              <div className='flex items-center gap-2.5'>
-                <div className='flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary'>
-                  <UserPlus className='size-5' />
-                </div>
-                <div>
-                  <DialogTitle className='text-base font-semibold'>
-                    Invite Team Member
-                  </DialogTitle>
-                  <DialogDescription className='text-xs text-muted-foreground'>
-                    Invite someone to collaborate in {activeOrg.name}.
-                  </DialogDescription>
-                </div>
-              </div>
-            </DialogHeader>
-            <div className='space-y-4 py-4'>
-              <div className='space-y-1.5'>
-                <Label htmlFor='invite-email' className='text-xs font-medium'>
-                  Email Address
-                </Label>
-                <Input
-                  id='invite-email'
-                  type='email'
-                  placeholder='colleague@company.com'
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  autoFocus
-                  className='text-xs'
-                />
-              </div>
-              <div className='space-y-1.5'>
-                <Label htmlFor='invite-role' className='text-xs font-medium'>
-                  Role & Permissions
-                </Label>
-                <Select
-                  value={inviteRole}
-                  onValueChange={(v) => setInviteRole(v as typeof inviteRole)}
-                >
-                  <SelectTrigger id='invite-role' className='text-xs'>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value='Admin' className='text-xs'>
-                      Admin (Full management)
-                    </SelectItem>
-                    <SelectItem value='Member' className='text-xs'>
-                      Member (Can edit documents)
-                    </SelectItem>
-                    <SelectItem value='Viewer' className='text-xs'>
-                      Viewer (Read-only access)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter className='gap-2 sm:gap-0'>
-              <Button
-                type='button'
-                variant='outline'
-                size='sm'
-                onClick={() => setInviteDialogOpen(false)}
-                className='text-xs'
-              >
-                Cancel
-              </Button>
-              <Button type='submit' size='sm' className='text-xs'>
-                Send Invitation
-              </Button>
-            </DialogFooter>
-          </form>
         </DialogContent>
       </Dialog>
     </div>

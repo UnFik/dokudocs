@@ -1,6 +1,7 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { createdDocumentID, documentPayload } from "../../helpers/markdown-document";
+import { joinWorkspace } from "../../../support/workspace-invites";
 
 const apiURL = process.env.API_URL ?? "http://localhost:8080";
 const tokenCookie = "thisisjustarandomstring";
@@ -155,15 +156,7 @@ async function sharedDocument(browser: Browser, baseURL: string) {
   const owner = await register();
   const member = await register();
   const doc = await createDocument(owner, `Session loss ${Date.now()}`);
-  const invite = await fetch(
-    `${apiURL}/api/v1/workspaces/${doc.workspaceID}/invites`,
-    {
-      method: "POST",
-      headers: doc.headers,
-      body: JSON.stringify({ email: member.email, role: "member" }),
-    },
-  );
-  expect(invite.status).toBe(201);
+  await joinWorkspace({ apiURL, authorization: doc.headers.Authorization, workspaceId: doc.workspaceID, email: member.email });
   const grant = await fetch(`${apiURL}/api/v1/documents/${doc.documentID}/accesses`, {
     method: "POST",
     headers: doc.headers,

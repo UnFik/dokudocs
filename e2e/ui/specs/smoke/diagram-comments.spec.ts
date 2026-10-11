@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { editorText, openSourceDocument } from "../../helpers/source-document";
+import { joinWorkspace } from "../../../support/workspace-invites";
 
 // Comments on the words of a DBML or Mermaid source: written on a selection, shown
 // on the words, followed as the source changes, mentioning a member who opens the
@@ -15,7 +16,7 @@ for (const [type, source, word] of [
   }) => {
     test.setTimeout(150000);
     const apiURL = process.env.API_URL ?? "http://localhost:8080";
-    const { documentID, workspaceID, api } = await openSourceDocument(page, type, source);
+    const { documentID, workspaceID, authorization, api } = await openSourceDocument(page, type, source);
 
     // A draft is for people who may edit it, so publish it for someone who may only comment.
     expect((await api(`/api/v1/documents/${documentID}`, { method: "PUT", data: { isDraft: false } })).status()).toBe(200);
@@ -27,7 +28,7 @@ for (const [type, source, word] of [
     });
     expect(registered.status()).toBe(201);
     const memberID = ((await registered.json()) as { data: { user: { id: string } } }).data.user.id;
-    expect((await api(`/api/v1/workspaces/${workspaceID}/invites`, { method: "POST", data: { email: memberEmail, role: "member" } })).status()).toBe(201);
+    await joinWorkspace({ apiURL, authorization, workspaceId: workspaceID, email: memberEmail });
     expect((await api(`/api/v1/documents/${documentID}/accesses`, { method: "POST", data: { email: memberEmail, level: "comment" } })).status()).toBe(201);
 
     // Select the first word and comment on it, naming the member.

@@ -1,5 +1,6 @@
 import { test, expect } from '../../fixtures/test-base'
 import { generateProject, generateUser, generateWorkspace } from '../../helpers/factory'
+import { joinWorkspace } from '../../../support/workspace-invites'
 
 test.describe('Project: Members Management', () => {
   test('should manage project members: list, add, update role, and remove', async ({
@@ -45,10 +46,7 @@ test.describe('Project: Members Management', () => {
     expect(regBRes.status()).toBe(201)
     const userB = (await regBRes.json()).data
 
-    const addWsMemberRes = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: userBData.email, role: 'member' },
-    })
-    expect(addWsMemberRes.status()).toBe(201)
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: userBData.email, role: 'member' })
 
     const userBRequest = await playwright.request.newContext({
       baseURL: process.env.API_URL || 'http://localhost:8080',
@@ -81,10 +79,7 @@ test.describe('Project: Members Management', () => {
     const regCRes = await request.post('/api/v1/auth/register', { data: userCData })
     expect(regCRes.status()).toBe(201)
     const userC = (await regCRes.json()).data
-    const addWsMemberCRes = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: userCData.email, role: 'member' },
-    })
-    expect(addWsMemberCRes.status()).toBe(201)
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: userCData.email, role: 'member' })
 
     const editorAddRes = await userBRequest.post(`/api/v1/projects/${projectId}/members`, {
       data: { email: userCData.email, role: 'viewer' },

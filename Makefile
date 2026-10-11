@@ -77,8 +77,10 @@ test-e2e-with-backend:
 			rm -rf "$$tmpdir"; \
 		}; \
 		trap cleanup EXIT INT TERM; \
-		$$compose up -d --wait db; \
+		$$compose up -d --wait db mailpit; \
 		db_port=$$($$compose port db 5432 | sed 's/.*://'); \
+		smtp_port=$$($$compose port mailpit 1025 | sed 's/.*://'); \
+		mailpit_port=$$($$compose port mailpit 8025 | sed 's/.*://'); \
 		database_url="postgres://postgres:postgres@127.0.0.1:$$db_port/dokudocs_test?sslmode=disable"; \
 		(cd backend && DATABASE_URL="$$database_url" go run ./cmd/migrate up && TEST_DATABASE_URL="$$database_url" go run ./cmd/testseed); \
 		api_port=$$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'); \
@@ -87,7 +89,7 @@ test-e2e-with-backend:
 		collab_url="http://127.0.0.1:$$collab_port"; \
 		collab_secret=test-collab-secret; \
 		(cd backend && go build -o "$$tmpdir/server" ./cmd/server); \
-		DATABASE_URL="$$database_url" JWT_SECRET=test-secret ALLOWED_ORIGIN=http://127.0.0.1:4173 PUBLIC_APP_URL=http://127.0.0.1:4173 RATE_LIMIT_LOGIN_PER_MIN=0 RATE_LIMIT_GOOGLE_START_PER_MIN=0 RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN=0 GOOGLE_CLIENT_ID=e2e-client GOOGLE_CLIENT_SECRET=e2e-secret GOOGLE_AUTH_URL=http://127.0.0.1:4399/auth GOOGLE_TOKEN_URL=http://127.0.0.1:4399/token GOOGLE_JWKS_URL=http://127.0.0.1:4399/certs APP_ADDR="127.0.0.1:$$api_port" COLLAB_SERVICE_SECRET="$$collab_secret" COLLAB_SERVICE_URL="$$collab_url" "$$tmpdir/server" >"$$tmpdir/backend.log" 2>&1 & \
+		DATABASE_URL="$$database_url" JWT_SECRET=test-secret ALLOWED_ORIGIN=http://127.0.0.1:4173 PUBLIC_APP_URL=http://127.0.0.1:4173 RATE_LIMIT_LOGIN_PER_MIN=0 RATE_LIMIT_GOOGLE_START_PER_MIN=0 RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN=0 RATE_LIMIT_INVITE_SEND_PER_MIN=0 RATE_LIMIT_INVITE_LOOKUP_PER_MIN=0 SMTP_HOST=127.0.0.1 SMTP_PORT="$$smtp_port" SMTP_FROM="Dokudocs <no-reply@localhost>" GOOGLE_CLIENT_ID=e2e-client GOOGLE_CLIENT_SECRET=e2e-secret GOOGLE_AUTH_URL=http://127.0.0.1:4399/auth GOOGLE_TOKEN_URL=http://127.0.0.1:4399/token GOOGLE_JWKS_URL=http://127.0.0.1:4399/certs APP_ADDR="127.0.0.1:$$api_port" COLLAB_SERVICE_SECRET="$$collab_secret" COLLAB_SERVICE_URL="$$collab_url" "$$tmpdir/server" >"$$tmpdir/backend.log" 2>&1 & \
 		backend_pid=$$!; \
 		ready=0; \
 		for attempt in $$(seq 1 60); do \
@@ -105,7 +107,7 @@ test-e2e-with-backend:
 		done; \
 		if [ "$$ready" -ne 1 ]; then cat "$$tmpdir/collab.log"; exit 1; fi; \
 		(cd frontend && bun run build); \
-		(cd e2e && API_URL="$$api_url" API_PROXY_TARGET="$$api_url" COLLAB_PROXY_TARGET="$$collab_url" CI=1 bunx playwright test $$E2E_ARGS)
+		(cd e2e && MAILPIT_URL="http://127.0.0.1:$$mailpit_port" API_URL="$$api_url" API_PROXY_TARGET="$$api_url" COLLAB_PROXY_TARGET="$$collab_url" CI=1 bunx playwright test $$E2E_ARGS)
 
 # Includes the two-instance Redis test, with a throwaway Redis.
 test-collab:

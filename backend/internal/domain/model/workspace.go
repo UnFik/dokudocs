@@ -27,3 +27,25 @@ type WorkspaceMember struct {
 	Role        string    `json:"role"`
 	JoinedAt    time.Time `json:"joinedAt"`
 }
+
+// WorkspaceInvite is an offer to join a workspace, sent to one email address.
+// The link token is never kept here; only its hash is stored.
+type WorkspaceInvite struct {
+	ID          uuid.UUID `json:"id"`
+	WorkspaceID uuid.UUID `json:"workspaceId"`
+	Email       string    `json:"email"`
+	Role        string    `json:"role"`
+	InvitedBy   uuid.UUID `json:"invitedBy"`
+	ExpiresAt   time.Time `json:"expiresAt"`
+	CreatedAt   time.Time `json:"createdAt"`
+	LastSentAt  time.Time `json:"lastSentAt"`
+}
+
+// InvitePreview is what someone with the link may see before signing in.
+type InvitePreview struct {
+	WorkspaceName string
+	InviterName   string
+	Role          string
+	// Email is the invited address, masked by the use case.
+	Email string
+}

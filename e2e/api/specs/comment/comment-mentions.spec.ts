@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { test, expect } from '../../fixtures/test-base'
 import { generateDocument, generateUser, generateWorkspace } from '../../helpers/factory'
+import { joinWorkspace } from '../../../support/workspace-invites'
 
 const textAnchor = { nodeID: 'node-1', start: 'AA==', end: 'AQ==' }
 const token = (name: string, userID: string) => `@[${name}](user:${userID})`
@@ -34,10 +35,7 @@ test.describe('Comment: mentions', () => {
     }
     const member = await register()
     const outsider = await register()
-    const invite = await userRequest.post(`/api/v1/workspaces/${workspace.id}/invites`, {
-      data: { email: member.email, role: 'member' },
-    })
-    expect(invite.status()).toBe(201)
+    await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: member.email, role: 'member' })
 
     const created = await owner.post('/api/v1/documents', {
       headers: { 'Idempotency-Key': randomUUID() },

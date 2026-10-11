@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/domain/contract/mail"
 	"backend/internal/domain/contract/repository"
 	usecasecontract "backend/internal/domain/contract/usecase"
 	"backend/internal/infrastructure/database"
@@ -16,17 +17,42 @@ import (
 type useCase struct {
 	workspaceRepo repository.WorkspaceRepository
 	userRepo      repository.UserRepository
+	invites       repository.WorkspaceInviteRepository
+	mailer        mail.Mailer
+	appURL        string
 }
 
-func NewUseCase(db database.DB) usecasecontract.WorkspaceUseCase {
-	return NewUseCaseWithRepos(workspacerepo.NewRepository(db), userrepo.NewRepository(db))
+type Option func(*useCase)
+
+// WithMailer lets the use case mail invitation links to the app at appURL.
+func WithMailer(mailer mail.Mailer, appURL string) Option {
+	return func(u *useCase) {
+		u.mailer = mailer
+		u.appURL = strings.TrimRight(appURL, "/")
+	}
 }
 
-func NewUseCaseWithRepos(workspaceRepo repository.WorkspaceRepository, userRepo repository.UserRepository) usecasecontract.WorkspaceUseCase {
-	return &useCase{
+// WithInviteRepository replaces the invitation store; tests use it.
+func WithInviteRepository(invites repository.WorkspaceInviteRepository) Option {
+	return func(u *useCase) { u.invites = invites }
+}
+
+func NewUseCase(db database.DB, opts ...Option) usecasecontract.WorkspaceUseCase {
+	return NewUseCaseWithRepos(workspacerepo.NewRepository(db), userrepo.NewRepository(db), opts...)
+}
+
+func NewUseCaseWithRepos(workspaceRepo repository.WorkspaceRepository, userRepo repository.UserRepository, opts ...Option) usecasecontract.WorkspaceUseCase {
+	u := &useCase{
 		workspaceRepo: workspaceRepo,
 		userRepo:      userRepo,
 	}
+	if invites, ok := workspaceRepo.(repository.WorkspaceInviteRepository); ok {
+		u.invites = invites
+	}
+	for _, opt := range opts {
+		opt(u)
+	}
+	return u
 }
 
 func slugify(s string) string {

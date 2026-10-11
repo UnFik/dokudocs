@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "../../fixtures/test-base";
 import { generateUser, generateWorkspace } from "../../helpers/factory";
+import { joinWorkspace } from '../../../support/workspace-invites'
 
 test("document revisions enforce current read and edit access", async ({
   userRequest,
@@ -29,13 +30,7 @@ test("document revisions enforce current read and edit access", async ({
   });
   expect(registrationResponse.status()).toBe(201);
   const member = (await registrationResponse.json()).data;
-  const inviteResponse = await userRequest.post(
-    `/api/v1/workspaces/${workspace.id}/invites`,
-    {
-      data: { email: memberData.email, role: "member" },
-    },
-  );
-  expect(inviteResponse.ok()).toBeTruthy();
+  await joinWorkspace({ authorization: `Bearer ${userContext.token}`, workspaceId: workspace.id, email: memberData.email, role: 'member' });
 
   const memberRequest = await playwright.request.newContext({
     baseURL,

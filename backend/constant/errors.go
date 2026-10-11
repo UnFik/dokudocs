@@ -26,6 +26,14 @@ var (
 	ErrEmailNotConfigured       = errors.New("email sending is not configured")
 	ErrEmailNotSent             = errors.New("email could not be sent")
 
+	ErrInviteNotFound      = errors.New("invitation is invalid or has expired")
+	ErrInviteEmailMismatch = errors.New("this invitation was sent to a different email")
+	ErrInviteTooSoon       = errors.New("an invitation was sent a moment ago")
+	ErrInviteLimit         = errors.New("this workspace has too many pending invitations")
+	ErrInvalidInvite       = errors.New("enter an email and choose the admin or member role")
+	ErrEmailNotVerified    = errors.New("verify your email to continue")
+	ErrAlreadyMember       = errors.New("this person is already a member")
+
 	ErrInvalidAvatar  = errors.New("avatar must be a PNG, JPEG or WebP picture up to 1024 by 1024 pixels")
 	ErrAvatarTooLarge = errors.New("avatar must be 512 KB or smaller")
 	ErrAvatarNotFound = errors.New("avatar not found")

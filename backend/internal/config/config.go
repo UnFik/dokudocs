@@ -45,6 +45,8 @@ type Config struct {
 	RateLimitCredentialsPerMin    int
 	RateLimitGoogleStartPerMin    int
 	RateLimitGoogleCallbackPerMin int
+	RateLimitInviteSendPerMin     int
+	RateLimitInviteLookupPerMin   int
 	// TrustProxyHeaders reads the client address from X-Real-IP; set it only
 	// when a proxy that overwrites the header is the sole way to reach the API.
 	TrustProxyHeaders bool
@@ -114,6 +116,8 @@ func LoadConfig() (Config, error) {
 		RateLimitCredentialsPerMin:    env.GetInt("RATE_LIMIT_LOGIN_PER_MIN", 10),
 		RateLimitGoogleStartPerMin:    env.GetInt("RATE_LIMIT_GOOGLE_START_PER_MIN", 20),
 		RateLimitGoogleCallbackPerMin: env.GetInt("RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN", 30),
+		RateLimitInviteSendPerMin:     env.GetInt("RATE_LIMIT_INVITE_SEND_PER_MIN", 10),
+		RateLimitInviteLookupPerMin:   env.GetInt("RATE_LIMIT_INVITE_LOOKUP_PER_MIN", 30),
 		TrustProxyHeaders:             env.GetBool("TRUST_PROXY_HEADERS", false),
 		RequireEmailVerification:      env.GetBool("REQUIRE_EMAIL_VERIFICATION", false),
 		SMTPHost:                      strings.TrimSpace(env.GetString("SMTP_HOST", "")),

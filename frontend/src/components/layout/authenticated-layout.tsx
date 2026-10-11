@@ -7,6 +7,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { SkipToMain } from '@/components/skip-to-main'
 import { SessionBoundary } from '@/features/auth/session-boundary'
+import { PendingInviteAcceptor } from '@/features/invites/pending-invite-acceptor'
 
 type AuthenticatedLayoutProps = {
   children?: React.ReactNode
@@ -21,6 +22,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
         <LayoutProvider>
           <SidebarProvider defaultOpen={defaultOpen}>
             <SkipToMain />
+            <PendingInviteAcceptor />
             <AppSidebar />
             <SidebarInset
               className={cn(

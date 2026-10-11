@@ -2,7 +2,7 @@ package dto
 
 import "github.com/google/uuid"
 
-type AddMemberInput struct {
+type InviteMemberInput struct {
 	WorkspaceID uuid.UUID
 	Email       string
 	Role        string
