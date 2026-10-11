@@ -161,3 +161,15 @@ func TestAStaleVersionComesBackAsAToolError(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestAStaleDirectEditMakesNoVersion(t *testing.T) {
+	e := newContentEnv("markdown", collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	// The room reads as version v1; the Agent sends an older one.
+	var refusal *ToolError
+	if _, err := e.svc.Edit(context.Background(), Actor{UserID: e.user, Channel: ChannelMCP, KeyName: "k"}, e.ws, e.doc, "v0", ops); !errors.As(err, &refusal) {
+		t.Fatalf("error = %v", err)
+	}
+	if len(e.revisions.titles) != 0 || len(e.rooms.edits) != 0 {
+		t.Fatalf("revisions %v, edits %v after a stale edit", e.revisions.titles, e.rooms.edits)
+	}
+}
