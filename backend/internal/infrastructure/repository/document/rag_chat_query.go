@@ -3,8 +3,10 @@ package document
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 
 	"backend/constant"
 	"backend/internal/domain/model"
@@ -31,8 +33,8 @@ func (r *Repository) CreateRAGConversation(ctx context.Context, workspaceID, act
 
 func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID) ([]model.RAGConversation, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT conversation_id, workspace_id, creator_id, title, created_at, updated_at
-		FROM rag_conversations WHERE creator_id = $1
+		SELECT conversation_id, workspace_id, creator_id, document_id, title, created_at, updated_at
+		FROM rag_conversations WHERE creator_id = $1 AND document_id IS NULL
 		ORDER BY updated_at DESC, conversation_id
 	`, actorID)
 	if err != nil {
@@ -42,12 +44,146 @@ func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID
 	conversations := make([]model.RAGConversation, 0)
 	for rows.Next() {
 		var conversation model.RAGConversation
-		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.Title, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
 			return nil, err
 		}
 		conversations = append(conversations, conversation)
 	}
 	return conversations, rows.Err()
+}
+
+// CreateDocumentRAGConversation opens a Conversation on one document the actor may read.
+func (r *Repository) CreateDocumentRAGConversation(ctx context.Context, workspaceID, actorID, documentID uuid.UUID) (model.RAGConversation, error) {
+	var conversation model.RAGConversation
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		if err := lockRAGWorkspaceMembership(ctx, tx, workspaceID, actorID); err != nil {
+			return err
+		}
+		if err := requireDocumentRead(ctx, tx, documentID, workspaceID, actorID); err != nil {
+			return err
+		}
+		return tx.QueryRowContext(ctx, `
+			INSERT INTO rag_conversations (workspace_id, creator_id, document_id)
+			VALUES ($1, $2, $3)
+			RETURNING conversation_id, workspace_id, creator_id, document_id, title, created_at, updated_at
+		`, workspaceID, actorID, documentID).Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.CreatedAt, &conversation.UpdatedAt)
+	})
+	return conversation, err
+}
+
+// ListDocumentRAGConversations lists the actor's own Conversations on one document.
+func (r *Repository) ListDocumentRAGConversations(ctx context.Context, actorID, documentID uuid.UUID) ([]model.RAGConversation, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT conversation_id, workspace_id, creator_id, document_id, title, created_at, updated_at
+		FROM rag_conversations WHERE creator_id = $1 AND document_id = $2
+		ORDER BY updated_at DESC, conversation_id
+	`, actorID, documentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	conversations := make([]model.RAGConversation, 0)
+	for rows.Next() {
+		var conversation model.RAGConversation
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
+			return nil, err
+		}
+		conversations = append(conversations, conversation)
+	}
+	return conversations, rows.Err()
+}
+
+func requireDocumentRead(ctx context.Context, tx database.Queryer, documentID, workspaceID, actorID uuid.UUID) error {
+	doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
+	if err != nil {
+		return err
+	}
+	if !policy.CanReadDocument(doc, access) {
+		return constant.ErrForbidden
+	}
+	return nil
+}
+
+// ListRAGChunksForDocument returns the current chunks of one document the actor may read, in order.
+func (r *Repository) ListRAGChunksForDocument(ctx context.Context, workspaceID, actorID, documentID uuid.UUID, limit int) ([]model.RAGChunk, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 40
+	}
+	var chunks []model.RAGChunk
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		if err := lockRAGWorkspaceMembership(ctx, tx, workspaceID, actorID); err != nil {
+			return err
+		}
+		if err := requireDocumentRead(ctx, tx, documentID, workspaceID, actorID); err != nil {
+			return err
+		}
+		rows, err := tx.QueryContext(ctx, `
+			SELECT c.chunk_id, c.document_id, c.node_id, c.text, c.title, c.breadcrumb,
+			       c.body_version, c.source_fingerprint, ri.coverage_status
+			FROM rag_chunks c
+			JOIN documents d ON d.id = c.document_id
+			JOIN rag_document_indexes ri ON ri.document_id = d.id
+			WHERE c.document_id = $1 AND d.workspace_id = $2 AND d.deleted_at IS NULL
+			  AND ri.indexed_body_version = d.body_version AND ri.source_fingerprint = c.source_fingerprint
+			ORDER BY c.ordinal
+			LIMIT $3
+		`, documentID, workspaceID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c model.RAGChunk
+			if err := rows.Scan(&c.ChunkID, &c.DocumentID, &c.NodeID, &c.Text, &c.Title, &c.Breadcrumb, &c.BodyVersion, &c.SourceFingerprint, &c.CoverageStatus); err != nil {
+				return err
+			}
+			chunks = append(chunks, c)
+		}
+		return rows.Err()
+	})
+	return chunks, err
+}
+
+// StoreAgentAnswer keeps a question and the Agent's answer, with what it did in meta.
+func (r *Repository) StoreAgentAnswer(ctx context.Context, workspaceID, conversationID, actorID uuid.UUID, question, answer string, meta json.RawMessage) error {
+	if len(meta) == 0 {
+		meta = json.RawMessage(`{}`)
+	}
+	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		if err := lockRAGWorkspaceMembership(ctx, tx, workspaceID, actorID); err != nil {
+			return err
+		}
+		var actualWorkspaceID uuid.UUID
+		if err := tx.QueryRowContext(ctx, `
+			SELECT workspace_id FROM rag_conversations WHERE conversation_id = $1 AND creator_id = $2 FOR UPDATE
+		`, conversationID, actorID).Scan(&actualWorkspaceID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return constant.ErrDocumentNotFound
+			}
+			return err
+		}
+		if actualWorkspaceID != workspaceID {
+			return constant.ErrDocumentNotFound
+		}
+		var last int64
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(sequence_no), 0) FROM rag_messages WHERE conversation_id = $1`, conversationID).Scan(&last); err != nil {
+			return err
+		}
+		if strings.TrimSpace(question) != "" {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO rag_messages (conversation_id, sequence_no, role, content) VALUES ($1, $2, 'user', $3)`, conversationID, last+1, question); err != nil {
+				return err
+			}
+			last++
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO rag_messages (conversation_id, sequence_no, role, content, meta) VALUES ($1, $2, 'assistant', $3, $4)
+		`, conversationID, last+1, answer, []byte(meta)); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE rag_conversations SET updated_at = NOW(),
+			title = CASE WHEN title = '' THEN left($2, 80) ELSE title END WHERE conversation_id = $1`, conversationID, question)
+		return err
+	})
 }
 
 func (r *Repository) AuthorizeRAGQuestion(ctx context.Context, workspaceID, conversationID, actorID uuid.UUID) error {
@@ -56,25 +192,30 @@ func (r *Repository) AuthorizeRAGQuestion(ctx context.Context, workspaceID, conv
 			return err
 		}
 		var actualWorkspaceID uuid.UUID
+		var documentID *uuid.UUID
 		err := tx.QueryRowContext(ctx, `
-			SELECT workspace_id FROM rag_conversations
+			SELECT workspace_id, document_id FROM rag_conversations
 			WHERE conversation_id = $1 AND creator_id = $2
-		`, conversationID, actorID).Scan(&actualWorkspaceID)
+		`, conversationID, actorID).Scan(&actualWorkspaceID, &documentID)
 		if errors.Is(err, sql.ErrNoRows) || (err == nil && actualWorkspaceID != workspaceID) {
 			return constant.ErrDocumentNotFound
 		}
-		return err
+		if err != nil || documentID == nil {
+			return err
+		}
+		// A document Conversation can be read after access ends, but not asked anything (ADR 0004).
+		return requireDocumentRead(ctx, tx, *documentID, workspaceID, actorID)
 	})
 }
 
 func (r *Repository) GetRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID) (model.RAGConversationHistory, error) {
 	var history model.RAGConversationHistory
 	if err := r.db.QueryRowContext(ctx, `
-		SELECT conversation_id, workspace_id, creator_id, title, created_at, updated_at
+		SELECT conversation_id, workspace_id, creator_id, document_id, title, created_at, updated_at
 		FROM rag_conversations WHERE conversation_id = $1 AND creator_id = $2
 	`, conversationID, actorID).Scan(
 		&history.Conversation.ID, &history.Conversation.WorkspaceID, &history.Conversation.CreatorID,
-		&history.Conversation.Title, &history.Conversation.CreatedAt, &history.Conversation.UpdatedAt,
+		&history.Conversation.DocumentID, &history.Conversation.Title, &history.Conversation.CreatedAt, &history.Conversation.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return history, constant.ErrDocumentNotFound
@@ -82,7 +223,7 @@ func (r *Repository) GetRAGConversation(ctx context.Context, conversationID, act
 		return history, err
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT message_id, conversation_id, role, content, coverage_partial, sources_may_be_incomplete, created_at
+		SELECT message_id, conversation_id, role, content, coverage_partial, sources_may_be_incomplete, meta, created_at
 		FROM rag_messages WHERE conversation_id = $1
 		ORDER BY sequence_no
 	`, conversationID)
@@ -93,11 +234,15 @@ func (r *Repository) GetRAGConversation(ctx context.Context, conversationID, act
 	history.Messages = make([]model.RAGMessage, 0)
 	for rows.Next() {
 		var message model.RAGMessage
+		var meta []byte
 		if err := rows.Scan(
 			&message.ID, &message.ConversationID, &message.Role, &message.Content,
-			&message.CoveragePartial, &message.SourcesMayBeIncomplete, &message.CreatedAt,
+			&message.CoveragePartial, &message.SourcesMayBeIncomplete, &meta, &message.CreatedAt,
 		); err != nil {
 			return history, err
+		}
+		if string(meta) != "{}" && len(meta) > 0 {
+			message.Meta = meta
 		}
 		message.Citations = []model.RAGCitation{}
 		if message.Role == "assistant" {
