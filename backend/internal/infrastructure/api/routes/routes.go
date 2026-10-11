@@ -29,6 +29,7 @@ func InitRoutes(c *container.Container, cfg config.Config) http.Handler {
 	addDocumentRoutes(appGroup, c, cfg)
 	addCatalogRoutes(appGroup, c, cfg)
 	addPushRoutes(appGroup, c, cfg)
+	addAISettingsRoutes(appGroup, c, cfg)
 	addCollabInternalRoutes(mux, c, cfg)
 
 	return mux

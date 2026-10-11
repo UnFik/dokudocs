@@ -74,6 +74,8 @@ type signInEnv struct {
 	google *fakeGoogle
 	mailer *recordingMailer
 	emails []string
+	app    *container.Container
+	cfg    config.Config
 }
 
 func newSignInEnv(t *testing.T, mutate func(*config.Config)) *signInEnv {
@@ -99,7 +101,7 @@ func newSignInEnv(t *testing.T, mutate func(*config.Config)) *signInEnv {
 	if mutate != nil {
 		mutate(&cfg)
 	}
-	env := &signInEnv{t: t, db: db, api: InitRoutes(app, cfg), google: google, mailer: mailer}
+	env := &signInEnv{t: t, db: db, api: InitRoutes(app, cfg), google: google, mailer: mailer, app: app, cfg: cfg}
 	t.Cleanup(func() {
 		for _, email := range env.emails {
 			_, _ = db.Exec(`DELETE FROM users WHERE email = $1`, email)

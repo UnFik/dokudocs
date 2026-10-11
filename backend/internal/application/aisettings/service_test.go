@@ -78,10 +78,10 @@ type fakeIndex struct {
 	kept        [2]string
 }
 
-func (i *fakeIndex) Progress(context.Context, string, string) (int, int, error) {
+func (i *fakeIndex) RAGEmbeddingProgress(context.Context, string, string) (int, int, error) {
 	return i.done, i.total, nil
 }
-func (i *fakeIndex) DeleteExcept(_ context.Context, provider, model string) (int64, error) {
+func (i *fakeIndex) DeleteRAGEmbeddingsExcept(_ context.Context, provider, model string) (int64, error) {
 	i.kept = [2]string{provider, model}
 	return 0, nil
 }
@@ -329,6 +329,32 @@ func TestTheEnvironmentSeedsOnlyAnEmptyTable(t *testing.T) {
 	empty := newEnv(t)
 	if err := empty.svc.Seed(ctx, Seed{AnswerModel: "gpt-x"}); err != nil || len(empty.store.rows) != 0 {
 		t.Fatalf("a seed without a key wrote rows: %+v, %v", empty.store.rows, err)
+	}
+}
+
+func TestCachedReadersAreToldWhenTheSettingsChange(t *testing.T) {
+	e := newEnv(t)
+	changes := 0
+	e.svc = NewService(Deps{
+		Store: e.store, Index: e.index, Cipher: fakeCipher{}, Tester: e.tester,
+		ProviderName: func(url string) string { return strings.TrimPrefix(url, "https://") },
+		OnChange:     func() { changes++ },
+	})
+	ctx := context.Background()
+	_, _ = e.svc.Save(ctx, e.admin, PurposeEmbedding, embeddingInput("e-1"))
+	_, _ = e.svc.Save(ctx, e.admin, PurposeEmbedding, embeddingInput("e-2"))
+	if changes != 2 {
+		t.Fatalf("OnChange ran %d times after two saves", changes)
+	}
+	e.tester.err = errors.New("down")
+	_, _ = e.svc.Save(ctx, e.admin, PurposeEmbedding, embeddingInput("e-3"))
+	if changes != 2 {
+		t.Fatal("OnChange ran for a save that did not happen")
+	}
+	e.tester.err = nil
+	e.index.done, e.index.total = 4, 4
+	if promoted, _ := e.svc.Advance(ctx); !promoted || changes != 3 {
+		t.Fatalf("promoted %v, OnChange ran %d times", promoted, changes)
 	}
 }
 

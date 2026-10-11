@@ -28,9 +28,14 @@ type Config struct {
 	OpenAIAPIKey                                 string
 	RAGEmbeddingModel                            string
 	RAGAnswerModel                               string
-	RAGRequestTimeout                            time.Duration
-	PublicAppURL                                 string
-	JWTSecret                                    string
+	// AISettingsEncryptionKey seals the AI provider API key stored in the database
+	// (32 bytes, base64). The server will not start without it.
+	AISettingsEncryptionKey string
+	// AllowPrivateAIHosts lets a Superadmin point the AI provider at a private or local address.
+	AllowPrivateAIHosts bool
+	RAGRequestTimeout   time.Duration
+	PublicAppURL        string
+	JWTSecret           string
 	// CollabServiceSecret is shared with the collaboration service; the internal
 	// endpoints it calls are off while it is empty.
 	CollabServiceSecret string
@@ -88,30 +93,32 @@ func LoadConfig() (Config, error) {
 		answerModel = "gpt-5-mini"
 	}
 	cfg := Config{
-		Addr:                env.GetString("APP_ADDR", ":8080"),
-		MetricsAddr:         env.GetString("METRICS_ADDR", ""),
-		OTLPEndpoint:        strings.TrimRight(env.GetString("OTEL_EXPORTER_OTLP_ENDPOINT", ""), "/"),
-		DatabaseURL:         env.GetString("DATABASE_URL", ""),
-		DBMaxOpenConns:      env.GetInt("DB_MAX_OPEN_CONNS", 10),
-		DBMaxIdleConns:      env.GetInt("DB_MAX_IDLE_CONNS", 10),
-		DBConnMaxLifetime:   env.GetDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
-		AllowedOrigin:       env.GetString("ALLOWED_ORIGIN", "http://localhost:5173"),
-		GoogleClientID:      env.GetString("GOOGLE_CLIENT_ID", ""),
-		GoogleClientSecret:  env.GetString("GOOGLE_CLIENT_SECRET", ""),
-		GoogleAuthURL:       env.GetString("GOOGLE_AUTH_URL", ""),
-		GoogleTokenURL:      env.GetString("GOOGLE_TOKEN_URL", ""),
-		GoogleJWKSURL:       env.GetString("GOOGLE_JWKS_URL", ""),
-		OpenAIAPIKey:        embeddingKey,
-		RAGEmbeddingModel:   embeddingModel,
-		RAGAnswerModel:      answerModel,
-		RAGRequestTimeout:   env.GetDuration("RAG_REQUEST_TIMEOUT", 120*time.Second),
-		PublicAppURL:        env.GetString("PUBLIC_APP_URL", "http://localhost:5173"),
-		JWTSecret:           env.GetString("JWT_SECRET", ""),
-		CollabServiceSecret: env.GetString("COLLAB_SERVICE_SECRET", ""),
-		CollabServiceURL:    env.GetString("COLLAB_SERVICE_URL", ""),
-		AssetDir:            env.GetString("ASSET_DIR", "./data/assets"),
-		MaxUploadBytes:      int64(env.GetInt("MAX_UPLOAD_BYTES", 25<<20)),
-		AccessTokenTTL:      env.GetDuration("ACCESS_TOKEN_TTL", 24*time.Hour),
+		Addr:                    env.GetString("APP_ADDR", ":8080"),
+		MetricsAddr:             env.GetString("METRICS_ADDR", ""),
+		OTLPEndpoint:            strings.TrimRight(env.GetString("OTEL_EXPORTER_OTLP_ENDPOINT", ""), "/"),
+		DatabaseURL:             env.GetString("DATABASE_URL", ""),
+		DBMaxOpenConns:          env.GetInt("DB_MAX_OPEN_CONNS", 10),
+		DBMaxIdleConns:          env.GetInt("DB_MAX_IDLE_CONNS", 10),
+		DBConnMaxLifetime:       env.GetDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
+		AllowedOrigin:           env.GetString("ALLOWED_ORIGIN", "http://localhost:5173"),
+		GoogleClientID:          env.GetString("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret:      env.GetString("GOOGLE_CLIENT_SECRET", ""),
+		GoogleAuthURL:           env.GetString("GOOGLE_AUTH_URL", ""),
+		GoogleTokenURL:          env.GetString("GOOGLE_TOKEN_URL", ""),
+		GoogleJWKSURL:           env.GetString("GOOGLE_JWKS_URL", ""),
+		OpenAIAPIKey:            embeddingKey,
+		RAGEmbeddingModel:       embeddingModel,
+		RAGAnswerModel:          answerModel,
+		RAGRequestTimeout:       env.GetDuration("RAG_REQUEST_TIMEOUT", 120*time.Second),
+		AISettingsEncryptionKey: strings.TrimSpace(env.GetString("AI_SETTINGS_ENCRYPTION_KEY", "")),
+		AllowPrivateAIHosts:     env.GetBool("AI_ALLOW_PRIVATE_HOSTS", false),
+		PublicAppURL:            env.GetString("PUBLIC_APP_URL", "http://localhost:5173"),
+		JWTSecret:               env.GetString("JWT_SECRET", ""),
+		CollabServiceSecret:     env.GetString("COLLAB_SERVICE_SECRET", ""),
+		CollabServiceURL:        env.GetString("COLLAB_SERVICE_URL", ""),
+		AssetDir:                env.GetString("ASSET_DIR", "./data/assets"),
+		MaxUploadBytes:          int64(env.GetInt("MAX_UPLOAD_BYTES", 25<<20)),
+		AccessTokenTTL:          env.GetDuration("ACCESS_TOKEN_TTL", 24*time.Hour),
 
 		RateLimitCredentialsPerMin:    env.GetInt("RATE_LIMIT_LOGIN_PER_MIN", 10),
 		RateLimitGoogleStartPerMin:    env.GetInt("RATE_LIMIT_GOOGLE_START_PER_MIN", 20),

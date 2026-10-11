@@ -254,3 +254,18 @@ func TestPushNeedsEveryFirebaseSetting(t *testing.T) {
 		t.Fatal("LoadConfig() accepted the web settings without a service account")
 	}
 }
+
+func TestLoadConfigReadsTheAISettingsEnvironment(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	cfg, err := LoadConfig()
+	if err != nil || cfg.AISettingsEncryptionKey != "" || cfg.AllowPrivateAIHosts {
+		t.Fatalf("defaults = %q, %v, %v", cfg.AISettingsEncryptionKey, cfg.AllowPrivateAIHosts, err)
+	}
+	t.Setenv("AI_SETTINGS_ENCRYPTION_KEY", " a2V5 ")
+	t.Setenv("AI_ALLOW_PRIVATE_HOSTS", "true")
+	cfg, err = LoadConfig()
+	if err != nil || cfg.AISettingsEncryptionKey != "a2V5" || !cfg.AllowPrivateAIHosts {
+		t.Fatalf("LoadConfig() = %q, %v, %v", cfg.AISettingsEncryptionKey, cfg.AllowPrivateAIHosts, err)
+	}
+}

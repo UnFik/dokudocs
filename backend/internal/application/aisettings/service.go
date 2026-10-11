@@ -74,8 +74,8 @@ type Store interface {
 
 // Index reports and prunes the stored vectors.
 type Index interface {
-	Progress(ctx context.Context, provider, model string) (done, total int, err error)
-	DeleteExcept(ctx context.Context, provider, model string) (int64, error)
+	RAGEmbeddingProgress(ctx context.Context, provider, model string) (done, total int, err error)
+	DeleteRAGEmbeddingsExcept(ctx context.Context, provider, model string) (int64, error)
 }
 
 type Cipher interface {
@@ -94,6 +94,8 @@ type Deps struct {
 	Tester       Tester
 	ProviderName func(baseURL string) string
 	AllowPrivate bool
+	// OnChange runs after a setting changed, so cached readers can look again.
+	OnChange func()
 }
 
 type Service struct{ d Deps }
@@ -164,7 +166,7 @@ func (s *Service) overview(ctx context.Context) (Overview, error) {
 		*target = &view
 	}
 	if out.EmbeddingPending != nil {
-		done, total, err := s.d.Index.Progress(ctx, s.d.ProviderName(out.EmbeddingPending.BaseURL), out.EmbeddingPending.Model)
+		done, total, err := s.d.Index.RAGEmbeddingProgress(ctx, s.d.ProviderName(out.EmbeddingPending.BaseURL), out.EmbeddingPending.Model)
 		if err != nil {
 			return Overview{}, err
 		}
@@ -304,7 +306,14 @@ func (s *Service) Save(ctx context.Context, actor uuid.UUID, purpose string, in 
 	}); err != nil {
 		return Overview{}, err
 	}
+	s.changed()
 	return s.overview(ctx)
+}
+
+func (s *Service) changed() {
+	if s.d.OnChange != nil {
+		s.d.OnChange()
+	}
 }
 
 func diff(previous Record, had bool, p prepared) map[string]FieldChange {
@@ -332,7 +341,7 @@ func (s *Service) Advance(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	provider := s.d.ProviderName(pending.BaseURL)
-	done, total, err := s.d.Index.Progress(ctx, provider, pending.Model)
+	done, total, err := s.d.Index.RAGEmbeddingProgress(ctx, provider, pending.Model)
 	if err != nil || done < total {
 		return false, err
 	}
@@ -348,7 +357,8 @@ func (s *Service) Advance(ctx context.Context) (bool, error) {
 	if err := s.d.Store.Delete(ctx, PurposeEmbeddingPending); err != nil {
 		return false, err
 	}
-	if _, err := s.d.Index.DeleteExcept(ctx, provider, pending.Model); err != nil {
+	s.changed()
+	if _, err := s.d.Index.DeleteRAGEmbeddingsExcept(ctx, provider, pending.Model); err != nil {
 		return true, err
 	}
 	changed := map[string]FieldChange{"model": {From: previous.Model, To: pending.Model}, "baseURL": {From: previous.BaseURL, To: pending.BaseURL}}
