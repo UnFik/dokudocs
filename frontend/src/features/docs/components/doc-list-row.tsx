@@ -16,7 +16,6 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { getDocCategories } from '@/lib/doc-category-utils'
 import { formatRelativeTime } from '@/lib/time-utils'
@@ -43,6 +42,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
+import {
+  useDuplicateDocument,
+  useMoveDocument,
+  useRecordDocumentView,
+  useUpdateDocument,
+} from '../hooks/use-document-actions'
+import { useMoveToTrash } from '../hooks/use-document-trash'
 import { useToggleDocumentStar } from '../hooks/use-toggle-document-star'
 import { DocTypeBadge } from './doc-type-badge'
 import { MoveDocDialog } from './move-doc-dialog'
@@ -55,16 +62,13 @@ interface DocListRowProps {
 
 export function DocListRow({ document }: DocListRowProps) {
   const navigate = useNavigate()
-  const {
-    projects,
-    activeOrgId,
-    recordDocumentView,
-    duplicateDocument,
-    moveToTrash,
-    updateDocument,
-    moveDocumentToProject,
-  } = useDokudocsStore()
+  const { projects, activeOrgId } = useDokudocs()
+  const duplicateDocument = useDuplicateDocument()
+  const moveDocument = useMoveDocument()
+  const updateDocument = useUpdateDocument()
+  const recordView = useRecordDocumentView()
   const starMutation = useToggleDocumentStar()
+  const moveToTrash = useMoveToTrash()
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [moveDialogOpen, setMoveDialogOpen] = useState(false)
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
@@ -85,76 +89,51 @@ export function DocListRow({ document }: DocListRowProps) {
     toast.success('Document link copied to clipboard')
   }
 
-  const handleDuplicate = () => {
-    duplicateDocument(document.id)
-    toast.success('Document duplicated successfully')
-  }
+  const handleDuplicate = () => duplicateDocument.mutate(document)
 
-  const handleDelete = () => {
-    moveToTrash(document.id)
-    toast.success('Moved document to Trash', {
-      action: {
-        label: 'Undo',
-        onClick: () =>
-          useDokudocsStore.getState().restoreFromTrash(document.id),
-      },
-    })
-  }
+  const handleDelete = () => moveToTrash.mutate(document)
 
   const handleToggleCategory = (cat: string) => {
     const current = getDocCategories(document)
     const next = current.includes(cat)
       ? current.filter((c) => c !== cat)
       : [...current, cat]
-    updateDocument(document.id, {
-      categories: next,
-      category: next[0] ?? null,
-    })
+    updateDocument.mutate({ document, input: { categories: next } })
   }
 
-  const handleClearCategories = () => {
-    updateDocument(document.id, {
-      categories: [],
-      category: null,
+  const handleClearCategories = () =>
+    updateDocument.mutate({
+      document,
+      input: { categories: [] },
+      message: 'Categories cleared',
     })
-    toast.success('Categories cleared')
-  }
+
+  const moveTo = (targetProjectId: string | null) =>
+    moveDocument.mutate({
+      document,
+      targetProjectId,
+      targetName: projects.find((p) => p.id === targetProjectId)?.name,
+    })
 
   const handleRequestMove = (targetId: string | null) => {
     if (document.projectId && targetId !== document.projectId) {
       setPendingTargetProjectId(targetId)
       setConfirmMoveOpen(true)
     } else if (!document.projectId) {
-      moveDocumentToProject(document.id, targetId)
-      if (targetId) {
-        const targetProj = projects.find((p) => p.id === targetId)
-        toast.success(
-          `Moved "${document.title}" to "${targetProj?.name || 'Project'}"`
-        )
-      } else {
-        toast.success(`Moved "${document.title}" to Drafts`)
-      }
+      moveTo(targetId)
     }
   }
 
   const handleConfirmMove = () => {
     if (pendingTargetProjectId !== undefined) {
-      moveDocumentToProject(document.id, pendingTargetProjectId)
-      if (pendingTargetProjectId) {
-        const targetProj = projects.find((p) => p.id === pendingTargetProjectId)
-        toast.success(
-          `Moved "${document.title}" to "${targetProj?.name || 'Project'}"`
-        )
-      } else {
-        toast.success(`Moved "${document.title}" to Drafts`)
-      }
+      moveTo(pendingTargetProjectId)
       setConfirmMoveOpen(false)
       setPendingTargetProjectId(undefined)
     }
   }
 
   const handleRowClick = () => {
-    recordDocumentView(document.id)
+    recordView.mutate(document)
     navigate({
       to: '/docs/$docId',
       params: { docId: document.id },
@@ -165,7 +144,7 @@ export function DocListRow({ document }: DocListRowProps) {
 
   return (
     <>
-      <ContextMenu>
+      <ContextMenu modal={false}>
         <ContextMenuTrigger asChild>
           <div
             onClick={handleRowClick}
@@ -257,11 +236,12 @@ export function DocListRow({ document }: DocListRowProps) {
               </span>
 
               <div onClick={(e) => e.stopPropagation()}>
-                <DropdownMenu>
+                <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant='ghost'
                       size='icon'
+                      aria-label='Document actions'
                       className='size-7 opacity-70 hover:opacity-100'
                     >
                       <MoreHorizontal className='size-3.5' />
@@ -277,7 +257,7 @@ export function DocListRow({ document }: DocListRowProps) {
 
                     <DropdownMenuItem
                       onClick={() => {
-                        recordDocumentView(document.id)
+                        recordView.mutate(document)
                         window.open(`/docs/${document.id}`, '_blank')
                       }}
                     >
@@ -439,7 +419,7 @@ export function DocListRow({ document }: DocListRowProps) {
 
           <ContextMenuItem
             onClick={() => {
-              recordDocumentView(document.id)
+              recordView.mutate(document)
               window.open(`/docs/${document.id}`, '_blank')
             }}
           >

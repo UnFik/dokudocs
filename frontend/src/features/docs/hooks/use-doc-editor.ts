@@ -9,6 +9,7 @@ import {
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { generateDualThumbnailsAsync } from '../lib/doc-thumbnail-generator'
 import { flushEditorWidgets } from '../lib/editor-flush'
+import { useRecordDocumentView } from './use-document-actions'
 
 interface EditorState {
   title: string
@@ -25,7 +26,7 @@ export function useDocEditor(docId: string) {
   const updateDocumentThumbnail = useDokudocsStore(
     (s) => s.updateDocumentThumbnail
   )
-  const recordDocumentView = useDokudocsStore((s) => s.recordDocumentView)
+  const recordView = useRecordDocumentView()
   const projects = useDokudocsStore((s) => s.projects)
   const doc = useDokudocsStore(
     useCallback((s) => s.documents.find((d) => d.id === docId), [docId])
@@ -66,9 +67,7 @@ export function useDocEditor(docId: string) {
 
   useMountEffect(() => {
     if (!isLocalUserScopeCurrent(scope)) return
-    if (docId) {
-      recordDocumentView(docId)
-    }
+    if (doc) recordView.mutate(doc)
 
     if (doc && !doc.thumbnail) {
       const version = thumbnailVersion.current

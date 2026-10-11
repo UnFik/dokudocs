@@ -1,10 +1,20 @@
 import { act } from 'react'
+import { createElement } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { DocumentItem, ProjectItem } from '@/types/dokudocs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from 'vitest-browser-react'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { switchLocalUser } from '@/lib/local-user-data'
 import { useDocEditor } from './use-doc-editor'
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  return createElement(
+    QueryClientProvider,
+    { client: new QueryClient() },
+    children
+  )
+}
 
 const mockDoc: DocumentItem = {
   id: 'doc-test-1',
@@ -74,7 +84,9 @@ describe('useDocEditor hook', () => {
   afterEach(() => switchLocalUser(null))
 
   it('loads document data correctly when found', async () => {
-    const { result } = await renderHook(() => useDocEditor('doc-test-1'))
+    const { result } = await renderHook(() => useDocEditor('doc-test-1'), {
+      wrapper,
+    })
 
     expect(result.current.document).toBeDefined()
     expect(result.current.title).toBe('Test Architecture')
@@ -85,7 +97,9 @@ describe('useDocEditor hook', () => {
   })
 
   it('returns undefined document if docId is not in store', async () => {
-    const { result } = await renderHook(() => useDocEditor('non-existent'))
+    const { result } = await renderHook(() => useDocEditor('non-existent'), {
+      wrapper,
+    })
 
     expect(result.current.document).toBeUndefined()
     expect(result.current.title).toBe('')
@@ -93,7 +107,9 @@ describe('useDocEditor hook', () => {
   })
 
   it('updates title and triggers auto-save with debounce', async () => {
-    const { result } = await renderHook(() => useDocEditor('doc-test-1'))
+    const { result } = await renderHook(() => useDocEditor('doc-test-1'), {
+      wrapper,
+    })
 
     act(() => {
       result.current.setTitle('Updated Architecture Title')
@@ -115,7 +131,9 @@ describe('useDocEditor hook', () => {
   })
 
   it('updates content and persists change after debounce', async () => {
-    const { result } = await renderHook(() => useDocEditor('doc-test-1'))
+    const { result } = await renderHook(() => useDocEditor('doc-test-1'), {
+      wrapper,
+    })
 
     act(() => {
       result.current.setContent('# New Header\nBrand new typed text')
@@ -139,7 +157,9 @@ describe('useDocEditor hook', () => {
   })
 
   it('updates category and project associations', async () => {
-    const { result } = await renderHook(() => useDocEditor('doc-test-1'))
+    const { result } = await renderHook(() => useDocEditor('doc-test-1'), {
+      wrapper,
+    })
 
     act(() => {
       result.current.setCategory('Design')
@@ -159,8 +179,9 @@ describe('useDocEditor hook', () => {
   })
 
   it('flushes pending changes on unmount when dirty', async () => {
-    const { result, unmount } = await renderHook(() =>
-      useDocEditor('doc-test-1')
+    const { result, unmount } = await renderHook(
+      () => useDocEditor('doc-test-1'),
+      { wrapper }
     )
 
     act(() => {
@@ -177,7 +198,10 @@ describe('useDocEditor hook', () => {
 
   it('switches state when docId prop changes', async () => {
     let currentId = 'doc-test-1'
-    const { result, rerender } = await renderHook(() => useDocEditor(currentId))
+    const { result, rerender } = await renderHook(
+      () => useDocEditor(currentId),
+      { wrapper }
+    )
 
     expect(result.current.title).toBe('Test Architecture')
 

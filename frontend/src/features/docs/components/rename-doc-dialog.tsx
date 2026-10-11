@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { DocumentItem } from '@/types/dokudocs'
 import { Pencil } from 'lucide-react'
 import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,6 +23,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { useUpdateDocument } from '../hooks/use-document-actions'
 
 const renameDocSchema = z.object({
   title: z
@@ -45,7 +45,7 @@ export function RenameDocDialog({
   onOpenChange,
   document,
 }: RenameDocDialogProps) {
-  const { updateDocument } = useDokudocsStore()
+  const updateDocument = useUpdateDocument()
 
   const form = useForm<RenameDocFormValues>({
     resolver: zodResolver(renameDocSchema),
@@ -69,11 +69,14 @@ export function RenameDocDialog({
       return
     }
 
-    updateDocument(document.id, {
-      title: trimmed,
-    })
-    toast.success(`Document renamed to "${trimmed}"`)
-    onOpenChange(false)
+    updateDocument.mutate(
+      {
+        document,
+        input: { title: trimmed },
+        message: `Document renamed to "${trimmed}"`,
+      },
+      { onSuccess: () => onOpenChange(false) }
+    )
   }
 
   return (
