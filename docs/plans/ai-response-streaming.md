@@ -1,6 +1,6 @@
 # Streaming respons AI Dokudocs
 
-Status: keputusan produk disepakati; rencana teknis siap ditinjau. Implementasi menunggu konfirmasi pemahaman bersama.
+Status: diimplementasikan di branch `feat/ai-response-streaming` (satu PR). Lihat bagian Hasil implementasi di akhir untuk apa yang dikerjakan dan yang sengaja belum.
 
 ## Fakta kode saat perencanaan
 
@@ -183,3 +183,15 @@ Tidak ada auto-resume generasi setelah server restart, auto-replay aksi, reasoni
 - `frontend/nginx.conf`
 
 Baseline implementasi harus memasukkan perbaikan PR #152 jika belum masuk main. Belum ada kode implementasi atau pengujian baru dalam sesi perencanaan ini.
+
+## Hasil implementasi
+
+Dikerjakan sesuai urutan di atas. Yang berbeda dari rencana atau sengaja belum:
+
+- **Transport event:** SSE membaca tabel `ai_run_events` dengan polling 150 ms (bukan LISTEN/NOTIFY). Itu sederhana, benar lintas instance, dan cukup untuk satu pengamat per run. Heartbeat tiap 15 detik.
+- **Finalisasi:** pesan, sitasi, dan status `completed` disimpan dalam dua transaksi (`StoreRAGAnswer`, lalu `Finish`), bukan satu. Jika server mati di antaranya, pesan sudah tersimpan dan run ditandai `interrupted`; run tidak dijalankan ulang. Menyatukannya ke satu transaksi butuh `StoreRAGAnswer` menerima transaksi dari luar.
+- **Aksi tool yang hasilnya tidak pasti:** aksi yang disetujui tanpa hasil tercatat ditampilkan sebagai "hasil tidak pernah tercatat" dan tidak dijalankan ulang. Aksi belum ditautkan ke `ai_runs` lewat kolom.
+- **Fallback provider:** permintaan streaming yang dijawab provider dengan JSON utuh diterima sebagai jawaban lengkap (dan dilaporkan `unsupported` pada Test). Penolakan eksplisit `stream: true` dengan 400 belum mengulang tanpa stream.
+- **Progres MCP:** notifikasi bertahap nyata hanya dua langkah (mulai, selesai) karena eksekutor tool sinkron. Hanya permintaan dengan `progressToken` memakai balasan event stream; sisanya tetap JSON.
+- **Satu instance:** Stop bekerja pada run yang berjalan di instance yang menerima permintaan Stop. Run di instance lain tidak dibatalkan (belum ada perintah lintas instance).
+- **Belum diverifikasi:** jalur Cloudflare/tunnel. nginx sudah diuji mengalirkan chunk tanpa buffer; tunnel production belum.

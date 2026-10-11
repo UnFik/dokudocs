@@ -217,3 +217,31 @@ func TestChatStreamWithoutItsTerminatorIsNotACompletedAnswer(t *testing.T) {
 		t.Fatal("a truncated stream was accepted as a completed answer")
 	}
 }
+
+func TestAProviderThatRefusesStreamOptionsIsAskedAgainWithoutThem(t *testing.T) {
+	source := uuid.New()
+	var withOptions, without int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		if _, has := request["stream_options"]; has {
+			withOptions++
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		without++
+		w.Header().Set("Content-Type", "text/event-stream")
+		last, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]string{"content": `{"answer":"Halo","source_ids":["` + source.String() + `"]}`}, "finish_reason": "stop"}}})
+		_, _ = fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", last)
+	}))
+	defer server.Close()
+	ctx := airuns.WithOutput(context.Background(), func(airuns.Event) error { return nil })
+	model := NewAnswer(Config{BaseURL: server.URL, APIKey: "test-key", Model: "test-model", Protocol: ProtocolChatCompletions, AllowPrivate: true})
+	output, err := model.Answer(ctx, answerInput(source))
+	if err != nil || output.Text != "Halo" {
+		t.Fatalf("Answer() = %+v, %v", output, err)
+	}
+	if withOptions != 1 || without != 1 {
+		t.Fatalf("requests with/without stream_options = %d/%d, want 1/1", withOptions, without)
+	}
+}

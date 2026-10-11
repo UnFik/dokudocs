@@ -220,7 +220,7 @@ const ragCitationSchema = z.object({
 const ragConversationSchema = z.object({
   id: z.string().uuid(),
   workspaceId: z.string().uuid(),
-  creatorId: z.string().uuid().optional(),
+  creatorId: z.guid().optional(),
   documentId: z.string().uuid().optional(),
   title: z.string(),
   createdAt: z.string(),
