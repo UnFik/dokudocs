@@ -46,7 +46,7 @@ reset:
 	esac
 	$(RUNNING) down --volumes --remove-orphans
 
-.PHONY: dev build down restart logs ps seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration test-backend-load docs
+.PHONY: dev build down restart logs ps seed-docker reset test-collab test-e2e test-e2e-api test-e2e-ui test-e2e-all test-e2e-smoke test-e2e-with-backend test-seed test-backend test-backend-unit test-backend-integration docs
 
 test-e2e: test-e2e-api
 
@@ -124,9 +124,6 @@ test-backend-unit:
 
 test-backend-integration:
 	cd backend && $(MAKE) test-integration
-
-test-backend-load:
-	cd backend && $(MAKE) test-load
 
 test-seed:
 	cd backend && go run ./cmd/testseed
