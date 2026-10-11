@@ -22,6 +22,7 @@ const overviewSchema = z.object({
   answer: viewSchema.nullable(),
   embedding: viewSchema.nullable(),
   embeddingPending: viewSchema.nullable(),
+  agent: viewSchema.nullable().optional(),
   progress: z.object({ done: z.number(), total: z.number() }).nullable(),
 })
 export type Overview = z.infer<typeof overviewSchema>
@@ -40,7 +41,7 @@ const changesSchema = z.object({
 })
 export type Change = z.infer<typeof changesSchema>['changes'][number]
 
-export type Purpose = 'answer' | 'embedding'
+export type Purpose = 'answer' | 'embedding' | 'agent'
 export type SettingInput = {
   baseURL: string
   protocol: string

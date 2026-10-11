@@ -216,3 +216,29 @@ it('lists recent changes without any key', async () => {
   await expect.element(screen.getByText(/gpt-old/)).toBeVisible()
   await expect.element(screen.getByText(/API key replaced/)).toBeVisible()
 })
+
+it('shows the agent provider as a third setting and tests it on its own', async () => {
+  const fetch = api({
+    'GET /api/v1/platform/ai': () =>
+      jsonResponse(
+        overview({
+          agent: {
+            ...answer,
+            purpose: 'agent',
+            model: 'agent-model',
+            keyHint: '••••9999',
+          },
+        })
+      ),
+    'POST /api/v1/platform/ai/agent/test': () => jsonResponse({ ok: true }),
+  })
+  vi.stubGlobal('fetch', fetch)
+  const screen = await mount()
+  await expect
+    .element(screen.getByLabelText('Agent model'))
+    .toHaveValue('agent-model')
+  await expect.element(screen.getByText('••••9999')).toBeVisible()
+  await screen.getByRole('button', { name: 'Test agent connection' }).click()
+  await expect.element(screen.getByText('Connection works.')).toBeVisible()
+  expect(calls(fetch, 'POST /api/v1/platform/ai/agent/test')).toHaveLength(1)
+})

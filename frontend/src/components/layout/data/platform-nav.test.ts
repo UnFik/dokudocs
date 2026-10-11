@@ -7,6 +7,11 @@ it('offers the AI provider page only to a superadmin', () => {
   expect(platformNavGroup(undefined)).toBeNull()
   expect(platformNavGroup(['member', 'superadmin'])).toMatchObject({
     title: 'Platform',
-    items: [{ title: 'AI provider', url: '/platform/ai' }],
+    items: [
+      { title: 'AI provider', url: '/platform/ai' },
+      { title: 'MCP', url: '/platform/mcp' },
+      { title: 'Skills', url: '/platform/skills' },
+      { title: 'Model usage', url: '/platform/usage' },
+    ],
   })
 })
