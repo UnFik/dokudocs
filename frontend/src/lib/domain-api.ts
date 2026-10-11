@@ -6,6 +6,8 @@ import type {
   ProjectItem,
   DocumentRevision,
   SortField,
+  ProjectMemberItem,
+  ProjectMemberRole,
   SortOrder,
   TrashItem,
   WorkspaceItem,
@@ -33,7 +35,13 @@ const projectSchema = z.object({
   logoUrl: z.string().optional().default(''),
   colorBadge: z.string().optional().default(''),
   categories: z
-    .array(z.object({ name: z.string(), colorId: z.string() }))
+    .array(
+      z.object({
+        id: z.string().optional(),
+        name: z.string(),
+        colorId: z.string(),
+      })
+    )
     .optional()
     .default([]),
   isStarred: z.boolean().optional().default(false),
@@ -534,6 +542,9 @@ function toProject(project: z.infer<typeof projectSchema>): ProjectItem {
     categoryColors: Object.fromEntries(
       project.categories.map(({ name, colorId }) => [name, colorId])
     ),
+    categoryIds: Object.fromEntries(
+      project.categories.flatMap(({ id, name }) => (id ? [[name, id]] : []))
+    ),
     workspaceId: project.workspaceId,
     orgId: project.workspaceId,
     colorBadge: project.colorBadge,
@@ -603,10 +614,24 @@ export async function deleteProject(
   })
 }
 
+// The trash list does not load visibility, and sends tags and categories as
+// null when there are none.
+const trashDocumentSchema = documentSchema.extend({
+  visibility: documentSchema.shape.visibility.catch('inherit'),
+  tags: z
+    .array(z.string())
+    .nullish()
+    .transform((tags) => tags ?? []),
+  categories: z
+    .array(z.string())
+    .nullish()
+    .transform((categories) => categories ?? []),
+})
+
 const trashItemSchema = z.object({
   id: z.string().min(1),
   docId: z.string().min(1),
-  document: documentSchema,
+  document: trashDocumentSchema,
   deletedAt: z.string(),
   deletedBy: z.object({
     id: z.string().min(1),
@@ -1122,6 +1147,115 @@ export async function addProjectCategory(
     method: 'POST',
     headers: workspaceHeaders(workspaceId),
     body: JSON.stringify({ name, colorId }),
+  })
+}
+
+export async function updateProjectCategory(
+  workspaceId: string,
+  projectId: string,
+  categoryId: string,
+  input: { name: string; colorId: string }
+): Promise<void> {
+  await apiFetch<unknown>(
+    `/api/v1/projects/${projectId}/categories/${categoryId}`,
+    {
+      method: 'PUT',
+      headers: workspaceHeaders(workspaceId),
+      body: JSON.stringify(input),
+    }
+  )
+}
+
+export async function deleteProjectCategory(
+  workspaceId: string,
+  projectId: string,
+  categoryId: string
+): Promise<void> {
+  await apiFetch<unknown>(
+    `/api/v1/projects/${projectId}/categories/${categoryId}`,
+    { method: 'DELETE', headers: workspaceHeaders(workspaceId) }
+  )
+}
+
+export async function reorderProjectCategories(
+  workspaceId: string,
+  projectId: string,
+  categoryIds: string[]
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/projects/${projectId}/categories/reorder`, {
+    method: 'PUT',
+    headers: workspaceHeaders(workspaceId),
+    body: JSON.stringify({ categoryIds }),
+  })
+}
+
+const projectMemberSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  userId: z.string().min(1),
+  role: z.enum(['manager', 'editor', 'viewer']),
+  createdAt: z.string(),
+  user: z.object({
+    id: z.string().min(1),
+    name: z.string(),
+    email: z.string(),
+    avatar: z.string().optional().default(''),
+  }),
+})
+
+export async function listProjectMembers(
+  workspaceId: string,
+  projectId: string,
+  signal?: AbortSignal
+): Promise<ProjectMemberItem[]> {
+  return z.array(projectMemberSchema).parse(
+    await apiFetch<unknown>(`/api/v1/projects/${projectId}/members`, {
+      headers: workspaceHeaders(workspaceId),
+      signal,
+    })
+  )
+}
+
+/** Adds the member, or changes the role when they already belong. */
+export async function setProjectMember(
+  workspaceId: string,
+  projectId: string,
+  email: string,
+  role: ProjectMemberRole
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/projects/${projectId}/members`, {
+    method: 'POST',
+    headers: workspaceHeaders(workspaceId),
+    body: JSON.stringify({ email, role }),
+  })
+}
+
+export async function removeProjectMember(
+  workspaceId: string,
+  projectId: string,
+  userId: string
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/projects/${projectId}/members/${userId}`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(workspaceId),
+  })
+}
+
+export type UpdateProjectInput = {
+  name: string
+  description: string
+  logoUrl: string
+}
+
+export async function updateProject(
+  workspaceId: string,
+  projectId: string,
+  input: UpdateProjectInput
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/projects/${projectId}`, {
+    method: 'PUT',
+    headers: workspaceHeaders(workspaceId),
+    body: JSON.stringify(input),
   })
 }
 

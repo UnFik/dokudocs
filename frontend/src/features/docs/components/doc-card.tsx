@@ -146,7 +146,7 @@ export function DocCard({ document }: DocCardProps) {
 
   return (
     <>
-      <ContextMenu>
+      <ContextMenu modal={false}>
         <ContextMenuTrigger asChild>
           <div
             onClick={handleCardClick}
@@ -226,6 +226,7 @@ export function DocCard({ document }: DocCardProps) {
 
                   <div onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu
+                      modal={false}
                       open={dropdownOpen}
                       onOpenChange={setDropdownOpen}
                     >
@@ -233,6 +234,7 @@ export function DocCard({ document }: DocCardProps) {
                         <Button
                           variant='ghost'
                           size='icon'
+                          aria-label='Document actions'
                           className='size-6 text-muted-foreground opacity-70 hover:opacity-100'
                         >
                           <MoreHorizontal className='size-3.5' />

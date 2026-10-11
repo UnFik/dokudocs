@@ -33,7 +33,6 @@ import {
 import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { CreateDocDialog } from '@/features/docs/components/create-doc-dialog'
 import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
-import { useRecordDocumentView } from '@/features/docs/hooks/use-document-actions'
 import { CreateProjectDialog } from '@/features/projects/components/create-project-dialog'
 import { ScrollArea } from './ui/scroll-area'
 
@@ -42,7 +41,6 @@ export function CommandMenu() {
   const { setTheme } = useTheme()
   const { open, setOpen } = useSearch()
   const { activeDocuments: documents, projects } = useDokudocs()
-  const recordView = useRecordDocumentView()
 
   const [createDocOpen, setCreateDocOpen] = useState(false)
   const [importDocOpen, setImportDocOpen] = useState(false)
@@ -95,7 +93,6 @@ export function CommandMenu() {
                       value={uniqueValue}
                       onSelect={() => {
                         runCommand(() => {
-                          recordView.mutate(doc)
                           navigate({
                             to: '/docs/$docId',
                             params: { docId: doc.id },

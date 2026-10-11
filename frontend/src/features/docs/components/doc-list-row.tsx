@@ -144,7 +144,7 @@ export function DocListRow({ document }: DocListRowProps) {
 
   return (
     <>
-      <ContextMenu>
+      <ContextMenu modal={false}>
         <ContextMenuTrigger asChild>
           <div
             onClick={handleRowClick}
@@ -236,11 +236,12 @@ export function DocListRow({ document }: DocListRowProps) {
               </span>
 
               <div onClick={(e) => e.stopPropagation()}>
-                <DropdownMenu>
+                <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant='ghost'
                       size='icon'
+                      aria-label='Document actions'
                       className='size-7 opacity-70 hover:opacity-100'
                     >
                       <MoreHorizontal className='size-3.5' />

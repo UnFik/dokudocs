@@ -1,13 +1,8 @@
-import { useState, useMemo } from 'react'
-import {
-  Mail,
-  Trash2,
-  UserPlus,
-  Users,
-} from 'lucide-react'
-import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { useState } from 'react'
 import type { ProjectItem, ProjectMemberRole } from '@/types/dokudocs'
+import { Mail, Trash2, UserPlus, Users } from 'lucide-react'
+import { toast } from 'sonner'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -17,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -24,8 +20,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  useProjectMembers,
+  useRemoveProjectMember,
+  useSetProjectMember,
+} from '../hooks/use-project-members'
 
 interface ProjectMembersDialogProps {
   open: boolean
@@ -38,16 +37,14 @@ export function ProjectMembersDialog({
   onOpenChange,
   project,
 }: ProjectMembersDialogProps) {
-  const projectMembersMap = useDokudocsStore((s) => s.projectMembers)
-  const setProjectMember = useDokudocsStore((s) => s.setProjectMember)
-  const removeProjectMember = useDokudocsStore((s) => s.removeProjectMember)
+  const membersQuery = useProjectMembers(project, open)
+  const setMember = useSetProjectMember()
+  const removeMember = useRemoveProjectMember()
 
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<ProjectMemberRole>('editor')
 
-  const members = useMemo(() => {
-    return projectMembersMap[project.id] || []
-  }, [projectMembersMap, project.id])
+  const members = membersQuery.data ?? []
 
   const handleAddMember = () => {
     const trimmed = inviteEmail.trim().toLowerCase()
@@ -56,20 +53,28 @@ export function ProjectMembersDialog({
       return
     }
 
-    setProjectMember(project.id, trimmed, inviteRole)
-    setInviteEmail('')
-    toast.success(`Added ${trimmed} as ${inviteRole}`)
+    setMember.mutate(
+      { project, email: trimmed, role: inviteRole },
+      {
+        onSuccess: () => {
+          setInviteEmail('')
+          toast.success(`Added ${trimmed} as ${inviteRole}`)
+        },
+      }
+    )
   }
 
-  const handleRoleChange = (_memberId: string, email: string, role: ProjectMemberRole) => {
-    setProjectMember(project.id, email, role)
-    toast.success(`Updated role for ${email} to ${role}`)
-  }
+  const handleRoleChange = (email: string, role: ProjectMemberRole) =>
+    setMember.mutate(
+      { project, email, role },
+      { onSuccess: () => toast.success(`Updated role for ${email} to ${role}`) }
+    )
 
-  const handleRemove = (memberId: string, email: string) => {
-    removeProjectMember(project.id, memberId)
-    toast.success(`Removed ${email} from project`)
-  }
+  const handleRemove = (userId: string, email: string) =>
+    removeMember.mutate(
+      { project, userId },
+      { onSuccess: () => toast.success(`Removed ${email} from project`) }
+    )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,14 +123,21 @@ export function ProjectMembersDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value='viewer' className='text-xs'>Viewer</SelectItem>
-                <SelectItem value='editor' className='text-xs'>Editor</SelectItem>
-                <SelectItem value='manager' className='text-xs'>Manager</SelectItem>
+                <SelectItem value='viewer' className='text-xs'>
+                  Viewer
+                </SelectItem>
+                <SelectItem value='editor' className='text-xs'>
+                  Editor
+                </SelectItem>
+                <SelectItem value='manager' className='text-xs'>
+                  Manager
+                </SelectItem>
               </SelectContent>
             </Select>
             <Button
               size='sm'
               onClick={handleAddMember}
+              disabled={setMember.isPending}
               className='h-8 px-3 text-xs'
             >
               Add
@@ -145,9 +157,14 @@ export function ProjectMembersDialog({
           </div>
 
           <ScrollArea className='max-h-56 pe-1'>
-            {members.length === 0 ? (
+            {membersQuery.isError ? (
               <div className='py-6 text-center text-xs text-muted-foreground'>
-                No specific project members assigned. All workspace members inherit default access.
+                Could not load members.
+              </div>
+            ) : members.length === 0 ? (
+              <div className='py-6 text-center text-xs text-muted-foreground'>
+                No specific project members assigned. All workspace members
+                inherit default access.
               </div>
             ) : (
               <div className='space-y-2'>
@@ -158,7 +175,10 @@ export function ProjectMembersDialog({
                   >
                     <div className='flex items-center gap-2.5'>
                       <Avatar className='size-7'>
-                        <AvatarImage src={member.user.avatar} alt={member.user.name} />
+                        <AvatarImage
+                          src={member.user.avatar}
+                          alt={member.user.name}
+                        />
                         <AvatarFallback className='text-[10px]'>
                           {member.user.name.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
@@ -177,16 +197,25 @@ export function ProjectMembersDialog({
                       <Select
                         value={member.role}
                         onValueChange={(val) =>
-                          handleRoleChange(member.id, member.user.email, val as ProjectMemberRole)
+                          handleRoleChange(
+                            member.user.email,
+                            val as ProjectMemberRole
+                          )
                         }
                       >
                         <SelectTrigger className='h-7 w-24 text-[11px]'>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent align='end'>
-                          <SelectItem value='viewer' className='text-xs'>Viewer</SelectItem>
-                          <SelectItem value='editor' className='text-xs'>Editor</SelectItem>
-                          <SelectItem value='manager' className='text-xs'>Manager</SelectItem>
+                          <SelectItem value='viewer' className='text-xs'>
+                            Viewer
+                          </SelectItem>
+                          <SelectItem value='editor' className='text-xs'>
+                            Editor
+                          </SelectItem>
+                          <SelectItem value='manager' className='text-xs'>
+                            Manager
+                          </SelectItem>
                         </SelectContent>
                       </Select>
 
@@ -194,7 +223,9 @@ export function ProjectMembersDialog({
                         variant='ghost'
                         size='icon'
                         className='size-7 text-muted-foreground hover:text-destructive'
-                        onClick={() => handleRemove(member.id, member.user.email)}
+                        onClick={() =>
+                          handleRemove(member.userId, member.user.email)
+                        }
                         title='Remove member'
                       >
                         <Trash2 className='size-3.5' />

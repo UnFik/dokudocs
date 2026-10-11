@@ -1,8 +1,15 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@/styles/index.css'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 import { ProjectCategoryFilter } from './project-category-filter'
+
+function renderFilter(ui: React.ReactElement) {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
+  )
+}
 
 describe('ProjectCategoryFilter', () => {
   const defaultProps = {
@@ -25,14 +32,14 @@ describe('ProjectCategoryFilter', () => {
   })
 
   it('renders the filter button with "All Categories"', async () => {
-    await render(<ProjectCategoryFilter {...defaultProps} />)
+    await renderFilter(<ProjectCategoryFilter {...defaultProps} />)
 
     const button = page.getByRole('button', { name: /All Categories/i }).first()
     await expect.element(button).toBeInTheDocument()
   })
 
   it('renders single selected category name on the filter button', async () => {
-    await render(
+    await renderFilter(
       <ProjectCategoryFilter
         {...defaultProps}
         selectedCategories={['Authentication']}
@@ -44,7 +51,7 @@ describe('ProjectCategoryFilter', () => {
   })
 
   it('renders count on filter button when multiple categories are selected', async () => {
-    await render(
+    await renderFilter(
       <ProjectCategoryFilter
         {...defaultProps}
         selectedCategories={['Authentication', 'Frontend']}
@@ -56,7 +63,7 @@ describe('ProjectCategoryFilter', () => {
   })
 
   it('opens the popover and displays search input and all categories', async () => {
-    await render(<ProjectCategoryFilter {...defaultProps} />)
+    await renderFilter(<ProjectCategoryFilter {...defaultProps} />)
 
     const filterButton = page
       .getByRole('button', { name: /All Categories/i })
@@ -74,7 +81,7 @@ describe('ProjectCategoryFilter', () => {
   })
 
   it('filters categories when typing in search input', async () => {
-    await render(<ProjectCategoryFilter {...defaultProps} />)
+    await renderFilter(<ProjectCategoryFilter {...defaultProps} />)
 
     const filterButton = page
       .getByRole('button', { name: /All Categories/i })
@@ -96,7 +103,7 @@ describe('ProjectCategoryFilter', () => {
   })
 
   it('shows empty message when search has no matching category', async () => {
-    await render(<ProjectCategoryFilter {...defaultProps} />)
+    await renderFilter(<ProjectCategoryFilter {...defaultProps} />)
 
     const filterButton = page
       .getByRole('button', { name: /All Categories/i })
@@ -113,7 +120,7 @@ describe('ProjectCategoryFilter', () => {
 
   it('calls onToggleCategory when clicking a category item in the dropdown', async () => {
     const onToggleCategory = vi.fn()
-    await render(
+    await renderFilter(
       <ProjectCategoryFilter
         {...defaultProps}
         onToggleCategory={onToggleCategory}
@@ -133,7 +140,7 @@ describe('ProjectCategoryFilter', () => {
 
   it('calls onClearCategories when clicking "All Categories" in the dropdown', async () => {
     const onClearCategories = vi.fn()
-    await render(
+    await renderFilter(
       <ProjectCategoryFilter
         {...defaultProps}
         selectedCategories={['Authentication']}
