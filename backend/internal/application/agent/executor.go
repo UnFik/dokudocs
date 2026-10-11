@@ -247,3 +247,6 @@ type ToolSpec struct {
 type Model interface {
 	Step(ctx context.Context, messages []Message, tools []ToolSpec) (Message, error)
 }
+
+// ErrAgentNotConfigured means no agent model is set up: chat answers from documents only.
+var ErrAgentNotConfigured = errors.New("no agent model is configured")
