@@ -16,6 +16,7 @@ import (
 const embeddingDimensions = 1536
 
 type EmbeddingModel struct {
+	cfg     Config
 	baseURL string
 	apiKey  string
 	model   string
@@ -27,14 +28,16 @@ func NewEmbeddingModel(apiKey, model string) *EmbeddingModel {
 }
 
 func NewEmbedding(cfg Config) *EmbeddingModel {
-	return &EmbeddingModel{baseURL: cfg.baseURL(), apiKey: cfg.APIKey, model: cfg.Model, client: cfg.client(30 * time.Second)}
+	return &EmbeddingModel{cfg: cfg, baseURL: cfg.baseURL(), apiKey: cfg.APIKey, model: cfg.Model, client: cfg.client(30 * time.Second)}
 }
 
 func (m *EmbeddingModel) Provider() string { return ProviderName(m.baseURL) }
 func (m *EmbeddingModel) Model() string    { return m.model }
 func (*EmbeddingModel) Dimensions() int    { return embeddingDimensions }
 
-func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) ([][]float32, error) {
+func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) (vectors [][]float32, err error) {
+	tokens := 0
+	defer func() { m.cfg.report(ctx, tokens, 0, err == nil) }()
 	if strings.TrimSpace(m.apiKey) == "" || strings.TrimSpace(m.model) == "" || len(inputs) == 0 || len(inputs) > 32 {
 		return nil, errors.New("embedding request is invalid")
 	}
@@ -69,11 +72,15 @@ func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) ([][]float3
 			Index     int       `json:"index"`
 			Embedding []float32 `json:"embedding"`
 		} `json:"data"`
+		Usage struct {
+			PromptTokens int `json:"prompt_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&response); err != nil || len(response.Data) != len(inputs) {
 		return nil, fmt.Errorf("%w: embedding provider returned an invalid response", appchat.ErrRAGProviderUnavailable)
 	}
-	vectors := make([][]float32, len(inputs))
+	tokens = response.Usage.PromptTokens
+	vectors = make([][]float32, len(inputs))
 	seen := make([]bool, len(inputs))
 	for _, item := range response.Data {
 		if len(item.Embedding) != embeddingDimensions && len(item.Embedding) > 0 {
