@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"backend/internal/application/airuns"
 	"backend/internal/config"
 	"backend/internal/infrastructure/api"
 	"backend/internal/infrastructure/api/routes"
@@ -12,6 +13,7 @@ import (
 	"backend/internal/infrastructure/logger"
 	"backend/internal/infrastructure/mail"
 	"backend/internal/infrastructure/postgres"
+	airunsrepo "backend/internal/infrastructure/repository/airuns"
 	documentrepo "backend/internal/infrastructure/repository/document"
 	pushrepo "backend/internal/infrastructure/repository/push"
 	"backend/internal/infrastructure/runtime/container"
@@ -58,6 +60,7 @@ func main() {
 	}
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()
+	c.AIRuns = airuns.NewService(workerCtx, airunsrepo.NewStore(db), 8)
 	go runRAGIndexWorker(workerCtx, documentrepo.NewRepository(db), resolver, aiService, log)
 	go func() {
 		ticker := time.NewTicker(time.Hour)

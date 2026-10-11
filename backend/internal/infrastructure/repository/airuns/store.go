@@ -99,6 +99,8 @@ func (s *Store) Append(ctx context.Context, id uuid.UUID, events []app.Event) er
 					return app.ErrInvalid
 				}
 				draft += value.Text
+			case "text_reset":
+				draft = ""
 			case "status", "tool_status", "action_pending":
 			default:
 				return app.ErrInvalid
@@ -200,4 +202,17 @@ func (s *Store) Recover(ctx context.Context, at time.Time) (int64, error) {
   FROM recovered RETURNING run_id
  ) SELECT count(*) FROM events`, at).Scan(&count)
 	return count, err
+}
+
+func (s *Store) Latest(ctx context.Context, owner, conversation uuid.UUID) (app.Run, error) {
+	return scan(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM ai_runs WHERE owner_id=$1 AND conversation_id=$2 ORDER BY (status='running') DESC, started_at DESC LIMIT 1`, owner, conversation))
+}
+
+// Cleanup removes runs that ended before the cutoff; their events go with them.
+func (s *Store) Cleanup(ctx context.Context, before time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM ai_runs WHERE status<>'running' AND updated_at < $1`, before)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }

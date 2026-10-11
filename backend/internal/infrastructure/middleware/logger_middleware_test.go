@@ -138,3 +138,17 @@ func TestLoggerPreservesHijacker(t *testing.T) {
 	rec := hijackableRecorder{ResponseRecorder: httptest.NewRecorder()}
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/collaboration/doc", nil))
 }
+
+func TestLoggerLetsAStreamFlushToTheClient(t *testing.T) {
+	handler := Logger(logger.New())(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("event: status\n\n"))
+		if err := http.NewResponseController(w).Flush(); err != nil {
+			t.Fatalf("Flush through the logger: %v", err)
+		}
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/ai/runs/1/events", nil))
+	if !rec.Flushed {
+		t.Fatal("the logger held the event back")
+	}
+}
