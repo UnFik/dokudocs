@@ -43,7 +43,9 @@ type Service struct {
 	admins Superadmins
 }
 
-func NewService(store Store, admins Superadmins) *Service { return &Service{store: store, admins: admins} }
+func NewService(store Store, admins Superadmins) *Service {
+	return &Service{store: store, admins: admins}
+}
 
 func (s *Service) requireSuperadmin(ctx context.Context, actor uuid.UUID) error {
 	ok, err := s.admins.IsSuperadmin(ctx, actor)
