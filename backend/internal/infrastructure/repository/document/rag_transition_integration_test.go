@@ -38,6 +38,11 @@ func (f *ragLifecycleFixture) embedAll(provider, model string) {
 
 func TestTwoEmbeddingModelsCanCoexistAndTheOldOneCanBeDropped(t *testing.T) {
 	f := newRAGLifecycleFixture(t)
+	// Dropping a model is global; give other tests' leftover documents their vectors back.
+	t.Cleanup(func() {
+		_, _ = f.db.ExecContext(f.ctx, `DELETE FROM workspaces WHERE id = $1`, f.workspaceID)
+		f.embedAll(lifecycleProvider, lifecycleModel)
+	})
 	documentID := f.newDocument("Transition", "private", "The transition document mentions pelican.")
 	f.indexWithEmbeddings()
 	_, chunks, embeddings := f.derivedRows(documentID)
