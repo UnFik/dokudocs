@@ -8,26 +8,9 @@ import {
   type RAGCitation,
   type RAGMessage,
 } from '@/lib/domain-api'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-
-const TOOL_LABEL: Record<string, string> = {
-  read_document: 'read a document',
-  search_documents: 'searched documents',
-  list_documents: 'listed documents',
-  list_projects: 'listed projects',
-  list_workspaces: 'listed workspaces',
-  list_comments: 'read comments',
-  list_suggestions: 'read suggestions',
-  list_revisions: 'read versions',
-  edit_document_content: 'suggested an edit',
-  create_revision: 'saved a version',
-}
-
-function toolsLine(tools: string[]) {
-  const unique = [...new Set(tools)]
-  return unique.map((tool) => TOOL_LABEL[tool] ?? tool.replaceAll('_', ' '))
-}
 
 /** An action the Agent asked for: it runs only when the User approves it here. */
 export function AgentActionCard({
@@ -163,7 +146,7 @@ export function ChatMessage({
       </article>
     )
 
-  const tools = toolsLine(message.meta?.tools ?? [])
+  const tools = [...new Set(message.meta?.tools ?? [])]
   return (
     <article className='max-w-4xl space-y-3'>
       <h3 className='font-mono text-[11px] text-muted-foreground'>
@@ -172,8 +155,13 @@ export function ChatMessage({
       {/* Plain text only: an answer never loads images or links from outside. */}
       <p className='text-sm leading-6 whitespace-pre-wrap'>{message.content}</p>
       {tools.length > 0 ? (
-        <p className='text-xs text-muted-foreground'>
-          The assistant {tools.join(', ')}.
+        <p className='flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground'>
+          Tools used:
+          {tools.map((tool) => (
+            <Badge key={tool} variant='tag'>
+              {tool}
+            </Badge>
+          ))}
         </p>
       ) : null}
       {message.sourcesMayBeIncomplete ? (
