@@ -83,7 +83,11 @@ func (o *output) persist() {
 		if len(batch) == 0 {
 			return true
 		}
-		err := o.append(o.ctx, batch)
+		// A stopped or interrupted run still saves what it had shown, so the
+		// write must not die with the run's own context.
+		save, cancel := context.WithTimeout(context.WithoutCancel(o.ctx), 3*time.Second)
+		err := o.append(save, batch)
+		cancel()
 		batch = batch[:0]
 		if err != nil {
 			o.mu.Lock()
@@ -95,8 +99,6 @@ func (o *output) persist() {
 	}
 	for {
 		select {
-		case <-o.ctx.Done():
-			return
 		case <-tick.C:
 			if !flush() {
 				return

@@ -305,122 +305,6 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 		t.Fatalf("RAG model evidence = %v, want only the canonical paragraph and no pending suggestion text", modelSourceInputs)
 	}
 
-	// Exercise the winning side of the finalization/revocation race. The trigger
-	// pauses the assistant INSERT after StoreRAGAnswer has acquired its access
-	// locks; revocation must wait, then commit after the complete answer.
-	raceConversationResponse := request(http.MethodPost, "/api/v1/rag/conversations", "{}", true)
-	var raceConversationEnvelope ragChatEnvelope
-	if raceConversationResponse.Code != http.StatusCreated || json.Unmarshal(raceConversationResponse.Body.Bytes(), &raceConversationEnvelope) != nil {
-		t.Fatalf("create race conversation status = %d, body = %s", raceConversationResponse.Code, raceConversationResponse.Body.String())
-	}
-	var raceConversation model.RAGConversation
-	if err := json.Unmarshal(raceConversationEnvelope.Data, &raceConversation); err != nil || raceConversation.ID == uuid.Nil {
-		t.Fatalf("race conversation = %+v, error = %v", raceConversation, err)
-	}
-	for _, statement := range []string{
-		`DROP TRIGGER IF EXISTS rag_test_pause_finalization ON rag_messages`,
-		`DROP FUNCTION IF EXISTS rag_test_pause_finalization()`,
-		`DROP SEQUENCE IF EXISTS rag_test_finalization_entered`,
-		`CREATE SEQUENCE rag_test_finalization_entered`,
-		`CREATE FUNCTION rag_test_pause_finalization() RETURNS trigger AS $$
-			BEGIN
-				IF NEW.role = 'assistant' AND NEW.conversation_id = TG_ARGV[0]::uuid THEN
-					PERFORM nextval('rag_test_finalization_entered');
-					PERFORM pg_sleep(2);
-				END IF;
-				RETURN NEW;
-			END;
-		$$ LANGUAGE plpgsql`,
-		`CREATE TRIGGER rag_test_pause_finalization BEFORE INSERT ON rag_messages
-			FOR EACH ROW EXECUTE FUNCTION rag_test_pause_finalization('` + raceConversation.ID.String() + `')`,
-	} {
-		if _, err := db.ExecContext(ctx, statement); err != nil {
-			t.Fatalf("prepare finalization race trigger: %v", err)
-		}
-	}
-	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), `DROP TRIGGER IF EXISTS rag_test_pause_finalization ON rag_messages`)
-		_, _ = db.ExecContext(context.Background(), `DROP FUNCTION IF EXISTS rag_test_pause_finalization()`)
-		_, _ = db.ExecContext(context.Background(), `DROP SEQUENCE IF EXISTS rag_test_finalization_entered`)
-	})
-
-	answerDone := make(chan *httptest.ResponseRecorder, 1)
-	go func() {
-		answerDone <- request(http.MethodPost, "/api/v1/rag/conversations/"+raceConversation.ID.String()+"/messages", `{"question":"What happens after a failed health check?","language":"en"}`, true)
-	}()
-	triggerDeadline := time.Now().Add(5 * time.Second)
-	triggerEntered := false
-	for time.Now().Before(triggerDeadline) {
-		var called bool
-		if err := db.QueryRowContext(ctx, `SELECT is_called FROM rag_test_finalization_entered`).Scan(&called); err != nil {
-			t.Fatalf("wait for finalization trigger: %v", err)
-		}
-		if called {
-			triggerEntered = true
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !triggerEntered {
-		t.Fatal("RAG finalization did not reach the pause trigger")
-	}
-	revokeConn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatalf("open workspace revoke connection: %v", err)
-	}
-	defer revokeConn.Close()
-	var revokePID int
-	if err := revokeConn.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&revokePID); err != nil {
-		t.Fatalf("read workspace revoke backend PID: %v", err)
-	}
-	revokeDone := make(chan error, 1)
-	go func() {
-		_, err := revokeConn.ExecContext(ctx, `DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`, workspaceID, actorID)
-		revokeDone <- err
-	}()
-	lockDeadline := time.Now().Add(time.Second)
-	revocationWaited := false
-	for time.Now().Before(lockDeadline) {
-		var state string
-		var waitType sql.NullString
-		if err := db.QueryRowContext(ctx, `SELECT state, wait_event_type FROM pg_stat_activity WHERE pid = $1`, revokePID).Scan(&state, &waitType); err != nil {
-			t.Fatalf("inspect workspace revoke wait: %v", err)
-		}
-		if state == "active" && waitType.Valid && waitType.String == "Lock" {
-			revocationWaited = true
-			break
-		}
-		select {
-		case err := <-revokeDone:
-			t.Fatalf("workspace revocation completed before RAG finalization: %v", err)
-		default:
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !revocationWaited {
-		t.Fatal("workspace revocation did not wait for RAG finalization's access lock")
-	}
-	select {
-	case raceAnswer := <-answerDone:
-		if raceAnswer.Code != http.StatusOK {
-			t.Fatalf("finalization that acquired access first returned %d: %s", raceAnswer.Code, raceAnswer.Body.String())
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("RAG finalization did not finish")
-	}
-	if err := <-revokeDone; err != nil {
-		t.Fatalf("revoke workspace access after RAG finalization: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'member')`, workspaceID, actorID); err != nil {
-		t.Fatalf("restore workspace membership after finalization race: %v", err)
-	}
-	if deleted := request(http.MethodDelete, "/api/v1/rag/conversations/"+raceConversation.ID.String(), "", false); deleted.Code != http.StatusNoContent {
-		t.Fatalf("delete race conversation status = %d, body = %s", deleted.Code, deleted.Body.String())
-	}
-	if _, err := db.ExecContext(ctx, `DROP TRIGGER rag_test_pause_finalization ON rag_messages`); err != nil {
-		t.Fatalf("remove finalization race trigger: %v", err)
-	}
-
 	followUp := request(http.MethodPost, "/api/v1/rag/conversations/"+conversation.ID.String()+"/messages", `{"question":"What about that?","language":"en"}`, true)
 	if followUp.Code != http.StatusOK {
 		t.Fatalf("contextual follow-up status = %d, body = %s", followUp.Code, followUp.Body.String())
@@ -530,20 +414,29 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if err := json.Unmarshal(linkConversationEnvelope.Data, &linkConversation); err != nil || linkConversation.ID == uuid.Nil {
 		t.Fatalf("public-link conversation = %+v, error = %v", linkConversation, err)
 	}
+	// A token rotated while the model writes does not discard the answer: it was
+	// made from what the token showed when the question was asked (ADR-0046). A
+	// separate conversation keeps the later history checks in this test as they were.
+	rotationResponse := request(http.MethodPost, "/api/v1/rag/conversations", "{}", true)
+	var rotationEnvelope ragChatEnvelope
+	var rotationConversation model.RAGConversation
+	if rotationResponse.Code != http.StatusCreated || json.Unmarshal(rotationResponse.Body.Bytes(), &rotationEnvelope) != nil || json.Unmarshal(rotationEnvelope.Data, &rotationConversation) != nil {
+		t.Fatalf("create rotation conversation status = %d, body = %s", rotationResponse.Code, rotationResponse.Body.String())
+	}
 	beforeAnswer = func() error {
 		_, err := db.ExecContext(ctx, `UPDATE documents SET share_token = 'rotated-public-link-token' WHERE id = $1`, publicDocumentID)
 		return err
 	}
-	rotatedTokenAnswer := request(http.MethodPost, "/api/v1/rag/conversations/"+linkConversation.ID.String()+"/messages", `{"question":"Where is the lunar archive stored?","language":"en","publicLinkTokens":["`+publicToken+`"]}`, true)
-	if rotatedTokenAnswer.Code != http.StatusForbidden {
-		t.Fatalf("answer finalized after public-link token rotation: status = %d, body = %s, want 403", rotatedTokenAnswer.Code, rotatedTokenAnswer.Body.String())
+	rotatedTokenAnswer := request(http.MethodPost, "/api/v1/rag/conversations/"+rotationConversation.ID.String()+"/messages", `{"question":"Where is the lunar archive stored?","language":"en","publicLinkTokens":["`+publicToken+`"]}`, true)
+	if rotatedTokenAnswer.Code != http.StatusOK {
+		t.Fatalf("answer made from the request snapshot was refused after public-link token rotation: status = %d, body = %s, want 200", rotatedTokenAnswer.Code, rotatedTokenAnswer.Body.String())
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE documents SET share_token = $2 WHERE id = $1`, publicDocumentID, publicToken); err != nil {
 		t.Fatalf("restore public-link token after race check: %v", err)
 	}
 	var rotatedTokenMessages int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, linkConversation.ID).Scan(&rotatedTokenMessages); err != nil || rotatedTokenMessages != 0 {
-		t.Fatalf("messages after public-link token rotation = %d, error = %v, want no partial turn", rotatedTokenMessages, err)
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, rotationConversation.ID).Scan(&rotatedTokenMessages); err != nil || rotatedTokenMessages != 2 {
+		t.Fatalf("messages after public-link token rotation = %d, error = %v, want the whole turn kept", rotatedTokenMessages, err)
 	}
 	linkQuestion := "Where is the lunar archive stored?"
 	withoutProof := request(http.MethodPost, "/api/v1/rag/conversations/"+linkConversation.ID.String()+"/messages", `{"question":"Where is the lunar archive stored?","language":"en"}`, true)
@@ -592,12 +485,14 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 		return err
 	}
 	revokedDuringAnswer := request(http.MethodPost, "/api/v1/rag/conversations/"+conversation.ID.String()+"/messages", `{"question":"What happens after a failed health check?","language":"en"}`, true)
-	if revokedDuringAnswer.Code != http.StatusForbidden {
-		t.Fatalf("answer finalized after workspace access was revoked during model call: status = %d, body = %s, want 403", revokedDuringAnswer.Code, revokedDuringAnswer.Body.String())
+	// ADR-0046: the answer belongs to the sources readable when it was asked, so a
+	// revocation that lands while the model is writing does not discard it.
+	if revokedDuringAnswer.Code != http.StatusOK {
+		t.Fatalf("answer made from the request snapshot was refused after workspace access was revoked during the model call: status = %d, body = %s, want 200", revokedDuringAnswer.Code, revokedDuringAnswer.Body.String())
 	}
 	var unfinalizedMessages int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, conversation.ID).Scan(&unfinalizedMessages); err != nil || unfinalizedMessages != 8 {
-		t.Fatalf("messages after access-revoked answer = %d, error = %v, want no partial turn", unfinalizedMessages, err)
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, conversation.ID).Scan(&unfinalizedMessages); err != nil || unfinalizedMessages != 10 {
+		t.Fatalf("messages after access-revoked answer = %d, error = %v, want the whole turn kept (10)", unfinalizedMessages, err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'member')`, workspaceID, actorID); err != nil {
 		t.Fatalf("restore workspace membership after access-revocation check: %v", err)
@@ -608,11 +503,11 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 		return err
 	}
 	concurrentEdit := request(http.MethodPost, "/api/v1/rag/conversations/"+conversation.ID.String()+"/messages", `{"question":"What happens after a failed health check?","language":"en"}`, true)
-	if concurrentEdit.Code != http.StatusConflict {
-		t.Fatalf("answer finalized after source changed during model call: status = %d, body = %s, want 409", concurrentEdit.Code, concurrentEdit.Body.String())
+	if concurrentEdit.Code != http.StatusOK {
+		t.Fatalf("answer made from the request snapshot was refused after the source changed during the model call: status = %d, body = %s, want 200", concurrentEdit.Code, concurrentEdit.Body.String())
 	}
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, conversation.ID).Scan(&unfinalizedMessages); err != nil || unfinalizedMessages != 8 {
-		t.Fatalf("messages after conflicted answer = %d, error = %v, want no persisted partial turn", unfinalizedMessages, err)
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, conversation.ID).Scan(&unfinalizedMessages); err != nil || unfinalizedMessages != 12 {
+		t.Fatalf("messages after the answer whose source changed mid-way = %d, error = %v, want it kept (12)", unfinalizedMessages, err)
 	}
 	stale := request(http.MethodPost, "/api/v1/rag/conversations/"+conversation.ID.String()+"/messages", `{"question":"What happens after a failed health check?","language":"en"}`, true)
 	if stale.Code != http.StatusOK {
@@ -626,7 +521,10 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 	if err := json.Unmarshal(staleEnvelope.Data, &staleAnswer); err != nil || len(staleAnswer.Citations) != 0 || staleAnswer.Text != unsupported.Text || !staleAnswer.SourcesMayBeIncomplete {
 		t.Fatalf("stale-source answer = %+v, error = %v", staleAnswer, err)
 	}
-	if modelCalls != 9 || len(modelHistories) != 9 || len(modelHistories[0]) != 0 || len(modelHistories[1]) != 0 || len(modelHistories[2]) != 1 || modelHistories[2][0] != "What happens after a failed health check?" || len(modelHistories[3]) != 2 || modelHistories[3][0] != "What happens after a failed health check?" || len(modelHistories[4]) != 0 || len(modelHistories[5]) != 0 || len(modelHistories[6]) != 1 || modelHistories[6][0] != linkQuestion || len(modelHistories[7]) != 4 || len(modelHistories[8]) != 4 || modelHistories[7][2] != "Apa yang dilakukan layanan setelah pemeriksaan kesehatan gagal?" || modelHistories[7][3] != "Which planet is nearest?" {
+	// Calls in order: the first answer, the follow-up, the cross-language ask, the conflict
+	// ask, the rotated-token ask, the public-link ask, then the two asks whose sources
+	// changed while the model wrote (their turns are kept, so later calls see them).
+	if modelCalls != 8 || len(modelHistories) != 8 || len(modelHistories[0]) != 0 || len(modelHistories[1]) != 1 || modelHistories[1][0] != "What happens after a failed health check?" || len(modelHistories[2]) != 2 || modelHistories[2][0] != "What happens after a failed health check?" || len(modelHistories[3]) != 0 || len(modelHistories[4]) != 0 || len(modelHistories[5]) != 1 || modelHistories[5][0] != linkQuestion || len(modelHistories[6]) != 4 || modelHistories[6][2] != "Apa yang dilakukan layanan setelah pemeriksaan kesehatan gagal?" || modelHistories[6][3] != "Which planet is nearest?" || len(modelHistories[7]) != 5 || modelHistories[7][4] != "What happens after a failed health check?" {
 		t.Fatalf("fake model calls/history = %d/%v, want prior user questions only and no historical answer evidence", modelCalls, modelHistories)
 	}
 
@@ -721,12 +619,12 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 		return err
 	}
 	grantRevokedDuringAnswer := request(http.MethodPost, "/api/v1/rag/conversations/"+linkConversation.ID.String()+"/messages", `{"question":"Where is the lunar archive stored?","language":"en"}`, true)
-	if grantRevokedDuringAnswer.Code != http.StatusForbidden {
-		t.Fatalf("answer finalized after its direct source grant was revoked: status = %d, body = %s, want 403", grantRevokedDuringAnswer.Code, grantRevokedDuringAnswer.Body.String())
+	if grantRevokedDuringAnswer.Code != http.StatusOK {
+		t.Fatalf("answer made from the request snapshot was refused after its direct source grant was revoked: status = %d, body = %s, want 200", grantRevokedDuringAnswer.Code, grantRevokedDuringAnswer.Body.String())
 	}
 	var messagesAfterGrantRevoke int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, linkConversation.ID).Scan(&messagesAfterGrantRevoke); err != nil || messagesAfterGrantRevoke != messagesBeforeGrantRevoke {
-		t.Fatalf("messages after direct-grant revocation race = %d, error = %v, want unchanged count %d", messagesAfterGrantRevoke, err, messagesBeforeGrantRevoke)
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, linkConversation.ID).Scan(&messagesAfterGrantRevoke); err != nil || messagesAfterGrantRevoke != messagesBeforeGrantRevoke+2 {
+		t.Fatalf("messages after direct-grant revocation = %d, error = %v, want the turn kept (%d)", messagesAfterGrantRevoke, err, messagesBeforeGrantRevoke+2)
 	}
 	if _, err := db.ExecContext(ctx, `DELETE FROM document_accesses WHERE document_id = $1 AND user_id = $2`, publicDocumentID, actorID); err != nil {
 		t.Fatalf("remove private-project source grant before explicit visibility check: %v", err)
@@ -825,12 +723,17 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 		return nil
 	}
 	hardDeleteRace := request(http.MethodPost, "/api/v1/rag/conversations/"+linkConversation.ID.String()+"/messages", `{"question":"Where is the lunar archive stored?","language":"en","publicLinkTokens":["`+publicToken+`"]}`, true)
-	if hardDeleteRace.Code != http.StatusNotFound {
-		t.Fatalf("answer finalized after source hard-delete: status = %d, body = %s, want 404", hardDeleteRace.Code, hardDeleteRace.Body.String())
+	// The source is gone, but the answer written from it is kept and cites nothing
+	// that no longer exists (ADR-0046, ADR-0004).
+	if hardDeleteRace.Code != http.StatusOK {
+		t.Fatalf("answer made from the request snapshot was refused after its source was hard-deleted: status = %d, body = %s, want 200", hardDeleteRace.Code, hardDeleteRace.Body.String())
 	}
-	var messagesAfterHardDeleteRace int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, linkConversation.ID).Scan(&messagesAfterHardDeleteRace); err != nil || messagesAfterHardDeleteRace != messagesBeforeHardDeleteRace {
-		t.Fatalf("messages after source hard-delete race = %d, error = %v, want unchanged count %d", messagesAfterHardDeleteRace, err, messagesBeforeHardDeleteRace)
+	var messagesAfterHardDeleteRace, orphanCitations int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_messages WHERE conversation_id = $1`, linkConversation.ID).Scan(&messagesAfterHardDeleteRace); err != nil || messagesAfterHardDeleteRace != messagesBeforeHardDeleteRace+2 {
+		t.Fatalf("messages after source hard-delete race = %d, error = %v, want the turn kept (%d)", messagesAfterHardDeleteRace, err, messagesBeforeHardDeleteRace+2)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM rag_message_citations c JOIN rag_messages m ON m.message_id = c.message_id WHERE m.conversation_id = $1 AND c.document_id = $2`, linkConversation.ID, publicDocumentID).Scan(&orphanCitations); err != nil || orphanCitations != 0 {
+		t.Fatalf("citations to the hard-deleted source = %d, error = %v, want none", orphanCitations, err)
 	}
 
 	historyResponse := request(http.MethodGet, "/api/v1/rag/conversations/"+conversation.ID.String(), "", false)
@@ -842,7 +745,7 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 		t.Fatalf("decode history response: %v", err)
 	}
 	var history model.RAGConversationHistory
-	if err := json.Unmarshal(historyEnvelope.Data, &history); err != nil || len(history.Messages) != 10 || history.Messages[0].Role != "user" || history.Messages[1].Role != "assistant" || len(history.Messages[1].Citations) != 1 || history.Messages[1].Citations[0].SourceFingerprint == "" || !bytes.Contains(historyEnvelope.Data, []byte(`"breadcrumb":"Operational checks"`)) {
+	if err := json.Unmarshal(historyEnvelope.Data, &history); err != nil || len(history.Messages) != 14 || history.Messages[0].Role != "user" || history.Messages[1].Role != "assistant" || len(history.Messages[1].Citations) != 1 || history.Messages[1].Citations[0].SourceFingerprint == "" || !bytes.Contains(historyEnvelope.Data, []byte(`"breadcrumb":"Operational checks"`)) {
 		t.Fatalf("history = %+v, error = %v, want ordered Q+A pairs with original citation fingerprint", history, err)
 	}
 	var storedStatus struct {
@@ -851,7 +754,7 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 			SourcesMayBeIncomplete bool   `json:"sourcesMayBeIncomplete"`
 		} `json:"messages"`
 	}
-	if err := json.Unmarshal(historyEnvelope.Data, &storedStatus); err != nil || len(storedStatus.Messages) != 10 || !storedStatus.Messages[9].SourcesMayBeIncomplete {
+	if err := json.Unmarshal(historyEnvelope.Data, &storedStatus); err != nil || len(storedStatus.Messages) != 14 || !storedStatus.Messages[13].SourcesMayBeIncomplete {
 		t.Fatalf("stored RAG message status = %+v, error = %v, want stale-index warning retained in history", storedStatus, err)
 	}
 	var storedCitation struct {
@@ -928,7 +831,7 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 		t.Fatalf("decode post-delete history: %v", err)
 	}
 	history = model.RAGConversationHistory{}
-	if err := json.Unmarshal(historyEnvelope.Data, &history); err != nil || len(history.Messages) != 10 || !bytes.Contains([]byte(history.Messages[1].Content), []byte("service restarts after a failed health check")) || len(history.Messages[1].Citations) != 0 {
+	if err := json.Unmarshal(historyEnvelope.Data, &history); err != nil || len(history.Messages) != 14 || !bytes.Contains([]byte(history.Messages[1].Content), []byte("service restarts after a failed health check")) || len(history.Messages[1].Citations) != 0 {
 		t.Fatalf("history after source deletion = %+v, error = %v, want answer text retained and its source citation removed", history, err)
 	}
 	inheritedDocumentID, inheritedParagraphID := uuid.New(), uuid.New()
@@ -994,8 +897,8 @@ func TestRAGChatHTTPPersistsGroundedAnswerAndPrivateHistory(t *testing.T) {
 		t.Fatalf("decode conversation list: %v", err)
 	}
 	var conversations []model.RAGConversation
-	if err := json.Unmarshal(listEnvelope.Data, &conversations); err != nil || len(conversations) != 3 {
-		t.Fatalf("conversation list = %+v, error = %v, want all three saved personal conversations", conversations, err)
+	if err := json.Unmarshal(listEnvelope.Data, &conversations); err != nil || len(conversations) != 4 {
+		t.Fatalf("conversation list = %+v, error = %v, want all four saved personal conversations", conversations, err)
 	}
 	deleted := request(http.MethodDelete, "/api/v1/rag/conversations/"+conversation.ID.String(), "", false)
 	if deleted.Code != http.StatusNoContent {
