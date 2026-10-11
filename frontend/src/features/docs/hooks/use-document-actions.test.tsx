@@ -145,9 +145,13 @@ it('reports a server refusal and does not claim success', async () => {
   expect(success).not.toHaveBeenCalled()
 })
 
-it('records a view in the document workspace', async () => {
+it('records a view without refetching the lists under an open editor', async () => {
+  const queryClient = new QueryClient()
+  queryClient.setQueryData(['documents', workspaceId], [])
   const { result } = await renderHook(() => useRecordDocumentView(), {
-    wrapper,
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
   })
   result.current.mutate(document)
   await vi.waitFor(() => expect(requests).toHaveLength(1))
@@ -156,4 +160,10 @@ it('records a view in the document workspace', async () => {
     method: 'POST',
     workspace: workspaceId,
   })
+  await vi.waitFor(() =>
+    expect(
+      queryClient.getQueryState(['documents', workspaceId])?.isInvalidated
+    ).toBe(true)
+  )
+  expect(requests).toHaveLength(1)
 })
