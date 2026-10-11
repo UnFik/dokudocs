@@ -48,7 +48,10 @@ type Record struct {
 	LastErrorAt                       *time.Time
 }
 
-type FieldChange struct{ From, To string }
+type FieldChange struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
 
 // Change is one audit entry.
 type Change struct {

@@ -16,6 +16,9 @@ var (
 	ErrInvalidChatRequest     = errors.New("invalid chatbot request")
 	ErrAnswerModelUnavailable = errors.New("RAG answer model is unavailable")
 	ErrRAGProviderUnavailable = errors.New("RAG model provider is unavailable")
+	// ErrEmbeddingNotConfigured is what an embedder returns when no provider is set up;
+	// chat then searches by text alone.
+	ErrEmbeddingNotConfigured = errors.New("no embedding provider is configured")
 )
 
 type ModelInput struct {
@@ -141,24 +144,32 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	}
 	linkTokens := append([]string{}, input.PublicLinkTokens...)
 	var chunks []model.RAGChunk
-	if u.embedder == nil {
+	embedder := u.embedder
+	var vector []float32
+	if embedder != nil {
+		vectors, embedErr := embedder.Embed(ctx, []string{retrievalQuery})
+		switch {
+		case errors.Is(embedErr, ErrEmbeddingNotConfigured):
+			embedder = nil
+		case embedErr != nil:
+			return Answer{}, embedErr
+		case len(vectors) != 1 || !validEmbedding(vectors[0], embedder.Dimensions()):
+			return Answer{}, errors.New("embedding model returned an invalid vector")
+		default:
+			vector = vectors[0]
+		}
+	}
+	if embedder == nil {
 		chunks, err = u.repository.SearchRAGChunksWithPublicLinkTokens(ctx, input.WorkspaceID, input.ActorID, retrievalQuery, 20, linkTokens)
 	} else {
-		vectors, embedErr := u.embedder.Embed(ctx, []string{retrievalQuery})
-		if embedErr != nil {
-			return Answer{}, embedErr
-		}
-		if len(vectors) != 1 || !validEmbedding(vectors[0], u.embedder.Dimensions()) {
-			return Answer{}, errors.New("embedding model returned an invalid vector")
-		}
-		chunks, err = u.repository.SearchRAGChunksWithEmbedding(ctx, input.WorkspaceID, input.ActorID, retrievalQuery, vectors[0], u.embedder.Provider(), u.embedder.Model(), 20, linkTokens)
+		chunks, err = u.repository.SearchRAGChunksWithEmbedding(ctx, input.WorkspaceID, input.ActorID, retrievalQuery, vector, embedder.Provider(), embedder.Model(), 20, linkTokens)
 	}
 	if err != nil {
 		return Answer{}, err
 	}
 	provider, embeddingModel := "", ""
-	if u.embedder != nil {
-		provider, embeddingModel = u.embedder.Provider(), u.embedder.Model()
+	if embedder != nil {
+		provider, embeddingModel = embedder.Provider(), embedder.Model()
 	}
 	sourcesMayBeIncomplete, err := u.repository.HasStaleReadableRAGIndex(ctx, input.WorkspaceID, input.ActorID, linkTokens, provider, embeddingModel)
 	if err != nil {
