@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -49,4 +50,14 @@ func ProviderName(baseURL string) string {
 		return "openai"
 	}
 	return parsed.Host
+}
+
+// reason is why a request could not be made, without the URL (which may carry a host the
+// operator typed) or any header.
+func reason(err error) string {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		err = urlErr.Err
+	}
+	return err.Error()
 }

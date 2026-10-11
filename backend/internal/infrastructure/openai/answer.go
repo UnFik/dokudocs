@@ -202,7 +202,7 @@ func (m *AnswerModel) post(ctx context.Context, path string, payload map[string]
 	req.Header.Set("Content-Type", "application/json")
 	res, err := m.client.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("%w: answer provider unavailable", appchat.ErrRAGProviderUnavailable)
+		return nil, 0, fmt.Errorf("%w: answer provider unavailable: %s", appchat.ErrRAGProviderUnavailable, reason(err))
 	}
 	defer res.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))

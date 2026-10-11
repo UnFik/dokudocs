@@ -58,7 +58,7 @@ func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) ([][]float3
 	req.Header.Set("Content-Type", "application/json")
 	res, err := m.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: embedding provider unavailable", appchat.ErrRAGProviderUnavailable)
+		return nil, fmt.Errorf("%w: embedding provider unavailable: %s", appchat.ErrRAGProviderUnavailable, reason(err))
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -76,6 +76,9 @@ func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) ([][]float3
 	vectors := make([][]float32, len(inputs))
 	seen := make([]bool, len(inputs))
 	for _, item := range response.Data {
+		if len(item.Embedding) != embeddingDimensions && len(item.Embedding) > 0 {
+			return nil, fmt.Errorf("%w: embedding provider returned %d numbers per text, Dokudocs needs %d", appchat.ErrRAGProviderUnavailable, len(item.Embedding), embeddingDimensions)
+		}
 		if item.Index < 0 || item.Index >= len(inputs) || seen[item.Index] || len(item.Embedding) != embeddingDimensions {
 			return nil, fmt.Errorf("%w: embedding provider returned an invalid response", appchat.ErrRAGProviderUnavailable)
 		}
