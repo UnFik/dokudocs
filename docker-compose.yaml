@@ -62,6 +62,10 @@ services:
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:?Set PUBLIC_APP_URL in .env}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Required: seals the AI provider API key stored in the database. Generate: openssl rand -base64 32
+      AI_SETTINGS_ENCRYPTION_KEY: ${AI_SETTINGS_ENCRYPTION_KEY:?Set AI_SETTINGS_ENCRYPTION_KEY in .env}
+      AI_ALLOW_PRIVATE_HOSTS: ${AI_ALLOW_PRIVATE_HOSTS:-false}
+      # First boot only: seeds the AI provider settings. After that the database wins.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-text-embedding-3-small}
       RAG_ANSWER_MODEL: ${RAG_ANSWER_MODEL:-gpt-5-mini}
