@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { jsonResponse, testSession } from '@/test-utils/auth'
+import { sseFrame, sseResponse } from '@/test-utils/sse'
 import { afterEach, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { userEvent } from 'vitest/browser'
@@ -13,6 +14,7 @@ import { RAGChatPage } from './rag-chat-page'
 const workspaceID = '149a8d07-8490-43ed-98fa-ebaa91b05e90'
 const conversationID = '65b7593c-3a2d-45a4-a47d-47e8a1c8136b'
 const documentID = 'b1f973dd-b554-4540-95c0-4697726ad6e1'
+const runID = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d'
 const nodeID = 'd2bd52f1-e274-4119-af61-737b0e8c80a9'
 const conversation: RAGConversationHistory['conversation'] = {
   id: conversationID,
@@ -108,14 +110,21 @@ function setup(
       return jsonResponse(conversation, 201)
     if (url.pathname === '/api/v1/rag/conversations')
       return jsonResponse([conversation])
-    if (url.pathname === `/api/v1/rag/conversations/${conversationID}/messages`)
-      return jsonResponse({
-        conversationId: conversationID,
-        text: 'Restart the service after a failed health check.',
-        citations: chatHistory.messages[1]?.citations ?? [],
-        coveragePartial: true,
-        sourcesMayBeIncomplete: true,
-      })
+    if (url.pathname === `/api/v1/rag/conversations/${conversationID}/runs`)
+      return init?.method === 'POST'
+        ? jsonResponse(
+            {
+              id: runID,
+              kind: 'chat',
+              status: 'running',
+              draft: '',
+              sequence: 0,
+            },
+            202
+          )
+        : jsonResponse(null)
+    if (url.pathname === `/api/v1/ai/runs/${runID}/events`)
+      return sseResponse([sseFrame(1, 'completed', { id: runID })])
     if (url.pathname === `/api/v1/rag/conversations/${conversationID}`)
       return jsonResponse(chatHistory)
     throw new Error(`Unexpected request: ${url.pathname}`)
@@ -174,13 +183,14 @@ it('shows persisted coverage and changed-source status and sends a workspace que
   await vi.waitFor(() => {
     const ask = fetch.mock.calls.find(
       ([input, init]) =>
-        new URL(String(input)).pathname.endsWith('/messages') &&
+        new URL(String(input)).pathname.endsWith('/runs') &&
         init?.method === 'POST'
     )
     expect(ask).toBeDefined()
     expect(new Headers(ask?.[1]?.headers).get('X-Workspace-Id')).toBe(
       workspaceID
     )
+    expect(new Headers(ask?.[1]?.headers).get('Idempotency-Key')).toBeTruthy()
     expect(JSON.parse(String(ask?.[1]?.body))).toMatchObject({
       question: 'How does recovery work?',
       language: 'en',

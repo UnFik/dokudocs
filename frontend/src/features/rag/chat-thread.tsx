@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Link2, Send, X } from 'lucide-react'
+import { Check, Link2, Send, Square, X } from 'lucide-react'
 import {
   decideAgentAction,
   listSkills,
@@ -11,6 +11,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import type { ChatRunView } from './use-chat-run'
 
 /** An action the Agent asked for: it runs only when the User approves it here. */
 export function AgentActionCard({
@@ -131,6 +132,85 @@ export function ChatMessages({
   )
 }
 
+const stepLabels: Record<string, string> = {
+  searching: 'Searching the documents…',
+  answering: 'Writing the answer…',
+  thinking: 'Working on it…',
+}
+
+const toolStates = {
+  running: 'running',
+  done: 'done',
+  failed: 'failed',
+  waiting: 'waiting for your approval',
+} as const
+
+const endings = {
+  failed: 'The answer could not be finished.',
+  cancelled: 'Stopped. This draft was not saved to the chat.',
+  interrupted:
+    'The server stopped while writing. Ask again to retry. Anything the assistant already did stays done.',
+} as const
+
+/**
+ * The answer while it is being written. The text is a draft: it joins the chat
+ * only when the server finishes, and a stopped or failed one says so.
+ */
+export function RunProgress({ view }: { view: ChatRunView }) {
+  if (view.phase === 'idle') return null
+  const ending = view.outcome ? endings[view.outcome] : null
+  return (
+    <div className='space-y-3'>
+      {view.question ? (
+        <article className='ml-auto max-w-3xl rounded-lg bg-primary/10 px-4 py-3'>
+          <h3 className='sr-only'>You</h3>
+          <p className='text-sm whitespace-pre-wrap'>{view.question}</p>
+        </article>
+      ) : null}
+      <article
+        className='max-w-4xl space-y-3'
+        aria-busy={view.phase !== 'ended'}
+        aria-label='Answer in progress'
+      >
+        <h3 className='font-mono text-[11px] text-muted-foreground'>
+          dokudocs ai · draft
+        </h3>
+        {view.draft ? (
+          <p
+            className={`text-sm leading-6 whitespace-pre-wrap ${view.phase === 'ended' ? 'text-muted-foreground' : ''}`}
+          >
+            {view.draft}
+          </p>
+        ) : null}
+        {view.tools.length > 0 ? (
+          <ul className='flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground'>
+            {view.tools.map((tool) => (
+              <li key={tool.name} className='flex items-center gap-1.5'>
+                <Badge variant='tag'>{tool.name}</Badge>
+                {toolStates[tool.state]}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {view.phase === 'ended' ? (
+          <p role='alert' className='text-sm text-destructive'>
+            {ending}
+            {view.outcome === 'failed' && view.message
+              ? ` ${view.message}.`
+              : null}
+          </p>
+        ) : (
+          <p role='status' className='text-xs text-muted-foreground'>
+            {view.phase === 'starting'
+              ? 'Sending your question…'
+              : (stepLabels[view.step] ?? 'Working on it…')}
+          </p>
+        )}
+      </article>
+    </div>
+  )
+}
+
 export function ChatMessage({
   message,
   workspaceID,
@@ -236,6 +316,7 @@ export function AskForm({
   error,
   placeholder,
   onAsk,
+  onStop,
   language,
   onLanguage,
 }: {
@@ -244,6 +325,8 @@ export function AskForm({
   error?: Error | null
   placeholder: string
   onAsk: (question: string) => void
+  /** Stops the answer being written; while it runs the form offers Stop in place of Send. */
+  onStop?: () => void
   language: 'id' | 'en'
   onLanguage: (language: 'id' | 'en') => void
 }) {
@@ -324,10 +407,21 @@ export function AskForm({
             <option value='id'>Bahasa Indonesia</option>
           </select>
         </label>
-        <Button type='submit' size='sm' disabled={pending || !question.trim()}>
-          <Send />
-          {pending ? 'Working…' : 'Send'}
-        </Button>
+        {pending && onStop ? (
+          <Button type='button' size='sm' variant='outline' onClick={onStop}>
+            <Square />
+            Stop
+          </Button>
+        ) : (
+          <Button
+            type='submit'
+            size='sm'
+            disabled={pending || !question.trim()}
+          >
+            <Send />
+            {pending ? 'Working…' : 'Send'}
+          </Button>
+        )}
       </div>
       {error ? (
         <p role='alert' className='mt-2 text-sm text-destructive'>
