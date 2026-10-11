@@ -130,6 +130,7 @@ const documentSuggestionSchema = z.object({
   suggestionId: z.guid(),
   proposerId: z.guid(),
   proposerName: z.string().optional().default(''),
+  aiAssisted: z.boolean().optional(),
   deciderId: z.guid().nullable().optional(),
   conflictReason: z.string().optional().default(''),
   status: z.enum(['pending', 'accepted', 'rejected', 'conflicted', 'closed']),
@@ -220,6 +221,7 @@ const ragConversationSchema = z.object({
   id: z.string().uuid(),
   workspaceId: z.string().uuid(),
   creatorId: z.string().uuid().optional(),
+  documentId: z.string().uuid().optional(),
   title: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -232,11 +234,28 @@ const ragMessageSchema = z.object({
   citations: z.array(ragCitationSchema).optional().default([]),
   coveragePartial: z.boolean().optional().default(false),
   sourcesMayBeIncomplete: z.boolean().optional().default(false),
+  meta: z
+    .object({
+      agent: z.boolean().optional(),
+      tools: z.array(z.string()).optional(),
+      actions: z.array(z.string()).optional(),
+      skill: z.string().optional(),
+    })
+    .optional(),
   createdAt: z.string(),
+})
+const agentActionSchema = z.object({
+  id: z.string().uuid(),
+  conversationId: z.string().uuid(),
+  tool: z.string(),
+  summary: z.string(),
+  status: z.enum(['pending', 'approved', 'declined', 'failed']),
+  result: z.string().optional().default(''),
 })
 const ragHistorySchema = z.object({
   conversation: ragConversationSchema,
   messages: z.array(ragMessageSchema),
+  actions: z.array(agentActionSchema).optional(),
 })
 const ragAnswerSchema = z.object({
   conversationId: z.string().uuid(),
@@ -244,6 +263,16 @@ const ragAnswerSchema = z.object({
   citations: z.array(ragCitationSchema),
   coveragePartial: z.boolean(),
   sourcesMayBeIncomplete: z.boolean(),
+  agent: z.boolean().optional().default(false),
+  tools: z.array(z.string()).optional().default([]),
+  actions: z.array(agentActionSchema).optional().default([]),
+})
+const skillSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string(),
+  instructions: z.string().optional().default(''),
+  updatedAt: z.string().optional(),
 })
 
 export type DocumentFilters = {
@@ -304,6 +333,8 @@ export type RAGConversation = z.infer<typeof ragConversationSchema>
 export type RAGMessage = z.infer<typeof ragMessageSchema>
 export type RAGConversationHistory = z.infer<typeof ragHistorySchema>
 export type RAGAnswer = z.infer<typeof ragAnswerSchema>
+export type AgentAction = z.infer<typeof agentActionSchema>
+export type Skill = z.infer<typeof skillSchema>
 export type CreateWorkspaceInput = {
   name: string
   plan?: string
@@ -983,6 +1014,54 @@ export async function createRAGConversation(
       body: JSON.stringify({}),
     })
   )
+}
+
+/** Opens a Conversation on one document; it draws on that document alone. */
+export async function createDocumentRAGConversation(
+  workspaceId: string,
+  documentId: string
+): Promise<RAGConversation> {
+  return ragConversationSchema.parse(
+    await apiFetch<unknown>('/api/v1/rag/conversations', {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceId),
+      body: JSON.stringify({ documentId }),
+    })
+  )
+}
+
+export async function listDocumentRAGConversations(
+  documentId: string,
+  signal?: AbortSignal
+): Promise<RAGConversation[]> {
+  return z
+    .array(ragConversationSchema)
+    .parse(
+      await apiFetch<unknown>(
+        `/api/v1/rag/documents/${documentId}/conversations`,
+        { signal }
+      )
+    )
+}
+
+/** Approves or declines an action the Agent asked for. */
+export async function decideAgentAction(
+  conversationID: string,
+  actionID: string,
+  approve: boolean
+): Promise<AgentAction> {
+  return agentActionSchema.parse(
+    await apiFetch<unknown>(
+      `/api/v1/rag/conversations/${conversationID}/actions/${actionID}`,
+      { method: 'POST', body: JSON.stringify({ approve }) }
+    )
+  )
+}
+
+export async function listSkills(signal?: AbortSignal): Promise<Skill[]> {
+  return z
+    .object({ skills: z.array(skillSchema) })
+    .parse(await apiFetch<unknown>('/api/v1/skills', { signal })).skills
 }
 
 export async function askRAGQuestion(
