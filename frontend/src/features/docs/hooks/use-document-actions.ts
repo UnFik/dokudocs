@@ -92,7 +92,11 @@ export function useAddProjectCategory() {
   })
 }
 
-/** Opening a document feeds Recent; a failed write must not block navigation. */
+/**
+ * Opening a document feeds Recent; a failed write must not block navigation.
+ * The lists are only marked stale: refetching them now would re-render the
+ * editor that is open, and the next list to mount refetches anyway.
+ */
 export function useRecordDocumentView() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -101,6 +105,7 @@ export function useRecordDocumentView() {
     onSuccess: (_, document) =>
       queryClient.invalidateQueries({
         queryKey: ['documents', document.orgId],
+        refetchType: 'none',
       }),
   })
 }
