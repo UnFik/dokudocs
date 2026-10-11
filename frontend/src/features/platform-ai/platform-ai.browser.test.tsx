@@ -242,3 +242,25 @@ it('shows the agent provider as a third setting and tests it on its own', async 
   await expect.element(screen.getByText('Connection works.')).toBeVisible()
   expect(calls(fetch, 'POST /api/v1/platform/ai/agent/test')).toHaveLength(1)
 })
+
+it('asks for a new key when the base URL changes, so the stored key is never sent to another address', async () => {
+  const fetch = api({
+    'GET /api/v1/platform/ai': () => jsonResponse(overview()),
+  })
+  vi.stubGlobal('fetch', fetch)
+  const screen = await mount()
+  const url = screen.getByLabelText('Base URL').first()
+  await expect.element(url).toHaveValue('https://api.example.com/v1')
+  const save = screen.getByRole('button', { name: 'Save answer provider' })
+  await url.fill('https://ai.other-provider.test/v1')
+  await expect
+    .element(screen.getByText(/Enter the API key for the new address/).first())
+    .toBeVisible()
+  await expect.element(save).toBeDisabled()
+  await expect
+    .element(screen.getByRole('button', { name: 'Test answer connection' }))
+    .toBeDisabled()
+  await screen.getByLabelText('API key').first().fill('sk-new-address')
+  await expect.element(save).toBeEnabled()
+  expect(calls(fetch, 'POST /api/v1/platform/ai/answer/test')).toHaveLength(0)
+})
