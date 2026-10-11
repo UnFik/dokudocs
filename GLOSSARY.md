@@ -92,3 +92,29 @@ _Avoid_: LLM config, model env
 **Active embedding model**:
 The embedding model whose vectors the chatbot searches with. After a Superadmin picks a new embedding model, the old one stays active until every document has been re-embedded with the new one.
 _Avoid_: Current model
+
+## AI agent
+
+**Agent**:
+The part of Dokudocs that acts for a User with Dokudocs tools: it answers in a Conversation and, when the User's AI permissions allow it, creates, changes or moves things. It works the same whether the User reaches it inside Dokudocs or through an outside AI client.
+_Avoid_: Bot, copilot, assistant (for the acting part)
+
+**MCP API key**:
+A secret a User creates to let an outside AI client act as them in Dokudocs. It belongs to one User, reaches every workspace that User is in with that User's rights, can be revoked at any time, and may or may not expire (ADR-0045).
+_Avoid_: Token, personal access token, integration key
+
+**AI permission**:
+One capability a User allows the Agent to use for them, such as reading, creating documents, editing content or managing a project. A User has one set that covers every MCP API key and the Agent inside Dokudocs; some actions are never allowed (ADR-0044).
+_Avoid_: Scope, MCP permission, token permission
+
+**AI assisted**:
+The label on a Suggestion the Agent wrote from a Conversation inside Dokudocs. The Suggestion is in the User's name and waits for review like any other (ADR-0043).
+_Avoid_: AI edit, bot suggestion
+
+**Skill**:
+A named set of instructions a Superadmin writes once for every User, called by name in a Conversation or from an outside AI client. A Skill tells the Agent how to do a task; it never grants an AI permission.
+_Avoid_: Prompt, template, command
+
+**Conversation scope**:
+Whether a Conversation draws on one document (opened from that document) or on every document the User may read in a workspace. Each User keeps their own Conversations of both kinds.
+_Avoid_: Chat mode, context
