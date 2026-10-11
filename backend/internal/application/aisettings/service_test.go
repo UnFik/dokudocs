@@ -34,7 +34,10 @@ func (s *fakeStore) Put(_ context.Context, r Record) error {
 	s.rows[r.Purpose] = r
 	return nil
 }
-func (s *fakeStore) Delete(_ context.Context, purpose string) error { delete(s.rows, purpose); return nil }
+func (s *fakeStore) Delete(_ context.Context, purpose string) error {
+	delete(s.rows, purpose)
+	return nil
+}
 func (s *fakeStore) RecordError(_ context.Context, purpose, message string) error {
 	if r, ok := s.rows[purpose]; ok {
 		r.LastError = message
