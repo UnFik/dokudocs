@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ProjectItem } from '@/types/dokudocs'
 import { AlertTriangle, Check, Copy, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useDokudocsStore } from '@/stores/dokudocs-store'
+import { deleteProject } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -36,7 +37,23 @@ export function DeleteProjectDialog({
   onOpenChange,
   project,
 }: DeleteProjectDialogProps) {
-  const { deleteProject } = useDokudocsStore()
+  const queryClient = useQueryClient()
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteProject(project.orgId, project.id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['projects', project.orgId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['documents', project.orgId],
+        }),
+      ])
+      toast.success(`Project "${project.name}" deleted successfully`)
+      onOpenChange(false)
+    },
+    onError: (error) => toast.error(error.message),
+  })
   const [copied, setCopied] = useState(false)
 
   const deleteProjectSchema = z.object({
@@ -75,9 +92,7 @@ export function DeleteProjectDialog({
   }
 
   const onSubmit = () => {
-    deleteProject(project.id)
-    toast.success(`Project "${project.name}" deleted successfully`)
-    onOpenChange(false)
+    deleteMutation.mutate()
   }
 
   return (
@@ -172,7 +187,7 @@ export function DeleteProjectDialog({
                 type='submit'
                 variant='destructive'
                 size='sm'
-                disabled={!isMatch}
+                disabled={!isMatch || deleteMutation.isPending}
                 className='h-8 text-xs'
               >
                 Delete Project

@@ -7,6 +7,7 @@ import type {
   DocumentRevision,
   SortField,
   SortOrder,
+  TrashItem,
   WorkspaceItem,
 } from '@/types/dokudocs'
 import { apiFetch } from './api-client'
@@ -590,6 +591,80 @@ export async function toggleProjectStar(
     })
   )
   return result.isStarred
+}
+
+export async function deleteProject(
+  workspaceId: string,
+  projectId: string
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/projects/${projectId}`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(workspaceId),
+  })
+}
+
+const trashItemSchema = z.object({
+  id: z.string().min(1),
+  docId: z.string().min(1),
+  document: documentSchema,
+  deletedAt: z.string(),
+  deletedBy: z.object({
+    id: z.string().min(1),
+    name: z.string(),
+    email: z.string(),
+    avatar: z.string().optional().default(''),
+  }),
+  daysRemaining: z.number(),
+})
+
+export async function listTrash(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<TrashItem[]> {
+  const rows = z.array(trashItemSchema).parse(
+    await apiFetch<unknown>('/api/v1/trash', {
+      headers: workspaceHeaders(workspaceId),
+      signal,
+    })
+  )
+  return rows.map((row) => ({ ...row, document: toDocument(row.document) }))
+}
+
+export async function moveDocumentToTrash(
+  workspaceId: string,
+  documentId: string
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/documents/${documentId}`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(workspaceId),
+  })
+}
+
+export async function restoreDocument(
+  workspaceId: string,
+  documentId: string
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/documents/${documentId}/restore`, {
+    method: 'POST',
+    headers: workspaceHeaders(workspaceId),
+  })
+}
+
+export async function permanentlyDeleteDocument(
+  workspaceId: string,
+  documentId: string
+): Promise<void> {
+  await apiFetch<unknown>(`/api/v1/documents/${documentId}/permanent`, {
+    method: 'DELETE',
+    headers: workspaceHeaders(workspaceId),
+  })
+}
+
+export async function emptyTrash(workspaceId: string): Promise<void> {
+  await apiFetch<unknown>('/api/v1/trash', {
+    method: 'DELETE',
+    headers: workspaceHeaders(workspaceId),
+  })
 }
 
 export async function listProjects(

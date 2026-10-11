@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/confirm-dialog'
+import { useMoveToTrash } from '../hooks/use-document-trash'
 import { useToggleDocumentStar } from '../hooks/use-toggle-document-star'
 import { DocThumbnailPreview } from './doc-thumbnail-preview'
 import { DocTypeBadge } from './doc-type-badge'
@@ -61,11 +62,11 @@ export function DocCard({ document }: DocCardProps) {
     activeOrgId,
     updateDocument,
     recordDocumentView,
-    moveToTrash,
     duplicateDocument,
     moveDocumentToProject,
   } = useDokudocsStore()
   const starMutation = useToggleDocumentStar()
+  const moveToTrash = useMoveToTrash()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
   const [moveDialogOpen, setMoveDialogOpen] = useState(false)
@@ -92,16 +93,7 @@ export function DocCard({ document }: DocCardProps) {
     toast.success('Document duplicated successfully')
   }
 
-  const handleDelete = () => {
-    moveToTrash(document.id)
-    toast.success('Moved document to Trash', {
-      action: {
-        label: 'Undo',
-        onClick: () =>
-          useDokudocsStore.getState().restoreFromTrash(document.id),
-      },
-    })
-  }
+  const handleDelete = () => moveToTrash.mutate(document)
 
   const handleToggleCategory = (cat: string) => {
     const current = getDocCategories(document)
