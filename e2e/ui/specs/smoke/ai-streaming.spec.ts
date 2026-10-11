@@ -11,12 +11,23 @@ test.describe.configure({ mode: 'serial' })
 const apiURL = process.env.API_URL ?? 'http://localhost:8080'
 let provider: FakeAIProvider
 let conversationQuestion: string
+let toRemove: { workspaceID: string; authorization: string } | undefined
 
 test.beforeAll(async () => {
   provider = new FakeAIProvider()
   await provider.start()
 })
-test.afterAll(async () => provider.stop())
+test.afterAll(async () => {
+  await provider.stop()
+  // The suite shares one admin account, and other specs look for the workspace
+  // switcher by the word "workspace", which a named workspace no longer shows.
+  if (toRemove) {
+    await fetch(`${apiURL}/api/v1/workspaces/${toRemove.workspaceID}`, {
+      method: 'DELETE',
+      headers: { Authorization: toRemove.authorization },
+    })
+  }
+})
 
 async function signIn(page: Page) {
   await page.goto('/sign-in')
@@ -49,6 +60,7 @@ async function setUp(page: Page) {
   const workspaceResponse = await workspaceCreated
   expect(workspaceResponse.ok()).toBe(true)
   const workspaceID = (await workspaceResponse.json()).data.id as string
+  toRemove = { workspaceID, authorization }
   const headers = { Authorization: authorization, 'X-Workspace-Id': workspaceID }
 
   // The answer provider is the local fake; saving it is itself a job that must pass.
