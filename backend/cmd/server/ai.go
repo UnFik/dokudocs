@@ -5,12 +5,15 @@ import (
 	"fmt"
 
 	"backend/internal/application/aisettings"
+	mcpapp "backend/internal/application/mcp"
 	"backend/internal/config"
 	"backend/internal/infrastructure/aiprovider"
 	"backend/internal/infrastructure/database"
 	"backend/internal/infrastructure/openai"
 	settingsrepo "backend/internal/infrastructure/repository/aisettings"
+	aiusagerepo "backend/internal/infrastructure/repository/aiusage"
 	documentrepo "backend/internal/infrastructure/repository/document"
+	mcprepo "backend/internal/infrastructure/repository/mcp"
 	"backend/internal/infrastructure/runtime/container"
 	"backend/internal/infrastructure/secretbox"
 )
@@ -35,10 +38,11 @@ func setUpAISettings(ctx context.Context, cfg config.Config, c *container.Contai
 	}
 	db := database.DB(c.DB)
 	store := settingsrepo.NewStore(db)
-	resolver := aiprovider.NewResolver(store, box, cfg.AllowPrivateAIHosts)
+	usage := aiusagerepo.NewStore(db)
+	resolver := aiprovider.NewResolver(store, box, cfg.AllowPrivateAIHosts).WithUsage(usage)
 	service := aisettings.NewService(aisettings.Deps{
 		Store: store, Index: documentrepo.NewRepository(db), Cipher: box,
-		Tester: aiprovider.NewTester(cfg.AllowPrivateAIHosts), ProviderName: openai.ProviderName,
+		Tester: aiprovider.NewTester(cfg.AllowPrivateAIHosts).WithUsage(usage), ProviderName: openai.ProviderName,
 		AllowPrivate: cfg.AllowPrivateAIHosts, OnChange: resolver.Invalidate,
 	})
 	if err := service.Seed(ctx, aisettings.Seed{APIKey: cfg.OpenAIAPIKey, AnswerModel: cfg.RAGAnswerModel, EmbeddingModel: cfg.RAGEmbeddingModel}); err != nil {
@@ -47,5 +51,12 @@ func setUpAISettings(ctx context.Context, cfg config.Config, c *container.Contai
 	c.AISettings = service
 	c.RAGAnswerModel = resolver
 	c.RAGEmbeddingModel = resolver.Embedder(aisettings.PurposeEmbedding)
+	c.AgentModel = resolver
 	return resolver, service, nil
+}
+
+// pruneMCPAudit drops audit entries older than the retention the Superadmin set.
+func pruneMCPAudit(ctx context.Context, c *container.Container) (int64, error) {
+	store := mcprepo.NewStore(c.DB)
+	return mcpapp.NewService(store, store, store, settingsrepo.NewStore(c.DB)).Prune(ctx)
 }

@@ -26,10 +26,12 @@ func InitRoutes(c *container.Container, cfg config.Config) http.Handler {
 	addUserRoutes(appGroup, c, cfg)
 	addWorkspaceRoutes(appGroup, c, cfg)
 	addProjectRoutes(appGroup, c, cfg)
-	addDocumentRoutes(appGroup, c, cfg)
+	kit := newAgentKit(c, cfg)
+	addDocumentRoutes(appGroup, c, cfg, kit)
 	addCatalogRoutes(appGroup, c, cfg)
 	addPushRoutes(appGroup, c, cfg)
 	addAISettingsRoutes(appGroup, c, cfg)
+	addAgentRoutes(mux, appGroup, c, cfg, kit)
 	addCollabInternalRoutes(mux, c, cfg)
 
 	return mux

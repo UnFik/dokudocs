@@ -93,10 +93,12 @@ type DocumentAccess struct {
 }
 
 type DocumentSuggestion struct {
-	DocumentID     uuid.UUID         `json:"documentId"`
-	SuggestionID   uuid.UUID         `json:"suggestionId"`
-	ProposerID     uuid.UUID         `json:"proposerId"`
-	ProposerName   string            `json:"proposerName"`
+	DocumentID   uuid.UUID `json:"documentId"`
+	SuggestionID uuid.UUID `json:"suggestionId"`
+	ProposerID   uuid.UUID `json:"proposerId"`
+	ProposerName string    `json:"proposerName"`
+	// AIAssisted is set when the Agent wrote the suggestion in the proposer's name.
+	AIAssisted     bool              `json:"aiAssisted"`
 	DeciderID      *uuid.UUID        `json:"deciderId,omitempty"`
 	ConflictReason string            `json:"conflictReason"`
 	Status         string            `json:"status"`
