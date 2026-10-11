@@ -81,15 +81,18 @@ func TestAnEmbeddingOfAnotherLengthIsRefused(t *testing.T) {
 func TestChatCompletionsAnswerUsesTheStrictSchemaFirst(t *testing.T) {
 	id := uuid.New()
 	var path string
+	var instructions string
 	var format map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path = r.URL.Path
 		var body struct {
-			Model          string         `json:"model"`
-			ResponseFormat map[string]any `json:"response_format"`
+			Model          string                     `json:"model"`
+			ResponseFormat map[string]any             `json:"response_format"`
+			Messages       []struct{ Content string } `json:"messages"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		format = body.ResponseFormat
+		instructions = body.Messages[0].Content
 		_, _ = w.Write([]byte(chatReply(`{"answer":"On a VPS.","source_ids":["` + id.String() + `"]}`)))
 	}))
 	defer server.Close()
@@ -100,6 +103,9 @@ func TestChatCompletionsAnswerUsesTheStrictSchemaFirst(t *testing.T) {
 	}
 	if path != "/v1/chat/completions" || format["type"] != "json_schema" {
 		t.Fatalf("request path %s, response_format %v", path, format)
+	}
+	if !strings.Contains(instructions, `"source_ids"`) {
+		t.Fatalf("the JSON field names must reach models whose provider ignores response_format: %s", instructions)
 	}
 }
 

@@ -18,7 +18,9 @@ func TimeoutWithRAG(duration, ragDuration time.Duration) func(http.Handler) http
 				return
 			}
 			requestDuration := duration
-			if strings.HasPrefix(r.URL.Path, "/api/v1/rag/") && ragDuration > 0 {
+			modelRequest := strings.HasPrefix(r.URL.Path, "/api/v1/rag/") ||
+				(strings.HasPrefix(r.URL.Path, "/api/v1/platform/ai/") && (r.Method == http.MethodPost || r.Method == http.MethodPut))
+			if modelRequest && ragDuration > 0 {
 				requestDuration = ragDuration
 			}
 			http.TimeoutHandler(next, requestDuration, "request timeout").ServeHTTP(w, r)
