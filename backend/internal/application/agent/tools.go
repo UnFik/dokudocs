@@ -689,11 +689,11 @@ func DokudocsTools(d ToolDeps) []Tool {
 			NeedsApproval: always(func(json.RawMessage) string { return "Change a project's details" }),
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
 				a, err := parse[struct {
-					WorkspaceID string `json:"workspace_id"`
-					ProjectID   string `json:"project_id"`
-					Name        string `json:"name"`
-					Description string `json:"description"`
-					Visibility  string `json:"visibility"`
+					WorkspaceID string  `json:"workspace_id"`
+					ProjectID   string  `json:"project_id"`
+					Name        string  `json:"name"`
+					Description *string `json:"description"`
+					Visibility  string  `json:"visibility"`
 				}](args)
 				if err != nil {
 					return nil, err
