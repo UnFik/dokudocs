@@ -11,26 +11,28 @@ import (
 	"time"
 
 	appchat "backend/internal/application/rag/usecase"
-	"backend/internal/infrastructure/tracing"
-
-	"go.opentelemetry.io/otel/attribute"
 )
 
 const embeddingDimensions = 1536
 
 type EmbeddingModel struct {
-	apiKey string
-	model  string
-	client *http.Client
+	baseURL string
+	apiKey  string
+	model   string
+	client  *http.Client
 }
 
 func NewEmbeddingModel(apiKey, model string) *EmbeddingModel {
-	return &EmbeddingModel{apiKey: apiKey, model: model, client: &http.Client{Timeout: 30 * time.Second, Transport: tracing.Transport(attribute.String("gen_ai.request.model", model))}}
+	return NewEmbedding(Config{APIKey: apiKey, Model: model})
 }
 
-func (*EmbeddingModel) Provider() string { return "openai" }
-func (m *EmbeddingModel) Model() string  { return m.model }
-func (*EmbeddingModel) Dimensions() int  { return embeddingDimensions }
+func NewEmbedding(cfg Config) *EmbeddingModel {
+	return &EmbeddingModel{baseURL: cfg.baseURL(), apiKey: cfg.APIKey, model: cfg.Model, client: cfg.client(30 * time.Second)}
+}
+
+func (m *EmbeddingModel) Provider() string { return ProviderName(m.baseURL) }
+func (m *EmbeddingModel) Model() string    { return m.model }
+func (*EmbeddingModel) Dimensions() int    { return embeddingDimensions }
 
 func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) ([][]float32, error) {
 	if strings.TrimSpace(m.apiKey) == "" || strings.TrimSpace(m.model) == "" || len(inputs) == 0 || len(inputs) > 32 {
@@ -48,7 +50,7 @@ func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) ([][]float3
 	if err != nil {
 		return nil, errors.New("embedding request failed")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.openai.com/v1/embeddings", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.baseURL+"/embeddings", bytes.NewReader(payload))
 	if err != nil {
 		return nil, errors.New("embedding request failed")
 	}
@@ -56,7 +58,7 @@ func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) ([][]float3
 	req.Header.Set("Content-Type", "application/json")
 	res, err := m.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: embedding provider unavailable", appchat.ErrRAGProviderUnavailable)
+		return nil, fmt.Errorf("%w: embedding provider unavailable: %s", appchat.ErrRAGProviderUnavailable, reason(err))
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -74,6 +76,9 @@ func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) ([][]float3
 	vectors := make([][]float32, len(inputs))
 	seen := make([]bool, len(inputs))
 	for _, item := range response.Data {
+		if len(item.Embedding) != embeddingDimensions && len(item.Embedding) > 0 {
+			return nil, fmt.Errorf("%w: embedding provider returned %d numbers per text, Dokudocs needs %d", appchat.ErrRAGProviderUnavailable, len(item.Embedding), embeddingDimensions)
+		}
 		if item.Index < 0 || item.Index >= len(inputs) || seen[item.Index] || len(item.Embedding) != embeddingDimensions {
 			return nil, fmt.Errorf("%w: embedding provider returned an invalid response", appchat.ErrRAGProviderUnavailable)
 		}

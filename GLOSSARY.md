@@ -78,3 +78,17 @@ Signing in with a provider whose verified email matches a local account that nev
 **Workspace invite**:
 An offer to join a workspace, mailed as a single-use link to one email address. Only a User whose Verified email is that address can accept it, so a forwarded link is useless. It expires after 7 days and can be sent again or withdrawn. Accepting adds the User to the workspace; nothing adds a person who has not accepted (ADR-0036).
 _Avoid_: Add member, share link, join link
+
+## Platform
+
+**Superadmin**:
+A User who holds the `superadmin` platform role. Only a Superadmin can change which AI provider the chatbot uses. The role is checked against the database on every request, never read from the sign-in token.
+_Avoid_: Root, owner, workspace admin
+
+**AI provider setting**:
+The record, one for answering and one for embedding, that says which base URL, protocol, model and API key the chatbot uses. It takes effect without a restart and is kept only after a connection test succeeds.
+_Avoid_: LLM config, model env
+
+**Active embedding model**:
+The embedding model whose vectors the chatbot searches with. After a Superadmin picks a new embedding model, the old one stays active until every document has been re-embedded with the new one.
+_Avoid_: Current model

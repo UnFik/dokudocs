@@ -1,6 +1,7 @@
 package container
 
 import (
+	"backend/internal/application/aisettings"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/domain/contract/mail"
 	"backend/internal/domain/contract/notification"
@@ -16,6 +17,8 @@ type Container struct {
 	Validator         *validator.Validator
 	RAGAnswerModel    appchat.AnswerModel
 	RAGEmbeddingModel appchat.EmbeddingModel
+	// AISettings is the Superadmin's AI provider settings; nil leaves their routes off.
+	AISettings *aisettings.Service
 	// Mailer sends email; nil when SMTP is not configured.
 	Mailer mail.Mailer
 	// Push sends to a person's browsers; nil when push is not configured.

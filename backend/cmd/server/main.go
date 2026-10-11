@@ -5,14 +5,12 @@ import (
 	"os"
 	"time"
 
-	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/config"
 	"backend/internal/infrastructure/api"
 	"backend/internal/infrastructure/api/routes"
 	"backend/internal/infrastructure/firebase"
 	"backend/internal/infrastructure/logger"
 	"backend/internal/infrastructure/mail"
-	"backend/internal/infrastructure/openai"
 	"backend/internal/infrastructure/postgres"
 	documentrepo "backend/internal/infrastructure/repository/document"
 	pushrepo "backend/internal/infrastructure/repository/push"
@@ -46,9 +44,9 @@ func main() {
 	}
 	defer db.Close()
 	c := container.New(db, log, validator.New())
-	if cfg.OpenAIAPIKey != "" {
-		c.RAGAnswerModel = openai.NewAnswerModel(cfg.OpenAIAPIKey, cfg.RAGAnswerModel)
-		c.RAGEmbeddingModel = openai.NewEmbeddingModel(cfg.OpenAIAPIKey, cfg.RAGEmbeddingModel)
+	resolver, aiService, err := setUpAISettings(context.Background(), cfg, c)
+	if err != nil {
+		log.Fatalf("set up AI settings: %v", err)
 	}
 	if cfg.MailerConfigured() {
 		c.Mailer = mail.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPassword, cfg.SMTPFrom)
@@ -60,7 +58,7 @@ func main() {
 	}
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	defer stopWorkers()
-	go runRAGIndexWorker(workerCtx, documentrepo.NewRepository(db), c.RAGEmbeddingModel, log)
+	go runRAGIndexWorker(workerCtx, documentrepo.NewRepository(db), resolver, aiService, log)
 	go func() {
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
@@ -102,17 +100,15 @@ func setUpPush(ctx context.Context, cfg config.Config, c *container.Container) e
 	return nil
 }
 
-func runRAGIndexWorker(ctx context.Context, repo *documentrepo.Repository, embedder appchat.EmbeddingModel, log *logger.Logger) {
+func runRAGIndexWorker(ctx context.Context, repo *documentrepo.Repository, source embedderSource, advance transitionAdvancer, log *logger.Logger) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
 		if _, err := repo.RebuildStaleRAGIndexes(ctx, 100); err != nil {
 			log.Errorf("rebuild stale RAG indexes: %v", err)
 		}
-		if embedder != nil {
-			if err := embedRAGBacklog(ctx, repo, embedder); err != nil {
-				log.Errorf("embed RAG chunks: %v", err)
-			}
+		if err := embedConfiguredModels(ctx, repo, source, advance); err != nil {
+			log.Errorf("embed RAG chunks: %v", err)
 		}
 		select {
 		case <-ctx.Done():

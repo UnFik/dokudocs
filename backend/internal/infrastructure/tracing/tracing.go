@@ -64,7 +64,12 @@ func Middleware(next http.Handler) http.Handler {
 // Transport traces outgoing requests, with attrs on each span, and passes the
 // trace on in traceparent. Spans hold the method, URL and status, never a body.
 func Transport(attrs ...attribute.KeyValue) http.RoundTripper {
-	return otelhttp.NewTransport(http.DefaultTransport, otelhttp.WithSpanOptions(trace.WithAttributes(attrs...)))
+	return WrapTransport(http.DefaultTransport, attrs...)
+}
+
+// WrapTransport is Transport over a transport of the caller's choosing.
+func WrapTransport(base http.RoundTripper, attrs ...attribute.KeyValue) http.RoundTripper {
+	return otelhttp.NewTransport(base, otelhttp.WithSpanOptions(trace.WithAttributes(attrs...)))
 }
 
 // QueryTracer traces database queries. Spans hold the SQL text with its
