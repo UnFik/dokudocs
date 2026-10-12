@@ -150,10 +150,12 @@ test('@smoke: the answer shows while the provider is still writing, and joins th
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible()
 
   provider.release()
-  await expect(page.getByText('The recovery codeword is cobalt.', { exact: true })).toBeVisible()
+  // The finished answer is in the message log; the chat's own title (written from the answer) also shows elsewhere.
+  const log = page.getByRole('log', { name: 'Messages' })
+  await expect(log.getByText('The recovery codeword is cobalt.', { exact: true })).toBeVisible()
   await expect(page.getByText('dokudocs ai · draft')).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Open block' })).toBeVisible()
-  await expect(page.getByText('The recovery codeword is cobalt.', { exact: true })).toHaveCount(1)
+  await expect(log.getByText('The recovery codeword is cobalt.', { exact: true })).toHaveCount(1)
   expect(starts).toHaveLength(0)
 })
 
