@@ -13,7 +13,6 @@ import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
 import { ArchitectureDocEditor } from '@/features/architecture/components/architecture-editor'
 import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
-import { DocumentChatPanel } from '@/features/rag/document-chat-panel'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { useDocEditor } from '../hooks/use-doc-editor'
 import { useToggleDocumentStar } from '../hooks/use-toggle-document-star'
@@ -25,6 +24,7 @@ import {
 } from '../lib/diagram-export'
 import { DbmlEditor } from './dbml-editor'
 import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
+import { DocumentFloatingControls } from './document-floating-controls'
 import { EditorHeader } from './editor-header'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
@@ -83,28 +83,37 @@ export function DocEditor() {
 
   if (!isRemoteID)
     return (
-      <ScopedDocEditor key={`${scope.generation}:${docId}`} docId={docId} />
+      <>
+        <ScopedDocEditor key={`${scope.generation}:${docId}`} docId={docId} />
+        <DocumentFloatingControls />
+      </>
     )
 
   if (offline && cachedCanvas?.workspaceId)
     return (
-      <ArchitectureDocEditor
-        key={`${scope.generation}:${docId}`}
-        document={cachedCanvas}
-        workspaceID={cachedCanvas.workspaceId}
-        userID={scope.userId ?? ''}
-      />
+      <>
+        <ArchitectureDocEditor
+          key={`${scope.generation}:${docId}`}
+          document={cachedCanvas}
+          workspaceID={cachedCanvas.workspaceId}
+          userID={scope.userId ?? ''}
+        />
+        <DocumentFloatingControls />
+      </>
     )
 
   if (offline && cachedSource?.workspaceId && cachedSource.replacementId)
     return (
-      <RemoteSourceDocEditor
-        key={`${scope.generation}:${docId}`}
-        document={cachedSource}
-        workspaceID={cachedSource.workspaceId}
-        userID={scope.userId ?? ''}
-        offline
-      />
+      <>
+        <RemoteSourceDocEditor
+          key={`${scope.generation}:${docId}`}
+          document={cachedSource}
+          workspaceID={cachedSource.workspaceId}
+          userID={scope.userId ?? ''}
+          offline
+        />
+        <DocumentFloatingControls />
+      </>
     )
 
   if (offline) {
@@ -113,13 +122,16 @@ export function DocEditor() {
         <DocumentLoadError message='This document is not available offline' />
       )
     return (
-      <RemoteMarkdownDocEditor
-        key={`${scope.generation}:${docId}:${citationNodeID ?? ''}`}
-        document={{ ...cachedMarkdown, content: '' }}
-        workspaceID={cachedMarkdown.workspaceId}
-        userID={scope.userId ?? ''}
-        offline
-      />
+      <>
+        <RemoteMarkdownDocEditor
+          key={`${scope.generation}:${docId}:${citationNodeID ?? ''}`}
+          document={{ ...cachedMarkdown, content: '' }}
+          workspaceID={cachedMarkdown.workspaceId}
+          userID={scope.userId ?? ''}
+          offline
+        />
+        <DocumentFloatingControls />
+      </>
     )
   }
 
@@ -187,21 +199,26 @@ export function DocEditor() {
     return (
       <>
         {remoteEditor}
-        <DocumentChatPanel
-          documentID={docId}
-          workspaceID={workspaceID}
-          title={documentQuery.data.title}
+        <DocumentFloatingControls
+          chat={{
+            documentID: docId,
+            workspaceID,
+            title: documentQuery.data.title,
+          }}
         />
       </>
     )
 
   return (
-    <HydrateLegacyDocument
-      key={`${scope.generation}:${docId}`}
-      document={documentQuery.data}
-      docId={docId}
-      generation={scope.generation}
-    />
+    <>
+      <HydrateLegacyDocument
+        key={`${scope.generation}:${docId}`}
+        document={documentQuery.data}
+        docId={docId}
+        generation={scope.generation}
+      />
+      <DocumentFloatingControls />
+    </>
   )
 }
 
