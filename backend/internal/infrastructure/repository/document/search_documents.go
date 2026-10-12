@@ -58,34 +58,44 @@ func (r *Repository) Search(ctx context.Context, workspaceID, actorID uuid.UUID,
 			`+documentReadPredicate+`
 		), title_hits AS (
 			SELECT v.id, v.title, v.type, v.project_id, v.project_name, v.is_draft, v.updated_at,
-			       'title' AS matched_on, '' AS snippet, 0::real AS body_rank,
+			       'title' AS matched_on, NULL::uuid AS chunk_id, 0::real AS body_rank,
 			       CASE WHEN v.title ILIKE $4 THEN 0 WHEN v.title ILIKE $3 THEN 1 ELSE 2 END AS tier
 			FROM visible v
 			WHERE v.title ILIKE $3 OR v.project_name ILIKE $3
+		), matched AS MATERIALIZED (
+			-- The full-text index finds the chunks first; scoring and the
+			-- workspace check then run only on what it returned.
+			SELECT c.chunk_id, c.document_id, c.source_fingerprint,
+			       ts_rank_cd(to_tsvector('simple', c.text), to_tsquery('simple', $6)) AS body_rank
+			FROM rag_chunks c
+			JOIN documents dw ON dw.id = c.document_id AND dw.workspace_id = $1
+			WHERE $6 <> '' AND to_tsvector('simple', c.text) @@ to_tsquery('simple', $6)
 		), body_hits AS (
 			SELECT DISTINCT ON (v.id) v.id, v.title, v.type, v.project_id, v.project_name, v.is_draft, v.updated_at,
-			       'body' AS matched_on,
-			       ts_headline('simple', c.text, to_tsquery('simple', $6), $7) AS snippet,
-			       ts_rank_cd(to_tsvector('simple', c.text), to_tsquery('simple', $6)) AS body_rank,
-			       3 AS tier
-			FROM visible v
+			       'body' AS matched_on, m.chunk_id, m.body_rank, 3 AS tier
+			FROM matched m
+			JOIN visible v ON v.id = m.document_id
 			JOIN rag_document_indexes ri ON ri.document_id = v.id
-			JOIN rag_chunks c ON c.document_id = v.id
-			WHERE $6 <> '' AND v.type IN ('markdown', 'architecture')
+			WHERE v.type IN ('markdown', 'architecture')
 			  AND ri.indexed_body_version = v.body_version
-			  AND ri.source_fingerprint = c.source_fingerprint AND ri.indexed_title = v.title
+			  AND ri.source_fingerprint = m.source_fingerprint AND ri.indexed_title = v.title
 			  AND ri.indexed_project_id IS NOT DISTINCT FROM v.project_id
 			  AND ri.indexed_project_name = v.raw_project_name AND ri.renderer_version = $8
-			  AND to_tsvector('simple', c.text) @@ to_tsquery('simple', $6)
 			  AND v.id NOT IN (SELECT id FROM title_hits)
-			ORDER BY v.id, body_rank DESC
-		), hits AS (
-			SELECT * FROM title_hits UNION ALL SELECT * FROM body_hits
+			ORDER BY v.id, m.body_rank DESC
+		), top_hits AS (
+			SELECT * FROM (
+				SELECT * FROM title_hits UNION ALL SELECT * FROM body_hits
+			) hits
+			ORDER BY tier, body_rank DESC, updated_at DESC
+			LIMIT $5
 		)
-		SELECT id, title, type, project_id, project_name, is_draft, updated_at, matched_on, snippet
-		FROM hits
-		ORDER BY tier, body_rank DESC, updated_at DESC
-		LIMIT $5
+		SELECT h.id, h.title, h.type, h.project_id, h.project_name, h.is_draft, h.updated_at, h.matched_on,
+		       CASE WHEN h.chunk_id IS NULL THEN ''
+		            ELSE ts_headline('simple', c.text, to_tsquery('simple', $6), $7) END
+		FROM top_hits h
+		LEFT JOIN rag_chunks c ON c.chunk_id = h.chunk_id
+		ORDER BY h.tier, h.body_rank DESC, h.updated_at DESC
 	`, workspaceID, actorID, pattern, prefix, limit, tsQuery, searchHeadlineOptions, ragRendererVersion)
 	if err != nil {
 		return nil, err
