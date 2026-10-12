@@ -312,6 +312,29 @@ type askRequest struct {
 
 // answer asks the Agent when one is set up, otherwise answers from documents.
 func (h *RAGChatHandler) answer(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, request askRequest) (any, error) {
+	answered, err := h.answerQuestion(ctx, actorID, workspaceID, conversationID, request)
+	if err == nil {
+		h.titleLater(ctx, actorID, workspaceID, conversationID, request.Language)
+	}
+	return answered, err
+}
+
+// titleLater has the model title the Conversation after its first answer, apart
+// from the request so the answer is not held back. A spent Usage limit or a
+// failed call leaves the title as the first question.
+func (h *RAGChatHandler) titleLater(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, language string) {
+	background := context.WithoutCancel(ctx)
+	go func() {
+		background, cancel := context.WithTimeout(background, 30*time.Second)
+		defer cancel()
+		if h.checkLimit(background, actorID, workspaceID) != nil {
+			return
+		}
+		_ = h.service.TitleConversation(background, workspaceID, conversationID, actorID, language)
+	}()
+}
+
+func (h *RAGChatHandler) answerQuestion(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, request askRequest) (any, error) {
 	if h.agent != nil && h.agent.ready(ctx) {
 		answer, err := h.agent.chat.Ask(ctx, agent.ChatInput{
 			WorkspaceID: workspaceID, ConversationID: conversationID, ActorID: actorID,
