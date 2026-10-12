@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { Check, Link2, Send, Square, X } from 'lucide-react'
+import { ArrowUp, Check, Link2, Square, X } from 'lucide-react'
 import {
   MAX_DOCUMENT_MENTIONS,
   activeMentionQuery,
@@ -17,6 +17,7 @@ import {
 } from '@/lib/document-mentions'
 import {
   decideAgentAction,
+  getRAGUsage,
   listSkills,
   searchChatDocuments,
   type AgentAction,
@@ -28,6 +29,9 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { AddContextMenu } from './add-context-menu'
+import { resetLabel } from './conversation-format'
+import { UsageRing } from './usage-ring'
 import type { ChatRunView } from './use-chat-run'
 
 /** An action the Agent asked for: it runs only when the User approves it here. */
@@ -452,6 +456,7 @@ export function AskForm({
   onStop,
   language,
   onLanguage,
+  scope = 'workspace',
 }: {
   id: string
   pending: boolean
@@ -464,6 +469,8 @@ export function AskForm({
   onStop?: () => void
   language: 'id' | 'en'
   onLanguage: (language: 'id' | 'en') => void
+  /** A document chat has no Category to narrow by. */
+  scope?: 'document' | 'workspace'
 }) {
   const [question, setQuestion] = useState('')
   const [placed, setPlaced] = useState<PlacedDocumentMention[]>([])
@@ -476,6 +483,14 @@ export function AskForm({
     retry: false,
     staleTime: 60_000,
   })
+  const usage = useQuery({
+    queryKey: ['rag-usage', workspaceID],
+    queryFn: ({ signal }) => getRAGUsage(workspaceID!, signal),
+    enabled: Boolean(workspaceID),
+    retry: false,
+    staleTime: 30_000,
+  })
+  const spent = Boolean(usage.data && usage.data.used >= usage.data.limit)
   const typed = question.startsWith('/') ? question.slice(1).split(/\s/)[0] : ''
   const matches = question.startsWith('/')
     ? (skills.data ?? []).filter(
@@ -581,33 +596,63 @@ export function AskForm({
   }
   return (
     <form onSubmit={submit} className='border-t p-3'>
-      <label htmlFor={id} className='mb-2 block text-sm font-medium'>
-        Ask a question
-      </label>
       <div className='relative'>
-        <Textarea
-          ref={box}
-          id={id}
-          value={question}
-          onChange={(event) => {
-            const next = event.target.value
-            setPlaced(trackEdit(placed, question, next))
-            setQuestion(next)
-            setCaret(event.target.selectionStart)
-            setHighlighted(0)
-            if (
-              activeMentionQuery(next, event.target.selectionStart)?.start !==
-              dismissedAt
-            )
-              setDismissedAt(null)
-          }}
-          onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          maxLength={10000}
-          disabled={pending}
-          className='min-h-20 resize-y'
-        />
+        <div className='rounded-md border border-input bg-card focus-within:ring-2 focus-within:ring-ring'>
+          <Textarea
+            ref={box}
+            id={id}
+            aria-label='Ask a question'
+            value={question}
+            onChange={(event) => {
+              const next = event.target.value
+              setPlaced(trackEdit(placed, question, next))
+              setQuestion(next)
+              setCaret(event.target.selectionStart)
+              setHighlighted(0)
+              if (
+                activeMentionQuery(next, event.target.selectionStart)?.start !==
+                dismissedAt
+              )
+                setDismissedAt(null)
+            }}
+            onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            maxLength={10000}
+            disabled={pending}
+            className='min-h-20 resize-none border-0 bg-transparent shadow-none focus-visible:border-transparent focus-visible:ring-0'
+          />
+          <div className='flex items-center justify-between px-2 pb-2'>
+            <AddContextMenu
+              skills={skills.data ?? []}
+              scope={scope}
+              disabled={pending}
+              onPickSkill={chooseSkill}
+            />
+            {pending && onStop ? (
+              <Button
+                type='button'
+                size='icon'
+                variant='outline'
+                aria-label='Stop'
+                onClick={onStop}
+                className='size-8 max-sm:size-11'
+              >
+                <Square />
+              </Button>
+            ) : (
+              <Button
+                type='submit'
+                size='icon'
+                aria-label='Send'
+                disabled={pending || spent || !question.trim()}
+                className='size-8 max-sm:size-11'
+              >
+                <ArrowUp />
+              </Button>
+            )}
+          </div>
+        </div>
         {matches.length > 0 ? (
           <ul aria-label='Skills' className={floatingList}>
             {matches.map((skill, index) => (
@@ -674,35 +719,27 @@ export function AskForm({
           )
         ) : null}
       </div>
-      <div className='mt-2 flex flex-wrap items-center justify-between gap-2'>
-        <label className='flex items-center gap-2 text-xs text-muted-foreground'>
-          Answer language
+      <div className='mt-2 flex items-center justify-between gap-2'>
+        <label className='flex min-w-0 items-center gap-2 text-xs text-muted-foreground'>
+          <span className='sr-only'>Answer language</span>
           <select
             aria-label='Answer language'
             value={language}
             onChange={(event) => onLanguage(event.target.value as 'id' | 'en')}
-            className='h-8 rounded-md border bg-background px-2 text-foreground'
+            className='h-8 rounded-md border border-input bg-card px-2 text-xs text-foreground max-sm:h-11'
           >
             <option value='en'>English</option>
             <option value='id'>Bahasa Indonesia</option>
           </select>
         </label>
-        {pending && onStop ? (
-          <Button type='button' size='sm' variant='outline' onClick={onStop}>
-            <Square />
-            Stop
-          </Button>
-        ) : (
-          <Button
-            type='submit'
-            size='sm'
-            disabled={pending || !question.trim()}
-          >
-            <Send />
-            {pending ? 'Working…' : 'Send'}
-          </Button>
-        )}
+        {usage.data ? <UsageRing usage={usage.data} /> : null}
       </div>
+      {spent && usage.data ? (
+        <p role='status' className='mt-2 text-sm text-muted-foreground'>
+          This month&apos;s AI limit is spent. It resets on{' '}
+          {resetLabel(usage.data.resetsAt)}. Your chats stay readable.
+        </p>
+      ) : null}
       {error ? (
         <p role='alert' className='mt-2 text-sm text-destructive'>
           {error.message}

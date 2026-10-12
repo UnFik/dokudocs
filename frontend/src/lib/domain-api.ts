@@ -223,8 +223,16 @@ const ragConversationSchema = z.object({
   creatorId: z.guid().optional(),
   documentId: z.string().uuid().optional(),
   title: z.string(),
+  pinnedAt: z.string().optional(),
+  archivedAt: z.string().optional(),
+  unread: z.boolean().optional().default(false),
   createdAt: z.string(),
   updatedAt: z.string(),
+})
+const ragUsageSchema = z.object({
+  used: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  resetsAt: z.string(),
 })
 const ragMessageSchema = z.object({
   id: z.string().uuid(),
@@ -332,6 +340,7 @@ export type CommentReply = z.infer<typeof commentReplySchema>
 export type CommentThread = z.infer<typeof commentThreadSchema>
 export type RAGCitation = z.infer<typeof ragCitationSchema>
 export type RAGConversation = z.infer<typeof ragConversationSchema>
+export type RAGUsage = z.infer<typeof ragUsageSchema>
 export type RAGMessage = z.infer<typeof ragMessageSchema>
 export type RAGConversationHistory = z.infer<typeof ragHistorySchema>
 export type AgentAction = z.infer<typeof agentActionSchema>
@@ -1101,6 +1110,41 @@ export async function listSkills(signal?: AbortSignal): Promise<Skill[]> {
   return z
     .object({ skills: z.array(skillSchema) })
     .parse(await apiFetch<unknown>('/api/v1/skills', { signal })).skills
+}
+
+/** Renames, pins, unpins, archives or restores one of the User's chats. */
+export async function updateRAGConversation(
+  conversationID: string,
+  patch: { title?: string; pinned?: boolean; archived?: boolean }
+): Promise<RAGConversation> {
+  return ragConversationSchema.parse(
+    await apiFetch<unknown>(`/api/v1/rag/conversations/${conversationID}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    })
+  )
+}
+
+/** Records that the User has seen the chat's latest answer. */
+export async function markRAGConversationRead(
+  conversationID: string
+): Promise<void> {
+  await apiFetch<void>(`/api/v1/rag/conversations/${conversationID}/read`, {
+    method: 'POST',
+  })
+}
+
+/** Tokens the User has used this month in the workspace, and the Plan's limit. */
+export async function getRAGUsage(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<RAGUsage> {
+  return ragUsageSchema.parse(
+    await apiFetch<unknown>('/api/v1/rag/usage', {
+      signal,
+      headers: workspaceHeaders(workspaceId),
+    })
+  )
 }
 
 export async function deleteRAGConversation(

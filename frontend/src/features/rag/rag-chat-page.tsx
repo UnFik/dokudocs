@@ -31,7 +31,12 @@ export function RAGChatPage() {
   const queryClient = useQueryClient()
   const userID = useAuthStore((state) => state.auth.user?.id ?? '')
   const { workspaces, activeWorkspaceId } = useWorkspaces()
-  const [selectedID, setSelectedID] = useState<string>()
+  // "Open in AI chat" from a document panel arrives as ?conversation=<id>.
+  const [selectedID, setSelectedID] = useState<string | undefined>(
+    () =>
+      new URLSearchParams(window.location.search).get('conversation') ??
+      undefined
+  )
   const [language, setLanguage] = useState<'id' | 'en'>('en')
   const [deleting, setDeleting] = useState<string>()
   const conversationsQuery = useQuery({
@@ -41,9 +46,15 @@ export function RAGChatPage() {
     retry: false,
   })
   const conversations = conversationsQuery.data ?? []
-  const selectedConversation =
-    conversations.find((item) => item.id === selectedID) ?? conversations[0]
-  const historyQuery = useConversationHistory(userID, selectedConversation?.id)
+  const listed =
+    conversations.find((item) => item.id === selectedID) ??
+    (selectedID ? undefined : conversations[0])
+  // A chat opened by id may be a document chat, which the list does not carry.
+  const historyQuery = useConversationHistory(
+    userID,
+    listed?.id ?? selectedID ?? conversations[0]?.id
+  )
+  const selectedConversation = listed ?? historyQuery.history?.conversation
   const createMutation = useMutation({
     mutationFn: createRAGConversation,
     onSuccess: async (conversation) => {
