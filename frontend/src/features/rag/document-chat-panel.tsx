@@ -57,7 +57,8 @@ export function DocumentChatPanel({
   const conversations = useQuery({
     queryKey: listKey,
     queryFn: ({ signal }) => listDocumentRAGConversations(documentID, signal),
-    enabled: Boolean(userID),
+    // EXPERIMENT: only once the panel is open or an answer is awaited.
+    enabled: Boolean(userID) && (open || Boolean(awaiting)),
     retry: false,
     // Only while an answer is pending behind a shut panel, even in a hidden tab.
     refetchInterval: watching ? CLOSED_PANEL_POLL_MS : false,
