@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Link2, Send, Square, X } from 'lucide-react'
 import {
@@ -346,6 +346,38 @@ export function AskForm({
         (skill) => skill.name.startsWith(typed) && !question.includes(' ')
       )
     : []
+  const [highlighted, setHighlighted] = useState(0)
+  const active = Math.min(highlighted, Math.max(matches.length - 1, 0))
+  const chooseSkill = (name: string) => {
+    const next = `/${name} `
+    setQuestion(next)
+    // Keep typing after the skill name.
+    requestAnimationFrame(() => {
+      box.current?.focus()
+      box.current?.setSelectionRange(next.length, next.length)
+    })
+  }
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter confirms an input-method candidate; it is not a send.
+    if (event.nativeEvent.isComposing || event.key === 'Process') return
+    const plainEnter = event.key === 'Enter' && !event.shiftKey
+    if (matches.length > 0) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const step = event.key === 'ArrowDown' ? 1 : matches.length - 1
+        setHighlighted((active + step) % matches.length)
+      } else if (plainEnter || event.key === 'Tab') {
+        event.preventDefault()
+        chooseSkill(matches[active]!.name)
+      }
+      return
+    }
+    // A touch keyboard has no Shift, so there Enter stays a new line and Send is the button.
+    if (plainEnter && !window.matchMedia('(pointer: coarse)').matches) {
+      event.preventDefault()
+      event.currentTarget.form?.requestSubmit()
+    }
+  }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const text = question.trim()
@@ -362,7 +394,11 @@ export function AskForm({
         ref={box}
         id={id}
         value={question}
-        onChange={(event) => setQuestion(event.target.value)}
+        onChange={(event) => {
+          setQuestion(event.target.value)
+          setHighlighted(0)
+        }}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         maxLength={10000}
         disabled={pending}
@@ -370,20 +406,13 @@ export function AskForm({
       />
       {matches.length > 0 ? (
         <ul aria-label='Skills' className='mt-2 divide-y border-y text-sm'>
-          {matches.map((skill) => (
+          {matches.map((skill, index) => (
             <li key={skill.id}>
               <button
                 type='button'
-                className='w-full px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
-                onClick={() => {
-                  const next = `/${skill.name} `
-                  setQuestion(next)
-                  // Keep typing after the skill name.
-                  requestAnimationFrame(() => {
-                    box.current?.focus()
-                    box.current?.setSelectionRange(next.length, next.length)
-                  })
-                }}
+                aria-current={index === active ? 'true' : undefined}
+                className='w-full px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=true]:bg-accent'
+                onClick={() => chooseSkill(skill.name)}
               >
                 <span className='font-mono text-xs'>/{skill.name}</span>
                 {skill.description ? (
