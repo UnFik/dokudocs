@@ -60,6 +60,7 @@ type ChatRepository interface {
 	AuthorizeRAGQuestion(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
 	GetRAGConversation(context.Context, uuid.UUID, uuid.UUID) (model.RAGConversationHistory, error)
 	ReadableDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]string, error)
+	SearchDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, text string, limit int) ([]model.RAGDocumentHit, error)
 	GetRAGConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, before int64, limit int) (model.RAGConversationHistory, int64, error)
 	DeleteRAGConversation(context.Context, uuid.UUID, uuid.UUID) error
 	SearchRAGChunksWithPublicLinkTokens(context.Context, uuid.UUID, uuid.UUID, string, int, []string) ([]model.RAGChunk, error)
@@ -133,6 +134,14 @@ func (u *ChatUseCase) GetConversation(ctx context.Context, conversationID, actor
 		return model.RAGConversationHistory{}, ErrInvalidChatRequest
 	}
 	return u.repository.GetRAGConversation(ctx, conversationID, actorID)
+}
+
+// SearchDocuments lists documents a question can name, for the picker.
+func (u *ChatUseCase) SearchDocuments(ctx context.Context, workspaceID, actorID uuid.UUID, text string, limit int) ([]model.RAGDocumentHit, error) {
+	if workspaceID == uuid.Nil || actorID == uuid.Nil || limit < 1 || len(text) > 200 {
+		return nil, ErrInvalidChatRequest
+	}
+	return u.repository.SearchDocumentTitles(ctx, workspaceID, actorID, text, min(limit, 20))
 }
 
 // MaxMentions is how many different documents one question may name.

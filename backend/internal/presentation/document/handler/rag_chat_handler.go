@@ -362,3 +362,25 @@ func errorsAsToolError(err error) bool {
 	var refusal *agent.ToolError
 	return errors.As(err, &refusal)
 }
+
+// SearchDocuments lists documents by title for the @ picker of a question.
+func (h *RAGChatHandler) SearchDocuments(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, err := getUserAndWorkspace(r)
+	if err != nil {
+		writeDocumentError(w, err)
+		return
+	}
+	limit := 8
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if limit, err = strconv.Atoi(raw); err != nil || limit < 1 {
+			response.Error(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+	}
+	hits, err := h.service.SearchDocuments(r.Context(), workspaceID, actorID, r.URL.Query().Get("search"), limit)
+	if err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, hits)
+}
