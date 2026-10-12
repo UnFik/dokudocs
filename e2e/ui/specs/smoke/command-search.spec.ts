@@ -96,7 +96,11 @@ test('@smoke: in the editor Ctrl+K searches from a caret and links a selection',
   await expect(searchBox(page)).toBeHidden()
   await expect(editor).toBeFocused()
 
-  await page.keyboard.press('Control+a')
+  // The format toolbar, and with it the link field, belongs to a text selection;
+  // select-all does not raise it.
+  await page.keyboard.press('Home')
+  await page.keyboard.press('Shift+End')
+  await expect(page.getByRole('toolbar', { name: 'Format selection' })).toBeVisible()
   await page.keyboard.press('Control+k')
   await expect(page.getByRole('textbox', { name: 'Link address' })).toBeVisible()
   await expect(searchBox(page)).toBeHidden()
