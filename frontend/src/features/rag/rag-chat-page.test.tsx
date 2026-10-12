@@ -125,6 +125,11 @@ function setup(
         : jsonResponse(null)
     if (url.pathname === `/api/v1/ai/runs/${runID}/events`)
       return sseResponse([sseFrame(1, 'completed', { id: runID })])
+    if (
+      url.pathname === `/api/v1/rag/conversations/${conversationID}` &&
+      init?.method === 'DELETE'
+    )
+      return new Response(null, { status: 204 })
     if (url.pathname === `/api/v1/rag/conversations/${conversationID}`)
       return jsonResponse(chatHistory)
     throw new Error(`Unexpected request: ${url.pathname}`)
@@ -248,4 +253,56 @@ it('shows a disagreement and both source citations in the saved answer', async (
     )
     .toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Open block' }).all()).toHaveLength(2)
+})
+
+const deletes = (fetch: ReturnType<typeof setup>['fetch']) =>
+  fetch.mock.calls.filter(([, init]) => init?.method === 'DELETE')
+
+it('asks before deleting a chat and keeps it when cancelled', async () => {
+  const { fetch, queryClient } = setup()
+  const screen = await render(
+    <QueryClientProvider client={queryClient}>
+      <SidebarProvider>
+        <RAGChatPage />
+      </SidebarProvider>
+    </QueryClientProvider>
+  )
+
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Delete chat' }).first()
+  )
+  await expect
+    .element(screen.getByRole('alertdialog', { name: 'Delete this chat?' }))
+    .toBeInTheDocument()
+  await expect
+    .element(screen.getByText(/cannot be restored/))
+    .toBeInTheDocument()
+  expect(deletes(fetch)).toHaveLength(0)
+
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  await expect.element(screen.getByRole('alertdialog')).not.toBeInTheDocument()
+  expect(deletes(fetch)).toHaveLength(0)
+})
+
+it('deletes the chat once the dialog is confirmed', async () => {
+  const { fetch, queryClient } = setup()
+  const screen = await render(
+    <QueryClientProvider client={queryClient}>
+      <SidebarProvider>
+        <RAGChatPage />
+      </SidebarProvider>
+    </QueryClientProvider>
+  )
+
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Delete chat' }).first()
+  )
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Delete', exact: true })
+  )
+  await vi.waitFor(() => expect(deletes(fetch)).toHaveLength(1))
+  expect(String(deletes(fetch)[0]![0])).toContain(
+    `/rag/conversations/${conversationID}`
+  )
+  await expect.element(screen.getByRole('alertdialog')).not.toBeInTheDocument()
 })
