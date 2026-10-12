@@ -386,6 +386,13 @@ function Citation({
   citation: RAGCitation
   workspaceID: string
 }) {
+  if (citation.unavailable)
+    return (
+      <li className='rounded-md border bg-background p-3 text-xs text-muted-foreground'>
+        <span className='font-medium'>Document not available</span>
+        <p className='mt-1'>You no longer have access to this source.</p>
+      </li>
+    )
   const href = `/docs/${encodeURIComponent(citation.documentId)}?workspaceId=${encodeURIComponent(workspaceID)}&nodeId=${encodeURIComponent(citation.nodeId)}#node-${encodeURIComponent(citation.nodeId)}`
   return (
     <li className='rounded-md border bg-background p-3 text-xs'>

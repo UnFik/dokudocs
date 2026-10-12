@@ -53,6 +53,7 @@ const history: RAGConversationHistory = {
           bodyVersion: 4,
           sourceFingerprint: 'source-v4',
           sourceChanged: true,
+          unavailable: false,
           quotedText: 'The runbook says restart the service.',
           breadcrumb: 'Recovery',
           ordinal: 0,
