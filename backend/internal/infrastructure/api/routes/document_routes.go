@@ -2,6 +2,7 @@ package routes
 
 import (
 	"backend/internal/application/airuns"
+	"backend/internal/application/aiusage"
 	"backend/internal/application/asset"
 	appauth "backend/internal/application/auth/usecase"
 	appdoc "backend/internal/application/document/usecase"
@@ -12,6 +13,7 @@ import (
 	"backend/internal/infrastructure/collabclient"
 	"backend/internal/infrastructure/notification"
 	airunsrepo "backend/internal/infrastructure/repository/airuns"
+	aiusagerepo "backend/internal/infrastructure/repository/aiusage"
 	docrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/infrastructure/runtime/container"
 	dochandler "backend/internal/presentation/document/handler"
@@ -36,7 +38,8 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 	suggestionHandler := dochandler.NewSuggestionHandler(suggestionService)
 	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel)).
 		WithAgent(kit.chat, kit.ready, kit.actions).
-		WithRuns(aiRuns(c), cfg.RAGRequestTimeout)
+		WithRuns(aiRuns(c), cfg.RAGRequestTimeout).
+		WithLimits(aiusage.NewLimits(aiusagerepo.NewStore(c.DB)))
 	commentUseCase := appdoc.NewCommentUseCase(bodyRepository).
 		WithDeliverer(notification.NewMentionDeliverer(c.Mailer, c.Push, cfg.PublicAppURL))
 	commentHandler := dochandler.NewCommentHandler(commentUseCase)
@@ -120,6 +123,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 		runGroup.Get("/{runID}/events", runs.Events)
 		runGroup.Post("/{runID}/cancel", runs.Cancel)
 	}
+	f.Group("/rag/usage", authRequired, workspaceRequired).Get("", ragChat.Usage)
 	f.Group("/rag/document-search", authRequired, workspaceRequired).Get("", ragChat.SearchDocuments)
 	f.Group("/rag/documents", authRequired).Get("/{documentID}/conversations", ragChat.ListDocumentConversations)
 }
