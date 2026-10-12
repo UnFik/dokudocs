@@ -67,6 +67,12 @@
   animation: slideUp 300ms ease-out;
 }
 
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 @keyframes slideDown {
   from {
     height: 0;
@@ -121,7 +127,8 @@
    and an underline, so it reads in both themes without the accent. */
 .source-comment-mark {
   background-color: color-mix(in oklab, var(--foreground) 10%, transparent);
-  border-bottom: 1px solid color-mix(in oklab, var(--foreground) 45%, transparent);
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--foreground) 45%, transparent);
 }
 
 .source-comment-focus {

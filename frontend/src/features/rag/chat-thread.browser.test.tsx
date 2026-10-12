@@ -1,3 +1,4 @@
+import '@/styles/index.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { jsonResponse, testSession } from '@/test-utils/auth'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -5,7 +6,8 @@ import { render } from 'vitest-browser-react'
 import { userEvent } from 'vitest/browser'
 import { useAuthStore } from '@/stores/auth-store'
 import type { AgentAction, RAGMessage } from '@/lib/domain-api'
-import { AskForm, ChatMessages } from './chat-thread'
+import { AskForm, ChatMessages, RunProgress } from './chat-thread'
+import type { ChatRunView } from './use-chat-run'
 
 const conversationID = '65b7593c-3a2d-45a4-a47d-47e8a1c8136b'
 const workspaceID = '149a8d07-8490-43ed-98fa-ebaa91b05e90'
@@ -283,4 +285,49 @@ it('keeps Enter as a new line on a touch keyboard', async () => {
   await userEvent.keyboard('one{Enter}two')
   await expect.element(box).toHaveValue('one\ntwo')
   expect(asked).toEqual([])
+})
+
+const runView: ChatRunView = {
+  phase: 'running',
+  runID: 'run-1',
+  question: 'What is the policy?',
+  draft: 'The policy says',
+  step: 'answering',
+  tools: [],
+  outcome: null,
+  message: '',
+  error: null,
+}
+
+const activity = (container: Element) =>
+  [...container.querySelectorAll('[data-activity]')] as HTMLElement[]
+
+it('animates a dot indicator and a caret while the answer is being written', async () => {
+  const screen = await mount(<RunProgress view={runView} />)
+  await expect.element(screen.getByText('Writing the answer…')).toBeVisible()
+  const found = activity(screen.container)
+  expect(found.map((el) => el.dataset.activity).sort()).toEqual([
+    'caret',
+    'dots',
+  ])
+  for (const el of found) {
+    const moving = el.firstElementChild ?? el
+    expect(getComputedStyle(moving).animationName).not.toBe('none')
+  }
+})
+
+it('animates the dots before any text has arrived', async () => {
+  const screen = await mount(
+    <RunProgress view={{ ...runView, phase: 'starting', draft: '' }} />
+  )
+  expect(activity(screen.container).map((el) => el.dataset.activity)).toEqual([
+    'dots',
+  ])
+})
+
+it('stops animating once the run has ended', async () => {
+  const screen = await mount(
+    <RunProgress view={{ ...runView, phase: 'ended', outcome: 'cancelled' }} />
+  )
+  expect(activity(screen.container)).toHaveLength(0)
 })
