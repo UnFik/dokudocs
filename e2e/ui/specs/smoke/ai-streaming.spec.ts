@@ -14,6 +14,7 @@ let conversationQuestion: string
 let documentTitle: string
 let codeword: string
 let apiHeaders: Record<string, string>
+let markdownDocumentID: string
 let toRemove: { workspaceID: string; authorization: string } | undefined
 
 test.beforeAll(async () => {
@@ -96,7 +97,7 @@ async function setUp(page: Page) {
     },
   })
   expect(created.status()).toBe(201)
-  await createdDocumentID(created)
+  markdownDocumentID = await createdDocumentID(created)
 
   // The index worker polls every 10 seconds; ask until an answer has a citation.
   const probe = (await (await page.request.post(`${apiURL}/api/v1/rag/conversations`, { headers, data: {} })).json()).data.id as string
@@ -226,4 +227,39 @@ test('@smoke: a long chat opens at its newest message and loads earlier ones on 
   await log.evaluate((el) => (el.scrollTop = 0))
   await expect(log.getByText('History question 1 about', { exact: false })).toHaveCount(1)
   await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0)
+})
+
+test('@smoke: on every kind of document the theme switch sits above Ask AI, which is at the bottom right', async ({ page }) => {
+  test.setTimeout(120_000)
+  await signIn(page)
+  const make = async (data: Record<string, unknown>) => {
+    const response = await page.request.post(`${apiURL}/api/v1/documents`, {
+      headers: { ...apiHeaders, 'Idempotency-Key': randomUUID() },
+      data,
+    })
+    expect(response.status()).toBe(201)
+    return (await response.json()).data.id as string
+  }
+  const documents = {
+    markdown: markdownDocumentID,
+    dbdiagram: await make({ title: 'Controls dbml', type: 'dbdiagram', isDraft: true, content: 'Table t { id int }' }),
+    mermaid: await make({ title: 'Controls mermaid', type: 'mermaid', isDraft: true, content: 'graph TD; A-->B' }),
+    architecture: await make({ title: 'Controls canvas', type: 'architecture', isDraft: false, visibility: 'private' }),
+  }
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 800 }]) {
+    await page.setViewportSize(viewport)
+    for (const [kind, id] of Object.entries(documents)) {
+      await page.goto(`/docs/${id}`)
+      const ask = page.getByRole('button', { name: 'Ask AI' })
+      await expect(ask, `${kind} at ${viewport.width}px`).toBeVisible({ timeout: 20_000 })
+      // One switch only, whatever the editor brings.
+      const theme = page.getByRole('button', { name: 'Toggle theme' })
+      await expect(theme, `${kind} at ${viewport.width}px`).toHaveCount(1)
+      const askBox = (await ask.boundingBox())!
+      const themeBox = (await theme.boundingBox())!
+      expect(themeBox.y + themeBox.height, `${kind}: theme above Ask AI`).toBeLessThanOrEqual(askBox.y + 1)
+      expect(Math.round(viewport.height - (askBox.y + askBox.height)), `${kind}: Ask AI 16px from the bottom`).toBe(16)
+      expect(Math.round(viewport.width - (askBox.x + askBox.width)), `${kind}: Ask AI 16px from the right`).toBe(16)
+    }
+  }
 })

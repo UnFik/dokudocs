@@ -409,6 +409,38 @@ function Citation({
   )
 }
 
+// The lists open above the box: it sits at the bottom of the chat, and a list
+// below it would push Send off the screen. Floating is what earns the shadow.
+const floatingList =
+  'absolute inset-x-0 bottom-full z-20 mb-1 max-h-64 divide-y overflow-y-auto rounded-md border bg-popover text-sm text-popover-foreground shadow-md'
+const floatingNote =
+  'absolute inset-x-0 bottom-full z-20 mb-1 rounded-md border bg-popover px-2 py-1.5 text-xs text-muted-foreground shadow-md'
+const listRow =
+  'w-full px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=true]:bg-accent'
+
+const documentTypes: Record<string, string> = {
+  markdown: 'Markdown',
+  dbdiagram: 'DBML',
+  mermaid: 'Mermaid',
+  architecture: 'Architecture',
+}
+const shownCategories = 2
+
+/** The second line of a picker row: project, type and the first categories; the title attribute holds them all. */
+function documentDetails(hit: ChatDocumentHit) {
+  const project = hit.projectName || 'No project'
+  const type = documentTypes[hit.type] ?? hit.type
+  const extra = hit.categories.length - shownCategories
+  const shown = hit.categories.slice(0, shownCategories).join(', ')
+  const categories = shown && extra > 0 ? `${shown} +${extra}` : shown
+  return {
+    short: [project, type, categories].filter(Boolean).join(' · '),
+    full: [project, type, hit.categories.join(', ')]
+      .filter(Boolean)
+      .join(' · '),
+  }
+}
+
 /** The question box, with Skills offered when the text starts with /. */
 export function AskForm({
   id,
@@ -552,85 +584,96 @@ export function AskForm({
       <label htmlFor={id} className='mb-2 block text-sm font-medium'>
         Ask a question
       </label>
-      <Textarea
-        ref={box}
-        id={id}
-        value={question}
-        onChange={(event) => {
-          const next = event.target.value
-          setPlaced(trackEdit(placed, question, next))
-          setQuestion(next)
-          setCaret(event.target.selectionStart)
-          setHighlighted(0)
-          if (
-            activeMentionQuery(next, event.target.selectionStart)?.start !==
-            dismissedAt
-          )
-            setDismissedAt(null)
-        }}
-        onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-        onKeyDown={onKeyDown}
-        placeholder={placeholder}
-        maxLength={10000}
-        disabled={pending}
-        className='min-h-20 resize-y'
-      />
-      {matches.length > 0 ? (
-        <ul aria-label='Skills' className='mt-2 divide-y border-y text-sm'>
-          {matches.map((skill, index) => (
-            <li key={skill.id}>
-              <button
-                type='button'
-                aria-current={index === active ? 'true' : undefined}
-                className='w-full px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=true]:bg-accent'
-                onClick={() => chooseSkill(skill.name)}
-              >
-                <span className='font-mono text-xs'>/{skill.name}</span>
-                {skill.description ? (
-                  <span className='ml-2 text-xs text-muted-foreground'>
-                    {skill.description}
-                  </span>
-                ) : null}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {picking && atLimit ? (
-        <p role='status' className='mt-2 text-xs text-muted-foreground'>
-          You can mention up to {MAX_DOCUMENT_MENTIONS} documents in one
-          question.
-        </p>
-      ) : null}
-      {picking && !atLimit ? (
-        documents.length > 0 ? (
-          <ul aria-label='Documents' className='mt-2 divide-y border-y text-sm'>
-            {documents.map((hit, index) => (
-              <li key={hit.id}>
+      <div className='relative'>
+        <Textarea
+          ref={box}
+          id={id}
+          value={question}
+          onChange={(event) => {
+            const next = event.target.value
+            setPlaced(trackEdit(placed, question, next))
+            setQuestion(next)
+            setCaret(event.target.selectionStart)
+            setHighlighted(0)
+            if (
+              activeMentionQuery(next, event.target.selectionStart)?.start !==
+              dismissedAt
+            )
+              setDismissedAt(null)
+          }}
+          onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          maxLength={10000}
+          disabled={pending}
+          className='min-h-20 resize-y'
+        />
+        {matches.length > 0 ? (
+          <ul aria-label='Skills' className={floatingList}>
+            {matches.map((skill, index) => (
+              <li key={skill.id}>
                 <button
                   type='button'
                   aria-current={index === active ? 'true' : undefined}
-                  className='w-full px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=true]:bg-accent'
-                  // Keep focus in the box so the caret stays where the @ was typed.
+                  className={listRow}
+                  // Keep focus in the box so the caret stays put.
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => chooseDocument(hit)}
+                  onClick={() => chooseSkill(skill.name)}
                 >
-                  <span className='font-medium'>{hit.title || 'Untitled'}</span>
-                  {hit.projectName ? (
+                  <span className='font-mono text-xs'>/{skill.name}</span>
+                  {skill.description ? (
                     <span className='ml-2 text-xs text-muted-foreground'>
-                      {hit.projectName}
+                      {skill.description}
                     </span>
                   ) : null}
                 </button>
               </li>
             ))}
           </ul>
-        ) : (
-          <p role='status' className='mt-2 text-xs text-muted-foreground'>
-            {found.isFetching ? 'Searching documents…' : 'No document matches.'}
+        ) : null}
+        {picking && atLimit ? (
+          <p role='status' className={floatingNote}>
+            You can mention up to {MAX_DOCUMENT_MENTIONS} documents in one
+            question.
           </p>
-        )
-      ) : null}
+        ) : null}
+        {picking && !atLimit ? (
+          documents.length > 0 ? (
+            <ul aria-label='Documents' className={floatingList}>
+              {documents.map((hit, index) => {
+                const details = documentDetails(hit)
+                return (
+                  <li key={hit.id}>
+                    <button
+                      type='button'
+                      aria-current={index === active ? 'true' : undefined}
+                      className={listRow}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => chooseDocument(hit)}
+                    >
+                      <span className='block truncate font-medium'>
+                        {hit.title || 'Untitled'}
+                      </span>
+                      <span
+                        title={details.full}
+                        className='block truncate text-xs text-muted-foreground'
+                      >
+                        {details.short}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p role='status' className={floatingNote}>
+              {found.isFetching
+                ? 'Searching documents…'
+                : 'No document matches.'}
+            </p>
+          )
+        ) : null}
+      </div>
       <div className='mt-2 flex flex-wrap items-center justify-between gap-2'>
         <label className='flex items-center gap-2 text-xs text-muted-foreground'>
           Answer language

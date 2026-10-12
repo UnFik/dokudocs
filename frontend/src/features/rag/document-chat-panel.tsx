@@ -21,7 +21,8 @@ import { useConversationHistory } from './use-conversation-history'
 
 /**
  * A Conversation about one document, for every document type. Each User keeps
- * their own chats; a chat here draws on this document alone.
+ * their own chats; a chat here draws on this document alone. The button is
+ * placed by DocumentFloatingControls.
  */
 export function DocumentChatPanel({
   documentID,
@@ -38,11 +39,12 @@ export function DocumentChatPanel({
       <Button
         variant='outline'
         size='sm'
-        className='fixed right-4 bottom-20 z-40 bg-background'
+        className='bg-background'
+        aria-label='Ask AI'
         onClick={() => setOpen(true)}
       >
         <MessageSquareText />
-        Ask AI
+        <span className='max-sm:sr-only'>Ask AI</span>
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className='flex w-full flex-col gap-0 p-0 sm:max-w-lg'>
