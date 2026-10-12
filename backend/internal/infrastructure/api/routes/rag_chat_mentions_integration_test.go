@@ -150,11 +150,12 @@ func TestAChipForADeletedDocumentIsMarkedUnavailable(t *testing.T) {
 
 type documentHits struct {
 	Data []struct {
-		ID          string  `json:"id"`
-		Title       string  `json:"title"`
-		Type        string  `json:"type"`
-		ProjectName string  `json:"projectName"`
-		Content     *string `json:"content"`
+		ID          string   `json:"id"`
+		Title       string   `json:"title"`
+		Type        string   `json:"type"`
+		ProjectName string   `json:"projectName"`
+		Categories  []string `json:"categories"`
+		Content     *string  `json:"content"`
 	} `json:"data"`
 }
 
@@ -200,5 +201,47 @@ func TestTheMentionPickerNeverListsADocumentTheUserCannotRead(t *testing.T) {
 	outsider := r.registerWithToken("")
 	if code, hits := r.searchDocuments(outsider, "search=plan"); code == http.StatusOK && len(hits.Data) != 0 {
 		t.Fatalf("a non-member found %+v", hits.Data)
+	}
+}
+
+func TestAPickerRowCarriesTheProjectTypeAndCategoriesOfTheDocument(t *testing.T) {
+	r := newRunEnv(t)
+	headers := map[string]string{"Authorization": "Bearer " + r.owner.token, "X-Workspace-Id": r.ws, "Idempotency-Key": uuid.NewString()}
+	project := r.do(http.MethodPost, "/api/v1/projects", map[string]any{"name": "Platform", "visibility": "workspace", "categories": []string{"Ops", "On-call", "Runbooks"}}, headers, "")
+	var created struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	project.json(&created)
+	if project.Code >= 300 {
+		t.Fatalf("create project = %d %s", project.Code, project.Body.String())
+	}
+	headers["Idempotency-Key"] = uuid.NewString()
+	doc := r.do(http.MethodPost, "/api/v1/documents", map[string]any{
+		"title": "Pager rota", "type": "markdown", "visibility": "workspace",
+		"projectId": created.Data.ID, "categories": []string{"Ops", "On-call", "Runbooks"},
+	}, headers, "")
+	if doc.Code != http.StatusCreated {
+		t.Fatalf("create document = %d %s", doc.Code, doc.Body.String())
+	}
+	r.newDocument(r.ws, "Pager notes without a project")
+
+	_, hits := r.searchDocuments(r.owner, "search=pager")
+	byTitle := map[string]int{}
+	for i, hit := range hits.Data {
+		byTitle[hit.Title] = i
+	}
+	rota, ok := byTitle["Pager rota"]
+	if !ok || len(hits.Data) != 2 {
+		t.Fatalf("hits = %+v", hits.Data)
+	}
+	got := hits.Data[rota]
+	if got.ProjectName != "Platform" || got.Type != "markdown" || strings.Join(got.Categories, ",") != "Ops,On-call,Runbooks" {
+		t.Errorf("row = %+v, want project Platform, type markdown, categories Ops,On-call,Runbooks in the project's order", got)
+	}
+	bare := hits.Data[byTitle["Pager notes without a project"]]
+	if bare.ProjectName != "" || len(bare.Categories) != 0 {
+		t.Errorf("a document without a project = %+v, want no project and no categories (an empty list, not null)", bare)
 	}
 }
