@@ -182,6 +182,13 @@ export function RunProgress({ view }: { view: ChatRunView }) {
             className={`text-sm leading-6 whitespace-pre-wrap ${view.phase === 'ended' ? 'text-muted-foreground' : ''}`}
           >
             {view.draft}
+            {view.phase === 'running' ? (
+              <span
+                data-activity='caret'
+                aria-hidden='true'
+                className='ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 animate-[caret-blink_1s_steps(1,end)_infinite] bg-foreground motion-reduce:animate-none'
+              />
+            ) : null}
           </p>
         ) : null}
         {view.tools.length > 0 ? (
@@ -202,7 +209,23 @@ export function RunProgress({ view }: { view: ChatRunView }) {
               : null}
           </p>
         ) : (
-          <p role='status' className='text-xs text-muted-foreground'>
+          <p
+            role='status'
+            className='flex items-center gap-2 text-xs text-muted-foreground'
+          >
+            <span
+              data-activity='dots'
+              aria-hidden='true'
+              className='flex items-center gap-1'
+            >
+              {[0, 1, 2].map((dot) => (
+                <span
+                  key={dot}
+                  className='size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none'
+                  style={{ animationDelay: `${dot * 200}ms` }}
+                />
+              ))}
+            </span>
             {view.phase === 'starting'
               ? 'Sending your question…'
               : (stepLabels[view.step] ?? 'Working on it…')}
