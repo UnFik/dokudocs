@@ -184,6 +184,7 @@ function PanelBody({
       {selected ? (
         <AskForm
           id='document-question'
+          workspaceID={workspaceID}
           pending={run.busy}
           error={run.error}
           placeholder='Ask about this document…'

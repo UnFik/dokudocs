@@ -9,6 +9,7 @@ import { Check, Link2, Send, Square, X } from 'lucide-react'
 import {
   MAX_DOCUMENT_MENTIONS,
   activeMentionQuery,
+  messageParts,
   documentLabel,
   serialize,
   trackEdit,
@@ -152,6 +153,7 @@ export function ChatMessages({
 
 const stepLabels: Record<string, string> = {
   searching: 'Searching the documents…',
+  reading: 'Reading the mentioned documents…',
   answering: 'Writing the answer…',
   thinking: 'Working on it…',
 }
@@ -162,6 +164,59 @@ const toolStates = {
   failed: 'failed',
   waiting: 'waiting for your approval',
 } as const
+
+/**
+ * A question as the User wrote it: the documents it names show as their names,
+ * linked while the User can still read them. The token itself is never shown.
+ */
+function QuestionText({
+  content,
+  workspaceID,
+  mentions = [],
+}: {
+  content: string
+  /** Without a workspace there is nothing to link to, so names stay plain. */
+  workspaceID?: string
+  mentions?: RAGMessage['mentions']
+}) {
+  return (
+    <p className='text-sm whitespace-pre-wrap'>
+      {messageParts(content).map((part, index) => {
+        if (part.kind === 'text') return part.text
+        const known = mentions?.find(
+          (item) => item.documentId === part.documentID
+        )
+        const title = known?.title ?? part.label
+        if (known && !known.available)
+          return (
+            <span
+              key={index}
+              title='No longer available to you'
+              className='rounded bg-muted px-1 text-muted-foreground line-through'
+            >
+              @{title}
+              <span className='sr-only'> (unavailable)</span>
+            </span>
+          )
+        const chip = 'rounded bg-background/70 px-1 font-medium'
+        return workspaceID ? (
+          <a
+            key={index}
+            href={`/docs/${part.documentID}?workspaceId=${workspaceID}`}
+            className={`${chip} text-primary underline-offset-4 hover:underline`}
+          >
+            <span aria-hidden='true'>@</span>
+            {title}
+          </a>
+        ) : (
+          <span key={index} className={chip}>
+            @{title}
+          </span>
+        )
+      })}
+    </p>
+  )
+}
 
 const endings = {
   failed: 'The answer could not be finished.',
@@ -182,7 +237,7 @@ export function RunProgress({ view }: { view: ChatRunView }) {
       {view.question ? (
         <article className='ml-auto max-w-3xl rounded-lg bg-primary/10 px-4 py-3'>
           <h3 className='sr-only'>You</h3>
-          <p className='text-sm whitespace-pre-wrap'>{view.question}</p>
+          <QuestionText content={view.question} />
         </article>
       ) : null}
       <article
@@ -263,7 +318,11 @@ export function ChatMessage({
     return (
       <article className='ml-auto max-w-3xl rounded-lg bg-primary/10 px-4 py-3'>
         <h3 className='sr-only'>You</h3>
-        <p className='text-sm whitespace-pre-wrap'>{message.content}</p>
+        <QuestionText
+          content={message.content}
+          workspaceID={workspaceID}
+          mentions={message.mentions}
+        />
       </article>
     )
 

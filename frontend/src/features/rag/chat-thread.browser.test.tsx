@@ -471,3 +471,50 @@ it('stops at five different documents and says so', async () => {
     0
   )
 })
+
+const docA = '11111111-1111-4111-8111-111111111111'
+const docB = '22222222-2222-4222-8222-222222222222'
+const asked: RAGMessage = {
+  ...answer,
+  id: '0a27eac4-3eea-4ced-b4fa-e7f6b1c81ed4',
+  role: 'user',
+  content: `compare @[Recovery runbook](doc:${docA}) with @[Old guide](doc:${docB})`,
+  meta: undefined,
+  mentions: [
+    { documentId: docA, title: 'Recovery runbook v2', available: true },
+    { documentId: docB, title: 'Old guide', available: false },
+  ],
+}
+
+it('shows a mentioned document as a link and a lost one as unavailable', async () => {
+  const screen = await mount(
+    <ChatMessages
+      messages={[asked]}
+      workspaceID={workspaceID}
+      conversationID={conversationID}
+      queryKey={['rag-conversation']}
+    />
+  )
+  const link = screen.getByRole('link', { name: 'Recovery runbook v2' })
+  await expect
+    .element(link)
+    .toHaveAttribute('href', `/docs/${docA}?workspaceId=${workspaceID}`)
+  await expect
+    .element(screen.getByText('Old guide (unavailable)'))
+    .toBeInTheDocument()
+  expect(
+    screen.getByRole('link', { name: /Old guide/ }).elements()
+  ).toHaveLength(0)
+  // The token itself never reaches the screen.
+  expect(screen.container.textContent).not.toContain('doc:')
+})
+
+it('shows the question of a running answer with its documents as names', async () => {
+  const screen = await mount(
+    <RunProgress
+      view={{ ...runView, question: `read @[Runbook](doc:${docA}) now` }}
+    />
+  )
+  await expect.element(screen.getByText('@Runbook')).toBeVisible()
+  expect(screen.container.textContent).not.toContain('doc:')
+})
