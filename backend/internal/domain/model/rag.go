@@ -41,8 +41,20 @@ type RAGConversation struct {
 	// DocumentID is set on a Conversation opened from one document.
 	DocumentID *uuid.UUID `json:"documentId,omitempty"`
 	Title      string     `json:"title"`
+	// PinnedAt is set while the User keeps the Conversation at the top of its list.
+	PinnedAt *time.Time `json:"pinnedAt,omitempty"`
+	// ArchivedAt is set while the Conversation sits in the Archived section.
+	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
 	CreatedAt  time.Time  `json:"createdAt"`
 	UpdatedAt  time.Time  `json:"updatedAt"`
+}
+
+// RAGConversationPatch changes a Conversation's title, pin or archive state.
+// A nil field is left as it is.
+type RAGConversationPatch struct {
+	Title    *string
+	Pinned   *bool
+	Archived *bool
 }
 
 type RAGMessage struct {

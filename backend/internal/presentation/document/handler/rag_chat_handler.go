@@ -198,6 +198,38 @@ func (h *RAGChatHandler) ListConversations(w http.ResponseWriter, r *http.Reques
 	_ = response.Data(w, http.StatusOK, conversations)
 }
 
+type updateConversationRequest struct {
+	Title    *string `json:"title"`
+	Pinned   *bool   `json:"pinned"`
+	Archived *bool   `json:"archived"`
+}
+
+func (h *RAGChatHandler) UpdateConversation(w http.ResponseWriter, r *http.Request) {
+	actorID, err := authenticatedRAGUserID(r)
+	if err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
+	conversationID, err := parsePathUUID(r, "conversationID")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid conversation ID")
+		return
+	}
+	var request updateConversationRequest
+	if err := response.DecodeJSON(r, &request); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	conversation, err := h.service.UpdateConversation(r.Context(), conversationID, actorID, model.RAGConversationPatch{
+		Title: request.Title, Pinned: request.Pinned, Archived: request.Archived,
+	})
+	if err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, conversation)
+}
+
 func (h *RAGChatHandler) DeleteConversation(w http.ResponseWriter, r *http.Request) {
 	actorID, err := authenticatedRAGUserID(r)
 	if err != nil {
