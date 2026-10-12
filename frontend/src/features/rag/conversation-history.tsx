@@ -9,6 +9,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Trash2,
 } from 'lucide-react'
 import type { RAGConversation } from '@/lib/domain-api'
 import { cn } from '@/lib/utils'
@@ -28,6 +29,10 @@ export type HistoryActions = {
   onArchive: (id: string, archived: boolean) => void
   /** Where "open in AI chat" leads; left out where the list already is that page. */
   assistantHref?: (id: string) => string
+  /** Deleting a chat for good; offered only where the page asks first. */
+  onDelete?: (id: string) => void
+  /** A muted second line under the name, such as the workspace. */
+  subtitle?: (chat: RAGConversation) => string
 }
 
 const titleOf = (chat: RAGConversation) => chat.title.trim() || 'Untitled chat'
@@ -132,6 +137,8 @@ function HistoryRow({
   onPin,
   onArchive,
   assistantHref,
+  onDelete,
+  subtitle,
 }: HistoryActions & {
   chat: RAGConversation
   selected: boolean
@@ -191,8 +198,13 @@ function HistoryRow({
           className='size-4 shrink-0 text-muted-foreground'
           aria-hidden='true'
         />
-        <span className='min-w-0 flex-1 truncate text-sm font-medium'>
-          {title}
+        <span className='min-w-0 flex-1'>
+          <span className='block truncate text-sm font-medium'>{title}</span>
+          {subtitle ? (
+            <span className='block truncate text-xs text-muted-foreground'>
+              {subtitle(chat)}
+            </span>
+          ) : null}
         </span>
         {chat.unread ? (
           <span className='flex shrink-0 items-center gap-1.5 font-mono text-[11px]'>
@@ -250,6 +262,17 @@ function HistoryRow({
         >
           {pinned ? <PinOff className='size-4' /> : <Pin className='size-4' />}
         </button>
+        {onDelete ? (
+          <button
+            type='button'
+            aria-label='Delete chat'
+            title='Delete chat'
+            onClick={() => onDelete(chat.id)}
+            className={quiet}
+          >
+            <Trash2 className='size-4' />
+          </button>
+        ) : null}
       </div>
       {/* There is no hover on a touch screen, so the same four actions live in a menu. */}
       <div className='absolute inset-y-0 end-1 hidden items-center [@media(hover:none)]:flex'>
@@ -277,6 +300,11 @@ function HistoryRow({
             <DropdownMenuItem onSelect={() => onPin(chat.id, !pinned)}>
               {pinned ? 'Unpin' : 'Pin'}
             </DropdownMenuItem>
+            {onDelete ? (
+              <DropdownMenuItem onSelect={() => onDelete(chat.id)}>
+                Delete
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

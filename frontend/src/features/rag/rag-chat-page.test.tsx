@@ -282,6 +282,10 @@ it('asks before deleting a chat and keeps it when cancelled', async () => {
     </QueryClientProvider>
   )
 
+  // Keyboard focus on the row shows its actions, as hovering does.
+  const row = screen.getByRole('button', { name: /Recovery policy/ }).first()
+  await expect.element(row).toBeVisible()
+  row.element().focus()
   await userEvent.click(
     screen.getByRole('button', { name: 'Delete chat' }).first()
   )
@@ -308,6 +312,10 @@ it('deletes the chat once the dialog is confirmed', async () => {
     </QueryClientProvider>
   )
 
+  // Keyboard focus on the row shows its actions, as hovering does.
+  const row = screen.getByRole('button', { name: /Recovery policy/ }).first()
+  await expect.element(row).toBeVisible()
+  row.element().focus()
   await userEvent.click(
     screen.getByRole('button', { name: 'Delete chat' }).first()
   )

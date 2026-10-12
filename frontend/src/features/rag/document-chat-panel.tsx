@@ -23,15 +23,16 @@ import {
   SheetDescription,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { allowBrowserNotifications, announceAnswer } from './chat-notify'
+import { announceAnswer } from './chat-notify'
 import { ChatPanelHeader } from './chat-panel-header'
-import { readChatPreferences, useChatPreferences } from './chat-preferences'
+import { readChatPreferences } from './chat-preferences'
 import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
-import { conversationMarkdown } from './conversation-format'
 import { ConversationHistory } from './conversation-history'
+import { downloadConversation } from './download-conversation'
 import { useChatRun } from './use-chat-run'
 import { useConversationHistory } from './use-conversation-history'
+import { usePanelOptions } from './use-panel-options'
 
 /**
  * A Conversation about one document, for every document type. Each User keeps
@@ -68,6 +69,8 @@ export function DocumentChatPanel({
   useEffect(() => {
     if (!finished?.unread) return
     announceAnswer(readChatPreferences(), finished.title, false)
+    // Telling the User is the outside effect; it also ends the wait.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAwaiting(undefined)
   }, [finished?.unread, finished?.title])
   const unread =
@@ -118,24 +121,6 @@ export function DocumentChatPanel({
 /** How often a shut panel looks for the answer it is waiting on. */
 const CLOSED_PANEL_POLL_MS = 5000
 
-function download(filename: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-const filenameOf = (title: string) =>
-  `${
-    title
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'chat'
-  }.md`
-
 function PanelBody({
   documentID,
   workspaceID,
@@ -156,12 +141,7 @@ function PanelBody({
   const [view, setView] = useState<'chat' | 'history'>('chat')
   const [language, setLanguage] = useState<'id' | 'en'>('en')
   const [problem, setProblem] = useState<string>()
-  const [preferences, changePreferences] = useChatPreferences()
-  const [browserBlocked, setBrowserBlocked] = useState(
-    () =>
-      typeof Notification !== 'undefined' &&
-      Notification.permission === 'denied'
-  )
+  const options = usePanelOptions()
   const chats = conversations.data
   const selected =
     chats?.find((item) => item.id === selectedID) ??
@@ -211,7 +191,11 @@ function PanelBody({
         queryKey: ['rag-usage', workspaceID],
       })
       void refreshList()
-      announceAnswer(preferences, selected?.title ?? '', view === 'chat')
+      announceAnswer(
+        options.preferences,
+        selected?.title ?? '',
+        view === 'chat'
+      )
     },
   })
 
@@ -228,14 +212,6 @@ function PanelBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewing, selected?.id, selected?.unread])
 
-  const onBrowser = (on: boolean) => {
-    if (!on) return changePreferences({ browser: false })
-    void allowBrowserNotifications().then((allowed) => {
-      setBrowserBlocked(!allowed)
-      changePreferences({ browser: allowed })
-    })
-  }
-
   return (
     <div className='flex min-h-0 flex-1 flex-col'>
       <ChatPanelHeader
@@ -247,15 +223,9 @@ function PanelBody({
         canDownload={Boolean(history && history.messages.length > 0)}
         onDownload={() => {
           if (history)
-            download(
-              filenameOf(selected?.title ?? ''),
-              conversationMarkdown(selected?.title ?? '', history.messages)
-            )
+            downloadConversation(selected?.title ?? '', history.messages)
         }}
-        preferences={preferences}
-        onSound={(sound) => changePreferences({ sound })}
-        onBrowser={onBrowser}
-        browserBlocked={browserBlocked}
+        {...options}
         close={
           <SheetClose asChild>
             <Button
