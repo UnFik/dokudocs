@@ -203,7 +203,7 @@ function HistoryRow({
             <span className='truncate text-sm font-medium'>{title}</span>
             {pinned ? (
               <Pin
-                className='size-3 shrink-0 text-muted-foreground'
+                className='size-3.5 shrink-0 text-muted-foreground'
                 aria-label='Pinned'
               />
             ) : null}

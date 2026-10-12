@@ -898,7 +898,7 @@ function ContextChip({
         onClick={onRemove}
         className='inline-flex size-5 shrink-0 items-center justify-center rounded-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-sm:size-8'
       >
-        <X className='size-3' aria-hidden='true' />
+        <X className='size-3.5' aria-hidden='true' />
       </button>
     </li>
   )
