@@ -124,6 +124,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 		runGroup.Post("/{runID}/cancel", runs.Cancel)
 	}
 	f.Group("/rag/usage", authRequired, workspaceRequired).Get("", ragChat.Usage)
+	f.Group("/rag/categories", authRequired, workspaceRequired).Get("", ragChat.Categories)
 	f.Group("/rag/document-search", authRequired, workspaceRequired).Get("", ragChat.SearchDocuments)
 	f.Group("/rag/documents", authRequired).Get("/{documentID}/conversations", ragChat.ListDocumentConversations)
 }
