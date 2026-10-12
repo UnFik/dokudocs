@@ -36,11 +36,151 @@ import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
 import { CreateProjectDialog } from '@/features/projects/components/create-project-dialog'
 import { ScrollArea } from './ui/scroll-area'
 
+// Mounted only while the dialog is open, so the lists load on demand.
+function DocumentAndProjectGroups({
+  runCommand,
+}: {
+  runCommand: (command: () => unknown) => void
+}) {
+  const navigate = useNavigate()
+  const { activeDocuments: documents, projects } = useDokudocs()
+
+  return (
+    <>
+      {documents.length > 0 && (
+        <CommandGroup heading='Documents'>
+          {documents.map((doc, idx) => {
+            const Icon = getDocumentType(doc.type).icon
+            const project = projects.find((p) => p.id === doc.projectId)
+            const docCats = getDocCategories(doc)
+
+            const uniqueValue = `doc-${doc.id}-${idx}-${doc.title}-${
+              doc.projectName || 'draft'
+            }-${docCats.join('-')}-${doc.type}`
+
+            return (
+              <CommandItem
+                key={`doc-item-${doc.id}-${idx}`}
+                value={uniqueValue}
+                onSelect={() => {
+                  runCommand(() => {
+                    navigate({
+                      to: '/docs/$docId',
+                      params: { docId: doc.id },
+                    })
+                  })
+                }}
+                className='flex items-center justify-between py-2'
+              >
+                <div className='flex min-w-0 flex-1 items-center gap-2.5'>
+                  <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-foreground'>
+                    <Icon className='size-3.5 text-muted-foreground' />
+                  </div>
+                  <div className='flex min-w-0 flex-col truncate'>
+                    <span className='truncate text-xs font-semibold text-foreground'>
+                      {doc.title}
+                    </span>
+                    <span className='truncate text-[10px] text-muted-foreground'>
+                      {doc.projectName ? doc.projectName : 'Personal Draft'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className='flex shrink-0 items-center gap-1'>
+                  {docCats.length > 0 &&
+                    (() => {
+                      const firstCat = docCats[0]
+                      const colorId = project?.categoryColors?.[firstCat]
+                      const palette = getCategoryPalette(firstCat, colorId, 0)
+                      const remainingCount = docCats.length - 1
+
+                      return (
+                        <>
+                          <span
+                            className={`rounded-sm border px-2 py-0.5 text-[9px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
+                          >
+                            {firstCat}
+                          </span>
+                          {remainingCount > 0 && (
+                            <span
+                              title={docCats.slice(1).join(', ')}
+                              className='rounded-sm border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
+                            >
+                              +{remainingCount}
+                            </span>
+                          )}
+                        </>
+                      )
+                    })()}
+                </div>
+              </CommandItem>
+            )
+          })}
+        </CommandGroup>
+      )}
+
+      {projects.length > 0 && (
+        <>
+          <CommandSeparator />
+          <CommandGroup heading='Projects'>
+            {projects.map((proj, idx) => {
+              const uniqueValue = `proj-${proj.id}-${idx}-${proj.name}-${
+                proj.description || ''
+              }`
+
+              return (
+                <CommandItem
+                  key={`proj-item-${proj.id}-${idx}`}
+                  value={uniqueValue}
+                  onSelect={() => {
+                    runCommand(() =>
+                      navigate({
+                        to: '/projects/$projectId',
+                        params: { projectId: proj.id },
+                      })
+                    )
+                  }}
+                  className='flex items-center justify-between py-2'
+                >
+                  <div className='flex min-w-0 flex-1 items-center gap-2.5'>
+                    {proj.logoUrl ? (
+                      <img
+                        src={proj.logoUrl}
+                        alt={proj.name}
+                        className='size-6 shrink-0 rounded-md border border-border object-cover'
+                      />
+                    ) : (
+                      <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary'>
+                        <Folder className='size-3.5' />
+                      </div>
+                    )}
+                    <div className='flex min-w-0 flex-col truncate'>
+                      <span className='truncate text-xs font-semibold text-foreground'>
+                        {proj.name}
+                      </span>
+                      <span className='truncate text-[10px] text-muted-foreground'>
+                        {proj.description ||
+                          `${documents.filter((d) => d.projectId === proj.id).length} documents`}
+                      </span>
+                    </div>
+                  </div>
+                  <span className='shrink-0 font-mono text-[10px] text-muted-foreground'>
+                    {proj.documentIds.length} docs
+                  </span>
+                </CommandItem>
+              )
+            })}
+          </CommandGroup>
+        </>
+      )}
+    </>
+  )
+}
+
 export function CommandMenu() {
   const navigate = useNavigate()
   const { setTheme } = useTheme()
   const { open, setOpen } = useSearch()
-  const { activeDocuments: documents, projects } = useDokudocs()
 
   const [createDocOpen, setCreateDocOpen] = useState(false)
   const [importDocOpen, setImportDocOpen] = useState(false)
@@ -68,146 +208,20 @@ export function CommandMenu() {
 
   return (
     <>
-      <CommandDialog modal open={open} onOpenChange={setOpen}>
+      <CommandDialog
+        modal
+        open={open}
+        onOpenChange={setOpen}
+        className='sm:max-w-2xl'
+      >
         <CommandInput placeholder='Search documents, projects, commands (⌘K)...' />
         <CommandList>
-          <ScrollArea type='hover' className='h-80 pe-1'>
+          <ScrollArea type='hover' className='h-[28rem] max-h-[60svh] pe-1'>
             <CommandEmpty>
               No matching documents or projects found.
             </CommandEmpty>
 
-            {documents.length > 0 && (
-              <CommandGroup heading='Documents'>
-                {documents.map((doc, idx) => {
-                  const Icon = getDocumentType(doc.type).icon
-                  const project = projects.find((p) => p.id === doc.projectId)
-                  const docCats = getDocCategories(doc)
-
-                  const uniqueValue = `doc-${doc.id}-${idx}-${doc.title}-${
-                    doc.projectName || 'draft'
-                  }-${docCats.join('-')}-${doc.type}`
-
-                  return (
-                    <CommandItem
-                      key={`doc-item-${doc.id}-${idx}`}
-                      value={uniqueValue}
-                      onSelect={() => {
-                        runCommand(() => {
-                          navigate({
-                            to: '/docs/$docId',
-                            params: { docId: doc.id },
-                          })
-                        })
-                      }}
-                      className='flex items-center justify-between py-2'
-                    >
-                      <div className='flex min-w-0 flex-1 items-center gap-2.5'>
-                        <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-foreground'>
-                          <Icon className='size-3.5 text-muted-foreground' />
-                        </div>
-                        <div className='flex min-w-0 flex-col truncate'>
-                          <span className='truncate text-xs font-semibold text-foreground'>
-                            {doc.title}
-                          </span>
-                          <span className='truncate text-[10px] text-muted-foreground'>
-                            {doc.projectName
-                              ? doc.projectName
-                              : 'Personal Draft'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className='flex shrink-0 items-center gap-1'>
-                        {docCats.length > 0 &&
-                          (() => {
-                            const firstCat = docCats[0]
-                            const colorId = project?.categoryColors?.[firstCat]
-                            const palette = getCategoryPalette(
-                              firstCat,
-                              colorId,
-                              0
-                            )
-                            const remainingCount = docCats.length - 1
-
-                            return (
-                              <>
-                                <span
-                                  className={`rounded-sm border px-2 py-0.5 text-[9px] font-medium ${palette.bg} ${palette.text} ${palette.border}`}
-                                >
-                                  {firstCat}
-                                </span>
-                                {remainingCount > 0 && (
-                                  <span
-                                    title={docCats.slice(1).join(', ')}
-                                    className='rounded-sm border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground'
-                                  >
-                                    +{remainingCount}
-                                  </span>
-                                )}
-                              </>
-                            )
-                          })()}
-                      </div>
-                    </CommandItem>
-                  )
-                })}
-              </CommandGroup>
-            )}
-
-            {projects.length > 0 && (
-              <>
-                <CommandSeparator />
-                <CommandGroup heading='Projects'>
-                  {projects.map((proj, idx) => {
-                    const uniqueValue = `proj-${proj.id}-${idx}-${proj.name}-${
-                      proj.description || ''
-                    }`
-
-                    return (
-                      <CommandItem
-                        key={`proj-item-${proj.id}-${idx}`}
-                        value={uniqueValue}
-                        onSelect={() => {
-                          runCommand(() =>
-                            navigate({
-                              to: '/projects/$projectId',
-                              params: { projectId: proj.id },
-                            })
-                          )
-                        }}
-                        className='flex items-center justify-between py-2'
-                      >
-                        <div className='flex min-w-0 flex-1 items-center gap-2.5'>
-                          {proj.logoUrl ? (
-                            <img
-                              src={proj.logoUrl}
-                              alt={proj.name}
-                              className='size-6 shrink-0 rounded-md border border-border object-cover'
-                            />
-                          ) : (
-                            <div className='flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary'>
-                              <Folder className='size-3.5' />
-                            </div>
-                          )}
-                          <div className='flex min-w-0 flex-col truncate'>
-                            <span className='truncate text-xs font-semibold text-foreground'>
-                              {proj.name}
-                            </span>
-                            <span className='truncate text-[10px] text-muted-foreground'>
-                              {proj.description ||
-                                `${documents.filter((d) => d.projectId === proj.id).length} documents`}
-                            </span>
-                          </div>
-                        </div>
-                        <span className='shrink-0 font-mono text-[10px] text-muted-foreground'>
-                          {proj.documentIds.length} docs
-                        </span>
-                      </CommandItem>
-                    )
-                  })}
-                </CommandGroup>
-              </>
-            )}
+            <DocumentAndProjectGroups runCommand={runCommand} />
 
             <CommandSeparator />
             <CommandGroup heading='Quick Create'>
@@ -317,18 +331,21 @@ export function CommandMenu() {
         </CommandList>
       </CommandDialog>
 
-      <CreateDocDialog
-        open={createDocOpen}
-        onOpenChange={setCreateDocOpen}
-        defaultType={createDocType}
-      />
+      {createDocOpen && (
+        <CreateDocDialog
+          open
+          onOpenChange={setCreateDocOpen}
+          defaultType={createDocType}
+        />
+      )}
 
-      <ImportDocDialog open={importDocOpen} onOpenChange={setImportDocOpen} />
+      {importDocOpen && (
+        <ImportDocDialog open onOpenChange={setImportDocOpen} />
+      )}
 
-      <CreateProjectDialog
-        open={createProjectOpen}
-        onOpenChange={setCreateProjectOpen}
-      />
+      {createProjectOpen && (
+        <CreateProjectDialog open onOpenChange={setCreateProjectOpen} />
+      )}
     </>
   )
 }
