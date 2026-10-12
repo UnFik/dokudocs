@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/sheet'
 import { allowBrowserNotifications, announceAnswer } from './chat-notify'
 import { ChatPanelHeader } from './chat-panel-header'
-import { useChatPreferences } from './chat-preferences'
+import { readChatPreferences, useChatPreferences } from './chat-preferences'
 import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { conversationMarkdown } from './conversation-format'
@@ -48,14 +48,28 @@ export function DocumentChatPanel({
   title: string
 }) {
   const [open, setOpen] = useState(false)
+  // The chat whose answer was still being written when the panel was shut.
+  const [awaiting, setAwaiting] = useState<string>()
   const userID = useAuthStore((state) => state.auth.user?.id ?? '')
   const listKey = ['rag-document-conversations', userID, documentID]
+  const watching = Boolean(awaiting) && !open
   const conversations = useQuery({
     queryKey: listKey,
     queryFn: ({ signal }) => listDocumentRAGConversations(documentID, signal),
     enabled: Boolean(userID),
     retry: false,
+    // Only while an answer is pending behind a shut panel, even in a hidden tab.
+    refetchInterval: watching ? CLOSED_PANEL_POLL_MS : false,
+    refetchIntervalInBackground: true,
   })
+  const finished = watching
+    ? conversations.data?.find((chat) => chat.id === awaiting)
+    : undefined
+  useEffect(() => {
+    if (!finished?.unread) return
+    announceAnswer(readChatPreferences(), finished.title, false)
+    setAwaiting(undefined)
+  }, [finished?.unread, finished?.title])
   const unread =
     conversations.data?.filter((chat) => chat.unread && !chat.archivedAt)
       .length ?? 0
@@ -92,6 +106,7 @@ export function DocumentChatPanel({
               workspaceID={workspaceID}
               conversations={conversations}
               listKey={listKey}
+              onRunning={setAwaiting}
             />
           ) : null}
         </SheetContent>
@@ -99,6 +114,9 @@ export function DocumentChatPanel({
     </>
   )
 }
+
+/** How often a shut panel looks for the answer it is waiting on. */
+const CLOSED_PANEL_POLL_MS = 5000
 
 function download(filename: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }))
@@ -123,11 +141,14 @@ function PanelBody({
   workspaceID,
   conversations,
   listKey,
+  onRunning,
 }: {
   documentID: string
   workspaceID: string
   conversations: UseQueryResult<RAGConversation[]>
   listKey: unknown[]
+  /** Reports the chat being answered, or nothing once the answer is in. */
+  onRunning: (conversationID: string | undefined) => void
 }) {
   const queryClient = useQueryClient()
   const userID = useAuthStore((state) => state.auth.user?.id ?? '')
@@ -190,9 +211,14 @@ function PanelBody({
         queryKey: ['rag-usage', workspaceID],
       })
       void refreshList()
-      announceAnswer(preferences, selected?.title ?? '')
+      announceAnswer(preferences, selected?.title ?? '', view === 'chat')
     },
   })
+
+  useEffect(() => {
+    onRunning(run.busy ? selected?.id : undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run.busy, selected?.id])
 
   // A chat counts as read once its latest answer is on screen.
   const viewing = view === 'chat' && Boolean(history)
