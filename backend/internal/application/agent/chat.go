@@ -11,6 +11,7 @@ import (
 	"backend/constant"
 	"backend/internal/application/airuns"
 	"backend/internal/application/aiusage"
+	"backend/internal/domain/mention"
 	"backend/internal/domain/model"
 
 	"github.com/google/uuid"
@@ -148,6 +149,9 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 		system += fmt.Sprintf("\n\nThis Conversation is about one document (id %s) in workspace %s. Read it with read_document before answering.", actor.DocumentID, input.WorkspaceID)
 	} else {
 		system += fmt.Sprintf("\n\nThis Conversation is in workspace %s.", input.WorkspaceID)
+	}
+	if named := mention.ParseDocuments(question); len(named) > 0 {
+		system += "\n\nThe User named documents in the question as @[Title](doc:id). Read each one with read_document, using that id, before you answer about it."
 	}
 	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: feature, UserID: input.ActorID, WorkspaceID: input.WorkspaceID})
 

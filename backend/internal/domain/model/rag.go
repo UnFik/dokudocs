@@ -54,11 +54,28 @@ type RAGMessage struct {
 	CoveragePartial        bool          `json:"coveragePartial"`
 	SourcesMayBeIncomplete bool          `json:"sourcesMayBeIncomplete"`
 	// Meta holds what the Agent did for this answer: tools used and actions asked for.
-	Meta      json.RawMessage `json:"meta,omitempty"`
-	CreatedAt time.Time       `json:"createdAt"`
+	Meta json.RawMessage `json:"meta,omitempty"`
+	// Mentions are the documents a question names. Available is false once the
+	// User can no longer read the document; the title is then the one it had when asked.
+	Mentions  []RAGMention `json:"mentions,omitempty"`
+	CreatedAt time.Time    `json:"createdAt"`
+}
+
+type RAGMention struct {
+	DocumentID uuid.UUID `json:"documentId"`
+	Title      string    `json:"title"`
+	Available  bool      `json:"available"`
 }
 
 type RAGConversationHistory struct {
 	Conversation RAGConversation `json:"conversation"`
 	Messages     []RAGMessage    `json:"messages"`
+}
+
+// RAGDocumentHit is a document a question can name: just enough to pick it.
+type RAGDocumentHit struct {
+	ID          uuid.UUID `json:"id"`
+	Title       string    `json:"title"`
+	Type        string    `json:"type"`
+	ProjectName string    `json:"projectName"`
 }

@@ -5,16 +5,27 @@ import { useAuthStore } from '@/stores/auth-store'
 import {
   createRAGConversation,
   deleteRAGConversation,
-  getRAGConversation,
   listRAGConversations,
 } from '@/lib/domain-api'
 import { getOpenedPublicLinkTokens } from '@/lib/public-link-session'
-import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
+import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { useChatRun } from './use-chat-run'
+import { useConversationHistory } from './use-conversation-history'
 
 export function RAGChatPage() {
   const queryClient = useQueryClient()
@@ -22,6 +33,7 @@ export function RAGChatPage() {
   const { workspaces, activeWorkspaceId } = useWorkspaces()
   const [selectedID, setSelectedID] = useState<string>()
   const [language, setLanguage] = useState<'id' | 'en'>('en')
+  const [deleting, setDeleting] = useState<string>()
   const conversationsQuery = useQuery({
     queryKey: ['rag-conversations', userID],
     queryFn: ({ signal }) => listRAGConversations(signal),
@@ -31,13 +43,7 @@ export function RAGChatPage() {
   const conversations = conversationsQuery.data ?? []
   const selectedConversation =
     conversations.find((item) => item.id === selectedID) ?? conversations[0]
-  const historyQuery = useQuery({
-    queryKey: ['rag-conversation', userID, selectedConversation?.id],
-    queryFn: ({ signal }) =>
-      getRAGConversation(selectedConversation!.id, signal),
-    enabled: Boolean(userID && selectedConversation),
-    retry: false,
-  })
+  const historyQuery = useConversationHistory(userID, selectedConversation?.id)
   const createMutation = useMutation({
     mutationFn: createRAGConversation,
     onSuccess: async (conversation) => {
@@ -71,7 +77,7 @@ export function RAGChatPage() {
     },
   })
 
-  const history = historyQuery.data
+  const history = historyQuery.history
   const canAsk = Boolean(
     selectedConversation &&
     workspaces.some(
@@ -94,8 +100,8 @@ export function RAGChatPage() {
           </p>
         </div>
       </Header>
-      <Main fluid className='flex min-h-0 flex-1 flex-col p-4 sm:p-6'>
-        <div className='grid min-h-0 flex-1 gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]'>
+      <Main fixed fluid className='min-h-0 p-4 sm:p-6'>
+        <div className='grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[17rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-visible'>
           <aside className='flex min-h-0 flex-col rounded-lg border bg-card'>
             <div className='flex items-center justify-between border-b p-3'>
               <h2 className='text-sm font-semibold'>Your chats</h2>
@@ -158,9 +164,7 @@ export function RAGChatPage() {
                             aria-label='Delete chat'
                             title='Delete chat'
                             disabled={deleteMutation.isPending}
-                            onClick={() =>
-                              deleteMutation.mutate(conversation.id)
-                            }
+                            onClick={() => setDeleting(conversation.id)}
                           >
                             <Trash2 />
                           </Button>
@@ -173,7 +177,7 @@ export function RAGChatPage() {
             </div>
           </aside>
 
-          <section className='flex min-h-[26rem] min-w-0 flex-col rounded-lg border bg-card'>
+          <section className='flex h-[34rem] max-h-[80svh] min-w-0 flex-col rounded-lg border bg-card lg:h-auto lg:max-h-none'>
             {selectedConversation && historyQuery.isPending ? (
               <p role='status' className='m-4 text-sm text-muted-foreground'>
                 Loading conversation…
@@ -196,7 +200,14 @@ export function RAGChatPage() {
                     Whole workspace
                   </p>
                 </div>
-                <div className='min-h-0 flex-1 space-y-5 overflow-y-auto p-4'>
+                <ChatScroller
+                  resetKey={history.conversation.id}
+                  firstKey={history.messages[0]?.id ?? ''}
+                  changeKey={`${history.messages.at(-1)?.id ?? ''}|${run.view.phase}|${run.view.draft.length}|${history.actions?.length ?? 0}`}
+                  hasOlder={historyQuery.hasOlder}
+                  loadingOlder={historyQuery.loadingOlder}
+                  onLoadOlder={historyQuery.loadOlder}
+                >
                   {history.messages.length === 0 &&
                   run.view.phase === 'idle' ? (
                     <p className='text-sm text-muted-foreground'>
@@ -217,10 +228,11 @@ export function RAGChatPage() {
                     />
                   )}
                   <RunProgress view={run.view} />
-                </div>
+                </ChatScroller>
                 {canAsk ? (
                   <AskForm
                     id='rag-question'
+                    workspaceID={history.conversation.workspaceId}
                     pending={run.busy}
                     error={run.error}
                     placeholder='Ask about documents in this workspace…'
@@ -264,6 +276,34 @@ export function RAGChatPage() {
           </section>
         </div>
       </Main>
+      <AlertDialog
+        open={deleting !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(undefined)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The chat and all its messages are deleted for good. They cannot be
+              restored.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: 'destructive' })}
+              onClick={() => {
+                if (deleting) deleteMutation.mutate(deleting)
+                setDeleting(undefined)
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

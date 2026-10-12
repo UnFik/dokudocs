@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"backend/constant"
@@ -103,19 +105,32 @@ func (h *RAGChatHandler) GetConversation(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusBadRequest, "invalid conversation ID")
 		return
 	}
-	history, err := h.service.GetConversation(r.Context(), conversationID, actorID)
+	limit := appchat.DefaultHistoryPage
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if limit, err = strconv.Atoi(raw); err != nil || limit < 1 {
+			response.Error(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+	}
+	cursor := r.URL.Query().Get("before")
+	history, next, err := h.service.GetConversationPage(r.Context(), conversationID, actorID, cursor, limit)
 	if err != nil {
 		writeRAGChatError(w, err)
 		return
 	}
+	// Pending actions belong to the newest messages, so only the first page carries them.
 	actions := []agent.PendingAction{}
-	if h.agent != nil {
+	if h.agent != nil && cursor == "" {
 		if actions, err = h.agent.actions.PendingActions(r.Context(), conversationID, actorID); err != nil {
 			writeRAGChatError(w, err)
 			return
 		}
 	}
-	_ = response.Data(w, http.StatusOK, map[string]any{"conversation": history.Conversation, "messages": history.Messages, "actions": actions})
+	var nextCursor *string
+	if next != "" {
+		nextCursor = &next
+	}
+	_ = response.Data(w, http.StatusOK, map[string]any{"conversation": history.Conversation, "messages": history.Messages, "actions": actions, "nextCursor": nextCursor})
 }
 
 // ListDocumentConversations lists the User's own Conversations on one document.
@@ -248,6 +263,12 @@ func (h *RAGChatHandler) Ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.runs == nil {
+		resolved, err := h.service.ResolveMentions(r.Context(), workspaceID, actorID, strings.TrimSpace(request.Question))
+		if err != nil {
+			writeRAGChatError(w, err)
+			return
+		}
+		request.Question = resolved
 		answer, err := h.answer(r.Context(), actorID, workspaceID, conversationID, request)
 		if err != nil {
 			writeRAGChatError(w, err)
@@ -294,6 +315,10 @@ func authenticatedRAGUserID(r *http.Request) (uuid.UUID, error) {
 
 func writeRAGChatError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, appchat.ErrTooManyMentions):
+		response.Error(w, http.StatusBadRequest, "mention at most 5 documents in one question")
+	case errors.Is(err, appchat.ErrMentionUnavailable):
+		response.Error(w, http.StatusBadRequest, "a mentioned document is not available to you in this workspace")
 	case errors.Is(err, appchat.ErrInvalidChatRequest):
 		response.Error(w, http.StatusBadRequest, "invalid chatbot request")
 	case errors.Is(err, constant.ErrUnauthorized):
@@ -336,4 +361,26 @@ func writeRAGChatError(w http.ResponseWriter, err error) {
 func errorsAsToolError(err error) bool {
 	var refusal *agent.ToolError
 	return errors.As(err, &refusal)
+}
+
+// SearchDocuments lists documents by title for the @ picker of a question.
+func (h *RAGChatHandler) SearchDocuments(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, err := getUserAndWorkspace(r)
+	if err != nil {
+		writeDocumentError(w, err)
+		return
+	}
+	limit := 8
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if limit, err = strconv.Atoi(raw); err != nil || limit < 1 {
+			response.Error(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+	}
+	hits, err := h.service.SearchDocuments(r.Context(), workspaceID, actorID, r.URL.Query().Get("search"), limit)
+	if err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, hits)
 }
