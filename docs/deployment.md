@@ -165,8 +165,7 @@ before.
   live in the `ai_plan_limits` table; a Plan with no row gets the **Free** limit.
   A migration seeds `Free` 300,000, `Pro` 3,000,000 and `Business` 15,000,000:
   change them, and add a row for every Plan name the billing provider will set,
-  before launch
-  ([ADR-0048](adr/0048-usage-limit-counts-tokens-per-user-per-workspace-per-month.md)).
+  before launch.
   A spent limit refuses new questions with `429` and code `ai_limit_reached`; a
   run already going finishes, so use can pass the limit by one run.
 - **Chats** carry more than a question. A User can narrow a workspace question to
