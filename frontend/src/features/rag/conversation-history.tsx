@@ -199,7 +199,15 @@ function HistoryRow({
           aria-hidden='true'
         />
         <span className='min-w-0 flex-1'>
-          <span className='block truncate text-sm font-medium'>{title}</span>
+          <span className='flex items-center gap-1.5'>
+            <span className='truncate text-sm font-medium'>{title}</span>
+            {pinned ? (
+              <Pin
+                className='size-3 shrink-0 text-muted-foreground'
+                aria-label='Pinned'
+              />
+            ) : null}
+          </span>
           {subtitle ? (
             <span className='block truncate text-xs text-muted-foreground'>
               {subtitle(chat)}

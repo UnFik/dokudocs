@@ -47,6 +47,7 @@ async function setup(
     usage?: { used: number; limit: number }
     role?: 'owner' | 'admin' | 'member'
     skills?: { id: string; name: string; description: string }[]
+    messages?: unknown[]
   } = {}
 ) {
   const chats = options.chats ?? [
@@ -82,7 +83,11 @@ async function setup(
     if (history) {
       const found = chats.find((item) => item.id === history[1])
       return Promise.resolve(
-        jsonResponse({ conversation: found, messages: [], actions: [] })
+        jsonResponse({
+          conversation: found,
+          messages: options.messages ?? [],
+          actions: [],
+        })
       )
     }
     if (/^GET \/api\/v1\/rag\/conversations\/[^/]+\/runs$/.test(route))
@@ -391,4 +396,89 @@ it('says why a file was refused instead of attaching it', async () => {
   await expect
     .element(screen.getByRole('alert'))
     .toHaveTextContent('logo.png is not a text file')
+})
+
+it('downloads the open chat as a Markdown file', async () => {
+  const saved: Blob[] = []
+  vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+    saved.push(blob as Blob)
+    return 'blob:chat'
+  })
+  const click = vi
+    .spyOn(HTMLAnchorElement.prototype, 'click')
+    .mockImplementation(() => {})
+  const { screen } = await setup({
+    messages: [
+      {
+        id: '1f27eac4-3eea-4ced-b4fa-e7f6b1c81ed4',
+        conversationId: idA,
+        role: 'user',
+        content: 'How do I ship?',
+        createdAt: ago(hour),
+      },
+      {
+        id: '2f27eac4-3eea-4ced-b4fa-e7f6b1c81ed4',
+        conversationId: idA,
+        role: 'assistant',
+        content: 'Run the release job.',
+        createdAt: ago(hour),
+      },
+    ],
+  })
+  await userEvent.click(screen.getByRole('button', { name: /Ask AI/ }))
+  await expect.element(screen.getByText('Run the release job.')).toBeVisible()
+  await userEvent.click(screen.getByRole('button', { name: 'Chat options' }))
+  await userEvent.click(
+    screen.getByRole('menuitem', { name: 'Download conversation' })
+  )
+  expect(click).toHaveBeenCalledOnce()
+  expect(await saved[0]!.text()).toBe(
+    '# Deploy checklist\n\n## You\n\nHow do I ship?\n\n## DokuDocs AI\n\nRun the release job.\n'
+  )
+  vi.restoreAllMocks()
+})
+
+it('keeps archived chats folded and restores one from there', async () => {
+  const { screen, calls } = await setup({
+    chats: [
+      chat(idA, 'Deploy checklist'),
+      chat(idB, 'Old thread', { archivedAt: ago(hour) }),
+    ],
+  })
+  await userEvent.click(screen.getByRole('button', { name: /Ask AI/ }))
+  await userEvent.click(screen.getByRole('button', { name: /Chat history/ }))
+  await expect.element(screen.getByText('Old thread')).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: /Archived \(1\)/ }))
+  const archived = screen.getByRole('list', { name: 'Archived chats' })
+  await userEvent.hover(archived.getByText('Old thread'))
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Restore Old thread' })
+  )
+  await vi.waitFor(() =>
+    expect(calls.find((call) => call.route.startsWith('PATCH'))?.body).toEqual({
+      archived: false,
+    })
+  )
+})
+
+it('links a chat to the assistant page where it can be opened in full', async () => {
+  const { screen } = await setup()
+  await userEvent.click(screen.getByRole('button', { name: /Ask AI/ }))
+  await userEvent.click(screen.getByRole('button', { name: /Chat history/ }))
+  const list = screen.getByRole('list', { name: 'Chats' })
+  await userEvent.hover(list.getByText('Schema questions'))
+  await expect
+    .element(
+      screen.getByRole('link', { name: 'Open Schema questions in AI chat' })
+    )
+    .toHaveAttribute('href', `/assistant?conversation=${idB}`)
+})
+
+it('marks a pinned chat in the list', async () => {
+  const { screen } = await setup({
+    chats: [chat(idA, 'Deploy checklist', { pinnedAt: ago(hour) })],
+  })
+  await userEvent.click(screen.getByRole('button', { name: /Ask AI/ }))
+  await userEvent.click(screen.getByRole('button', { name: /Chat history/ }))
+  await expect.element(screen.getByLabelText('Pinned')).toBeVisible()
 })
