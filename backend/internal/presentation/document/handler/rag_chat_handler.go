@@ -368,18 +368,19 @@ func (h *RAGChatHandler) Categories(w http.ResponseWriter, r *http.Request) {
 func (h *RAGChatHandler) answer(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, request askRequest, extras model.QuestionExtras) (any, error) {
 	answered, err := h.answerQuestion(ctx, actorID, workspaceID, conversationID, request, extras)
 	if err == nil {
-		h.titleLater(ctx, actorID, workspaceID, conversationID, request.Language)
+		h.titleLater(actorID, workspaceID, conversationID, request.Language)
 	}
 	return answered, err
 }
 
 // titleLater has the model title the Conversation after its first answer, apart
 // from the request so the answer is not held back. A spent Usage limit or a
-// failed call leaves the title as the first question.
-func (h *RAGChatHandler) titleLater(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, language string) {
-	background := context.WithoutCancel(ctx)
+// failed call leaves the title as the first question. It starts from a fresh
+// context: the run's own context carries its output, which is closed once the
+// run ends, and a late write to it would bring the server down.
+func (h *RAGChatHandler) titleLater(actorID, workspaceID, conversationID uuid.UUID, language string) {
 	go func() {
-		background, cancel := context.WithTimeout(background, 30*time.Second)
+		background, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		if h.checkLimit(background, actorID, workspaceID) != nil {
 			return
