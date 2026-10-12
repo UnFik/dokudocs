@@ -256,6 +256,8 @@ const ragHistorySchema = z.object({
   conversation: ragConversationSchema,
   messages: z.array(ragMessageSchema),
   actions: z.array(agentActionSchema).optional(),
+  /** Pass as `before` to read the page of older messages; absent at the first message. */
+  nextCursor: z.string().nullish(),
 })
 const skillSchema = z.object({
   id: z.string().uuid(),
@@ -982,14 +984,18 @@ export async function listRAGConversations(
     .parse(await apiFetch<unknown>('/api/v1/rag/conversations', { signal }))
 }
 
+/** One page of a conversation: the newest messages, or the ones before `before`. */
 export async function getRAGConversation(
   conversationID: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  before?: string
 ): Promise<RAGConversationHistory> {
+  const query = before ? `?before=${encodeURIComponent(before)}` : ''
   return ragHistorySchema.parse(
-    await apiFetch<unknown>(`/api/v1/rag/conversations/${conversationID}`, {
-      signal,
-    })
+    await apiFetch<unknown>(
+      `/api/v1/rag/conversations/${conversationID}${query}`,
+      { signal }
+    )
   )
 }
 
