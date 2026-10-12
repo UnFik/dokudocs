@@ -68,7 +68,7 @@ test.afterAll(async ({ request }) => {
   if (documentID) await request.delete(`${apiURL}/api/v1/documents/${documentID}`, { headers })
 })
 
-test('Ctrl+K from the dashboard finds a document by a word in its body and opens it', async ({ page }) => {
+test('@smoke: Ctrl+K from the dashboard finds a document by a word in its body and opens it', async ({ page }) => {
   await signIn(page)
   await page.keyboard.press('Control+k')
   await expect(searchBox(page)).toBeVisible()
@@ -83,7 +83,7 @@ test('Ctrl+K from the dashboard finds a document by a word in its body and opens
   await expect(searchBox(page)).toBeHidden()
 })
 
-test('in the editor Ctrl+K searches from a caret and links a selection', async ({ page }) => {
+test('@smoke: in the editor Ctrl+K searches from a caret and links a selection', async ({ page }) => {
   await signIn(page)
   await page.goto(`/docs/${documentID}`)
   const editor = page.locator('[contenteditable="true"]').first()
@@ -102,7 +102,7 @@ test('in the editor Ctrl+K searches from a caret and links a selection', async (
   await expect(searchBox(page)).toBeHidden()
 })
 
-test('Ctrl+K on the sign-in page is left to the browser', async ({ page }) => {
+test('@smoke: Ctrl+K on the sign-in page is left to the browser', async ({ page }) => {
   await page.goto('/sign-in')
   await page.keyboard.press('Control+k')
   await expect(searchBox(page)).toHaveCount(0)
