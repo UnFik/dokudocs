@@ -756,6 +756,37 @@ export async function listDocuments(
   return rows.map((row) => toDocument(row))
 }
 
+const documentSearchHitSchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  type: documentTypeSchema,
+  projectId: z.string().nullable().optional(),
+  projectName: z.string().optional().default(''),
+  isDraft: z.boolean(),
+  updatedAt: z.string(),
+  matchedOn: z.enum(['title', 'body']).optional(),
+  snippet: z.string().optional().default(''),
+})
+
+export type DocumentSearchHit = z.infer<typeof documentSearchHitSchema>
+
+/** Documents the user can read that match `query`; an empty query lists recent ones. */
+export async function searchDocuments(
+  workspaceId: string,
+  query: string,
+  signal?: AbortSignal
+): Promise<DocumentSearchHit[]> {
+  const params = new URLSearchParams()
+  if (query) params.set('q', query)
+  const suffix = params.size ? `?${params}` : ''
+  return z.array(documentSearchHitSchema).parse(
+    await apiFetch<unknown>(`/api/v1/documents/search${suffix}`, {
+      headers: workspaceHeaders(workspaceId),
+      signal,
+    })
+  )
+}
+
 export async function getDocument(
   workspaceId: string,
   documentId: string,

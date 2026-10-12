@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+import { SearchProvider } from '@/context/search-provider'
 import { Toaster } from '@/components/ui/sonner'
 import { NavigationProgress } from '@/components/navigation-progress'
 import { GeneralError } from '@/features/errors/general-error'
@@ -19,7 +20,9 @@ export const Route = createRootRouteWithContext<{
       <>
         <HeadContent />
         <NavigationProgress />
-        <Outlet />
+        <SearchProvider>
+          <Outlet />
+        </SearchProvider>
         <Toaster duration={5000} />
         {import.meta.env.MODE === 'development' && (
           <>

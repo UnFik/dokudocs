@@ -138,6 +138,27 @@ definitions:
       versionNumber:
         type: integer
     type: object
+  backend_internal_domain_model.DocumentSearchHit:
+    properties:
+      id:
+        type: string
+      isDraft:
+        type: boolean
+      matchedOn:
+        type: string
+      projectId:
+        type: string
+      projectName:
+        type: string
+      snippet:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+      updatedAt:
+        type: string
+    type: object
   backend_internal_domain_model.Project:
     properties:
       categories:
@@ -2203,6 +2224,55 @@ paths:
       summary: Record document view
       tags:
       - Document
+  /documents/search:
+    get:
+      description: Find readable documents by title, project name, or body text. An
+        empty query returns recent documents.
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Search text
+        in: query
+        name: q
+        type: string
+      - description: Maximum hits (default 8, max 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/backend_internal_domain_model.DocumentSearchHit'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Search documents
+      tags:
+      - Document
   /health:
     get:
       description: Returns service health status
@@ -2282,6 +2352,126 @@ paths:
       summary: Preview a workspace invitation
       tags:
       - Workspace
+  /platform/ai:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: AI provider settings
+      tags:
+      - Platform
+  /platform/ai/{purpose}:
+    put:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Save an AI provider setting
+      tags:
+      - Platform
+  /platform/ai/{purpose}/runs:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Run an AI provider test or save
+      tags:
+      - Platform
+  /platform/ai/{purpose}/runs/latest:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: Latest AI provider test or save
+      tags:
+      - Platform
+  /platform/ai/{purpose}/test:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Test an AI provider setting
+      tags:
+      - Platform
+  /platform/ai/changes:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+      security:
+      - BearerAuth: []
+      summary: AI provider setting changes
+      tags:
+      - Platform
+  /platform/ai/embedding/events:
+    get:
+      produces:
+      - text/event-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Follow re-embedding progress
+      tags:
+      - Platform
   /projects:
     get:
       description: Get all projects accessible to the user within the active workspace

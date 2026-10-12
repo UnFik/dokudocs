@@ -52,6 +52,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 
 	// Documents CRUD & Operations
 	docGroup.Get("", docHandler.List)
+	docGroup.Get("/search", docHandler.Search)
 	docGroup.Post("", docHandler.Create)
 	docGroup.Get("/{id}/suggestions", suggestionHandler.List)
 	docGroup.Post("/{id}/suggestions/{suggestionID}/replies", suggestionHandler.Reply)
