@@ -20,23 +20,55 @@ import (
 // conversationListOrder puts pinned Conversations first and archived ones last.
 const conversationListOrder = `(archived_at IS NOT NULL), pinned_at DESC NULLS LAST, updated_at DESC, conversation_id`
 
+// MaxPinnedConversations is how many Conversations one User may pin in one scope
+// (the workspace scope, or one document).
+const MaxPinnedConversations = 5
+
 // UpdateRAGConversation renames, pins, unpins, archives or restores one of the
-// actor's own Conversations and returns it as stored.
+// actor's own Conversations and returns it as stored. Pinning past
+// MaxPinnedConversations in the Conversation's scope fails with
+// constant.ErrConversationPinLimit.
 func (r *Repository) UpdateRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error) {
 	var conversation model.RAGConversation
-	err := r.db.QueryRowContext(ctx, `
-		UPDATE rag_conversations SET
-			title = COALESCE($3, title),
-			pinned_at = CASE WHEN $4::boolean IS NULL THEN pinned_at WHEN $4 THEN COALESCE(pinned_at, NOW()) ELSE NULL END,
-			archived_at = CASE WHEN $5::boolean IS NULL THEN archived_at WHEN $5 THEN COALESCE(archived_at, NOW()) ELSE NULL END
-		WHERE conversation_id = $1 AND creator_id = $2
-		RETURNING conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at
-	`, conversationID, actorID, patch.Title, patch.Pinned, patch.Archived).Scan(
-		&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID,
-		&conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return conversation, constant.ErrDocumentNotFound
-	}
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		var documentID *uuid.UUID
+		var alreadyPinned bool
+		if err := tx.QueryRowContext(ctx, `
+			SELECT document_id, pinned_at IS NOT NULL FROM rag_conversations
+			WHERE conversation_id = $1 AND creator_id = $2
+		`, conversationID, actorID).Scan(&documentID, &alreadyPinned); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return constant.ErrDocumentNotFound
+			}
+			return err
+		}
+		if patch.Pinned != nil && *patch.Pinned && !alreadyPinned {
+			// One pin at a time per User, or two pins could both see room.
+			if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "rag-pins:"+actorID.String()); err != nil {
+				return err
+			}
+			var pinned int
+			if err := tx.QueryRowContext(ctx, `
+				SELECT count(*) FROM rag_conversations
+				WHERE creator_id = $1 AND document_id IS NOT DISTINCT FROM $2 AND pinned_at IS NOT NULL
+			`, actorID, documentID).Scan(&pinned); err != nil {
+				return err
+			}
+			if pinned >= MaxPinnedConversations {
+				return constant.ErrConversationPinLimit
+			}
+		}
+		return tx.QueryRowContext(ctx, `
+			UPDATE rag_conversations SET
+				title = COALESCE($3, title),
+				pinned_at = CASE WHEN $4::boolean IS NULL THEN pinned_at WHEN $4 THEN COALESCE(pinned_at, NOW()) ELSE NULL END,
+				archived_at = CASE WHEN $5::boolean IS NULL THEN archived_at WHEN $5 THEN COALESCE(archived_at, NOW()) ELSE NULL END
+			WHERE conversation_id = $1 AND creator_id = $2
+			RETURNING conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at
+		`, conversationID, actorID, patch.Title, patch.Pinned, patch.Archived).Scan(
+			&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID,
+			&conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt)
+	})
 	return conversation, err
 }
 
