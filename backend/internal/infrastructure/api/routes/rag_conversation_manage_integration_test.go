@@ -29,6 +29,7 @@ import (
 // conversationClient drives the Conversation routes as one signed-in Member.
 type conversationClient struct {
 	t           *testing.T
+	db          *sql.DB
 	api         http.Handler
 	token       string
 	workspaceID uuid.UUID
@@ -69,7 +70,7 @@ func newConversationClient(t *testing.T) *conversationClient {
 	if err != nil {
 		t.Fatalf("issue access token: %v", err)
 	}
-	return &conversationClient{t: t, api: api, token: user.AccessToken, workspaceID: workspaceID}
+	return &conversationClient{t: t, db: db, api: api, token: user.AccessToken, workspaceID: workspaceID}
 }
 
 func (c *conversationClient) do(method, path, body string) *httptest.ResponseRecorder {
@@ -175,5 +176,46 @@ func TestConversationPinsAreCappedAtFivePerScope(t *testing.T) {
 	}
 	if res := client.do(http.MethodPatch, "/api/v1/rag/conversations/"+sixth.ID.String(), `{"pinned":true}`); res.Code != http.StatusOK {
 		t.Fatalf("pin after unpin = %d, body = %s", res.Code, res.Body.String())
+	}
+}
+
+func (c *conversationClient) answer(conversationID uuid.UUID, sequence int) {
+	c.t.Helper()
+	role := "assistant"
+	if sequence%2 == 1 {
+		role = "user"
+	}
+	if _, err := c.db.ExecContext(context.Background(), `
+		INSERT INTO rag_messages (conversation_id, sequence_no, role, content) VALUES ($1, $2, $3, 'text')
+	`, conversationID, sequence, role); err != nil {
+		c.t.Fatalf("insert %s message: %v", role, err)
+	}
+}
+
+func TestConversationUnreadFollowsTheLatestAnswer(t *testing.T) {
+	client := newConversationClient(t)
+	conversation := client.create()
+	if got := client.list()[0]; got.Unread {
+		t.Fatalf("empty conversation = %+v, want read", got)
+	}
+
+	client.answer(conversation.ID, 1)
+	client.answer(conversation.ID, 2)
+	if got := client.list()[0]; !got.Unread {
+		t.Fatalf("after an answer = %+v, want unread", got)
+	}
+
+	read := client.do(http.MethodPost, "/api/v1/rag/conversations/"+conversation.ID.String()+"/read", "")
+	if read.Code != http.StatusNoContent {
+		t.Fatalf("mark read = %d, body = %s", read.Code, read.Body.String())
+	}
+	if got := client.list()[0]; got.Unread {
+		t.Fatalf("after reading = %+v, want read", got)
+	}
+
+	client.answer(conversation.ID, 3)
+	client.answer(conversation.ID, 4)
+	if got := client.list()[0]; !got.Unread {
+		t.Fatalf("after a newer answer = %+v, want unread again", got)
 	}
 }

@@ -64,12 +64,28 @@ func (r *Repository) UpdateRAGConversation(ctx context.Context, conversationID, 
 				pinned_at = CASE WHEN $4::boolean IS NULL THEN pinned_at WHEN $4 THEN COALESCE(pinned_at, NOW()) ELSE NULL END,
 				archived_at = CASE WHEN $5::boolean IS NULL THEN archived_at WHEN $5 THEN COALESCE(archived_at, NOW()) ELSE NULL END
 			WHERE conversation_id = $1 AND creator_id = $2
-			RETURNING conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at
+			RETURNING conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at, EXISTS (SELECT 1 FROM rag_messages m WHERE m.conversation_id = rag_conversations.conversation_id AND m.role = 'assistant' AND m.created_at > rag_conversations.last_read_at)
 		`, conversationID, actorID, patch.Title, patch.Pinned, patch.Archived).Scan(
 			&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID,
-			&conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt)
+			&conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt, &conversation.Unread)
 	})
 	return conversation, err
+}
+
+// MarkRAGConversationRead records that the actor has seen the Conversation up to now.
+func (r *Repository) MarkRAGConversationRead(ctx context.Context, conversationID, actorID uuid.UUID) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE rag_conversations SET last_read_at = NOW() WHERE conversation_id = $1 AND creator_id = $2
+	`, conversationID, actorID)
+	if err != nil {
+		return err
+	}
+	if updated, err := result.RowsAffected(); err != nil {
+		return err
+	} else if updated == 0 {
+		return constant.ErrDocumentNotFound
+	}
+	return nil
 }
 
 func (r *Repository) CreateRAGConversation(ctx context.Context, workspaceID, actorID uuid.UUID) (model.RAGConversation, error) {
@@ -89,7 +105,7 @@ func (r *Repository) CreateRAGConversation(ctx context.Context, workspaceID, act
 
 func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID) ([]model.RAGConversation, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at
+		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at, EXISTS (SELECT 1 FROM rag_messages m WHERE m.conversation_id = rag_conversations.conversation_id AND m.role = 'assistant' AND m.created_at > rag_conversations.last_read_at)
 		FROM rag_conversations WHERE creator_id = $1 AND document_id IS NULL
 		ORDER BY `+conversationListOrder+`
 	`, actorID)
@@ -100,7 +116,7 @@ func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID
 	conversations := make([]model.RAGConversation, 0)
 	for rows.Next() {
 		var conversation model.RAGConversation
-		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt, &conversation.Unread); err != nil {
 			return nil, err
 		}
 		conversations = append(conversations, conversation)
@@ -130,7 +146,7 @@ func (r *Repository) CreateDocumentRAGConversation(ctx context.Context, workspac
 // ListDocumentRAGConversations lists the actor's own Conversations on one document.
 func (r *Repository) ListDocumentRAGConversations(ctx context.Context, actorID, documentID uuid.UUID) ([]model.RAGConversation, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at
+		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at, EXISTS (SELECT 1 FROM rag_messages m WHERE m.conversation_id = rag_conversations.conversation_id AND m.role = 'assistant' AND m.created_at > rag_conversations.last_read_at)
 		FROM rag_conversations WHERE creator_id = $1 AND document_id = $2
 		ORDER BY `+conversationListOrder+`
 	`, actorID, documentID)
@@ -141,7 +157,7 @@ func (r *Repository) ListDocumentRAGConversations(ctx context.Context, actorID, 
 	conversations := make([]model.RAGConversation, 0)
 	for rows.Next() {
 		var conversation model.RAGConversation
-		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt, &conversation.Unread); err != nil {
 			return nil, err
 		}
 		conversations = append(conversations, conversation)

@@ -230,6 +230,24 @@ func (h *RAGChatHandler) UpdateConversation(w http.ResponseWriter, r *http.Reque
 	_ = response.Data(w, http.StatusOK, conversation)
 }
 
+func (h *RAGChatHandler) MarkConversationRead(w http.ResponseWriter, r *http.Request) {
+	actorID, err := authenticatedRAGUserID(r)
+	if err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
+	conversationID, err := parsePathUUID(r, "conversationID")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid conversation ID")
+		return
+	}
+	if err := h.service.MarkConversationRead(r.Context(), conversationID, actorID); err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *RAGChatHandler) DeleteConversation(w http.ResponseWriter, r *http.Request) {
 	actorID, err := authenticatedRAGUserID(r)
 	if err != nil {
