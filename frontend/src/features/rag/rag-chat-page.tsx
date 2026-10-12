@@ -9,7 +9,17 @@ import {
   listRAGConversations,
 } from '@/lib/domain-api'
 import { getOpenedPublicLinkTokens } from '@/lib/public-link-session'
-import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
@@ -22,6 +32,7 @@ export function RAGChatPage() {
   const { workspaces, activeWorkspaceId } = useWorkspaces()
   const [selectedID, setSelectedID] = useState<string>()
   const [language, setLanguage] = useState<'id' | 'en'>('en')
+  const [deleting, setDeleting] = useState<string>()
   const conversationsQuery = useQuery({
     queryKey: ['rag-conversations', userID],
     queryFn: ({ signal }) => listRAGConversations(signal),
@@ -158,9 +169,7 @@ export function RAGChatPage() {
                             aria-label='Delete chat'
                             title='Delete chat'
                             disabled={deleteMutation.isPending}
-                            onClick={() =>
-                              deleteMutation.mutate(conversation.id)
-                            }
+                            onClick={() => setDeleting(conversation.id)}
                           >
                             <Trash2 />
                           </Button>
@@ -264,6 +273,34 @@ export function RAGChatPage() {
           </section>
         </div>
       </Main>
+      <AlertDialog
+        open={deleting !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(undefined)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The chat and all its messages are deleted for good. They cannot be
+              restored.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: 'destructive' })}
+              onClick={() => {
+                if (deleting) deleteMutation.mutate(deleting)
+                setDeleting(undefined)
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }
