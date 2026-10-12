@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"backend/constant"
@@ -262,6 +263,12 @@ func (h *RAGChatHandler) Ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.runs == nil {
+		resolved, err := h.service.ResolveMentions(r.Context(), workspaceID, actorID, strings.TrimSpace(request.Question))
+		if err != nil {
+			writeRAGChatError(w, err)
+			return
+		}
+		request.Question = resolved
 		answer, err := h.answer(r.Context(), actorID, workspaceID, conversationID, request)
 		if err != nil {
 			writeRAGChatError(w, err)
@@ -308,6 +315,10 @@ func authenticatedRAGUserID(r *http.Request) (uuid.UUID, error) {
 
 func writeRAGChatError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, appchat.ErrTooManyMentions):
+		response.Error(w, http.StatusBadRequest, "mention at most 5 documents in one question")
+	case errors.Is(err, appchat.ErrMentionUnavailable):
+		response.Error(w, http.StatusBadRequest, "a mentioned document is not available to you in this workspace")
 	case errors.Is(err, appchat.ErrInvalidChatRequest):
 		response.Error(w, http.StatusBadRequest, "invalid chatbot request")
 	case errors.Is(err, constant.ErrUnauthorized):

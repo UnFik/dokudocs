@@ -1,0 +1,44 @@
+{
+  "cases": [
+    { "name": "plain text", "content": "what is the policy", "visible": "what is the policy", "mentions": [] },
+    {
+      "name": "one document",
+      "content": "summarise @[Runbook](doc:11111111-1111-4111-8111-111111111111) please",
+      "visible": "summarise @Runbook please",
+      "mentions": [{ "documentID": "11111111-1111-4111-8111-111111111111", "label": "Runbook" }]
+    },
+    {
+      "name": "same document twice",
+      "content": "@[Runbook](doc:11111111-1111-4111-8111-111111111111) vs @[Runbook](doc:11111111-1111-4111-8111-111111111111)",
+      "visible": "@Runbook vs @Runbook",
+      "mentions": [
+        { "documentID": "11111111-1111-4111-8111-111111111111", "label": "Runbook" },
+        { "documentID": "11111111-1111-4111-8111-111111111111", "label": "Runbook" }
+      ]
+    },
+    {
+      "name": "a person token is not a document",
+      "content": "@[Ana Bo](user:11111111-1111-4111-8111-111111111111)",
+      "visible": "@[Ana Bo](user:11111111-1111-4111-8111-111111111111)",
+      "mentions": []
+    },
+    {
+      "name": "id that is not a uuid stays text",
+      "content": "@[Runbook](doc:not-a-uuid)",
+      "visible": "@[Runbook](doc:not-a-uuid)",
+      "mentions": []
+    },
+    {
+      "name": "cut-off token stays text",
+      "content": "@[Runbook](doc:11111111-1111-4111-8111-11111111111",
+      "visible": "@[Runbook](doc:11111111-1111-4111-8111-11111111111",
+      "mentions": []
+    },
+    {
+      "name": "label with a bracket stays text",
+      "content": "@[Run]book](doc:11111111-1111-4111-8111-111111111111)",
+      "visible": "@[Run]book](doc:11111111-1111-4111-8111-111111111111)",
+      "mentions": []
+    }
+  ]
+}

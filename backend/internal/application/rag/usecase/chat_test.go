@@ -113,3 +113,78 @@ func TestADocumentConversationOnlyDrawsOnItsDocument(t *testing.T) {
 		t.Fatalf("document chunks %d, lexical %d, semantic %d", repo.docCalls, repo.lexicalCalls, repo.semanticCalls)
 	}
 }
+
+type mentionRepo struct {
+	chatRepo
+	chunksByDocument map[uuid.UUID][]model.RAGChunk
+	asked            []uuid.UUID
+}
+
+func (r *mentionRepo) ListRAGChunksForDocument(_ context.Context, _, _, documentID uuid.UUID, _ int) ([]model.RAGChunk, error) {
+	r.asked = append(r.asked, documentID)
+	return r.chunksByDocument[documentID], nil
+}
+
+type capturingModel struct{ got ModelInput }
+
+func (m *capturingModel) Answer(_ context.Context, input ModelInput) (ModelOutput, error) {
+	m.got = input
+	ids := make([]uuid.UUID, len(input.Sources))
+	for i, source := range input.Sources {
+		ids[i] = source.ChunkID
+	}
+	return ModelOutput{Text: "done", SourceIDs: ids}, nil
+}
+
+func TestAMentionedDocumentIsAlwaysInTheModelsSourcesWhateverTheSearchFinds(t *testing.T) {
+	mentioned, found := uuid.New(), uuid.New()
+	mentionedChunk := model.RAGChunk{ChunkID: uuid.New(), DocumentID: mentioned, Text: "The runbook says restart."}
+	foundChunk := model.RAGChunk{ChunkID: uuid.New(), DocumentID: found, Text: "Found by search."}
+	repo := &mentionRepo{
+		chatRepo:         chatRepo{chunks: []model.RAGChunk{foundChunk, mentionedChunk}},
+		chunksByDocument: map[uuid.UUID][]model.RAGChunk{mentioned: {mentionedChunk}},
+	}
+	answers := &capturingModel{}
+	question := "what does @[Runbook](doc:" + mentioned.String() + ") say about restarts?"
+	if _, err := NewChatUseCase(repo, answers, unconfiguredEmbedder{}).Ask(context.Background(), AskInput{
+		WorkspaceID: uuid.New(), ConversationID: uuid.New(), ActorID: uuid.New(), Question: question,
+	}); err != nil {
+		t.Fatalf("Ask(): %v", err)
+	}
+	if len(repo.asked) != 1 || repo.asked[0] != mentioned {
+		t.Fatalf("read chunks of %v, want only the mentioned document %s", repo.asked, mentioned)
+	}
+	ids := map[uuid.UUID]int{}
+	for _, source := range answers.got.Sources {
+		ids[source.ChunkID]++
+	}
+	if ids[mentionedChunk.ChunkID] != 1 || ids[foundChunk.ChunkID] != 1 || len(answers.got.Sources) != 2 {
+		t.Errorf("sources = %+v, want the mentioned chunk and the searched chunk once each", answers.got.Sources)
+	}
+	if want := "what does @Runbook say about restarts?"; answers.got.Question != want {
+		t.Errorf("the model was asked %q, want %q (no ids in the prompt)", answers.got.Question, want)
+	}
+}
+
+func TestMentionedSourcesComeFirstSoTheyAreNotCutOff(t *testing.T) {
+	mentioned := uuid.New()
+	mentionedChunk := model.RAGChunk{ChunkID: uuid.New(), DocumentID: mentioned, Text: "mentioned"}
+	var searched []model.RAGChunk
+	for i := 0; i < 20; i++ {
+		searched = append(searched, model.RAGChunk{ChunkID: uuid.New(), DocumentID: uuid.New(), Text: "searched"})
+	}
+	repo := &mentionRepo{
+		chatRepo:         chatRepo{chunks: searched},
+		chunksByDocument: map[uuid.UUID][]model.RAGChunk{mentioned: {mentionedChunk}},
+	}
+	answers := &capturingModel{}
+	if _, err := NewChatUseCase(repo, answers, unconfiguredEmbedder{}).Ask(context.Background(), AskInput{
+		WorkspaceID: uuid.New(), ConversationID: uuid.New(), ActorID: uuid.New(),
+		Question: "@[Doc](doc:" + mentioned.String() + ") summary",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(answers.got.Sources) == 0 || answers.got.Sources[0].ChunkID != mentionedChunk.ChunkID {
+		t.Errorf("first source = %+v, want the mentioned chunk", answers.got.Sources)
+	}
+}
