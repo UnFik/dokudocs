@@ -64,6 +64,8 @@ type ChatRepository interface {
 	SearchDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, text string, limit int) ([]model.RAGDocumentHit, error)
 	GetRAGConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, before int64, limit int) (model.RAGConversationHistory, int64, error)
 	DeleteRAGConversation(context.Context, uuid.UUID, uuid.UUID) error
+	RAGTitleSource(ctx context.Context, conversationID, actorID uuid.UUID) (question, answer string, ok bool, err error)
+	SetGeneratedRAGTitle(ctx context.Context, conversationID, actorID uuid.UUID, title string) error
 	MarkRAGConversationRead(ctx context.Context, conversationID, actorID uuid.UUID) error
 	UpdateRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error)
 	SearchRAGChunksWithPublicLinkTokens(context.Context, uuid.UUID, uuid.UUID, string, int, []string) ([]model.RAGChunk, error)
@@ -230,6 +232,53 @@ func (u *ChatUseCase) UpdateConversation(ctx context.Context, conversationID, ac
 		patch.Title = &title
 	}
 	return u.repository.UpdateRAGConversation(ctx, conversationID, actorID, patch)
+}
+
+// TitleRequest opens the request that asks the model for a Conversation's title.
+const TitleRequest = "Write a short title (at most six words, no quotes) for this conversation."
+
+const maxGeneratedTitle = 60
+
+// TitleConversation asks the model for a short title once a Conversation has its
+// first answer, and keeps it unless the User renamed the Conversation meanwhile.
+// It does nothing when no model is set up.
+func (u *ChatUseCase) TitleConversation(ctx context.Context, workspaceID, conversationID, actorID uuid.UUID, language string) error {
+	if u.model == nil {
+		return nil
+	}
+	question, answer, ok, err := u.repository.RAGTitleSource(ctx, conversationID, actorID)
+	if err != nil || !ok {
+		return err
+	}
+	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: aiusage.FeatureChatTitle, UserID: actorID, WorkspaceID: workspaceID})
+	exchange := "Question: " + clip(mention.VisibleDocuments(question), 1000) + "\nAnswer: " + clip(answer, 1000)
+	generated, err := u.model.Answer(ctx, ModelInput{
+		Question: TitleRequest + " Reply in the language of the question.",
+		Language: normalizeRAGLanguage(language),
+		Sources:  []model.RAGChunk{{ChunkID: uuid.New(), Text: exchange}},
+	})
+	if err != nil {
+		return err
+	}
+	title := tidyTitle(generated.Text)
+	if title == "" {
+		return nil
+	}
+	return u.repository.SetGeneratedRAGTitle(ctx, conversationID, actorID, title)
+}
+
+func clip(text string, runes int) string {
+	if utf8.RuneCountInString(text) <= runes {
+		return text
+	}
+	return string([]rune(text)[:runes])
+}
+
+// tidyTitle keeps the first line, drops quotes and extra spaces, and shortens it.
+func tidyTitle(text string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
+	line = strings.Join(strings.Fields(strings.Trim(strings.TrimSpace(line), "\"'`“”‘’")), " ")
+	return strings.TrimSpace(clip(line, maxGeneratedTitle))
 }
 
 // MarkConversationRead records that the actor has seen the Conversation's latest answer.

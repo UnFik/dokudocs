@@ -64,6 +64,9 @@ func (fakeRAGEmbeddingModel) Embed(_ context.Context, inputs []string) ([][]floa
 }
 
 func (fake fakeRAGAnswerModel) Answer(_ context.Context, input appchat.ModelInput) (appchat.ModelOutput, error) {
+	if strings.HasPrefix(input.Question, appchat.TitleRequest) {
+		return appchat.ModelOutput{Text: "Chat title"}, nil
+	}
 	if len(input.Sources) == 0 {
 		return appchat.ModelOutput{}, fmt.Errorf("model called without evidence")
 	}

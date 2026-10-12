@@ -36,7 +36,7 @@ type conversationClient struct {
 	workspaceID uuid.UUID
 }
 
-func newConversationClient(t *testing.T) *conversationClient {
+func newConversationClient(t *testing.T, options ...func(*container.Container)) *conversationClient {
 	t.Helper()
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -64,6 +64,9 @@ func newConversationClient(t *testing.T) *conversationClient {
 		_ = db.Close()
 	})
 	app := container.New(database.NewSQLDB(db), logger.New(), validator.New())
+	for _, option := range options {
+		option(app)
+	}
 	api := InitRoutes(app, config.Config{JWTSecret: "conv-test-secret", AccessTokenTTL: time.Hour})
 	user, err := jwtmanager.NewManager("conv-test-secret", time.Hour).Issue(model.AuthUser{
 		ID: actorID, AccountNo: "conv-account", Email: email, Roles: []string{"member"},

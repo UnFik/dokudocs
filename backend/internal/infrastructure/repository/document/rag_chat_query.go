@@ -61,6 +61,7 @@ func (r *Repository) UpdateRAGConversation(ctx context.Context, conversationID, 
 		return tx.QueryRowContext(ctx, `
 			UPDATE rag_conversations SET
 				title = COALESCE($3, title),
+				title_generated = title_generated OR $3::text IS NOT NULL,
 				pinned_at = CASE WHEN $4::boolean IS NULL THEN pinned_at WHEN $4 THEN COALESCE(pinned_at, NOW()) ELSE NULL END,
 				archived_at = CASE WHEN $5::boolean IS NULL THEN archived_at WHEN $5 THEN COALESCE(archived_at, NOW()) ELSE NULL END
 			WHERE conversation_id = $1 AND creator_id = $2
@@ -70,6 +71,33 @@ func (r *Repository) UpdateRAGConversation(ctx context.Context, conversationID, 
 			&conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt, &conversation.Unread)
 	})
 	return conversation, err
+}
+
+// RAGTitleSource reads the first question and first answer of a Conversation
+// whose title the model has not yet written. ok is false when there is nothing
+// to do: the title was already written or renamed, or no answer exists yet.
+func (r *Repository) RAGTitleSource(ctx context.Context, conversationID, actorID uuid.UUID) (question, answer string, ok bool, err error) {
+	err = r.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE((SELECT content FROM rag_messages WHERE conversation_id = c.conversation_id AND role = 'user' ORDER BY sequence_no LIMIT 1), ''),
+			COALESCE((SELECT content FROM rag_messages WHERE conversation_id = c.conversation_id AND role = 'assistant' ORDER BY sequence_no LIMIT 1), '')
+		FROM rag_conversations c
+		WHERE c.conversation_id = $1 AND c.creator_id = $2 AND NOT c.title_generated
+	`, conversationID, actorID).Scan(&question, &answer)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", false, nil
+	}
+	return question, answer, err == nil && question != "" && answer != "", err
+}
+
+// SetGeneratedRAGTitle stores the model's title unless the User renamed the
+// Conversation, or it was titled, in the meantime.
+func (r *Repository) SetGeneratedRAGTitle(ctx context.Context, conversationID, actorID uuid.UUID, title string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE rag_conversations SET title = $3, title_generated = true
+		WHERE conversation_id = $1 AND creator_id = $2 AND NOT title_generated
+	`, conversationID, actorID, title)
+	return err
 }
 
 // MarkRAGConversationRead records that the actor has seen the Conversation up to now.
