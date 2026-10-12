@@ -331,7 +331,46 @@ func (r *Repository) GetRAGConversationPage(ctx context.Context, conversationID,
 	if err != nil {
 		return history, 0, err
 	}
-	return history, next, r.attachMentions(ctx, history.Conversation.WorkspaceID, actorID, history.Messages)
+	if err := r.attachMentions(ctx, history.Conversation.WorkspaceID, actorID, history.Messages); err != nil {
+		return history, next, err
+	}
+	return history, next, r.withholdUnreadableCitations(ctx, history.Conversation.WorkspaceID, actorID, history.Messages)
+}
+
+// withholdUnreadableCitations hides what a citation shows of a document the
+// actor can no longer read: its title, project, place and quote. The answer
+// itself stays (ADR 0046); the citation keeps its position so the text still
+// lines up.
+func (r *Repository) withholdUnreadableCitations(ctx context.Context, workspaceID, actorID uuid.UUID, messages []model.RAGMessage) error {
+	var ids []uuid.UUID
+	seen := map[uuid.UUID]bool{}
+	for _, message := range messages {
+		for _, citation := range message.Citations {
+			if !seen[citation.DocumentID] {
+				seen[citation.DocumentID] = true
+				ids = append(ids, citation.DocumentID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	readable, err := r.ReadableDocumentTitles(ctx, workspaceID, actorID, ids)
+	if err != nil {
+		return err
+	}
+	for i := range messages {
+		for j, citation := range messages[i].Citations {
+			if _, ok := readable[citation.DocumentID]; ok {
+				continue
+			}
+			messages[i].Citations[j] = model.RAGCitation{
+				DocumentID: citation.DocumentID, ChunkID: citation.ChunkID,
+				NodeID: citation.NodeID, Ordinal: citation.Ordinal, Unavailable: true,
+			}
+		}
+	}
+	return nil
 }
 
 // ReadableDocumentTitles returns the current title of each listed document the

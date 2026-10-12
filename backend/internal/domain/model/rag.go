@@ -32,6 +32,9 @@ type RAGCitation struct {
 	QuotedText        string    `json:"quotedText"`
 	Breadcrumb        string    `json:"breadcrumb"`
 	Ordinal           int       `json:"ordinal"`
+	// Unavailable is set when the reader may no longer read the document; the
+	// title, quote and place are then withheld.
+	Unavailable bool `json:"unavailable,omitempty"`
 }
 
 type RAGConversation struct {
