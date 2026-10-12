@@ -308,11 +308,65 @@ type askRequest struct {
 	Question         string   `json:"question"`
 	Language         string   `json:"language"`
 	PublicLinkTokens []string `json:"publicLinkTokens"`
+	// CategoryIDs narrow the search to documents in these categories.
+	CategoryIDs []string `json:"categoryIds"`
+	// ContextChatIDs are other chats of the User, brought in as background.
+	ContextChatIDs []string `json:"contextChatIds"`
+	// Attachments are text files for this question only.
+	Attachments []struct {
+		Name string `json:"name"`
+		Text string `json:"text"`
+	} `json:"attachments"`
+}
+
+// extras checks the categories, chats and files a question carries.
+func (h *RAGChatHandler) extras(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, request askRequest) (model.QuestionExtras, error) {
+	parse := func(raw []string) ([]uuid.UUID, error) {
+		ids := make([]uuid.UUID, 0, len(raw))
+		for _, text := range raw {
+			id, err := uuid.Parse(text)
+			if err != nil {
+				return nil, appchat.ErrInvalidChatRequest
+			}
+			ids = append(ids, id)
+		}
+		return ids, nil
+	}
+	categories, err := parse(request.CategoryIDs)
+	if err != nil {
+		return model.QuestionExtras{}, err
+	}
+	chats, err := parse(request.ContextChatIDs)
+	if err != nil {
+		return model.QuestionExtras{}, err
+	}
+	files := make([]appchat.AttachmentInput, len(request.Attachments))
+	for i, file := range request.Attachments {
+		files[i] = appchat.AttachmentInput{Name: file.Name, Text: file.Text}
+	}
+	return h.service.PrepareExtras(ctx, workspaceID, actorID, conversationID, appchat.ExtrasInput{
+		CategoryIDs: categories, ContextChatIDs: chats, Attachments: files,
+	})
+}
+
+// Categories lists the categories the User may narrow a question to.
+func (h *RAGChatHandler) Categories(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, err := getUserAndWorkspace(r)
+	if err != nil {
+		writeDocumentError(w, err)
+		return
+	}
+	categories, err := h.service.Categories(r.Context(), workspaceID, actorID)
+	if err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, categories)
 }
 
 // answer asks the Agent when one is set up, otherwise answers from documents.
-func (h *RAGChatHandler) answer(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, request askRequest) (any, error) {
-	answered, err := h.answerQuestion(ctx, actorID, workspaceID, conversationID, request)
+func (h *RAGChatHandler) answer(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, request askRequest, extras model.QuestionExtras) (any, error) {
+	answered, err := h.answerQuestion(ctx, actorID, workspaceID, conversationID, request, extras)
 	if err == nil {
 		h.titleLater(ctx, actorID, workspaceID, conversationID, request.Language)
 	}
@@ -334,11 +388,11 @@ func (h *RAGChatHandler) titleLater(ctx context.Context, actorID, workspaceID, c
 	}()
 }
 
-func (h *RAGChatHandler) answerQuestion(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, request askRequest) (any, error) {
+func (h *RAGChatHandler) answerQuestion(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, request askRequest, extras model.QuestionExtras) (any, error) {
 	if h.agent != nil && h.agent.ready(ctx) {
 		answer, err := h.agent.chat.Ask(ctx, agent.ChatInput{
 			WorkspaceID: workspaceID, ConversationID: conversationID, ActorID: actorID,
-			Question: request.Question, Language: request.Language,
+			Question: request.Question, Language: request.Language, Extras: extras,
 		})
 		if err != nil {
 			return nil, err
@@ -350,7 +404,7 @@ func (h *RAGChatHandler) answerQuestion(ctx context.Context, actorID, workspaceI
 	}
 	return h.service.Ask(ctx, appchat.AskInput{
 		WorkspaceID: workspaceID, ConversationID: conversationID, ActorID: actorID,
-		Question: request.Question, Language: request.Language, PublicLinkTokens: request.PublicLinkTokens,
+		Question: request.Question, Language: request.Language, PublicLinkTokens: request.PublicLinkTokens, Extras: extras,
 	})
 }
 
@@ -381,7 +435,12 @@ func (h *RAGChatHandler) Ask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		request.Question = resolved
-		answer, err := h.answer(r.Context(), actorID, workspaceID, conversationID, request)
+		extras, err := h.extras(r.Context(), actorID, workspaceID, conversationID, request)
+		if err != nil {
+			writeRAGChatError(w, err)
+			return
+		}
+		answer, err := h.answer(r.Context(), actorID, workspaceID, conversationID, request, extras)
 		if err != nil {
 			writeRAGChatError(w, err)
 			return

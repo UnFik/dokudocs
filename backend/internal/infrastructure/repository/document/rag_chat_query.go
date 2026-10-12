@@ -757,3 +757,94 @@ func (r *Repository) SearchDocumentTitles(ctx context.Context, workspaceID, acto
 	}
 	return hits, nil
 }
+
+// RAGCategories lists the categories of the projects in the workspace the actor
+// may see, for narrowing a question. Projects come first by name, then each
+// project's own category order.
+func (r *Repository) RAGCategories(ctx context.Context, workspaceID, actorID uuid.UUID) ([]model.RAGCategory, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT pc.id, pc.name, p.name
+		FROM project_categories pc
+		JOIN projects p ON p.id = pc.project_id AND p.workspace_id = $1 AND p.deleted_at IS NULL
+		WHERE `+projectVisiblePredicate("$2", "p")+`
+		ORDER BY p.name, pc.sort_order, pc.created_at
+	`, workspaceID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	categories := make([]model.RAGCategory, 0)
+	for rows.Next() {
+		var category model.RAGCategory
+		if err := rows.Scan(&category.ID, &category.Name, &category.ProjectName); err != nil {
+			return nil, err
+		}
+		categories = append(categories, category)
+	}
+	return categories, rows.Err()
+}
+
+// CountVisibleRAGCategories says how many of the ids are categories the actor
+// may see in the workspace, so a question cannot name one it should not know of.
+func (r *Repository) CountVisibleRAGCategories(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) (int, error) {
+	texts := make([]string, len(ids))
+	for i, id := range ids {
+		texts[i] = id.String()
+	}
+	var visible int
+	err := r.db.QueryRowContext(ctx, `
+		SELECT count(*)
+		FROM project_categories pc
+		JOIN projects p ON p.id = pc.project_id AND p.workspace_id = $1 AND p.deleted_at IS NULL
+		WHERE pc.id = ANY($3::uuid[]) AND `+projectVisiblePredicate("$2", "p"),
+		workspaceID, actorID, texts).Scan(&visible)
+	return visible, err
+}
+
+// contextMessagesPerChat is how many of a chat's latest messages the model gets.
+const contextMessagesPerChat = 12
+
+// RAGContextChats reads the actor's own chats in the workspace, newest messages
+// last. It fails with ErrDocumentNotFound when one of them is not theirs.
+func (r *Repository) RAGContextChats(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) ([]model.ContextChat, error) {
+	chats := make([]model.ContextChat, 0, len(ids))
+	for _, id := range ids {
+		var title string
+		if err := r.db.QueryRowContext(ctx, `
+			SELECT title FROM rag_conversations
+			WHERE conversation_id = $1 AND creator_id = $2 AND workspace_id = $3
+		`, id, actorID, workspaceID).Scan(&title); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, constant.ErrDocumentNotFound
+			}
+			return nil, err
+		}
+		rows, err := r.db.QueryContext(ctx, `
+			SELECT role, content FROM (
+				SELECT role, content, sequence_no FROM rag_messages
+				WHERE conversation_id = $1 ORDER BY sequence_no DESC LIMIT $2
+			) latest ORDER BY sequence_no
+		`, id, contextMessagesPerChat)
+		if err != nil {
+			return nil, err
+		}
+		chat := model.ContextChat{Title: title, Messages: []model.ContextMessage{}}
+		for rows.Next() {
+			var message model.ContextMessage
+			if err := rows.Scan(&message.Role, &message.Content); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			chat.Messages = append(chat.Messages, message)
+		}
+		rows.Close()
+		chats = append(chats, chat)
+	}
+	return chats, nil
+}
+
+// projectVisiblePredicate is projectMetadataPredicate for a query that has no
+// document: the project's own workspace stands in for the document's.
+func projectVisiblePredicate(actorPlaceholder, projectAlias string) string {
+	return strings.ReplaceAll(projectMetadataPredicate(actorPlaceholder, projectAlias), "d.workspace_id", projectAlias+".workspace_id")
+}

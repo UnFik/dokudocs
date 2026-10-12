@@ -15,6 +15,7 @@ import (
 	"backend/internal/application/aiusage"
 	"backend/internal/domain/mention"
 	"backend/internal/domain/model"
+	"backend/internal/domain/searchscope"
 
 	"github.com/google/uuid"
 )
@@ -37,6 +38,10 @@ type ModelInput struct {
 	Language string
 	History  []model.RAGMessage
 	Sources  []model.RAGChunk
+	// Context is other chats of the User, background only and never evidence.
+	Context []model.ContextChat
+	// Attachments are files the User attached to this question; the model may cite them by ID.
+	Attachments []model.QuestionAttachment
 }
 
 type ModelOutput struct {
@@ -66,6 +71,9 @@ type ChatRepository interface {
 	DeleteRAGConversation(context.Context, uuid.UUID, uuid.UUID) error
 	RAGTitleSource(ctx context.Context, conversationID, actorID uuid.UUID) (question, answer string, ok bool, err error)
 	SetGeneratedRAGTitle(ctx context.Context, conversationID, actorID uuid.UUID, title string) error
+	RAGCategories(ctx context.Context, workspaceID, actorID uuid.UUID) ([]model.RAGCategory, error)
+	CountVisibleRAGCategories(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) (int, error)
+	RAGContextChats(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) ([]model.ContextChat, error)
 	MarkRAGConversationRead(ctx context.Context, conversationID, actorID uuid.UUID) error
 	UpdateRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error)
 	SearchRAGChunksWithPublicLinkTokens(context.Context, uuid.UUID, uuid.UUID, string, int, []string) ([]model.RAGChunk, error)
@@ -78,6 +86,8 @@ type ChatRepository interface {
 }
 
 type AskInput struct {
+	// Extras were checked by PrepareExtras.
+	Extras           model.QuestionExtras
 	WorkspaceID      uuid.UUID
 	ConversationID   uuid.UUID
 	ActorID          uuid.UUID
@@ -351,6 +361,7 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 		feature = aiusage.FeatureChatDocument
 	}
 	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: feature, UserID: input.ActorID, WorkspaceID: input.WorkspaceID})
+	ctx = searchscope.WithCategories(ctx, input.Extras.CategoryIDs)
 	if history.Conversation.DocumentID != nil {
 		// A document Conversation draws on its document alone.
 		chunks, err = u.repository.ListRAGChunksForDocument(ctx, input.WorkspaceID, input.ActorID, *history.Conversation.DocumentID, 40)
@@ -397,9 +408,10 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 		ConversationID: input.ConversationID, Citations: []model.RAGCitation{},
 		SourcesMayBeIncomplete: sourcesMayBeIncomplete,
 	}
-	if len(chunks) == 0 {
+	storedQuestion := input.Extras.Annotate(question)
+	if len(chunks) == 0 && len(input.Extras.Attachments) == 0 {
 		answer.Text = noEvidenceMessage(language)
-		if err := u.repository.StoreRAGAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, question, answer.Text, answer.CoveragePartial, answer.SourcesMayBeIncomplete, nil, linkTokens); err != nil {
+		if err := u.repository.StoreRAGAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, storedQuestion, answer.Text, answer.CoveragePartial, answer.SourcesMayBeIncomplete, nil, linkTokens); err != nil {
 			return Answer{}, err
 		}
 		return answer, nil
@@ -410,7 +422,10 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	if err := airuns.Emit(ctx, "status", map[string]string{"phase": "answering"}); err != nil {
 		return Answer{}, err
 	}
-	generated, err := u.model.Answer(ctx, ModelInput{Question: visible, Language: language, History: previousQuestions, Sources: chunks})
+	generated, err := u.model.Answer(ctx, ModelInput{
+		Question: visible, Language: language, History: previousQuestions, Sources: chunks,
+		Context: input.Extras.ContextChats, Attachments: input.Extras.Attachments,
+	})
 	if err != nil {
 		return Answer{}, err
 	}
@@ -419,8 +434,17 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 		chunkByID[chunk.ChunkID] = chunk
 		answer.CoveragePartial = answer.CoveragePartial || chunk.CoverageStatus == "partial"
 	}
+	attached := make(map[uuid.UUID]bool, len(input.Extras.Attachments))
+	for _, attachment := range input.Extras.Attachments {
+		attached[attachment.ID] = true
+	}
+	citedAttachment := false
 	seen := make(map[uuid.UUID]struct{}, len(generated.SourceIDs))
 	for _, sourceID := range generated.SourceIDs {
+		if attached[sourceID] {
+			citedAttachment = true
+			continue
+		}
 		chunk, ok := chunkByID[sourceID]
 		if !ok {
 			continue
@@ -436,14 +460,14 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 			QuotedText: chunk.Text, Breadcrumb: chunk.Breadcrumb, Ordinal: len(answer.Citations),
 		})
 	}
-	if strings.TrimSpace(generated.Text) == "" || len(answer.Citations) == 0 {
+	if strings.TrimSpace(generated.Text) == "" || (len(answer.Citations) == 0 && !citedAttachment) {
 		answer.Text = noEvidenceMessage(language)
 		answer.Citations = []model.RAGCitation{}
 		answer.CoveragePartial = false
 	} else {
 		answer.Text = strings.TrimSpace(generated.Text)
 	}
-	if err := u.repository.StoreRAGAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, question, answer.Text, answer.CoveragePartial, answer.SourcesMayBeIncomplete, answer.Citations, linkTokens); err != nil {
+	if err := u.repository.StoreRAGAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, storedQuestion, answer.Text, answer.CoveragePartial, answer.SourcesMayBeIncomplete, answer.Citations, linkTokens); err != nil {
 		return Answer{}, err
 	}
 	return answer, nil
