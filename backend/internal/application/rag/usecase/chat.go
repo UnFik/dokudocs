@@ -2,8 +2,10 @@ package usecase
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"math"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -51,6 +53,7 @@ type ChatRepository interface {
 	ListRAGConversations(context.Context, uuid.UUID) ([]model.RAGConversation, error)
 	AuthorizeRAGQuestion(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
 	GetRAGConversation(context.Context, uuid.UUID, uuid.UUID) (model.RAGConversationHistory, error)
+	GetRAGConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, before int64, limit int) (model.RAGConversationHistory, int64, error)
 	DeleteRAGConversation(context.Context, uuid.UUID, uuid.UUID) error
 	SearchRAGChunksWithPublicLinkTokens(context.Context, uuid.UUID, uuid.UUID, string, int, []string) ([]model.RAGChunk, error)
 	SearchRAGChunksWithEmbedding(context.Context, uuid.UUID, uuid.UUID, string, []float32, string, string, int, []string) ([]model.RAGChunk, error)
@@ -123,6 +126,37 @@ func (u *ChatUseCase) GetConversation(ctx context.Context, conversationID, actor
 		return model.RAGConversationHistory{}, ErrInvalidChatRequest
 	}
 	return u.repository.GetRAGConversation(ctx, conversationID, actorID)
+}
+
+const (
+	// DefaultHistoryPage is how many messages a conversation shows at first.
+	DefaultHistoryPage = 30
+	maxHistoryPage     = 100
+)
+
+// GetConversationPage returns one page of a conversation, newest page first.
+// cursor is empty for the newest page, or the opaque value an earlier page
+// returned; the returned cursor is empty when nothing older remains.
+func (u *ChatUseCase) GetConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, cursor string, limit int) (model.RAGConversationHistory, string, error) {
+	if conversationID == uuid.Nil || actorID == uuid.Nil || limit < 1 {
+		return model.RAGConversationHistory{}, "", ErrInvalidChatRequest
+	}
+	limit = min(limit, maxHistoryPage)
+	var before int64
+	if cursor != "" {
+		raw, err := base64.RawURLEncoding.DecodeString(cursor)
+		if err == nil {
+			before, err = strconv.ParseInt(string(raw), 10, 64)
+		}
+		if err != nil || before < 1 {
+			return model.RAGConversationHistory{}, "", ErrInvalidChatRequest
+		}
+	}
+	history, next, err := u.repository.GetRAGConversationPage(ctx, conversationID, actorID, before, limit)
+	if err != nil || next == 0 {
+		return history, "", err
+	}
+	return history, base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(next, 10))), nil
 }
 
 func (u *ChatUseCase) DeleteConversation(ctx context.Context, conversationID, actorID uuid.UUID) error {

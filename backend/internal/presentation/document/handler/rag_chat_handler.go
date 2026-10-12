@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"backend/constant"
@@ -103,19 +104,32 @@ func (h *RAGChatHandler) GetConversation(w http.ResponseWriter, r *http.Request)
 		response.Error(w, http.StatusBadRequest, "invalid conversation ID")
 		return
 	}
-	history, err := h.service.GetConversation(r.Context(), conversationID, actorID)
+	limit := appchat.DefaultHistoryPage
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if limit, err = strconv.Atoi(raw); err != nil || limit < 1 {
+			response.Error(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+	}
+	cursor := r.URL.Query().Get("before")
+	history, next, err := h.service.GetConversationPage(r.Context(), conversationID, actorID, cursor, limit)
 	if err != nil {
 		writeRAGChatError(w, err)
 		return
 	}
+	// Pending actions belong to the newest messages, so only the first page carries them.
 	actions := []agent.PendingAction{}
-	if h.agent != nil {
+	if h.agent != nil && cursor == "" {
 		if actions, err = h.agent.actions.PendingActions(r.Context(), conversationID, actorID); err != nil {
 			writeRAGChatError(w, err)
 			return
 		}
 	}
-	_ = response.Data(w, http.StatusOK, map[string]any{"conversation": history.Conversation, "messages": history.Messages, "actions": actions})
+	var nextCursor *string
+	if next != "" {
+		nextCursor = &next
+	}
+	_ = response.Data(w, http.StatusOK, map[string]any{"conversation": history.Conversation, "messages": history.Messages, "actions": actions, "nextCursor": nextCursor})
 }
 
 // ListDocumentConversations lists the User's own Conversations on one document.
