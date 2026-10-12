@@ -90,3 +90,17 @@ func TestTimeoutWithRAGUsesLongerModelRequestDeadline(t *testing.T) {
 		})
 	}
 }
+
+func TestTimeoutDoesNotHoldBackARunEventStream(t *testing.T) {
+	handler := middleware.Timeout(time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(10 * time.Millisecond)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("event: status\n\n"))
+		_ = http.NewResponseController(w).Flush()
+	}))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/ai/runs/abc/events", nil))
+	if rec.Code != http.StatusOK || !rec.Flushed {
+		t.Fatalf("stream was wrapped: status %d flushed %v", rec.Code, rec.Flushed)
+	}
+}

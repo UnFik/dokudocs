@@ -12,6 +12,7 @@ import (
 	"time"
 
 	agentapp "backend/internal/application/agent"
+	"backend/internal/application/airuns"
 	app "backend/internal/application/aisettings"
 	"backend/internal/application/aiusage"
 	appchat "backend/internal/application/rag/usecase"
@@ -86,7 +87,7 @@ func input() appchat.ModelInput {
 func TestTheTesterAcceptsAWorkingAnswerProvider(t *testing.T) {
 	server := chatServer(t, http.StatusOK, `{"answer":"ok","source_ids":[]}`, nil)
 	defer server.Close()
-	err := NewTester(true).Test(context.Background(), app.PurposeAnswer,
+	_, err := NewTester(true).Test(context.Background(), app.PurposeAnswer,
 		app.Config{BaseURL: server.URL, Protocol: app.ProtocolChatCompletions, Model: "m", APIKey: "sk-test-key"})
 	if err != nil {
 		t.Fatalf("Test(): %v", err)
@@ -96,13 +97,13 @@ func TestTheTesterAcceptsAWorkingAnswerProvider(t *testing.T) {
 func TestTheTesterSaysWhatWentWrongWithoutRepeatingTheKey(t *testing.T) {
 	server := chatServer(t, http.StatusUnauthorized, "", nil)
 	defer server.Close()
-	err := NewTester(true).Test(context.Background(), app.PurposeAnswer,
+	_, err := NewTester(true).Test(context.Background(), app.PurposeAnswer,
 		app.Config{BaseURL: server.URL, Protocol: app.ProtocolChatCompletions, Model: "m", APIKey: "sk-test-key"})
 	if err == nil || !strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "sk-test-key") {
 		t.Fatalf("Test() error = %v, want a message naming HTTP 401 and no key", err)
 	}
 	server.Close()
-	err = NewTester(true).Test(context.Background(), app.PurposeAnswer,
+	_, err = NewTester(true).Test(context.Background(), app.PurposeAnswer,
 		app.Config{BaseURL: server.URL, Protocol: app.ProtocolChatCompletions, Model: "m", APIKey: "sk-test-key"})
 	if err == nil || strings.Contains(err.Error(), "sk-test-key") {
 		t.Fatalf("Test() against a closed server = %v", err)
@@ -114,7 +115,7 @@ func TestTheTesterRejectsAnEmbeddingModelOfAnotherSize(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": make([]float32, 768)}}})
 	}))
 	defer server.Close()
-	err := NewTester(true).Test(context.Background(), app.PurposeEmbedding,
+	_, err := NewTester(true).Test(context.Background(), app.PurposeEmbedding,
 		app.Config{BaseURL: server.URL, Protocol: app.ProtocolResponses, Model: "small", APIKey: "k"})
 	if err == nil || !strings.Contains(err.Error(), "768") || !strings.Contains(err.Error(), "1536") {
 		t.Fatalf("Test() error = %v, want the two sizes named", err)
@@ -276,11 +277,53 @@ func TestTheTesterRequiresTheAgentModelToCallATool(t *testing.T) {
 	}))
 	defer server.Close()
 	cfg := app.Config{BaseURL: server.URL, Protocol: app.ProtocolChatCompletions, Model: "m", APIKey: "k"}
-	if err := NewTester(true).Test(context.Background(), app.PurposeAgent, cfg); err == nil || !strings.Contains(err.Error(), "tool") {
+	if _, err := NewTester(true).Test(context.Background(), app.PurposeAgent, cfg); err == nil || !strings.Contains(err.Error(), "tool") {
 		t.Fatalf("a model that answers without calling a tool passed: %v", err)
 	}
 	calls = true
-	if err := NewTester(true).Test(context.Background(), app.PurposeAgent, cfg); err != nil {
+	if _, err := NewTester(true).Test(context.Background(), app.PurposeAgent, cfg); err != nil {
 		t.Fatalf("Test(): %v", err)
+	}
+}
+
+func streamingServer(t *testing.T, sse bool) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		if sse && request["stream"] == true {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"{\\\"answer\\\":\\\"ok\\\",\\\"source_ids\\\":[]}\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"))
+			return
+		}
+		body, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": `{"answer":"ok","source_ids":[]}`}}}})
+		_, _ = w.Write(body)
+	}))
+}
+
+func TestTheTesterReportsWhetherTheProviderStreams(t *testing.T) {
+	cases := map[string]struct {
+		sse   bool
+		inRun bool
+		want  string
+	}{
+		"event stream in a run": {sse: true, inRun: true, want: "supported"},
+		"whole answer in a run": {sse: false, inRun: true, want: "unsupported"},
+		"outside a run":         {sse: true, inRun: false, want: "unverified"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			server := streamingServer(t, c.sse)
+			defer server.Close()
+			ctx := context.Background()
+			if c.inRun {
+				ctx = airuns.WithOutput(ctx, func(airuns.Event) error { return nil })
+			}
+			report, err := NewTester(true).Test(ctx, app.PurposeAnswer,
+				app.Config{BaseURL: server.URL, Protocol: app.ProtocolChatCompletions, Model: "m", APIKey: "sk-test-key"})
+			if err != nil || report.Streaming != c.want {
+				t.Fatalf("Test() = %+v, %v; want streaming %q", report, err, c.want)
+			}
+		})
 	}
 }

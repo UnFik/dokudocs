@@ -1,8 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import {
   getChangesApi,
+  followEmbeddingProgress,
   getOverviewApi,
   type Change,
   type Overview,
@@ -55,13 +57,35 @@ function PendingSwitch({ overview }: { overview: Overview }) {
 
 /** Where a Superadmin chooses the provider, model and key the chatbot answers and searches with. */
 export function PlatformAiPage() {
+  const queryClient = useQueryClient()
   const overview = useQuery({
     queryKey: ['platform-ai', 'overview'],
     queryFn: ({ signal }) => getOverviewApi(signal),
+    // The stream below carries progress; this is the fallback if it is cut off.
     refetchInterval: (query) =>
-      query.state.data?.embeddingPending ? 10_000 : false,
+      query.state.data?.embeddingPending ? 60_000 : false,
     retry: false,
   })
+  const switching = Boolean(overview.data?.embeddingPending)
+  useEffect(() => {
+    if (!switching) return
+    const controller = new AbortController()
+    followEmbeddingProgress(controller.signal, (state) => {
+      if (!state.pending) {
+        void queryClient.invalidateQueries({ queryKey: ['platform-ai'] })
+        return
+      }
+      queryClient.setQueryData<Overview>(
+        ['platform-ai', 'overview'],
+        (current) =>
+          current && {
+            ...current,
+            progress: { done: state.done ?? 0, total: state.total ?? 0 },
+          }
+      )
+    }).catch(() => undefined)
+    return () => controller.abort()
+  }, [switching, queryClient])
   const changes = useQuery({
     queryKey: ['platform-ai', 'changes', overview.dataUpdatedAt],
     queryFn: ({ signal }) => getChangesApi(signal),

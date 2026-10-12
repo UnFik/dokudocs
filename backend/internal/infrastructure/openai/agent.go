@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"backend/internal/application/agent"
+	"backend/internal/application/airuns"
 	appchat "backend/internal/application/rag/usecase"
 )
 
@@ -49,6 +50,20 @@ func (m *AgentModel) Step(ctx context.Context, messages []agent.Message, tools [
 }
 
 func (m *AgentModel) post(ctx context.Context, path string, payload any) ([]byte, error) {
+	if airuns.HasOutput(ctx) {
+		data, ok := payload.(map[string]any)
+		if !ok {
+			return nil, errors.New("invalid agent request")
+		}
+		body, status, err := streamPost(ctx, m.client, m.baseURL+path, m.cfg.APIKey, data, false)
+		if err != nil {
+			return nil, err
+		}
+		if status != http.StatusOK {
+			return nil, fmt.Errorf("%w: agent provider returned HTTP %d", appchat.ErrRAGProviderUnavailable, status)
+		}
+		return body, nil
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return nil, errors.New("agent request failed")

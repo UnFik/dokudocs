@@ -1,6 +1,7 @@
 import { jsonResponse, testSession } from '@/test-utils/auth'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '@/stores/auth-store'
+import { startChatRun } from './ai-runs'
 import {
   createDocument,
   createDocumentShareToken,
@@ -22,7 +23,6 @@ import {
   listRAGConversations,
   listWorkspaceMembers,
   listWorkspaces,
-  askRAGQuestion,
 } from './domain-api'
 
 const workspaceId = '149a8d07-8490-43ed-98fa-ebaa91b05e90'
@@ -79,13 +79,16 @@ describe('Dokudocs domain API adapter', () => {
       )
       .mockResolvedValueOnce(jsonResponse(conversation, 201))
       .mockResolvedValueOnce(
-        jsonResponse({
-          conversationId: conversationID,
-          text: 'Restart the service.',
-          citations: [citation],
-          coveragePartial: false,
-          sourcesMayBeIncomplete: true,
-        })
+        jsonResponse(
+          {
+            id: requestID,
+            kind: 'chat',
+            status: 'running',
+            draft: '',
+            sequence: 0,
+          },
+          202
+        )
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetch)
@@ -100,15 +103,17 @@ describe('Dokudocs domain API adapter', () => {
       id: conversationID,
     })
     await expect(
-      askRAGQuestion(workspaceId, conversationID, {
-        question: 'What is the recovery policy?',
-        language: 'en',
-        publicLinkTokens: ['opened-public-token'],
-      })
-    ).resolves.toMatchObject({
-      sourcesMayBeIncomplete: true,
-      citations: [expect.objectContaining({ nodeId: requestID })],
-    })
+      startChatRun(
+        workspaceId,
+        conversationID,
+        {
+          question: 'What is the recovery policy?',
+          language: 'en',
+          publicLinkTokens: ['opened-public-token'],
+        },
+        'attempt-1'
+      )
+    ).resolves.toMatchObject({ id: requestID, status: 'running' })
     await expect(deleteRAGConversation(conversationID)).resolves.toBeUndefined()
 
     const calls = fetch.mock.calls as Array<[string, RequestInit]>
@@ -124,12 +129,35 @@ describe('Dokudocs domain API adapter', () => {
     expect(new Headers(calls[3][1].headers).get('X-Workspace-Id')).toBe(
       workspaceId
     )
+    expect(new URL(calls[3][0]).pathname).toBe(
+      `/api/v1/rag/conversations/${conversationID}/runs`
+    )
+    expect(new Headers(calls[3][1].headers).get('Idempotency-Key')).toBe(
+      'attempt-1'
+    )
     expect(JSON.parse(String(calls[3][1].body))).toEqual({
       question: 'What is the recovery policy?',
       language: 'en',
       publicLinkTokens: ['opened-public-token'],
     })
     expect(new Headers(calls[4][1].headers).has('X-Workspace-Id')).toBe(false)
+  })
+
+  it('lists a conversation made by the seeded admin, whose id is not an RFC UUID', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse([
+        {
+          id: '65b7593c-3a2d-45a4-a47d-47e8a1c8136b',
+          workspaceId,
+          creatorId: '00000000-0000-0000-0000-000000000001',
+          title: '',
+          createdAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+        },
+      ])
+    )
+    vi.stubGlobal('fetch', fetch)
+    await expect(listRAGConversations()).resolves.toHaveLength(1)
   })
 
   it('lists suggestions decided by the seeded system user, whose id is not an RFC UUID', async () => {

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 
 	app "backend/internal/application/aisettings"
 	"backend/internal/infrastructure/database"
@@ -47,6 +48,29 @@ func (s *Store) Put(ctx context.Context, r app.Record) error {
 		  updated_at = NOW(), last_error = '', last_error_at = NULL`,
 		r.Purpose, r.BaseURL, r.Protocol, r.Model, r.APIKeyCiphertext, r.UpdatedBy)
 	return err
+}
+
+// Replace writes the record only if the row is still the version the caller read.
+func (s *Store) Replace(ctx context.Context, r app.Record, expected *time.Time) (bool, error) {
+	var res sql.Result
+	var err error
+	if expected == nil {
+		res, err = s.db.ExecContext(ctx, `
+			INSERT INTO ai_provider_settings (purpose, base_url, protocol, model, api_key_ciphertext, updated_by, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, NOW()) ON CONFLICT (purpose) DO NOTHING`,
+			r.Purpose, r.BaseURL, r.Protocol, r.Model, r.APIKeyCiphertext, r.UpdatedBy)
+	} else {
+		res, err = s.db.ExecContext(ctx, `
+			UPDATE ai_provider_settings SET base_url = $2, protocol = $3, model = $4, api_key_ciphertext = $5,
+			  updated_by = $6, updated_at = NOW(), last_error = '', last_error_at = NULL
+			WHERE purpose = $1 AND updated_at = $7`,
+			r.Purpose, r.BaseURL, r.Protocol, r.Model, r.APIKeyCiphertext, r.UpdatedBy, *expected)
+	}
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
 
 func (s *Store) Delete(ctx context.Context, purpose string) error {

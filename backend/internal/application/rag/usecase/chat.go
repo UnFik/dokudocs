@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode"
 
+	"backend/internal/application/airuns"
 	"backend/internal/application/aiusage"
 	"backend/internal/domain/model"
 
@@ -131,6 +132,15 @@ func (u *ChatUseCase) DeleteConversation(ctx context.Context, conversationID, ac
 	return u.repository.DeleteRAGConversation(ctx, conversationID, actorID)
 }
 
+// Authorize checks that the actor may ask in the conversation, so a run can be
+// refused before it starts.
+func (u *ChatUseCase) Authorize(ctx context.Context, workspaceID, conversationID, actorID uuid.UUID) error {
+	if workspaceID == uuid.Nil || conversationID == uuid.Nil || actorID == uuid.Nil {
+		return ErrInvalidChatRequest
+	}
+	return u.repository.AuthorizeRAGQuestion(ctx, workspaceID, conversationID, actorID)
+}
+
 func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	question := strings.TrimSpace(input.Question)
 	if input.WorkspaceID == uuid.Nil || input.ConversationID == uuid.Nil || input.ActorID == uuid.Nil || question == "" || len(question) > 10000 || len(input.PublicLinkTokens) > 20 {
@@ -147,6 +157,9 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	}
 	history, err := u.repository.GetRAGConversation(ctx, input.ConversationID, input.ActorID)
 	if err != nil {
+		return Answer{}, err
+	}
+	if err := airuns.Emit(ctx, "status", map[string]string{"phase": "searching"}); err != nil {
 		return Answer{}, err
 	}
 	previousQuestions := make([]model.RAGMessage, 0, 10)
@@ -222,6 +235,9 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	}
 	if u.model == nil {
 		return Answer{}, ErrAnswerModelUnavailable
+	}
+	if err := airuns.Emit(ctx, "status", map[string]string{"phase": "answering"}); err != nil {
+		return Answer{}, err
 	}
 	generated, err := u.model.Answer(ctx, ModelInput{Question: question, Language: language, History: previousQuestions, Sources: chunks})
 	if err != nil {

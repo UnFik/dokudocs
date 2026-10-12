@@ -1,0 +1,5 @@
+# Streamed answers use the request source snapshot
+
+Dokudocs will stream answer text while generation is in progress. For RAG, the source of truth is the authorized source snapshot at the beginning of the request: later source edits or access revocations do not invalidate that request's answer. This replaces ADR-0004's source access/fingerprint recheck as a condition of answer finalization, because already streamed text cannot be recalled and the User chose request-time source consistency. The remaining history and deletion policies in ADR-0004 continue to apply; citation storage must still handle a source that was deleted during generation.
+
+For a source first discovered during an Agent's tool loop, take the snapshot when it is first read successfully with the User's then-current permissions, and reuse that snapshot during the run. This decision does not grant permission to execute subsequent write tools or to reconnect to another User's conversation; write tools still check current permissions at execution time.

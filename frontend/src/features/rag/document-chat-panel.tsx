@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquarePlus, MessageSquareText } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import {
-  askRAGQuestion,
   createDocumentRAGConversation,
   getRAGConversation,
   listDocumentRAGConversations,
@@ -16,7 +15,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { AskForm, ChatMessages } from './chat-thread'
+import { AskForm, ChatMessages, RunProgress } from './chat-thread'
+import { useChatRun } from './use-chat-run'
 
 /**
  * A Conversation about one document, for every document type. Each User keeps
@@ -92,11 +92,11 @@ function PanelBody({
       await queryClient.invalidateQueries({ queryKey: listKey })
     },
   })
-  const ask = useMutation({
-    mutationFn: (question: string) =>
-      askRAGQuestion(workspaceID, selected!.id, { question, language }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: historyKey }),
-    retry: false,
+  const run = useChatRun({
+    conversationID: selected?.id,
+    workspaceID,
+    language,
+    onAnswered: () => queryClient.invalidateQueries({ queryKey: historyKey }),
   })
 
   return (
@@ -148,18 +148,23 @@ function PanelBody({
           <p role='alert' className='text-sm text-destructive'>
             Could not load this chat.
           </p>
-        ) : history.data && history.data.messages.length > 0 ? (
-          <ChatMessages
-            messages={history.data.messages}
-            actions={history.data.actions}
-            workspaceID={workspaceID}
-            conversationID={selected.id}
-            queryKey={historyKey}
-          />
         ) : (
-          <p className='text-sm text-muted-foreground'>
-            Ask about this document. Type / to use a skill.
-          </p>
+          <>
+            {history.data && history.data.messages.length > 0 ? (
+              <ChatMessages
+                messages={history.data.messages}
+                actions={history.data.actions}
+                workspaceID={workspaceID}
+                conversationID={selected.id}
+                queryKey={historyKey}
+              />
+            ) : run.view.phase === 'idle' ? (
+              <p className='text-sm text-muted-foreground'>
+                Ask about this document. Type / to use a skill.
+              </p>
+            ) : null}
+            <RunProgress view={run.view} />
+          </>
         )}
         {create.error ? (
           <p role='alert' className='text-sm text-destructive'>
@@ -170,10 +175,11 @@ function PanelBody({
       {selected ? (
         <AskForm
           id='document-question'
-          pending={ask.isPending}
-          error={ask.error}
+          pending={run.busy}
+          error={run.error}
           placeholder='Ask about this document…'
-          onAsk={(question) => ask.mutate(question)}
+          onAsk={(question) => void run.ask(question)}
+          onStop={() => void run.stop()}
           language={language}
           onLanguage={setLanguage}
         />

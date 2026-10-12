@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"backend/constant"
+	"backend/internal/application/airuns"
 	"backend/internal/application/aiusage"
 	"backend/internal/domain/model"
 
@@ -175,6 +176,15 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 			answer.Text = "I stopped after too many steps. Ask again with a narrower request."
 			break
 		}
+		if step > 0 {
+			// The prose that came before a tool call is not part of the answer.
+			if err := airuns.Emit(ctx, "text_reset", struct{}{}); err != nil {
+				return ChatAnswer{}, err
+			}
+		}
+		if err := airuns.Emit(ctx, "status", map[string]any{"phase": "thinking", "step": step + 1}); err != nil {
+			return ChatAnswer{}, err
+		}
 		reply, err := c.model.Step(ctx, messages, specs)
 		if err != nil {
 			return ChatAnswer{}, err
@@ -205,8 +215,10 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 
 func (c *ChatService) run(ctx context.Context, actor Actor, conversationID uuid.UUID, tc ToolCall, answer *ChatAnswer) string {
 	answer.Tools = append(answer.Tools, tc.Name)
+	_ = airuns.Emit(ctx, "tool_status", map[string]string{"name": tc.Name, "state": "running"})
 	out, err := c.exec.Call(ctx, actor, tc.Name, tc.Arguments)
 	if err != nil {
+		_ = airuns.Emit(ctx, "tool_status", map[string]string{"name": tc.Name, "state": "failed"})
 		return `{"error":` + mustJSON(errorText(err)) + `}`
 	}
 	if out.Pending != nil {
@@ -217,8 +229,11 @@ func (c *ChatService) run(ctx context.Context, actor Actor, conversationID uuid.
 			return `{"error":"the request could not be saved for approval"}`
 		}
 		answer.Actions = append(answer.Actions, action)
+		_ = airuns.Emit(ctx, "action_pending", map[string]any{"id": action.ID, "tool": action.Tool, "summary": action.Summary})
+		_ = airuns.Emit(ctx, "tool_status", map[string]string{"name": tc.Name, "state": "waiting"})
 		return `{"status":"waiting for the User to approve","summary":` + mustJSON(action.Summary) + `}`
 	}
+	_ = airuns.Emit(ctx, "tool_status", map[string]string{"name": tc.Name, "state": "done"})
 	return out.Text
 }
 
@@ -260,6 +275,11 @@ func (c *ChatService) Decide(ctx context.Context, userID, actionID uuid.UUID, ap
 		action.Status, action.Result = "failed", errorText(err)
 	} else {
 		action.Result = out.Text
+		if action.Result == "" {
+			// An approved action with no result at all means it started and never
+			// reported back; a finished one always says something.
+			action.Result = "Done."
+		}
 	}
 	if err := c.actions.FinishPendingAction(ctx, actionID, action.Status, action.Result); err != nil {
 		return action, err

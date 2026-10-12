@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { jsonResponse, testSession } from '@/test-utils/auth'
+import { sseFrame, sseResponse } from '@/test-utils/sse'
 import { afterEach, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { useAuthStore } from '@/stores/auth-store'
@@ -34,6 +35,40 @@ function overview(extra: Record<string, unknown> = {}) {
     embeddingPending: null,
     progress: null,
     ...extra,
+  }
+}
+
+const runID = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d'
+const runBase = { id: runID, kind: 'test', draft: '', sequence: 3 }
+
+/** The routes of a test or save job that ends as given. */
+function job(
+  purpose: string,
+  operation: 'test' | 'save',
+  end:
+    | { streaming: 'supported' | 'unsupported' | 'unverified' }
+    | { error: string }
+) {
+  const done =
+    'error' in end
+      ? { ...runBase, kind: operation, status: 'failed', error: end.error }
+      : {
+          ...runBase,
+          kind: operation,
+          status: 'completed',
+          result: { operation, streaming: end.streaming },
+        }
+  return {
+    [`POST /api/v1/platform/ai/${purpose}/runs`]: () =>
+      jsonResponse(
+        { ...runBase, kind: operation, status: 'running', sequence: 0 },
+        202
+      ),
+    [`GET /api/v1/ai/runs/${runID}/events`]: () =>
+      sseResponse([
+        sseFrame(1, 'status', { phase: 'testing' }),
+        sseFrame(3, done.status, done),
+      ]),
   }
 }
 
@@ -105,7 +140,7 @@ it('says only a superadmin can open the page when the server refuses', async () 
 it('tests a connection with the typed values and reports the result', async () => {
   const fetch = api({
     'GET /api/v1/platform/ai': () => jsonResponse(overview()),
-    'POST /api/v1/platform/ai/answer/test': () => jsonResponse({ ok: true }),
+    ...job('answer', 'test', { streaming: 'supported' }),
   })
   vi.stubGlobal('fetch', fetch)
   const screen = await mount()
@@ -114,28 +149,27 @@ it('tests a connection with the typed values and reports the result', async () =
   await model.fill('gpt-new')
   await screen.getByLabelText('API key').first().fill('sk-typed-key')
   await screen.getByRole('button', { name: 'Test answer connection' }).click()
-  await expect.element(screen.getByText('Connection works.')).toBeVisible()
-  const [, init] = calls(fetch, 'POST /api/v1/platform/ai/answer/test')[0]
+  await expect.element(screen.getByText(/Connection works\./)).toBeVisible()
+  await expect
+    .element(screen.getByText(/answers arrive as they are written/))
+    .toBeVisible()
+  const [, init] = calls(fetch, 'POST /api/v1/platform/ai/answer/runs')[0]
   expect(JSON.parse(String(init?.body))).toEqual({
+    operation: 'test',
     baseURL: 'https://api.example.com/v1',
     protocol: 'openai_chat_completions',
     model: 'gpt-new',
     apiKey: 'sk-typed-key',
   })
+  expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy()
 })
 
 it('keeps the form and shows why when the connection test fails on save', async () => {
   const fetch = api({
     'GET /api/v1/platform/ai': () => jsonResponse(overview()),
-    'PUT /api/v1/platform/ai/answer': () =>
-      jsonResponse(
-        {
-          title:
-            'The connection test failed: answer provider returned HTTP 401',
-          code: 'connection_failed',
-        },
-        422
-      ),
+    ...job('answer', 'save', {
+      error: 'The connection test failed: answer provider returned HTTP 401',
+    }),
   })
   vi.stubGlobal('fetch', fetch)
   const screen = await mount()
@@ -173,6 +207,81 @@ it('explains a pending embedding model with its progress and what still answers'
   await expect.element(screen.getByText('30 of 120 chunks')).toBeVisible()
   await expect
     .element(screen.getByText(/text-embedding-small keeps answering/))
+    .toBeVisible()
+})
+
+it('moves the re-embedding counter as progress events arrive', async () => {
+  vi.stubGlobal(
+    'fetch',
+    api({
+      'GET /api/v1/platform/ai': () =>
+        jsonResponse(
+          overview({
+            embeddingPending: { ...embedding, model: 'text-embedding-large' },
+            progress: { done: 30, total: 120 },
+          })
+        ),
+      'GET /api/v1/platform/ai/embedding/events': () =>
+        sseResponse([
+          `event: progress\ndata: ${JSON.stringify({ pending: true, model: 'text-embedding-large', done: 90, total: 120 })}\n\n`,
+        ]),
+    })
+  )
+  const screen = await mount()
+  await expect.element(screen.getByText('90 of 120 chunks')).toBeVisible()
+})
+
+it('shows the outcome of the last test after the page was closed and opened again', async () => {
+  vi.stubGlobal(
+    'fetch',
+    api({
+      'GET /api/v1/platform/ai': () => jsonResponse(overview()),
+      'GET /api/v1/platform/ai/answer/runs/latest': () =>
+        jsonResponse({
+          ...runBase,
+          kind: 'test',
+          status: 'completed',
+          result: { operation: 'test', streaming: 'unverified' },
+        }),
+    })
+  )
+  const screen = await mount()
+  await expect
+    .element(screen.getByText(/Last test: connection worked/))
+    .toBeVisible()
+})
+
+it('picks a job that is still running back up and refreshes when it ends', async () => {
+  let finished = false
+  const fetch = api({
+    'GET /api/v1/platform/ai': () => jsonResponse(overview()),
+    'GET /api/v1/platform/ai/answer/runs/latest': () =>
+      jsonResponse(
+        finished
+          ? {
+              ...runBase,
+              kind: 'save',
+              status: 'completed',
+              result: { operation: 'save', streaming: 'supported' },
+            }
+          : { ...runBase, kind: 'save', status: 'running', sequence: 1 }
+      ),
+    [`GET /api/v1/ai/runs/${runID}/events`]: () => {
+      finished = true
+      return sseResponse([
+        sseFrame(3, 'completed', {
+          ...runBase,
+          kind: 'save',
+          status: 'completed',
+          result: { operation: 'save', streaming: 'supported' },
+        }),
+      ])
+    },
+  })
+  vi.stubGlobal('fetch', fetch)
+  const screen = await mount()
+  await expect
+    .element(screen.getByText(/Last save: connection worked/))
     .toBeVisible()
 })
 
@@ -230,7 +339,7 @@ it('shows the agent provider as a third setting and tests it on its own', async 
           },
         })
       ),
-    'POST /api/v1/platform/ai/agent/test': () => jsonResponse({ ok: true }),
+    ...job('agent', 'test', { streaming: 'unsupported' }),
   })
   vi.stubGlobal('fetch', fetch)
   const screen = await mount()
@@ -239,8 +348,11 @@ it('shows the agent provider as a third setting and tests it on its own', async 
     .toHaveValue('agent-model')
   await expect.element(screen.getByText('••••9999')).toBeVisible()
   await screen.getByRole('button', { name: 'Test agent connection' }).click()
-  await expect.element(screen.getByText('Connection works.')).toBeVisible()
-  expect(calls(fetch, 'POST /api/v1/platform/ai/agent/test')).toHaveLength(1)
+  await expect.element(screen.getByText(/Connection works\./)).toBeVisible()
+  await expect
+    .element(screen.getByText(/answered the streaming request with a whole/))
+    .toBeVisible()
+  expect(calls(fetch, 'POST /api/v1/platform/ai/agent/runs')).toHaveLength(1)
 })
 
 it('asks for a new key when the base URL changes, so the stored key is never sent to another address', async () => {
@@ -262,5 +374,5 @@ it('asks for a new key when the base URL changes, so the stored key is never sen
     .toBeDisabled()
   await screen.getByLabelText('API key').first().fill('sk-new-address')
   await expect.element(save).toBeEnabled()
-  expect(calls(fetch, 'POST /api/v1/platform/ai/answer/test')).toHaveLength(0)
+  expect(calls(fetch, 'POST /api/v1/platform/ai/answer/runs')).toHaveLength(0)
 })

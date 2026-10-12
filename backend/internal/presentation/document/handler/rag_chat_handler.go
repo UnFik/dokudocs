@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"backend/constant"
 	"backend/internal/application/agent"
+	"backend/internal/application/airuns"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/domain/model"
 	"backend/internal/presentation/middleware"
@@ -18,6 +20,8 @@ import (
 type RAGChatHandler struct {
 	service *appchat.ChatUseCase
 	agent   *agentMode
+	runs    *airuns.Service
+	timeout time.Duration
 }
 
 func NewRAGChatHandler(service *appchat.ChatUseCase) *RAGChatHandler {
@@ -39,6 +43,19 @@ type agentMode struct {
 // chat answers from documents only, as before.
 func (h *RAGChatHandler) WithAgent(chat *agent.ChatService, ready func(context.Context) bool, actions ActionLister) *RAGChatHandler {
 	h.agent = &agentMode{chat: chat, ready: ready, actions: actions}
+	return h
+}
+
+// WithRuns makes chat jobs outlive the request that started them. A run lasts at
+// most timeout.
+func (h *RAGChatHandler) WithRuns(runs *airuns.Service, timeout time.Duration) *RAGChatHandler {
+	if runs == nil {
+		return h
+	}
+	if timeout <= 0 {
+		timeout = 120 * time.Second
+	}
+	h.runs, h.timeout = runs, timeout
 	return h
 }
 
@@ -177,11 +194,41 @@ func (h *RAGChatHandler) DeleteConversation(w http.ResponseWriter, r *http.Reque
 		response.Error(w, http.StatusBadRequest, "invalid conversation ID")
 		return
 	}
+	if h.runs != nil {
+		h.runs.CancelConversation(r.Context(), actorID, conversationID)
+	}
 	if err := h.service.DeleteConversation(r.Context(), conversationID, actorID); err != nil {
 		writeRAGChatError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type askRequest struct {
+	Question         string   `json:"question"`
+	Language         string   `json:"language"`
+	PublicLinkTokens []string `json:"publicLinkTokens"`
+}
+
+// answer asks the Agent when one is set up, otherwise answers from documents.
+func (h *RAGChatHandler) answer(ctx context.Context, actorID, workspaceID, conversationID uuid.UUID, request askRequest) (any, error) {
+	if h.agent != nil && h.agent.ready(ctx) {
+		answer, err := h.agent.chat.Ask(ctx, agent.ChatInput{
+			WorkspaceID: workspaceID, ConversationID: conversationID, ActorID: actorID,
+			Question: request.Question, Language: request.Language,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"conversationId": answer.ConversationID, "text": answer.Text, "citations": []model.RAGCitation{},
+			"coveragePartial": false, "sourcesMayBeIncomplete": false, "agent": true, "tools": answer.Tools, "actions": answer.Actions,
+		}, nil
+	}
+	return h.service.Ask(ctx, appchat.AskInput{
+		WorkspaceID: workspaceID, ConversationID: conversationID, ActorID: actorID,
+		Question: request.Question, Language: request.Language, PublicLinkTokens: request.PublicLinkTokens,
+	})
 }
 
 func (h *RAGChatHandler) Ask(w http.ResponseWriter, r *http.Request) {
@@ -195,39 +242,42 @@ func (h *RAGChatHandler) Ask(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "invalid conversation ID")
 		return
 	}
-	var request struct {
-		Question         string   `json:"question"`
-		Language         string   `json:"language"`
-		PublicLinkTokens []string `json:"publicLinkTokens"`
-	}
+	var request askRequest
 	if err := response.DecodeJSON(r, &request); err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	if h.agent != nil && h.agent.ready(r.Context()) {
-		answer, err := h.agent.chat.Ask(r.Context(), agent.ChatInput{
-			WorkspaceID: workspaceID, ConversationID: conversationID, ActorID: actorID,
-			Question: request.Question, Language: request.Language,
-		})
+	if h.runs == nil {
+		answer, err := h.answer(r.Context(), actorID, workspaceID, conversationID, request)
 		if err != nil {
 			writeRAGChatError(w, err)
 			return
 		}
-		_ = response.Data(w, http.StatusOK, map[string]any{
-			"conversationId": answer.ConversationID, "text": answer.Text, "citations": []model.RAGCitation{},
-			"coveragePartial": false, "sourcesMayBeIncomplete": false, "agent": true, "tools": answer.Tools, "actions": answer.Actions,
-		})
+		_ = response.Data(w, http.StatusOK, answer)
 		return
 	}
-	answer, err := h.service.Ask(r.Context(), appchat.AskInput{
-		WorkspaceID: workspaceID, ConversationID: conversationID, ActorID: actorID,
-		Question: request.Question, Language: request.Language, PublicLinkTokens: request.PublicLinkTokens,
-	})
+	// The older JSON endpoint runs the same job as the stream, so the work keeps
+	// going on the server when the caller leaves, and waits for the whole answer.
+	run, _, err := h.startRun(r, actorID, workspaceID, conversationID, request)
 	if err != nil {
 		writeRAGChatError(w, err)
 		return
 	}
-	_ = response.Data(w, http.StatusOK, answer)
+	finished, workErr, err := h.runs.Wait(r.Context(), actorID, run.ID)
+	if err != nil {
+		if r.Context().Err() == nil {
+			writeRAGChatError(w, err)
+		}
+		return
+	}
+	switch {
+	case workErr != nil:
+		writeRAGChatError(w, workErr)
+	case finished.Status == "completed":
+		_ = response.Data(w, http.StatusOK, finished.Result)
+	default:
+		response.Error(w, http.StatusServiceUnavailable, "chat model provider is temporarily unavailable")
+	}
 }
 
 func authenticatedRAGUserID(r *http.Request) (uuid.UUID, error) {
@@ -256,6 +306,16 @@ func writeRAGChatError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusConflict, "source changed; ask again")
 	case errors.Is(err, appchat.ErrAnswerModelUnavailable):
 		response.Error(w, http.StatusServiceUnavailable, "chat model is not configured")
+	case errors.Is(err, airuns.ErrBusy):
+		response.Error(w, http.StatusConflict, "an answer is already being written in this conversation")
+	case errors.Is(err, airuns.ErrCapacity):
+		response.Error(w, http.StatusServiceUnavailable, "too many answers are being written; try again shortly")
+	case errors.Is(err, airuns.ErrConflict):
+		response.Error(w, http.StatusUnprocessableEntity, "this Idempotency-Key was used for a different question")
+	case errors.Is(err, airuns.ErrNotFound):
+		response.Error(w, http.StatusNotFound, "AI run not found")
+	case errors.Is(err, context.DeadlineExceeded):
+		response.Error(w, http.StatusServiceUnavailable, "chat model provider is temporarily unavailable")
 	case errors.Is(err, appchat.ErrRAGProviderUnavailable):
 		response.Error(w, http.StatusServiceUnavailable, "chat model provider is temporarily unavailable")
 	case errors.Is(err, agent.ErrUnknownSkill):

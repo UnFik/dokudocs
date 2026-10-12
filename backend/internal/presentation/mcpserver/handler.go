@@ -3,9 +3,11 @@
 package mcpserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -30,10 +32,15 @@ type keyContext struct{}
 
 // New returns the /mcp endpoint.
 func New(d Deps) http.Handler {
-	stream := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+	newServer := func(r *http.Request) *mcp.Server {
 		key, _ := r.Context().Value(keyContext{}).(mcpapp.Key)
 		return d.server(r.Context(), key)
-	}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
+	}
+	// Most calls get one JSON reply. A call that asks for progress needs a reply it
+	// can follow as events, so it goes to a handler that answers with an event
+	// stream. The server is stateless, so the two share no session to keep apart.
+	plain := mcp.NewStreamableHTTPHandler(newServer, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
+	events := mcp.NewStreamableHTTPHandler(newServer, &mcp.StreamableHTTPOptions{Stateless: true})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		secret := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 		key, err := d.Keys.Authenticate(r.Context(), secret)
@@ -49,8 +56,64 @@ func New(d Deps) http.Handler {
 			http.Error(w, "the key could not be checked; try again", http.StatusServiceUnavailable)
 			return
 		}
-		stream.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), keyContext{}, key)))
+		r = r.WithContext(context.WithValue(r.Context(), keyContext{}, key))
+		if asksForProgress(r) {
+			events.ServeHTTP(w, r)
+			return
+		}
+		plain.ServeHTTP(w, r)
 	})
+}
+
+// maxPeek is how much of a request is read to see whether it asks for progress;
+// a larger body is passed on unread, as a call without progress.
+const maxPeek = 1 << 20
+
+// asksForProgress reports whether a POSTed JSON-RPC request carries a progress
+// token in its _meta, which is how MCP clients ask for progress notifications.
+// The body is put back for the handler.
+func asksForProgress(r *http.Request) bool {
+	if r.Method != http.MethodPost || r.Body == nil {
+		return false
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxPeek+1))
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(body), r.Body), r.Body}
+	if err != nil || len(body) > maxPeek {
+		return false
+	}
+	var messages []struct {
+		Params struct {
+			Meta struct {
+				ProgressToken json.RawMessage `json:"progressToken"`
+			} `json:"_meta"`
+		} `json:"params"`
+	}
+	if trimmed := bytes.TrimSpace(body); len(trimmed) > 0 && trimmed[0] == '[' {
+		if json.Unmarshal(trimmed, &messages) != nil {
+			return false
+		}
+	} else {
+		var one struct {
+			Params struct {
+				Meta struct {
+					ProgressToken json.RawMessage `json:"progressToken"`
+				} `json:"_meta"`
+			} `json:"params"`
+		}
+		if json.Unmarshal(trimmed, &one) != nil {
+			return false
+		}
+		messages = append(messages, one)
+	}
+	for _, message := range messages {
+		if token := message.Params.Meta.ProgressToken; len(token) > 0 && string(token) != "null" {
+			return true
+		}
+	}
+	return false
 }
 
 var destructive = map[string]bool{"trash_document": true, "remove_project_member": true, "edit_document_content": true}
@@ -107,7 +170,10 @@ func (d Deps) call(actor agent.Actor, tool agent.Tool) mcp.ToolHandler {
 			_ = d.Keys.Audit(ctx, entry)
 			return textResult("Rate limit reached for this key; wait a minute and try again.", true), nil
 		}
+		progress := progressReporter(ctx, req)
+		progress(1, 2, "Running "+tool.Name)
 		out, err := d.Executor.Call(ctx, actor, tool.Name, args)
+		progress(2, 2, "Done")
 		if err != nil {
 			entry.Outcome, entry.Detail = mcpapp.OutcomeRefused, agent.ErrorText(err)
 			var refusal *agent.ToolError
@@ -121,6 +187,21 @@ func (d Deps) call(actor agent.Actor, tool agent.Tool) mcp.ToolHandler {
 		entry.Outcome = mcpapp.OutcomeOK
 		_ = d.Keys.Audit(ctx, entry)
 		return textResult(out.Text, false), nil
+	}
+}
+
+// progressReporter sends MCP progress notifications for a call whose client asked
+// for them with a progress token; for any other call it does nothing. The steps
+// are the real ones a call has (started, finished), so the numbers never overstate.
+func progressReporter(ctx context.Context, req *mcp.CallToolRequest) func(done, total float64, message string) {
+	token := req.Params.GetProgressToken()
+	if token == nil || req.Session == nil {
+		return func(float64, float64, string) {}
+	}
+	return func(done, total float64, message string) {
+		_ = req.Session.NotifyProgress(ctx, &mcp.ProgressNotificationParams{
+			ProgressToken: token, Progress: done, Total: total, Message: message,
+		})
 	}
 }
 

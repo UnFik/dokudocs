@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"backend/internal/application/airuns"
 	"backend/internal/application/asset"
 	appauth "backend/internal/application/auth/usecase"
 	appdoc "backend/internal/application/document/usecase"
@@ -10,11 +11,13 @@ import (
 	"backend/internal/infrastructure/assetstore"
 	"backend/internal/infrastructure/collabclient"
 	"backend/internal/infrastructure/notification"
+	airunsrepo "backend/internal/infrastructure/repository/airuns"
 	docrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/infrastructure/runtime/container"
 	dochandler "backend/internal/presentation/document/handler"
 	"backend/internal/presentation/middleware"
 	"context"
+	"sync"
 	"time"
 )
 
@@ -32,7 +35,8 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 	suggestionService := appdoc.NewSuggestionUseCase(bodyRepository)
 	suggestionHandler := dochandler.NewSuggestionHandler(suggestionService)
 	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel)).
-		WithAgent(kit.chat, kit.ready, kit.actions)
+		WithAgent(kit.chat, kit.ready, kit.actions).
+		WithRuns(aiRuns(c), cfg.RAGRequestTimeout)
 	commentUseCase := appdoc.NewCommentUseCase(bodyRepository).
 		WithDeliverer(notification.NewMentionDeliverer(c.Mailer, c.Push, cfg.PublicAppURL))
 	commentHandler := dochandler.NewCommentHandler(commentUseCase)
@@ -100,11 +104,20 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 	chatGroup := f.Group("/rag/conversations", authRequired, workspaceRequired)
 	chatGroup.Post("", ragChat.CreateConversation)
 	chatGroup.Post("/{conversationID}/messages", ragChat.Ask)
+	chatGroup.Post("/{conversationID}/runs", ragChat.StartRun)
 	privateChatGroup := f.Group("/rag/conversations", authRequired)
 	privateChatGroup.Get("", ragChat.ListConversations)
 	privateChatGroup.Get("/{conversationID}", ragChat.GetConversation)
+	privateChatGroup.Get("/{conversationID}/runs", ragChat.LatestRun)
 	privateChatGroup.Delete("/{conversationID}", ragChat.DeleteConversation)
 	privateChatGroup.Post("/{conversationID}/actions/{actionID}", ragChat.DecideAction)
+	if runner := aiRuns(c); runner != nil {
+		runGroup := f.Group("/ai/runs", authRequired)
+		runs := dochandler.NewRunHandler(runner)
+		runGroup.Get("/{runID}", runs.Get)
+		runGroup.Get("/{runID}/events", runs.Events)
+		runGroup.Post("/{runID}/cancel", runs.Cancel)
+	}
 	f.Group("/rag/documents", authRequired).Get("/{documentID}/conversations", ragChat.ListDocumentConversations)
 }
 
@@ -116,3 +129,16 @@ func newAssetService(c *container.Container, cfg config.Config) *asset.Service {
 func SweepAssets(ctx context.Context, c *container.Container, cfg config.Config, olderThan time.Duration) (int, error) {
 	return newAssetService(c, cfg).Sweep(ctx, olderThan)
 }
+
+// aiRuns is the one AI run service of this server, made on first use when the
+// process did not set one up. Without a database there are no runs.
+func aiRuns(c *container.Container) *airuns.Service {
+	aiRunsOnce.Lock()
+	defer aiRunsOnce.Unlock()
+	if c.AIRuns == nil && c.DB != nil {
+		c.AIRuns = airuns.NewService(context.Background(), airunsrepo.NewStore(c.DB), 8)
+	}
+	return c.AIRuns
+}
+
+var aiRunsOnce sync.Mutex
