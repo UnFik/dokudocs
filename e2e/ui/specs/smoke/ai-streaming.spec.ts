@@ -134,11 +134,11 @@ test('@smoke: the answer shows while the provider is still writing, and joins th
   await ask(page)
 
   // The first part is on screen as a draft; the provider has not finished.
-  await expect(page.getByText('The recovery codeword is', { exact: false })).toBeVisible()
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('The recovery codeword is', { exact: false })).toBeVisible()
   await expect(page.getByText('dokudocs ai · draft')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible()
   expect(provider.completed).toBe(completedBefore)
-  await expect(page.getByText('cobalt.', { exact: false })).toHaveCount(0)
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('cobalt.', { exact: false })).toHaveCount(0)
 
   // Reloading the page picks the same run up; it does not start a second one.
   const starts: string[] = []
@@ -146,7 +146,7 @@ test('@smoke: the answer shows while the provider is still writing, and joins th
     if (request.method() === 'POST' && /\/runs$/.test(new URL(request.url()).pathname)) starts.push(request.url())
   })
   await page.reload()
-  await expect(page.getByText('The recovery codeword is', { exact: false })).toBeVisible()
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('The recovery codeword is', { exact: false })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible()
 
   provider.release()
@@ -166,7 +166,7 @@ test('@smoke: Stop ends the answer, keeps the draft labelled, and lets the next 
   provider.hold()
   const abandonedBefore = provider.abandoned
   await ask(page, false)
-  await expect(page.getByText('The recovery codeword is', { exact: false })).toBeVisible()
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('The recovery codeword is', { exact: false })).toBeVisible()
   await page.getByRole('button', { name: 'Stop' }).click()
   await expect(page.getByText(/This draft was not saved to the chat/)).toBeVisible()
   await expect.poll(() => provider.abandoned).toBeGreaterThan(abandonedBefore)
@@ -193,7 +193,7 @@ test('@smoke: a document named with @ is read, and shows as a link in the chat',
   expect(response.status()).toBe(202)
   expect(response.request().postDataJSON().question).toMatch(/^What does @\[Vault runbook .*\]\(doc:[0-9a-f-]{36}\) say about/)
   await expect(page.getByRole('link', { name: documentTitle })).toBeVisible()
-  await expect(page.getByText('The recovery codeword is cobalt.', { exact: true }).last()).toBeVisible()
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('The recovery codeword is cobalt.', { exact: true }).last()).toBeVisible()
 })
 
 test('@smoke: a long chat opens at its newest message and loads earlier ones on the way up', async ({ page }) => {
