@@ -19,7 +19,9 @@ import {
 import {
   decideAgentAction,
   getRAGUsage,
+  listRAGCategories,
   listWorkspaces,
+  type RAGCategory,
   listSkills,
   searchChatDocuments,
   type AgentAction,
@@ -31,8 +33,16 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { AddContextMenu } from './add-context-menu'
+import { AddContextMenu, type ContextChat } from './add-context-menu'
 import { resetLabel } from './conversation-format'
+import {
+  MAX_CATEGORIES,
+  MAX_CONTEXT_CHATS,
+  MAX_FILES,
+  readAttachments,
+  type Attachment,
+  type QuestionExtras,
+} from './question-extras'
 import { UsageRing } from './usage-ring'
 import type { ChatRunView } from './use-chat-run'
 
@@ -466,6 +476,7 @@ export function AskForm({
   language,
   onLanguage,
   scope = 'workspace',
+  chats = [],
 }: {
   id: string
   pending: boolean
@@ -473,15 +484,21 @@ export function AskForm({
   placeholder: string
   /** Where @ looks for documents to name; without it @ is plain text. */
   workspaceID?: string
-  onAsk: (question: string) => void
+  onAsk: (question: string, extras: QuestionExtras) => void
   /** Stops the answer being written; while it runs the form offers Stop in place of Send. */
   onStop?: () => void
   language: 'id' | 'en'
   onLanguage: (language: 'id' | 'en') => void
   /** A document chat has no Category to narrow by. */
   scope?: 'document' | 'workspace'
+  /** Other chats of the User that can be brought in as context (not the open one). */
+  chats?: ContextChat[]
 }) {
   const [question, setQuestion] = useState('')
+  const [categories, setCategories] = useState<RAGCategory[]>([])
+  const [contextChats, setContextChats] = useState<ContextChat[]>([])
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [fileError, setFileError] = useState<string>()
   const [placed, setPlaced] = useState<PlacedDocumentMention[]>([])
   const [caret, setCaret] = useState(0)
   const [dismissedAt, setDismissedAt] = useState<number | null>(null)
@@ -499,6 +516,13 @@ export function AskForm({
     enabled: Boolean(workspaceID),
     retry: false,
     staleTime: 30_000,
+  })
+  const categoryList = useQuery({
+    queryKey: ['rag-categories', workspaceID],
+    queryFn: ({ signal }) => listRAGCategories(workspaceID!, signal),
+    enabled: scope === 'workspace' && Boolean(workspaceID),
+    retry: false,
+    staleTime: 60_000,
   })
   const spent = Boolean(usage.data && usage.data.used >= usage.data.limit)
   const workspaces = useQuery({
@@ -609,7 +633,15 @@ export function AskForm({
     event.preventDefault()
     const text = serialize(question, placed).trim()
     if (!text || pending) return
-    onAsk(text)
+    onAsk(text, {
+      categoryIds: categories.map((category) => category.id),
+      contextChatIds: contextChats.map((chat) => chat.id),
+      attachments,
+    })
+    setCategories([])
+    setContextChats([])
+    setAttachments([])
+    setFileError(undefined)
     setQuestion('')
     setPlaced([])
     setCaret(0)
@@ -618,6 +650,49 @@ export function AskForm({
     <form onSubmit={submit} className='border-t p-3'>
       <div className='relative'>
         <div className='rounded-md border border-input bg-card focus-within:ring-2 focus-within:ring-ring'>
+          {categories.length + contextChats.length + attachments.length > 0 ? (
+            <ul
+              aria-label='Added to this question'
+              className='flex flex-wrap gap-1.5 px-2 pt-2'
+            >
+              {categories.map((category) => (
+                <ContextChip
+                  key={category.id}
+                  label={category.name}
+                  remove={`Remove category ${category.name}`}
+                  onRemove={() =>
+                    setCategories(
+                      categories.filter((c) => c.id !== category.id)
+                    )
+                  }
+                />
+              ))}
+              {contextChats.map((chat) => (
+                <ContextChip
+                  key={chat.id}
+                  label={chat.title || 'Untitled chat'}
+                  remove={`Remove chat ${chat.title || 'Untitled chat'}`}
+                  onRemove={() =>
+                    setContextChats(
+                      contextChats.filter((c) => c.id !== chat.id)
+                    )
+                  }
+                />
+              ))}
+              {attachments.map((file) => (
+                <ContextChip
+                  key={file.name}
+                  label={file.name}
+                  remove={`Remove file ${file.name}`}
+                  onRemove={() =>
+                    setAttachments(
+                      attachments.filter((a) => a.name !== file.name)
+                    )
+                  }
+                />
+              ))}
+            </ul>
+          ) : null}
           <Textarea
             ref={box}
             id={id}
@@ -645,9 +720,29 @@ export function AskForm({
           <div className='flex items-center justify-between px-2 pb-2'>
             <AddContextMenu
               skills={skills.data ?? []}
+              chats={chats.filter(
+                (chat) => !contextChats.some((chosen) => chosen.id === chat.id)
+              )}
+              categories={(categoryList.data ?? []).filter(
+                (category) =>
+                  !categories.some((chosen) => chosen.id === category.id)
+              )}
               scope={scope}
               disabled={pending}
+              chatsFull={contextChats.length >= MAX_CONTEXT_CHATS}
+              categoriesFull={categories.length >= MAX_CATEGORIES}
+              filesFull={attachments.length >= MAX_FILES}
               onPickSkill={chooseSkill}
+              onPickChat={(chat) => setContextChats([...contextChats, chat])}
+              onPickCategory={(category) =>
+                setCategories([...categories, category])
+              }
+              onFiles={(files) => {
+                void readAttachments(files, attachments).then((result) => {
+                  setAttachments(result.attachments)
+                  setFileError(result.error)
+                })
+              }}
             />
             {pending && onStop ? (
               <Button
@@ -754,6 +849,11 @@ export function AskForm({
         </label>
         {usage.data ? <UsageRing usage={usage.data} /> : null}
       </div>
+      {fileError ? (
+        <p role='alert' className='mt-2 text-sm text-destructive'>
+          {fileError}
+        </p>
+      ) : null}
       {spent && usage.data ? (
         <p role='status' className='mt-2 text-sm text-muted-foreground'>
           This month&apos;s AI limit is spent. It resets on{' '}
@@ -776,5 +876,30 @@ export function AskForm({
         </p>
       ) : null}
     </form>
+  )
+}
+
+/** One thing added to the question being written, with a way to take it off. */
+function ContextChip({
+  label,
+  remove,
+  onRemove,
+}: {
+  label: string
+  remove: string
+  onRemove: () => void
+}) {
+  return (
+    <li className='flex max-w-full items-center gap-1 rounded-sm bg-border py-0.5 ps-2 pe-0.5 font-mono text-[11px]'>
+      <span className='truncate'>{label}</span>
+      <button
+        type='button'
+        aria-label={remove}
+        onClick={onRemove}
+        className='inline-flex size-5 shrink-0 items-center justify-center rounded-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-sm:size-8'
+      >
+        <X className='size-3' aria-hidden='true' />
+      </button>
+    </li>
   )
 }

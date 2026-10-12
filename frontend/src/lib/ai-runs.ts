@@ -37,6 +37,9 @@ export async function startChatRun(
     question: string
     language: 'id' | 'en'
     publicLinkTokens?: string[]
+    categoryIds?: string[]
+    contextChatIds?: string[]
+    attachments?: { name: string; text: string }[]
   },
   idempotencyKey: string
 ): Promise<AIRun> {

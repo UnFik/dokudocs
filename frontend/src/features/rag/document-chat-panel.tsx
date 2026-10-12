@@ -316,7 +316,12 @@ function PanelBody({
               pending={run.busy}
               error={run.error}
               placeholder='Ask about this document…'
-              onAsk={(question) => void run.ask(question)}
+              chats={(chats ?? [])
+                .filter((chat) => chat.id !== selected.id && !chat.archivedAt)
+                .map((chat) => ({ id: chat.id, title: chat.title }))}
+              onAsk={(question, extras) =>
+                void run.ask(question, undefined, extras)
+              }
               onStop={() => void run.stop()}
               language={language}
               onLanguage={setLanguage}

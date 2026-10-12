@@ -31,6 +31,7 @@ import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { ConversationHistory } from './conversation-history'
 import { downloadConversation } from './download-conversation'
+import type { QuestionExtras } from './question-extras'
 import { useChatRun } from './use-chat-run'
 import { useConversationHistory } from './use-conversation-history'
 import { usePanelOptions } from './use-panel-options'
@@ -140,9 +141,9 @@ export function RAGChatPage() {
     )
   )
 
-  const submitQuestion = (text: string) => {
+  const submitQuestion = (text: string, extras: QuestionExtras) => {
     if (!selectedConversation || !canAsk || run.busy) return
-    void run.ask(text, getOpenedPublicLinkTokens())
+    void run.ask(text, getOpenedPublicLinkTokens(), extras)
   }
 
   return (
@@ -245,6 +246,15 @@ export function RAGChatPage() {
                     pending={run.busy}
                     error={run.error}
                     placeholder='Ask about documents in this workspace…'
+                    chats={conversations
+                      .filter(
+                        (chat) =>
+                          chat.id !== history.conversation.id &&
+                          chat.workspaceId ===
+                            history.conversation.workspaceId &&
+                          !chat.archivedAt
+                      )
+                      .map((chat) => ({ id: chat.id, title: chat.title }))}
                     onAsk={submitQuestion}
                     onStop={() => void run.stop()}
                     language={language}
