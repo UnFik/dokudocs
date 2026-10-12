@@ -145,3 +145,35 @@ func TestConversationRenamePinAndArchive(t *testing.T) {
 		t.Fatalf("blank rename = %d, want 400", blank.Code)
 	}
 }
+
+func TestConversationPinsAreCappedAtFivePerScope(t *testing.T) {
+	client := newConversationClient(t)
+	var pinned []model.RAGConversation
+	for i := 0; i < 5; i++ {
+		conversation := client.create()
+		res := client.do(http.MethodPatch, "/api/v1/rag/conversations/"+conversation.ID.String(), `{"pinned":true}`)
+		if res.Code != http.StatusOK {
+			t.Fatalf("pin %d = %d, body = %s", i+1, res.Code, res.Body.String())
+		}
+		pinned = append(pinned, conversation)
+	}
+	sixth := client.create()
+	res := client.do(http.MethodPatch, "/api/v1/rag/conversations/"+sixth.ID.String(), `{"pinned":true}`)
+	if res.Code != http.StatusConflict {
+		t.Fatalf("sixth pin = %d, want 409 (body = %s)", res.Code, res.Body.String())
+	}
+
+	// Pinning one that is already pinned is not a sixth pin.
+	again := client.do(http.MethodPatch, "/api/v1/rag/conversations/"+pinned[0].ID.String(), `{"pinned":true}`)
+	if again.Code != http.StatusOK {
+		t.Fatalf("re-pin = %d, want 200", again.Code)
+	}
+
+	// Unpinning frees a place.
+	if res := client.do(http.MethodPatch, "/api/v1/rag/conversations/"+pinned[1].ID.String(), `{"pinned":false}`); res.Code != http.StatusOK {
+		t.Fatalf("unpin = %d", res.Code)
+	}
+	if res := client.do(http.MethodPatch, "/api/v1/rag/conversations/"+sixth.ID.String(), `{"pinned":true}`); res.Code != http.StatusOK {
+		t.Fatalf("pin after unpin = %d, body = %s", res.Code, res.Body.String())
+	}
+}

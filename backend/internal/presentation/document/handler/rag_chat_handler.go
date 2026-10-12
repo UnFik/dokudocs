@@ -361,6 +361,8 @@ func writeRAGChatError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusNotFound, "conversation not found")
 	case errors.Is(err, constant.ErrDocumentConflict):
 		response.Error(w, http.StatusConflict, "source changed; ask again")
+	case errors.Is(err, constant.ErrConversationPinLimit):
+		response.Error(w, http.StatusConflict, "you can pin at most 5 conversations here; unpin one first")
 	case errors.Is(err, appchat.ErrAnswerModelUnavailable):
 		response.Error(w, http.StatusServiceUnavailable, "chat model is not configured")
 	case errors.Is(err, airuns.ErrBusy):
