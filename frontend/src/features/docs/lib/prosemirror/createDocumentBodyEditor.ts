@@ -381,8 +381,9 @@ export function createDocumentBodyEditor(
             options.onCommentRequest?.()
             return true
           },
+          // Links the selected text; with a caret it falls through to page search.
           k: () => {
-            if (!canEdit()) return true
+            if (!canEdit() || state.selection.empty) return false
             options.onLinkRequest?.()
             return true
           },

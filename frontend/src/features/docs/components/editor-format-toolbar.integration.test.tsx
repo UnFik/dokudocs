@@ -118,4 +118,20 @@ describe('toolbar wired to the real editor', () => {
         .map((node) => node.attributes.href ?? null)
     ).toEqual([null, 'https://example.com', null])
   })
+
+  it('leaves Ctrl+K to the page search when nothing is selected', async () => {
+    let editor!: Editor
+    const view = await render(
+      <Harness onReady={(next) => void (editor = next)} />
+    )
+    await expect.poll(() => Boolean(editor)).toBe(true)
+
+    select(editor, 4, 4)
+    const event = pressKey(editor.view.dom, 'k', { ctrlKey: true })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(
+      view.container.querySelector('[aria-label="Link address"]')
+    ).toBeNull()
+  })
 })
