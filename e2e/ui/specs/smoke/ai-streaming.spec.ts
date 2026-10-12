@@ -263,3 +263,46 @@ test('@smoke: on every kind of document the theme switch sits above Ask AI, whic
     }
   }
 })
+
+test('@smoke: on every kind of document the AI panel has the one-row header and the icon composer', async ({ page }) => {
+  test.setTimeout(120_000)
+  await signIn(page)
+  const make = async (data: Record<string, unknown>) => {
+    const response = await page.request.post(`${apiURL}/api/v1/documents`, {
+      headers: { ...apiHeaders, 'Idempotency-Key': randomUUID() },
+      data,
+    })
+    expect(response.status()).toBe(201)
+    return (await response.json()).data.id as string
+  }
+  const documents = {
+    markdown: markdownDocumentID,
+    dbdiagram: await make({ title: 'Panel dbml', type: 'dbdiagram', isDraft: true, content: 'Table t { id int }' }),
+    mermaid: await make({ title: 'Panel mermaid', type: 'mermaid', isDraft: true, content: 'graph TD; A-->B' }),
+  }
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 800 }]) {
+    await page.setViewportSize(viewport)
+    for (const [kind, id] of Object.entries(documents)) {
+      const where = `${kind} at ${viewport.width}px`
+      await page.goto(`/docs/${id}`)
+      await page.getByRole('button', { name: 'Ask AI' }).click()
+      // The header is one row: no "Ask about this document" title, the controls are there.
+      await expect(page.getByRole('heading', { name: 'Ask about this document' }), where).toHaveCount(0)
+      const options = page.getByRole('button', { name: 'Chat options' })
+      await expect(options, where).toBeVisible({ timeout: 20_000 })
+      await expect(page.getByRole('button', { name: 'New chat' }), where).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Close' }), where).toBeVisible()
+      // The composer has no visible label and sends with an icon.
+      await expect(page.getByText('Ask a question', { exact: true }), where).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Add context' }), where).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Send' }), where).toBeDisabled()
+      await options.click()
+      await expect(page.getByRole('menuitem', { name: 'Download conversation' }), where).toBeVisible()
+      await expect(page.getByRole('menuitem', { name: 'Settings' }), where).toBeVisible()
+      await expect(page.getByRole('menuitemcheckbox', { name: 'Browser notification' }), where).toBeVisible()
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: 'Close' }).click()
+      await expect(page.getByRole('button', { name: 'Chat options' }), where).toHaveCount(0)
+    }
+  }
+})
