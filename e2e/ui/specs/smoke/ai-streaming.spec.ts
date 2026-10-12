@@ -11,6 +11,9 @@ test.describe.configure({ mode: 'serial' })
 const apiURL = process.env.API_URL ?? 'http://localhost:8080'
 let provider: FakeAIProvider
 let conversationQuestion: string
+let documentTitle: string
+let codeword: string
+let apiHeaders: Record<string, string>
 let toRemove: { workspaceID: string; authorization: string } | undefined
 
 test.beforeAll(async () => {
@@ -45,7 +48,7 @@ async function token(page: Page) {
 
 async function setUp(page: Page) {
   const suffix = `${Date.now()}`
-  const codeword = `heliotrope${suffix}`
+  codeword = `heliotrope${suffix}`
   conversationQuestion = `What is the recovery codeword for the ${codeword} vault?`
   await signIn(page)
   const authorization = `Bearer ${await token(page)}`
@@ -62,6 +65,8 @@ async function setUp(page: Page) {
   const workspaceID = (await workspaceResponse.json()).data.id as string
   toRemove = { workspaceID, authorization }
   const headers = { Authorization: authorization, 'X-Workspace-Id': workspaceID }
+  apiHeaders = headers
+  documentTitle = `Vault runbook ${suffix}`
 
   // The answer provider is the local fake; saving it is itself a job that must pass.
   const saved = await page.request.post(`${apiURL}/api/v1/platform/ai/answer/runs`, {
@@ -79,7 +84,7 @@ async function setUp(page: Page) {
   const created = await page.request.post(`${apiURL}/api/v1/documents`, {
     headers: { ...headers, 'Idempotency-Key': randomUUID() },
     data: {
-      title: `Vault runbook ${suffix}`,
+      title: documentTitle,
       type: 'markdown',
       visibility: 'workspace',
       isDraft: false,
@@ -164,4 +169,61 @@ test('@smoke: Stop ends the answer, keeps the draft labelled, and lets the next 
   await expect.poll(() => provider.abandoned).toBeGreaterThan(abandonedBefore)
   await expect(page.getByRole('button', { name: 'Send' })).toBeVisible()
   provider.release()
+})
+
+test('@smoke: a document named with @ is read, and shows as a link in the chat', async ({ page }) => {
+  test.setTimeout(120_000)
+  await signIn(page)
+  provider.release()
+  await page.goto('/assistant')
+  const box = page.getByRole('textbox', { name: 'Ask a question' })
+  await box.click()
+  await page.keyboard.type('What does @Vault runbook')
+  await page.getByRole('button', { name: new RegExp(documentTitle) }).click()
+  await page.keyboard.type(`say about the ${codeword} vault?`)
+  const started = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && /\/runs$/.test(new URL(response.url()).pathname),
+  )
+  // Enter sends; Shift+Enter would have added a line.
+  await page.keyboard.press('Enter')
+  const response = await started
+  expect(response.status()).toBe(202)
+  expect(response.request().postDataJSON().question).toMatch(/^What does @\[Vault runbook .*\]\(doc:[0-9a-f-]{36}\) say about/)
+  await expect(page.getByRole('link', { name: documentTitle })).toBeVisible()
+  await expect(page.getByText('The recovery codeword is cobalt.', { exact: true }).last()).toBeVisible()
+})
+
+test('@smoke: a long chat opens at its newest message and loads earlier ones on the way up', async ({ page }) => {
+  test.setTimeout(180_000)
+  await signIn(page)
+  provider.release()
+  const chats = (await (await page.request.get(`${apiURL}/api/v1/rag/conversations`, { headers: apiHeaders })).json()).data as { id: string }[]
+  const fresh = (await (await page.request.post(`${apiURL}/api/v1/rag/conversations`, { headers: apiHeaders, data: {} })).json()).data.id as string
+  expect(chats.length).toBeGreaterThan(0)
+  // 18 questions make 36 messages, more than the 30 a first page holds.
+  for (let n = 1; n <= 18; n++) {
+    const asked = await page.request.post(`${apiURL}/api/v1/rag/conversations/${fresh}/messages`, {
+      headers: apiHeaders,
+      data: { question: `History question ${n} about the ${codeword} vault`, language: 'en' },
+    })
+    expect(asked.ok()).toBe(true)
+  }
+  const first = await page.request.get(`${apiURL}/api/v1/rag/conversations/${fresh}`, { headers: apiHeaders })
+  const page1 = (await first.json()).data
+  expect(page1.messages).toHaveLength(30)
+  expect(page1.nextCursor).toBeTruthy()
+
+  await page.goto('/assistant')
+  // The newest chat is first in the list.
+  const log = page.getByRole('log', { name: 'Messages' })
+  await expect(log.getByText('History question 18', { exact: false })).toBeVisible()
+  // The transcript itself scrolls (not the page) and rests on the newest message.
+  await expect.poll(() => log.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+  await expect.poll(() => log.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThan(4)
+  await expect(log.getByText('History question 1 about', { exact: false })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Load earlier messages' })).toBeVisible()
+
+  await log.evaluate((el) => (el.scrollTop = 0))
+  await expect(log.getByText('History question 1 about', { exact: false })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0)
 })
