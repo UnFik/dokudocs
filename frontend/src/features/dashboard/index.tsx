@@ -7,6 +7,10 @@ import { Main } from '@/components/layout/main'
 import { useDokudocs } from '@/features/dashboard/hooks/use-dokudocs'
 import { CreateDocDialog } from '@/features/docs/components/create-doc-dialog'
 import { ImportDocDialog } from '@/features/docs/components/import-doc-dialog'
+import {
+  ProjectsSectionSkeleton,
+  RecentSectionSkeleton,
+} from './components/dashboard-skeleton'
 import { FilterTabs } from './components/filter-tabs'
 import { NewDocumentMenu } from './components/new-document-menu'
 import { ProjectsSection } from './components/projects-section'
@@ -75,9 +79,15 @@ export function Dashboard() {
             </Button>
           </div>
         ) : isLoading ? (
-          <p role='status' className='text-sm text-muted-foreground'>
-            Loading workspace documents and projects…
-          </p>
+          <div role='status' aria-busy='true' className='space-y-6'>
+            <span className='sr-only'>
+              Loading workspace documents and projects
+            </span>
+            <div aria-hidden='true' className='space-y-6'>
+              <RecentSectionSkeleton />
+              <ProjectsSectionSkeleton />
+            </div>
+          </div>
         ) : (
           <>
             <RecentSection
