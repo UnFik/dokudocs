@@ -42,8 +42,9 @@ export function ChatPanelHeader({
   close,
 }: {
   title: string
-  historyOpen: boolean
-  onToggleHistory: () => void
+  /** Left out where the list of chats is always on screen; the name is then plain text. */
+  historyOpen?: boolean
+  onToggleHistory?: () => void
   onNew: () => void
   newDisabled?: boolean
   canDownload: boolean
@@ -62,22 +63,28 @@ export function ChatPanelHeader({
         className='mx-1 size-4 shrink-0 text-muted-foreground'
         aria-hidden='true'
       />
-      <button
-        type='button'
-        aria-expanded={historyOpen}
-        aria-label={`Chat history, ${name}`}
-        onClick={onToggleHistory}
-        className={cn(
-          'flex min-w-0 flex-1 items-center gap-1 rounded-sm px-2 py-1.5 text-left text-sm font-medium transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-sm:min-h-11',
-          historyOpen && 'bg-accent'
-        )}
-      >
-        <span className='truncate'>{name}</span>
-        <ChevronDown
-          className='size-3.5 shrink-0 text-muted-foreground'
-          aria-hidden='true'
-        />
-      </button>
+      {onToggleHistory ? (
+        <button
+          type='button'
+          aria-expanded={historyOpen}
+          aria-label={`Chat history, ${name}`}
+          onClick={onToggleHistory}
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-1 rounded-sm px-2 py-1.5 text-left text-sm font-medium transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-sm:min-h-11',
+            historyOpen && 'bg-accent'
+          )}
+        >
+          <span className='truncate'>{name}</span>
+          <ChevronDown
+            className='size-3.5 shrink-0 text-muted-foreground'
+            aria-hidden='true'
+          />
+        </button>
+      ) : (
+        <h2 className='min-w-0 flex-1 truncate px-2 text-sm font-medium'>
+          {name}
+        </h2>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
