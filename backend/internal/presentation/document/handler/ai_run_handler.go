@@ -36,6 +36,11 @@ func (h *RAGChatHandler) startRun(r *http.Request, actorID, workspaceID, convers
 	if err := h.service.Authorize(r.Context(), workspaceID, conversationID, actorID); err != nil {
 		return airuns.Run{}, false, err
 	}
+	resolved, err := h.service.ResolveMentions(r.Context(), workspaceID, actorID, question)
+	if err != nil {
+		return airuns.Run{}, false, err
+	}
+	request.Question = resolved
 	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	if key == "" {
 		key = uuid.NewString()

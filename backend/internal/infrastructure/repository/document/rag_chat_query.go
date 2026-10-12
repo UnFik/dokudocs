@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"backend/constant"
+	"backend/internal/domain/mention"
 	"backend/internal/domain/model"
 	"backend/internal/domain/policy"
 	"backend/internal/infrastructure/database"
@@ -228,7 +229,81 @@ func (r *Repository) GetRAGConversationPage(ctx context.Context, conversationID,
 	}
 	var next int64
 	history.Messages, next, err = r.ragMessages(ctx, conversationID, before, limit)
-	return history, next, err
+	if err != nil {
+		return history, 0, err
+	}
+	return history, next, r.attachMentions(ctx, history.Conversation.WorkspaceID, actorID, history.Messages)
+}
+
+// ReadableDocumentTitles returns the current title of each listed document the
+// actor may read in the workspace. Documents that are missing, trashed, in
+// another workspace or not readable are left out.
+func (r *Repository) ReadableDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]string, error) {
+	titles := make(map[uuid.UUID]string, len(ids))
+	if len(ids) == 0 {
+		return titles, nil
+	}
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		for _, id := range ids {
+			doc, access, err := lockDocumentAccess(ctx, tx, id, workspaceID, actorID, false, nil)
+			if errors.Is(err, constant.ErrDocumentNotFound) || errors.Is(err, constant.ErrForbidden) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if !policy.CanReadDocument(doc, access) {
+				continue
+			}
+			var title string
+			if err := tx.QueryRowContext(ctx, `SELECT title FROM documents WHERE id = $1`, id).Scan(&title); err != nil {
+				return err
+			}
+			titles[id] = title
+		}
+		return nil
+	})
+	return titles, err
+}
+
+// attachMentions lists, on each question, the documents it names and whether
+// the actor can still read them.
+func (r *Repository) attachMentions(ctx context.Context, workspaceID, actorID uuid.UUID, messages []model.RAGMessage) error {
+	var ids []uuid.UUID
+	seen := map[uuid.UUID]bool{}
+	for _, message := range messages {
+		if message.Role != "user" {
+			continue
+		}
+		for _, found := range mention.ParseDocuments(message.Content) {
+			if !seen[found.DocumentID] {
+				seen[found.DocumentID] = true
+				ids = append(ids, found.DocumentID)
+			}
+		}
+	}
+	titles, err := r.ReadableDocumentTitles(ctx, workspaceID, actorID, ids)
+	if err != nil {
+		return err
+	}
+	for i := range messages {
+		if messages[i].Role != "user" {
+			continue
+		}
+		listed := map[uuid.UUID]bool{}
+		for _, found := range mention.ParseDocuments(messages[i].Content) {
+			if listed[found.DocumentID] {
+				continue
+			}
+			listed[found.DocumentID] = true
+			title, available := titles[found.DocumentID]
+			if !available {
+				title = found.Label
+			}
+			messages[i].Mentions = append(messages[i].Mentions, model.RAGMention{DocumentID: found.DocumentID, Title: title, Available: available})
+		}
+	}
+	return nil
 }
 
 func (r *Repository) ragConversation(ctx context.Context, conversationID, actorID uuid.UUID) (model.RAGConversationHistory, error) {

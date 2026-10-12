@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"backend/constant"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -11,13 +12,18 @@ import (
 
 	"backend/internal/application/airuns"
 	"backend/internal/application/aiusage"
+	"backend/internal/domain/mention"
 	"backend/internal/domain/model"
 
 	"github.com/google/uuid"
 )
 
 var (
-	ErrInvalidChatRequest     = errors.New("invalid chatbot request")
+	ErrInvalidChatRequest = errors.New("invalid chatbot request")
+	// ErrMentionUnavailable: a question names a document the User cannot read here.
+	ErrMentionUnavailable = errors.New("a mentioned document is not available")
+	// ErrTooManyMentions: a question names more than MaxMentions documents.
+	ErrTooManyMentions        = errors.New("too many documents are mentioned")
 	ErrAnswerModelUnavailable = errors.New("RAG answer model is unavailable")
 	ErrRAGProviderUnavailable = errors.New("RAG model provider is unavailable")
 	// ErrEmbeddingNotConfigured is what an embedder returns when no provider is set up;
@@ -53,6 +59,7 @@ type ChatRepository interface {
 	ListRAGConversations(context.Context, uuid.UUID) ([]model.RAGConversation, error)
 	AuthorizeRAGQuestion(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) error
 	GetRAGConversation(context.Context, uuid.UUID, uuid.UUID) (model.RAGConversationHistory, error)
+	ReadableDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]string, error)
 	GetRAGConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, before int64, limit int) (model.RAGConversationHistory, int64, error)
 	DeleteRAGConversation(context.Context, uuid.UUID, uuid.UUID) error
 	SearchRAGChunksWithPublicLinkTokens(context.Context, uuid.UUID, uuid.UUID, string, int, []string) ([]model.RAGChunk, error)
@@ -128,6 +135,41 @@ func (u *ChatUseCase) GetConversation(ctx context.Context, conversationID, actor
 	return u.repository.GetRAGConversation(ctx, conversationID, actorID)
 }
 
+// MaxMentions is how many different documents one question may name.
+const MaxMentions = 5
+
+// ResolveMentions checks the documents a question names and returns it with
+// each label written from the document's current title (ADR 0036). It refuses
+// a document the User cannot read in the workspace and more than MaxMentions
+// different documents; naming one document again does not count twice.
+func (u *ChatUseCase) ResolveMentions(ctx context.Context, workspaceID, actorID uuid.UUID, question string) (string, error) {
+	found := mention.ParseDocuments(question)
+	if len(found) == 0 {
+		return question, nil
+	}
+	var ids []uuid.UUID
+	seen := map[uuid.UUID]bool{}
+	for _, f := range found {
+		if !seen[f.DocumentID] {
+			seen[f.DocumentID] = true
+			ids = append(ids, f.DocumentID)
+		}
+	}
+	if len(ids) > MaxMentions {
+		return "", ErrTooManyMentions
+	}
+	titles, err := u.repository.ReadableDocumentTitles(ctx, workspaceID, actorID, ids)
+	if err != nil {
+		return "", err
+	}
+	for _, id := range ids {
+		if _, ok := titles[id]; !ok {
+			return "", ErrMentionUnavailable
+		}
+	}
+	return mention.RewriteDocuments(question, func(id uuid.UUID) string { return mention.DocumentLabel(titles[id]) }), nil
+}
+
 const (
 	// DefaultHistoryPage is how many messages a conversation shows at first.
 	DefaultHistoryPage = 30
@@ -199,14 +241,17 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	previousQuestions := make([]model.RAGMessage, 0, 10)
 	for _, message := range history.Messages {
 		if message.Role == "user" {
+			message.Content = mention.VisibleDocuments(message.Content)
 			previousQuestions = append(previousQuestions, message)
 		}
 	}
 	if len(previousQuestions) > 10 {
 		previousQuestions = previousQuestions[len(previousQuestions)-10:]
 	}
-	retrievalQuery := question
-	if len(previousQuestions) > 0 && needsRAGHistoryContext(question) {
+	// The model and the search read "@Title"; the ids stay in the stored question.
+	visible := mention.VisibleDocuments(question)
+	retrievalQuery := visible
+	if len(previousQuestions) > 0 && needsRAGHistoryContext(visible) {
 		retrievalQuery += " " + previousQuestions[len(previousQuestions)-1].Content
 	}
 	linkTokens := append([]string{}, input.PublicLinkTokens...)
@@ -248,6 +293,10 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	if err != nil {
 		return Answer{}, err
 	}
+	chunks, err = u.withMentionedDocuments(ctx, input, question, chunks)
+	if err != nil {
+		return Answer{}, err
+	}
 	provider, embeddingModel := "", ""
 	if embedder != nil {
 		provider, embeddingModel = embedder.Provider(), embedder.Model()
@@ -273,7 +322,7 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	if err := airuns.Emit(ctx, "status", map[string]string{"phase": "answering"}); err != nil {
 		return Answer{}, err
 	}
-	generated, err := u.model.Answer(ctx, ModelInput{Question: question, Language: language, History: previousQuestions, Sources: chunks})
+	generated, err := u.model.Answer(ctx, ModelInput{Question: visible, Language: language, History: previousQuestions, Sources: chunks})
 	if err != nil {
 		return Answer{}, err
 	}
@@ -310,6 +359,58 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 		return Answer{}, err
 	}
 	return answer, nil
+}
+
+// mentionedChunkBudget is how many chunks the mentioned documents share, so a
+// question that names five long documents does not fill the prompt with them.
+const mentionedChunkBudget = 40
+
+// withMentionedDocuments puts the text of the documents the question names in
+// front of what the search found, so they are always read. A document that has
+// no current index yet adds nothing, and a long one is cut to its share.
+func (u *ChatUseCase) withMentionedDocuments(ctx context.Context, input AskInput, question string, found []model.RAGChunk) ([]model.RAGChunk, error) {
+	var ids []uuid.UUID
+	seen := map[uuid.UUID]bool{}
+	for _, named := range mention.ParseDocuments(question) {
+		if !seen[named.DocumentID] {
+			seen[named.DocumentID] = true
+			ids = append(ids, named.DocumentID)
+		}
+	}
+	if len(ids) == 0 {
+		return found, nil
+	}
+	share := max(mentionedChunkBudget/len(ids), 8)
+	merged := make([]model.RAGChunk, 0, len(found)+len(ids)*share)
+	have := map[uuid.UUID]bool{}
+	truncated := false
+	for _, id := range ids {
+		chunks, err := u.repository.ListRAGChunksForDocument(ctx, input.WorkspaceID, input.ActorID, id, share)
+		if errors.Is(err, constant.ErrDocumentNotFound) || errors.Is(err, constant.ErrForbidden) {
+			// Deleted or no longer readable since the question was checked.
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		truncated = truncated || len(chunks) == share
+		for _, chunk := range chunks {
+			if !have[chunk.ChunkID] {
+				have[chunk.ChunkID] = true
+				merged = append(merged, chunk)
+			}
+		}
+	}
+	for _, chunk := range found {
+		if !have[chunk.ChunkID] {
+			have[chunk.ChunkID] = true
+			merged = append(merged, chunk)
+		}
+	}
+	if err := airuns.Emit(ctx, "status", map[string]any{"phase": "reading", "truncated": truncated}); err != nil {
+		return nil, err
+	}
+	return merged, nil
 }
 
 func normalizeRAGLanguage(language string) string {

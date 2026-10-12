@@ -23,6 +23,7 @@ import (
 type gatedAgent struct {
 	mu        sync.Mutex
 	calls     int
+	seen      [][]agent.Message
 	firstSent chan struct{}
 	release   chan struct{}
 	stopped   chan struct{}
@@ -34,9 +35,10 @@ func newGatedAgent() *gatedAgent {
 
 func (g *gatedAgent) AgentReady(context.Context) bool { return true }
 
-func (g *gatedAgent) Step(ctx context.Context, _ []agent.Message, _ []agent.ToolSpec) (agent.Message, error) {
+func (g *gatedAgent) Step(ctx context.Context, messages []agent.Message, _ []agent.ToolSpec) (agent.Message, error) {
 	g.mu.Lock()
 	g.calls++
+	g.seen = append(g.seen, messages)
 	g.mu.Unlock()
 	if err := airuns.Emit(ctx, "text_delta", map[string]string{"text": "Halo "}); err != nil {
 		return agent.Message{}, err
