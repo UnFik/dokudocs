@@ -173,3 +173,18 @@ type MentionDelivery struct {
 	SendEmail bool
 	SendPush  bool
 }
+
+// DocumentSearchHit is one document returned by the command search. MatchedOn is
+// "title" or "body", and empty for the recent-documents list; Snippet is set only
+// for body matches.
+type DocumentSearchHit struct {
+	ID          uuid.UUID  `json:"id"`
+	Title       string     `json:"title"`
+	Type        string     `json:"type"`
+	ProjectID   *uuid.UUID `json:"projectId,omitempty"`
+	ProjectName string     `json:"projectName,omitempty"`
+	IsDraft     bool       `json:"isDraft"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+	MatchedOn   string     `json:"matchedOn,omitempty"`
+	Snippet     string     `json:"snippet,omitempty"`
+}

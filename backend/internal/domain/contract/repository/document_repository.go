@@ -18,6 +18,7 @@ type DocumentFilter struct {
 
 type DocumentRepository interface {
 	List(ctx context.Context, workspaceID, userID uuid.UUID, filter DocumentFilter) ([]model.Document, error)
+	Search(ctx context.Context, workspaceID, userID uuid.UUID, query string, limit int) ([]model.DocumentSearchHit, error)
 	GetByID(ctx context.Context, id, userID uuid.UUID) (model.Document, error)
 	GetByShareToken(ctx context.Context, token string) (model.Document, error)
 	Create(ctx context.Context, doc model.Document, categoryNames []string) (model.Document, error)
