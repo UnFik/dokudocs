@@ -35,21 +35,30 @@ export function SearchProvider({ children }: SearchProviderProps) {
 
   // The dialog has no trigger, so Radix leaves focus on <body> when it closes.
   // While the menu is closed, remember the last focused element: reading it at
-  // open time is too late, because the dialog has already taken focus. Give it
-  // back on close, unless a follow-up dialog took it.
+  // open time is too late, because the dialog has already taken focus. On close,
+  // the dialog fades out and stays mounted (with focus inside it) until the
+  // animation ends, so wait for focus to reach <body>. If something else took
+  // it, such as a follow-up dialog, leave it alone.
   const returnFocusTo = useRef<Element | null>(null)
   useEffect(() => {
     if (open) return
     const target = returnFocusTo.current
-    let timer: ReturnType<typeof setTimeout> | undefined
+    let frame = 0
     if (
       target instanceof HTMLElement &&
       target !== document.body &&
       target.isConnected
     ) {
-      timer = setTimeout(() => {
-        if (document.activeElement === document.body) target.focus()
-      })
+      let waited = 0
+      const restore = () => {
+        const active = document.activeElement
+        if (!active || active === document.body) {
+          target.focus()
+        } else if (active.closest('[role="dialog"]') && waited++ < 60) {
+          frame = requestAnimationFrame(restore)
+        }
+      }
+      frame = requestAnimationFrame(restore)
     }
     returnFocusTo.current = document.activeElement
     const track = (event: FocusEvent) => {
@@ -57,7 +66,7 @@ export function SearchProvider({ children }: SearchProviderProps) {
     }
     document.addEventListener('focusin', track)
     return () => {
-      clearTimeout(timer)
+      cancelAnimationFrame(frame)
       document.removeEventListener('focusin', track)
     }
   }, [open])

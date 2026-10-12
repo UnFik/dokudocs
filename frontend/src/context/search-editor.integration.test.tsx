@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { jsonResponse, testSession } from '@/test-utils/auth'
 import { TextSelection } from 'prosemirror-state'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { userEvent } from 'vitest/browser'
 import { useAuthStore } from '@/stores/auth-store'
@@ -84,6 +84,12 @@ describe('page search beside the editor', () => {
   }
 
   it('opens search from a caret and gives focus back to the editor when it closes', async () => {
+    // The real dialog fades out, and Radix keeps it mounted until that ends.
+    const fade = document.createElement('style')
+    fade.textContent =
+      '@keyframes test-fade-out { to { opacity: 0 } } [role="dialog"][data-state="closed"] { animation: test-fade-out 200ms }'
+    document.head.append(fade)
+    onTestFinished(() => fade.remove())
     const { editor, screen, onLinkRequest } = await mountPage()
     editor.view.focus()
     selectRange(editor, 4, 4)
