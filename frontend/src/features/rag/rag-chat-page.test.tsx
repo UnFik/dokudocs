@@ -22,6 +22,7 @@ const conversation: RAGConversationHistory['conversation'] = {
   workspaceId: workspaceID,
   creatorId: testSession().user.id,
   title: 'Recovery policy',
+  unread: false,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 }
