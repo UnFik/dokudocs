@@ -45,8 +45,10 @@ type RAGConversation struct {
 	PinnedAt *time.Time `json:"pinnedAt,omitempty"`
 	// ArchivedAt is set while the Conversation sits in the Archived section.
 	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	UpdatedAt  time.Time  `json:"updatedAt"`
+	// Unread is true while the latest answer has not been seen by the User.
+	Unread    bool      `json:"unread"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // RAGConversationPatch changes a Conversation's title, pin or archive state.

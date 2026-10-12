@@ -64,6 +64,7 @@ type ChatRepository interface {
 	SearchDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, text string, limit int) ([]model.RAGDocumentHit, error)
 	GetRAGConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, before int64, limit int) (model.RAGConversationHistory, int64, error)
 	DeleteRAGConversation(context.Context, uuid.UUID, uuid.UUID) error
+	MarkRAGConversationRead(ctx context.Context, conversationID, actorID uuid.UUID) error
 	UpdateRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error)
 	SearchRAGChunksWithPublicLinkTokens(context.Context, uuid.UUID, uuid.UUID, string, int, []string) ([]model.RAGChunk, error)
 	SearchRAGChunksWithEmbedding(context.Context, uuid.UUID, uuid.UUID, string, []float32, string, string, int, []string) ([]model.RAGChunk, error)
@@ -229,6 +230,14 @@ func (u *ChatUseCase) UpdateConversation(ctx context.Context, conversationID, ac
 		patch.Title = &title
 	}
 	return u.repository.UpdateRAGConversation(ctx, conversationID, actorID, patch)
+}
+
+// MarkConversationRead records that the actor has seen the Conversation's latest answer.
+func (u *ChatUseCase) MarkConversationRead(ctx context.Context, conversationID, actorID uuid.UUID) error {
+	if conversationID == uuid.Nil || actorID == uuid.Nil {
+		return ErrInvalidChatRequest
+	}
+	return u.repository.MarkRAGConversationRead(ctx, conversationID, actorID)
 }
 
 func (u *ChatUseCase) DeleteConversation(ctx context.Context, conversationID, actorID uuid.UUID) error {
