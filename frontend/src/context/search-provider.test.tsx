@@ -3,12 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, type RenderResult } from 'vitest-browser-react'
 import { userEvent } from 'vitest/browser'
 import { SearchProvider } from '@/context/search-provider'
+import { useAuthStore } from '@/stores/auth-store'
+import { jsonResponse, testSession } from '@/test-utils/auth'
 
 const COMMAND_MENU_PLACEHOLDER = 'Search documents, projects, commands (⌘K)...'
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   setTheme: vi.fn(),
+  fetch: vi.fn(),
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -22,6 +25,18 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 vi.mock('@/context/theme-provider', () => ({
   useTheme: () => ({ setTheme: mocks.setTheme }),
 }))
+
+function signIn(status: 'authenticated' | 'offline' | 'guest') {
+  const auth = useAuthStore.getState().auth
+  auth.reset()
+  if (status === 'authenticated') auth.setSession(testSession())
+  if (status === 'offline') {
+    const { accessToken } = testSession()
+    useAuthStore.setState((state) => ({
+      auth: { ...state.auth, status: 'offline', accessToken, user: null },
+    }))
+  }
+}
 
 type ShortcutModifier = 'Control' | 'Meta'
 
@@ -66,6 +81,9 @@ async function openCommandPalette(
 describe('SearchProvider and CommandMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.fetch.mockImplementation(async () => jsonResponse([]))
+    vi.stubGlobal('fetch', mocks.fetch)
+    signIn('authenticated')
   })
 
   it('renders the command palette when the palette is open', async () => {
@@ -158,5 +176,58 @@ describe('SearchProvider and CommandMenu', () => {
     await expect
       .element(screen.getByText('No matching documents or projects found.'))
       .toBeInTheDocument()
+  })
+
+  it.each(['guest', 'offline'] as const)(
+    'leaves Ctrl+K to the browser when the session is %s',
+    async (status) => {
+      signIn(status)
+      const screen = await renderWithSearchProvider()
+
+      const event = new KeyboardEvent('keydown', {
+        key: 'k',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+      document.dispatchEvent(event)
+
+      expect(event.defaultPrevented).toBe(false)
+      await expect
+        .element(screen.getByPlaceholder(COMMAND_MENU_PLACEHOLDER))
+        .not.toBeInTheDocument()
+    }
+  )
+
+  it('does not open when a field already handled Ctrl+K', async () => {
+    const screen = await renderWithSearchProvider()
+    const field = document.createElement('div')
+    field.addEventListener('keydown', (event) => event.preventDefault())
+    document.body.append(field)
+
+    field.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'k',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    )
+
+    await expect
+      .element(screen.getByPlaceholder(COMMAND_MENU_PLACEHOLDER))
+      .not.toBeInTheDocument()
+    field.remove()
+  })
+
+  it('asks the server for nothing until the menu is opened', async () => {
+    const screen = await renderWithSearchProvider()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+
+    expect(mocks.fetch.mock.calls.map(([u]) => String(u))).toEqual([])
+
+    await openCommandPalette(screen)
+
+    await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalled())
   })
 })
