@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"backend/internal/application/airuns"
 	"backend/internal/application/aiusage"
@@ -63,6 +64,7 @@ type ChatRepository interface {
 	SearchDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, text string, limit int) ([]model.RAGDocumentHit, error)
 	GetRAGConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, before int64, limit int) (model.RAGConversationHistory, int64, error)
 	DeleteRAGConversation(context.Context, uuid.UUID, uuid.UUID) error
+	UpdateRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error)
 	SearchRAGChunksWithPublicLinkTokens(context.Context, uuid.UUID, uuid.UUID, string, int, []string) ([]model.RAGChunk, error)
 	SearchRAGChunksWithEmbedding(context.Context, uuid.UUID, uuid.UUID, string, []float32, string, string, int, []string) ([]model.RAGChunk, error)
 	HasStaleReadableRAGIndex(context.Context, uuid.UUID, uuid.UUID, []string, string, string) (bool, error)
@@ -208,6 +210,25 @@ func (u *ChatUseCase) GetConversationPage(ctx context.Context, conversationID, a
 		return history, "", err
 	}
 	return history, base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(next, 10))), nil
+}
+
+// maxConversationTitle is the longest title a User may give a Conversation.
+const maxConversationTitle = 120
+
+// UpdateConversation renames, pins, unpins, archives or restores one of the
+// actor's Conversations. A title is trimmed and may not end up empty.
+func (u *ChatUseCase) UpdateConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error) {
+	if conversationID == uuid.Nil || actorID == uuid.Nil || (patch.Title == nil && patch.Pinned == nil && patch.Archived == nil) {
+		return model.RAGConversation{}, ErrInvalidChatRequest
+	}
+	if patch.Title != nil {
+		title := strings.TrimSpace(*patch.Title)
+		if title == "" || utf8.RuneCountInString(title) > maxConversationTitle {
+			return model.RAGConversation{}, ErrInvalidChatRequest
+		}
+		patch.Title = &title
+	}
+	return u.repository.UpdateRAGConversation(ctx, conversationID, actorID, patch)
 }
 
 func (u *ChatUseCase) DeleteConversation(ctx context.Context, conversationID, actorID uuid.UUID) error {

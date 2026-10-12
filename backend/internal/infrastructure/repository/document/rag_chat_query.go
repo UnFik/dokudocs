@@ -17,6 +17,29 @@ import (
 	"github.com/google/uuid"
 )
 
+// conversationListOrder puts pinned Conversations first and archived ones last.
+const conversationListOrder = `(archived_at IS NOT NULL), pinned_at DESC NULLS LAST, updated_at DESC, conversation_id`
+
+// UpdateRAGConversation renames, pins, unpins, archives or restores one of the
+// actor's own Conversations and returns it as stored.
+func (r *Repository) UpdateRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error) {
+	var conversation model.RAGConversation
+	err := r.db.QueryRowContext(ctx, `
+		UPDATE rag_conversations SET
+			title = COALESCE($3, title),
+			pinned_at = CASE WHEN $4::boolean IS NULL THEN pinned_at WHEN $4 THEN COALESCE(pinned_at, NOW()) ELSE NULL END,
+			archived_at = CASE WHEN $5::boolean IS NULL THEN archived_at WHEN $5 THEN COALESCE(archived_at, NOW()) ELSE NULL END
+		WHERE conversation_id = $1 AND creator_id = $2
+		RETURNING conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at
+	`, conversationID, actorID, patch.Title, patch.Pinned, patch.Archived).Scan(
+		&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID,
+		&conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return conversation, constant.ErrDocumentNotFound
+	}
+	return conversation, err
+}
+
 func (r *Repository) CreateRAGConversation(ctx context.Context, workspaceID, actorID uuid.UUID) (model.RAGConversation, error) {
 	var conversation model.RAGConversation
 	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
@@ -34,9 +57,9 @@ func (r *Repository) CreateRAGConversation(ctx context.Context, workspaceID, act
 
 func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID) ([]model.RAGConversation, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT conversation_id, workspace_id, creator_id, document_id, title, created_at, updated_at
+		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at
 		FROM rag_conversations WHERE creator_id = $1 AND document_id IS NULL
-		ORDER BY updated_at DESC, conversation_id
+		ORDER BY `+conversationListOrder+`
 	`, actorID)
 	if err != nil {
 		return nil, err
@@ -45,7 +68,7 @@ func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID
 	conversations := make([]model.RAGConversation, 0)
 	for rows.Next() {
 		var conversation model.RAGConversation
-		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
 			return nil, err
 		}
 		conversations = append(conversations, conversation)
@@ -75,9 +98,9 @@ func (r *Repository) CreateDocumentRAGConversation(ctx context.Context, workspac
 // ListDocumentRAGConversations lists the actor's own Conversations on one document.
 func (r *Repository) ListDocumentRAGConversations(ctx context.Context, actorID, documentID uuid.UUID) ([]model.RAGConversation, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT conversation_id, workspace_id, creator_id, document_id, title, created_at, updated_at
+		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at
 		FROM rag_conversations WHERE creator_id = $1 AND document_id = $2
-		ORDER BY updated_at DESC, conversation_id
+		ORDER BY `+conversationListOrder+`
 	`, actorID, documentID)
 	if err != nil {
 		return nil, err
@@ -86,7 +109,7 @@ func (r *Repository) ListDocumentRAGConversations(ctx context.Context, actorID, 
 	conversations := make([]model.RAGConversation, 0)
 	for rows.Next() {
 		var conversation model.RAGConversation
-		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
 			return nil, err
 		}
 		conversations = append(conversations, conversation)

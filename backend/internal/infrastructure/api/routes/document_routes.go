@@ -109,6 +109,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 	privateChatGroup.Get("", ragChat.ListConversations)
 	privateChatGroup.Get("/{conversationID}", ragChat.GetConversation)
 	privateChatGroup.Get("/{conversationID}/runs", ragChat.LatestRun)
+	privateChatGroup.Patch("/{conversationID}", ragChat.UpdateConversation)
 	privateChatGroup.Delete("/{conversationID}", ragChat.DeleteConversation)
 	privateChatGroup.Post("/{conversationID}/actions/{actionID}", ragChat.DecideAction)
 	if runner := aiRuns(c); runner != nil {
