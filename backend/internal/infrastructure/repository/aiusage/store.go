@@ -125,3 +125,30 @@ func (s *Store) PlanLimit(ctx context.Context, workspaceID uuid.UUID) (int64, er
 	`, workspaceID).Scan(&limit)
 	return limit, err
 }
+
+// ListPlanLimits returns every Plan's monthly token limit, smallest first.
+func (s *Store) ListPlanLimits(ctx context.Context) ([]app.PlanLimit, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT plan, monthly_tokens FROM ai_plan_limits ORDER BY monthly_tokens, plan`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	limits := []app.PlanLimit{}
+	for rows.Next() {
+		var limit app.PlanLimit
+		if err := rows.Scan(&limit.Plan, &limit.MonthlyTokens); err != nil {
+			return nil, err
+		}
+		limits = append(limits, limit)
+	}
+	return limits, rows.Err()
+}
+
+// SetPlanLimit adds or changes a Plan's monthly token limit.
+func (s *Store) SetPlanLimit(ctx context.Context, plan string, monthlyTokens int64) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO ai_plan_limits (plan, monthly_tokens) VALUES ($1, $2)
+		ON CONFLICT (plan) DO UPDATE SET monthly_tokens = EXCLUDED.monthly_tokens, updated_at = NOW()
+	`, plan, monthlyTokens)
+	return err
+}

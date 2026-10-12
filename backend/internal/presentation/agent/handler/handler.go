@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"backend/internal/application/agent"
 	"backend/internal/application/aiusage"
@@ -23,10 +24,17 @@ type Handler struct {
 	mcp         *mcpapp.Service
 	skills      *skills.Service
 	usage       *aiusage.Service
+	planLimits  aiusage.PlanLimitStore
 }
 
 func New(permissions *agent.PermissionService, mcp *mcpapp.Service, skillService *skills.Service, usage *aiusage.Service) *Handler {
 	return &Handler{permissions: permissions, mcp: mcp, skills: skillService, usage: usage}
+}
+
+// WithPlanLimits lets a Superadmin read and change the Usage limit of each Plan.
+func (h *Handler) WithPlanLimits(store aiusage.PlanLimitStore) *Handler {
+	h.planLimits = store
+	return h
 }
 
 func actor(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
@@ -43,6 +51,8 @@ func fail(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, mcpapp.ErrForbidden), errors.Is(err, skills.ErrForbidden), errors.Is(err, aiusage.ErrForbidden):
 		response.Error(w, http.StatusForbidden, "only a superadmin can do this")
+	case errors.Is(err, aiusage.ErrInvalidLimit):
+		response.Error(w, http.StatusBadRequest, "a limit needs a Plan name of up to 50 characters and a whole number of tokens from 1 to 1,000,000,000,000")
 	case errors.Is(err, agent.ErrUnknownCapability):
 		response.Error(w, http.StatusBadRequest, "one of the AI permissions is not known")
 	case errors.Is(err, mcpapp.ErrInvalid):
@@ -216,6 +226,41 @@ func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = response.Data(w, http.StatusOK, summary)
+}
+
+// PlanLimits lists what each Plan allows per User per month.
+func (h *Handler) PlanLimits(w http.ResponseWriter, r *http.Request) {
+	id, ok := actor(w, r)
+	if !ok {
+		return
+	}
+	limits, err := h.usage.PlanLimits(r.Context(), id, h.planLimits)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, map[string]any{"limits": limits})
+}
+
+// SetPlanLimit changes what one Plan allows.
+func (h *Handler) SetPlanLimit(w http.ResponseWriter, r *http.Request) {
+	id, ok := actor(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		MonthlyTokens int64 `json:"monthlyTokens"`
+	}
+	if err := response.DecodeJSON(r, &body); err != nil {
+		fail(w, aiusage.ErrInvalidLimit)
+		return
+	}
+	plan := r.PathValue("plan")
+	if err := h.usage.SetPlanLimit(r.Context(), id, h.planLimits, plan, body.MonthlyTokens); err != nil {
+		fail(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, aiusage.PlanLimit{Plan: strings.TrimSpace(plan), MonthlyTokens: body.MonthlyTokens})
 }
 
 // ListSkills is open to every signed-in User, for the chat's / picker.
