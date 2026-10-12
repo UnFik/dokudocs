@@ -3,7 +3,9 @@ package aiusage
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -60,6 +62,57 @@ func (l *Limits) Check(ctx context.Context, userID, workspaceID uuid.UUID) error
 	}
 	if status.Spent() {
 		return ErrLimitReached
+	}
+	return nil
+}
+
+// ErrInvalidLimit means the Plan name or the token count cannot be stored.
+var ErrInvalidLimit = errors.New("invalid usage limit")
+
+const (
+	maxPlanNameLength = 50
+	maxMonthlyTokens  = 1_000_000_000_000
+)
+
+// PlanLimit is what one Plan allows each User per workspace per month.
+type PlanLimit struct {
+	Plan          string `json:"plan"`
+	MonthlyTokens int64  `json:"monthlyTokens"`
+}
+
+// PlanLimitStore reads and writes the limits a Superadmin sets.
+type PlanLimitStore interface {
+	ListPlanLimits(ctx context.Context) ([]PlanLimit, error)
+	SetPlanLimit(ctx context.Context, plan string, monthlyTokens int64) error
+}
+
+// PlanLimits lists the limits of every Plan; only a Superadmin may.
+func (s *Service) PlanLimits(ctx context.Context, actor uuid.UUID, store PlanLimitStore) ([]PlanLimit, error) {
+	if err := s.requireSuperadmin(ctx, actor); err != nil {
+		return nil, err
+	}
+	return store.ListPlanLimits(ctx)
+}
+
+// SetPlanLimit sets what a Plan allows. A Plan with no limit of its own gets the Free limit.
+func (s *Service) SetPlanLimit(ctx context.Context, actor uuid.UUID, store PlanLimitStore, plan string, monthlyTokens int64) error {
+	if err := s.requireSuperadmin(ctx, actor); err != nil {
+		return err
+	}
+	plan = strings.TrimSpace(plan)
+	if plan == "" || utf8.RuneCountInString(plan) > maxPlanNameLength || monthlyTokens < 1 || monthlyTokens > maxMonthlyTokens {
+		return ErrInvalidLimit
+	}
+	return store.SetPlanLimit(ctx, plan, monthlyTokens)
+}
+
+func (s *Service) requireSuperadmin(ctx context.Context, actor uuid.UUID) error {
+	ok, err := s.admins.IsSuperadmin(ctx, actor)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrForbidden
 	}
 	return nil
 }
