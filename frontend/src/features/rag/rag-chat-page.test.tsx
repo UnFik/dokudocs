@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import '@/styles/index.css'
 import { jsonResponse, testSession } from '@/test-utils/auth'
 import { sseFrame, sseResponse } from '@/test-utils/sse'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -87,7 +88,10 @@ const conflictingHistory = {
 
 function setup(
   hasWorkspace = true,
-  chatHistory: RAGConversationHistory = history
+  chatHistory: RAGConversationHistory = history,
+  respond?: (
+    url: URL
+  ) => RAGConversationHistory & { nextCursor?: string | null }
 ) {
   useAuthStore.getState().auth.setSession(testSession())
   useDokudocsStore.setState({ activeOrgId: workspaceID })
@@ -131,7 +135,7 @@ function setup(
     )
       return new Response(null, { status: 204 })
     if (url.pathname === `/api/v1/rag/conversations/${conversationID}`)
-      return jsonResponse(chatHistory)
+      return jsonResponse(respond ? respond(url) : chatHistory)
     throw new Error(`Unexpected request: ${url.pathname}`)
   })
   vi.stubGlobal('fetch', fetch)
@@ -305,4 +309,98 @@ it('deletes the chat once the dialog is confirmed', async () => {
     `/rag/conversations/${conversationID}`
   )
   await expect.element(screen.getByRole('alertdialog')).not.toBeInTheDocument()
+})
+
+const longMessages = (from: number, to: number) =>
+  Array.from({ length: to - from + 1 }, (_, i) => {
+    const n = from + i
+    return {
+      ...history.messages[0]!,
+      id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+      role: n % 2 === 0 ? ('assistant' as const) : ('user' as const),
+      content: `Message ${n}\nline two of ${n}\nline three of ${n}`,
+      citations: [],
+      coveragePartial: false,
+      sourcesMayBeIncomplete: false,
+    }
+  })
+
+function pagedHistory(url: URL) {
+  const before = url.searchParams.get('before')
+  if (before === 'older-1')
+    return { ...history, messages: longMessages(11, 40), nextCursor: 'older-2' }
+  if (before === 'older-2')
+    return { ...history, messages: longMessages(1, 10), nextCursor: null }
+  return { ...history, messages: longMessages(41, 70), nextCursor: 'older-1' }
+}
+
+const askedBefore = (fetch: ReturnType<typeof setup>['fetch']) =>
+  fetch.mock.calls
+    .map(([input]) => new URL(String(input)))
+    .filter(
+      (url) => url.pathname === `/api/v1/rag/conversations/${conversationID}`
+    )
+    .map((url) => url.searchParams.get('before'))
+
+it('opens at the newest messages and loads older ones on the way up', async () => {
+  const { fetch, queryClient } = setup(true, history, pagedHistory)
+  const screen = await render(
+    <QueryClientProvider client={queryClient}>
+      <SidebarProvider>
+        <div
+          style={{ height: '640px', display: 'flex', flexDirection: 'column' }}
+        >
+          <RAGChatPage />
+        </div>
+      </SidebarProvider>
+    </QueryClientProvider>
+  )
+
+  await expect.element(screen.getByText('Message 70')).toBeVisible()
+  expect(screen.getByText('Message 40').elements()).toHaveLength(0)
+  const log = screen.getByRole('log', { name: 'Messages' }).element()
+  await vi.waitFor(() =>
+    expect(log.scrollHeight - log.scrollTop - log.clientHeight).toBeLessThan(4)
+  )
+  expect(askedBefore(fetch)).toEqual([null])
+
+  const anchor = screen.getByText('Message 41').element()
+  log.scrollTop = 0
+  const readingAt = () =>
+    anchor.getBoundingClientRect().top - log.getBoundingClientRect().top
+  const before = readingAt()
+  await expect.element(screen.getByText('Message 40')).toBeInTheDocument()
+  expect(askedBefore(fetch)).toEqual([null, 'older-1'])
+  // The message the User was reading stays where it was while older ones appear above it.
+  await vi.waitFor(() => expect(log.scrollTop).toBeGreaterThan(100))
+  expect(Math.abs(readingAt() - before)).toBeLessThan(3)
+
+  log.scrollTop = 0
+  await expect.element(screen.getByText(/^Message 1\s/)).toBeInTheDocument()
+  expect(askedBefore(fetch)).toEqual([null, 'older-1', 'older-2'])
+  expect(
+    screen.getByRole('button', { name: 'Load earlier messages' }).elements()
+  ).toHaveLength(0)
+})
+
+it('lets a keyboard User load earlier messages with a button', async () => {
+  const { queryClient } = setup(true, history, pagedHistory)
+  const screen = await render(
+    <QueryClientProvider client={queryClient}>
+      <SidebarProvider>
+        <div
+          style={{ height: '640px', display: 'flex', flexDirection: 'column' }}
+        >
+          <RAGChatPage />
+        </div>
+      </SidebarProvider>
+    </QueryClientProvider>
+  )
+  await expect.element(screen.getByText('Message 70')).toBeVisible()
+  // A DOM click: Playwright would scroll the button into view first, which loads the page by itself.
+  const button = screen
+    .getByRole('button', { name: 'Load earlier messages' })
+    .element() as HTMLButtonElement
+  button.click()
+  await expect.element(screen.getByText('Message 40')).toBeInTheDocument()
 })

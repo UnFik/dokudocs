@@ -5,7 +5,6 @@ import { useAuthStore } from '@/stores/auth-store'
 import {
   createRAGConversation,
   deleteRAGConversation,
-  getRAGConversation,
   listRAGConversations,
 } from '@/lib/domain-api'
 import { getOpenedPublicLinkTokens } from '@/lib/public-link-session'
@@ -23,8 +22,10 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
+import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { useChatRun } from './use-chat-run'
+import { useConversationHistory } from './use-conversation-history'
 
 export function RAGChatPage() {
   const queryClient = useQueryClient()
@@ -42,13 +43,7 @@ export function RAGChatPage() {
   const conversations = conversationsQuery.data ?? []
   const selectedConversation =
     conversations.find((item) => item.id === selectedID) ?? conversations[0]
-  const historyQuery = useQuery({
-    queryKey: ['rag-conversation', userID, selectedConversation?.id],
-    queryFn: ({ signal }) =>
-      getRAGConversation(selectedConversation!.id, signal),
-    enabled: Boolean(userID && selectedConversation),
-    retry: false,
-  })
+  const historyQuery = useConversationHistory(userID, selectedConversation?.id)
   const createMutation = useMutation({
     mutationFn: createRAGConversation,
     onSuccess: async (conversation) => {
@@ -82,7 +77,7 @@ export function RAGChatPage() {
     },
   })
 
-  const history = historyQuery.data
+  const history = historyQuery.history
   const canAsk = Boolean(
     selectedConversation &&
     workspaces.some(
@@ -205,7 +200,14 @@ export function RAGChatPage() {
                     Whole workspace
                   </p>
                 </div>
-                <div className='min-h-0 flex-1 space-y-5 overflow-y-auto p-4'>
+                <ChatScroller
+                  resetKey={history.conversation.id}
+                  firstKey={history.messages[0]?.id ?? ''}
+                  changeKey={`${history.messages.at(-1)?.id ?? ''}|${run.view.phase}|${run.view.draft.length}|${history.actions?.length ?? 0}`}
+                  hasOlder={historyQuery.hasOlder}
+                  loadingOlder={historyQuery.loadingOlder}
+                  onLoadOlder={historyQuery.loadOlder}
+                >
                   {history.messages.length === 0 &&
                   run.view.phase === 'idle' ? (
                     <p className='text-sm text-muted-foreground'>
@@ -226,7 +228,7 @@ export function RAGChatPage() {
                     />
                   )}
                   <RunProgress view={run.view} />
-                </div>
+                </ChatScroller>
                 {canAsk ? (
                   <AskForm
                     id='rag-question'

@@ -1,5 +1,5 @@
-import '@/styles/index.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import '@/styles/index.css'
 import { jsonResponse, testSession } from '@/test-utils/auth'
 import { afterEach, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
