@@ -232,6 +232,7 @@ export function RAGChatPage() {
                 {canAsk ? (
                   <AskForm
                     id='rag-question'
+                    workspaceID={history.conversation.workspaceId}
                     pending={run.busy}
                     error={run.error}
                     placeholder='Ask about documents in this workspace…'

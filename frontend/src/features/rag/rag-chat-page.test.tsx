@@ -114,6 +114,15 @@ function setup(
       return jsonResponse(conversation, 201)
     if (url.pathname === '/api/v1/rag/conversations')
       return jsonResponse([conversation])
+    if (url.pathname === '/api/v1/rag/document-search')
+      return jsonResponse([
+        {
+          id: documentID,
+          title: 'Operations runbook',
+          type: 'markdown',
+          projectName: 'Platform',
+        },
+      ])
     if (url.pathname === `/api/v1/rag/conversations/${conversationID}/runs`)
       return init?.method === 'POST'
         ? jsonResponse(
@@ -403,4 +412,39 @@ it('lets a keyboard User load earlier messages with a button', async () => {
     .element() as HTMLButtonElement
   button.click()
   await expect.element(screen.getByText('Message 40')).toBeInTheDocument()
+})
+
+it('names a document from the workspace of the chat and sends it as a mention', async () => {
+  const { fetch, queryClient } = setup()
+  const screen = await render(
+    <QueryClientProvider client={queryClient}>
+      <SidebarProvider>
+        <RAGChatPage />
+      </SidebarProvider>
+    </QueryClientProvider>
+  )
+  const question = screen.getByRole('textbox', { name: 'Ask a question' })
+  await userEvent.click(question)
+  await userEvent.keyboard('what does @oper')
+  await userEvent.click(
+    screen.getByRole('button', { name: /Operations runbook/ })
+  )
+  await userEvent.keyboard('say?{Enter}')
+  await vi.waitFor(() => {
+    const search = fetch.mock.calls.find(
+      ([input]) =>
+        new URL(String(input)).pathname === '/api/v1/rag/document-search'
+    )
+    expect(new Headers(search?.[1]?.headers).get('X-Workspace-Id')).toBe(
+      workspaceID
+    )
+    const ask = fetch.mock.calls.find(
+      ([input, init]) =>
+        new URL(String(input)).pathname.endsWith('/runs') &&
+        init?.method === 'POST'
+    )
+    expect(JSON.parse(String(ask?.[1]?.body)).question).toBe(
+      `what does @[Operations runbook](doc:${documentID}) say?`
+    )
+  })
 })
