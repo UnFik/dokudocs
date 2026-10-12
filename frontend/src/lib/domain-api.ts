@@ -242,6 +242,16 @@ const ragMessageSchema = z.object({
       skill: z.string().optional(),
     })
     .optional(),
+  /** The documents a question names; available is false once the User cannot read one. */
+  mentions: z
+    .array(
+      z.object({
+        documentId: z.string().uuid(),
+        title: z.string(),
+        available: z.boolean(),
+      })
+    )
+    .optional(),
   createdAt: z.string(),
 })
 const agentActionSchema = z.object({
@@ -256,6 +266,8 @@ const ragHistorySchema = z.object({
   conversation: ragConversationSchema,
   messages: z.array(ragMessageSchema),
   actions: z.array(agentActionSchema).optional(),
+  /** Pass as `before` to read the page of older messages; absent at the first message. */
+  nextCursor: z.string().nullish(),
 })
 const skillSchema = z.object({
   id: z.string().uuid(),
@@ -982,15 +994,50 @@ export async function listRAGConversations(
     .parse(await apiFetch<unknown>('/api/v1/rag/conversations', { signal }))
 }
 
+/** One page of a conversation: the newest messages, or the ones before `before`. */
 export async function getRAGConversation(
   conversationID: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  before?: string
 ): Promise<RAGConversationHistory> {
+  const query = before ? `?before=${encodeURIComponent(before)}` : ''
   return ragHistorySchema.parse(
-    await apiFetch<unknown>(`/api/v1/rag/conversations/${conversationID}`, {
-      signal,
-    })
+    await apiFetch<unknown>(
+      `/api/v1/rag/conversations/${conversationID}${query}`,
+      { signal }
+    )
   )
+}
+
+export type ChatDocumentHit = {
+  id: string
+  title: string
+  type: string
+  projectName: string
+}
+
+/** Documents the User can read in the workspace whose title contains the text, for the @ picker. */
+export async function searchChatDocuments(
+  workspaceId: string,
+  text: string,
+  signal?: AbortSignal
+): Promise<ChatDocumentHit[]> {
+  const query = text ? `?search=${encodeURIComponent(text)}` : ''
+  return z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        title: z.string(),
+        type: z.string(),
+        projectName: z.string().optional().default(''),
+      })
+    )
+    .parse(
+      await apiFetch<unknown>(`/api/v1/rag/document-search${query}`, {
+        headers: workspaceHeaders(workspaceId),
+        signal,
+      })
+    )
 }
 
 export async function createRAGConversation(

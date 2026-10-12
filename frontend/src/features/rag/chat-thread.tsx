@@ -1,13 +1,30 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { Check, Link2, Send, Square, X } from 'lucide-react'
+import {
+  MAX_DOCUMENT_MENTIONS,
+  activeMentionQuery,
+  messageParts,
+  documentLabel,
+  serialize,
+  trackEdit,
+  type PlacedDocumentMention,
+} from '@/lib/document-mentions'
 import {
   decideAgentAction,
   listSkills,
+  searchChatDocuments,
   type AgentAction,
+  type ChatDocumentHit,
   type RAGCitation,
   type RAGMessage,
 } from '@/lib/domain-api'
+import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -136,6 +153,7 @@ export function ChatMessages({
 
 const stepLabels: Record<string, string> = {
   searching: 'Searching the documents…',
+  reading: 'Reading the mentioned documents…',
   answering: 'Writing the answer…',
   thinking: 'Working on it…',
 }
@@ -146,6 +164,59 @@ const toolStates = {
   failed: 'failed',
   waiting: 'waiting for your approval',
 } as const
+
+/**
+ * A question as the User wrote it: the documents it names show as their names,
+ * linked while the User can still read them. The token itself is never shown.
+ */
+function QuestionText({
+  content,
+  workspaceID,
+  mentions = [],
+}: {
+  content: string
+  /** Without a workspace there is nothing to link to, so names stay plain. */
+  workspaceID?: string
+  mentions?: RAGMessage['mentions']
+}) {
+  return (
+    <p className='text-sm whitespace-pre-wrap'>
+      {messageParts(content).map((part, index) => {
+        if (part.kind === 'text') return part.text
+        const known = mentions?.find(
+          (item) => item.documentId === part.documentID
+        )
+        const title = known?.title ?? part.label
+        if (known && !known.available)
+          return (
+            <span
+              key={index}
+              title='No longer available to you'
+              className='rounded bg-muted px-1 text-muted-foreground line-through'
+            >
+              @{title}
+              <span className='sr-only'> (unavailable)</span>
+            </span>
+          )
+        const chip = 'rounded bg-background/70 px-1 font-medium'
+        return workspaceID ? (
+          <a
+            key={index}
+            href={`/docs/${part.documentID}?workspaceId=${workspaceID}`}
+            className={`${chip} text-primary underline-offset-4 hover:underline`}
+          >
+            <span aria-hidden='true'>@</span>
+            {title}
+          </a>
+        ) : (
+          <span key={index} className={chip}>
+            @{title}
+          </span>
+        )
+      })}
+    </p>
+  )
+}
 
 const endings = {
   failed: 'The answer could not be finished.',
@@ -166,7 +237,7 @@ export function RunProgress({ view }: { view: ChatRunView }) {
       {view.question ? (
         <article className='ml-auto max-w-3xl rounded-lg bg-primary/10 px-4 py-3'>
           <h3 className='sr-only'>You</h3>
-          <p className='text-sm whitespace-pre-wrap'>{view.question}</p>
+          <QuestionText content={view.question} />
         </article>
       ) : null}
       <article
@@ -182,6 +253,13 @@ export function RunProgress({ view }: { view: ChatRunView }) {
             className={`text-sm leading-6 whitespace-pre-wrap ${view.phase === 'ended' ? 'text-muted-foreground' : ''}`}
           >
             {view.draft}
+            {view.phase === 'running' ? (
+              <span
+                data-activity='caret'
+                aria-hidden='true'
+                className='ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 animate-[caret-blink_1s_steps(1,end)_infinite] bg-foreground motion-reduce:animate-none'
+              />
+            ) : null}
           </p>
         ) : null}
         {view.tools.length > 0 ? (
@@ -202,7 +280,23 @@ export function RunProgress({ view }: { view: ChatRunView }) {
               : null}
           </p>
         ) : (
-          <p role='status' className='text-xs text-muted-foreground'>
+          <p
+            role='status'
+            className='flex items-center gap-2 text-xs text-muted-foreground'
+          >
+            <span
+              data-activity='dots'
+              aria-hidden='true'
+              className='flex items-center gap-1'
+            >
+              {[0, 1, 2].map((dot) => (
+                <span
+                  key={dot}
+                  className='size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none'
+                  style={{ animationDelay: `${dot * 200}ms` }}
+                />
+              ))}
+            </span>
             {view.phase === 'starting'
               ? 'Sending your question…'
               : (stepLabels[view.step] ?? 'Working on it…')}
@@ -224,7 +318,11 @@ export function ChatMessage({
     return (
       <article className='ml-auto max-w-3xl rounded-lg bg-primary/10 px-4 py-3'>
         <h3 className='sr-only'>You</h3>
-        <p className='text-sm whitespace-pre-wrap'>{message.content}</p>
+        <QuestionText
+          content={message.content}
+          workspaceID={workspaceID}
+          mentions={message.mentions}
+        />
       </article>
     )
 
@@ -317,6 +415,7 @@ export function AskForm({
   pending,
   error,
   placeholder,
+  workspaceID,
   onAsk,
   onStop,
   language,
@@ -326,6 +425,8 @@ export function AskForm({
   pending: boolean
   error?: Error | null
   placeholder: string
+  /** Where @ looks for documents to name; without it @ is plain text. */
+  workspaceID?: string
   onAsk: (question: string) => void
   /** Stops the answer being written; while it runs the form offers Stop in place of Send. */
   onStop?: () => void
@@ -333,6 +434,9 @@ export function AskForm({
   onLanguage: (language: 'id' | 'en') => void
 }) {
   const [question, setQuestion] = useState('')
+  const [placed, setPlaced] = useState<PlacedDocumentMention[]>([])
+  const [caret, setCaret] = useState(0)
+  const [dismissedAt, setDismissedAt] = useState<number | null>(null)
   const box = useRef<HTMLTextAreaElement>(null)
   const skills = useQuery({
     queryKey: ['skills'],
@@ -346,12 +450,102 @@ export function AskForm({
         (skill) => skill.name.startsWith(typed) && !question.includes(' ')
       )
     : []
+  const naming =
+    workspaceID && matches.length === 0
+      ? activeMentionQuery(question, caret, placed)
+      : null
+  const picking = naming && naming.start !== dismissedAt ? naming : null
+  const named = new Set(placed.map((mention) => mention.documentID))
+  const atLimit = named.size >= MAX_DOCUMENT_MENTIONS
+  const search = useDebouncedValue(picking?.query ?? '', 200)
+  const found = useQuery({
+    queryKey: ['chat-document-search', workspaceID, search],
+    queryFn: ({ signal }) => searchChatDocuments(workspaceID!, search, signal),
+    enabled: Boolean(picking && !atLimit),
+    placeholderData: keepPreviousData,
+    retry: false,
+    staleTime: 30_000,
+  })
+  const documents = picking && !atLimit ? (found.data ?? []) : []
+  const choices = matches.length > 0 ? matches.length : documents.length
+  const [highlighted, setHighlighted] = useState(0)
+  const active = Math.min(highlighted, Math.max(choices - 1, 0))
+  const placeCaret = (position: number) => {
+    setCaret(position)
+    requestAnimationFrame(() => {
+      box.current?.focus()
+      box.current?.setSelectionRange(position, position)
+    })
+  }
+  const chooseSkill = (name: string) => {
+    const next = `/${name} `
+    setQuestion(next)
+    // Keep typing after the skill name.
+    placeCaret(next.length)
+  }
+  const chooseDocument = (hit: ChatDocumentHit) => {
+    if (!picking) return
+    const label = documentLabel(hit.title)
+    const inserted = `@${label} `
+    const next =
+      question.slice(0, picking.start) + inserted + question.slice(caret)
+    const delta = next.length - question.length
+    setQuestion(next)
+    setPlaced([
+      ...placed.map((mention) =>
+        mention.start >= caret
+          ? {
+              ...mention,
+              start: mention.start + delta,
+              end: mention.end + delta,
+            }
+          : mention
+      ),
+      {
+        documentID: hit.id.toLowerCase(),
+        label,
+        start: picking.start,
+        end: picking.start + 1 + label.length,
+      },
+    ])
+    placeCaret(picking.start + inserted.length)
+  }
+  const choose = (index: number) => {
+    if (matches.length > 0) chooseSkill(matches[index]!.name)
+    else if (documents[index]) chooseDocument(documents[index])
+  }
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter confirms an input-method candidate; it is not a send.
+    if (event.nativeEvent.isComposing || event.key === 'Process') return
+    const plainEnter = event.key === 'Enter' && !event.shiftKey
+    if (choices > 0) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const step = event.key === 'ArrowDown' ? 1 : choices - 1
+        setHighlighted((active + step) % choices)
+      } else if (plainEnter || event.key === 'Tab') {
+        event.preventDefault()
+        choose(active)
+      } else if (event.key === 'Escape' && picking) {
+        event.preventDefault()
+        setDismissedAt(picking.start)
+      }
+      return
+    }
+    // A touch keyboard has no Shift, so there Enter stays a new line and Send is the button.
+    if (plainEnter && !window.matchMedia('(pointer: coarse)').matches) {
+      event.preventDefault()
+      event.currentTarget.form?.requestSubmit()
+    }
+  }
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const text = question.trim()
+    const text = serialize(question, placed).trim()
     if (!text || pending) return
     onAsk(text)
     setQuestion('')
+    setPlaced([])
+    setCaret(0)
   }
   return (
     <form onSubmit={submit} className='border-t p-3'>
@@ -362,7 +556,20 @@ export function AskForm({
         ref={box}
         id={id}
         value={question}
-        onChange={(event) => setQuestion(event.target.value)}
+        onChange={(event) => {
+          const next = event.target.value
+          setPlaced(trackEdit(placed, question, next))
+          setQuestion(next)
+          setCaret(event.target.selectionStart)
+          setHighlighted(0)
+          if (
+            activeMentionQuery(next, event.target.selectionStart)?.start !==
+            dismissedAt
+          )
+            setDismissedAt(null)
+        }}
+        onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         maxLength={10000}
         disabled={pending}
@@ -370,20 +577,13 @@ export function AskForm({
       />
       {matches.length > 0 ? (
         <ul aria-label='Skills' className='mt-2 divide-y border-y text-sm'>
-          {matches.map((skill) => (
+          {matches.map((skill, index) => (
             <li key={skill.id}>
               <button
                 type='button'
-                className='w-full px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
-                onClick={() => {
-                  const next = `/${skill.name} `
-                  setQuestion(next)
-                  // Keep typing after the skill name.
-                  requestAnimationFrame(() => {
-                    box.current?.focus()
-                    box.current?.setSelectionRange(next.length, next.length)
-                  })
-                }}
+                aria-current={index === active ? 'true' : undefined}
+                className='w-full px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=true]:bg-accent'
+                onClick={() => chooseSkill(skill.name)}
               >
                 <span className='font-mono text-xs'>/{skill.name}</span>
                 {skill.description ? (
@@ -395,6 +595,41 @@ export function AskForm({
             </li>
           ))}
         </ul>
+      ) : null}
+      {picking && atLimit ? (
+        <p role='status' className='mt-2 text-xs text-muted-foreground'>
+          You can mention up to {MAX_DOCUMENT_MENTIONS} documents in one
+          question.
+        </p>
+      ) : null}
+      {picking && !atLimit ? (
+        documents.length > 0 ? (
+          <ul aria-label='Documents' className='mt-2 divide-y border-y text-sm'>
+            {documents.map((hit, index) => (
+              <li key={hit.id}>
+                <button
+                  type='button'
+                  aria-current={index === active ? 'true' : undefined}
+                  className='w-full px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=true]:bg-accent'
+                  // Keep focus in the box so the caret stays where the @ was typed.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => chooseDocument(hit)}
+                >
+                  <span className='font-medium'>{hit.title || 'Untitled'}</span>
+                  {hit.projectName ? (
+                    <span className='ml-2 text-xs text-muted-foreground'>
+                      {hit.projectName}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p role='status' className='mt-2 text-xs text-muted-foreground'>
+            {found.isFetching ? 'Searching documents…' : 'No document matches.'}
+          </p>
+        )
       ) : null}
       <div className='mt-2 flex flex-wrap items-center justify-between gap-2'>
         <label className='flex items-center gap-2 text-xs text-muted-foreground'>

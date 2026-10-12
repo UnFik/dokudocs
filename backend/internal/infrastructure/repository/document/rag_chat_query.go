@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"backend/constant"
+	"backend/internal/domain/mention"
 	"backend/internal/domain/model"
 	"backend/internal/domain/policy"
 	"backend/internal/infrastructure/database"
@@ -209,6 +210,103 @@ func (r *Repository) AuthorizeRAGQuestion(ctx context.Context, workspaceID, conv
 }
 
 func (r *Repository) GetRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID) (model.RAGConversationHistory, error) {
+	history, err := r.ragConversation(ctx, conversationID, actorID)
+	if err != nil {
+		return history, err
+	}
+	history.Messages, _, err = r.ragMessages(ctx, conversationID, 0, 0)
+	return history, err
+}
+
+// GetRAGConversationPage returns the newest limit messages that come before
+// the sequence number `before` (0 means from the newest), oldest first. The
+// second result is the sequence to pass as `before` for the next older page,
+// or 0 when this page reaches the first message.
+func (r *Repository) GetRAGConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, before int64, limit int) (model.RAGConversationHistory, int64, error) {
+	history, err := r.ragConversation(ctx, conversationID, actorID)
+	if err != nil {
+		return history, 0, err
+	}
+	var next int64
+	history.Messages, next, err = r.ragMessages(ctx, conversationID, before, limit)
+	if err != nil {
+		return history, 0, err
+	}
+	return history, next, r.attachMentions(ctx, history.Conversation.WorkspaceID, actorID, history.Messages)
+}
+
+// ReadableDocumentTitles returns the current title of each listed document the
+// actor may read in the workspace. Documents that are missing, trashed, in
+// another workspace or not readable are left out.
+func (r *Repository) ReadableDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]string, error) {
+	titles := make(map[uuid.UUID]string, len(ids))
+	if len(ids) == 0 {
+		return titles, nil
+	}
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		for _, id := range ids {
+			doc, access, err := lockDocumentAccess(ctx, tx, id, workspaceID, actorID, false, nil)
+			if errors.Is(err, constant.ErrDocumentNotFound) || errors.Is(err, constant.ErrForbidden) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if !policy.CanReadDocument(doc, access) {
+				continue
+			}
+			var title string
+			if err := tx.QueryRowContext(ctx, `SELECT title FROM documents WHERE id = $1`, id).Scan(&title); err != nil {
+				return err
+			}
+			titles[id] = title
+		}
+		return nil
+	})
+	return titles, err
+}
+
+// attachMentions lists, on each question, the documents it names and whether
+// the actor can still read them.
+func (r *Repository) attachMentions(ctx context.Context, workspaceID, actorID uuid.UUID, messages []model.RAGMessage) error {
+	var ids []uuid.UUID
+	seen := map[uuid.UUID]bool{}
+	for _, message := range messages {
+		if message.Role != "user" {
+			continue
+		}
+		for _, found := range mention.ParseDocuments(message.Content) {
+			if !seen[found.DocumentID] {
+				seen[found.DocumentID] = true
+				ids = append(ids, found.DocumentID)
+			}
+		}
+	}
+	titles, err := r.ReadableDocumentTitles(ctx, workspaceID, actorID, ids)
+	if err != nil {
+		return err
+	}
+	for i := range messages {
+		if messages[i].Role != "user" {
+			continue
+		}
+		listed := map[uuid.UUID]bool{}
+		for _, found := range mention.ParseDocuments(messages[i].Content) {
+			if listed[found.DocumentID] {
+				continue
+			}
+			listed[found.DocumentID] = true
+			title, available := titles[found.DocumentID]
+			if !available {
+				title = found.Label
+			}
+			messages[i].Mentions = append(messages[i].Mentions, model.RAGMention{DocumentID: found.DocumentID, Title: title, Available: available})
+		}
+	}
+	return nil
+}
+
+func (r *Repository) ragConversation(ctx context.Context, conversationID, actorID uuid.UUID) (model.RAGConversationHistory, error) {
 	var history model.RAGConversationHistory
 	if err := r.db.QueryRowContext(ctx, `
 		SELECT conversation_id, workspace_id, creator_id, document_id, title, created_at, updated_at
@@ -222,39 +320,74 @@ func (r *Repository) GetRAGConversation(ctx context.Context, conversationID, act
 		}
 		return history, err
 	}
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT message_id, conversation_id, role, content, coverage_partial, sources_may_be_incomplete, meta, created_at
-		FROM rag_messages WHERE conversation_id = $1
-		ORDER BY sequence_no
-	`, conversationID)
+	return history, nil
+}
+
+// ragMessages reads a conversation's messages oldest first. A limit of 0 reads
+// all of them; otherwise it reads the newest `limit` before the sequence number
+// `before` (0 means no upper bound) and reports where the older ones start.
+func (r *Repository) ragMessages(ctx context.Context, conversationID uuid.UUID, before int64, limit int) ([]model.RAGMessage, int64, error) {
+	query := `
+		SELECT message_id, conversation_id, role, content, coverage_partial, sources_may_be_incomplete, meta, created_at, sequence_no
+		FROM rag_messages WHERE conversation_id = $1 AND ($2 = 0 OR sequence_no < $2)
+		ORDER BY sequence_no`
+	args := []any{conversationID, before}
+	if limit > 0 {
+		// One extra row tells whether an older page exists.
+		query = strings.Replace(query, "ORDER BY sequence_no", "ORDER BY sequence_no DESC LIMIT $3", 1)
+		args = append(args, limit+1)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return history, err
+		return nil, 0, err
 	}
 	defer rows.Close()
-	history.Messages = make([]model.RAGMessage, 0)
+	messages := make([]model.RAGMessage, 0)
+	sequences := make([]int64, 0)
 	for rows.Next() {
 		var message model.RAGMessage
 		var meta []byte
+		var sequence int64
 		if err := rows.Scan(
 			&message.ID, &message.ConversationID, &message.Role, &message.Content,
-			&message.CoveragePartial, &message.SourcesMayBeIncomplete, &meta, &message.CreatedAt,
+			&message.CoveragePartial, &message.SourcesMayBeIncomplete, &meta, &message.CreatedAt, &sequence,
 		); err != nil {
-			return history, err
+			return nil, 0, err
 		}
 		if string(meta) != "{}" && len(meta) > 0 {
 			message.Meta = meta
 		}
 		message.Citations = []model.RAGCitation{}
-		if message.Role == "assistant" {
-			citations, err := r.listRAGCitations(ctx, message.ID)
-			if err != nil {
-				return history, err
-			}
-			message.Citations = citations
-		}
-		history.Messages = append(history.Messages, message)
+		messages = append(messages, message)
+		sequences = append(sequences, sequence)
 	}
-	return history, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	var next int64
+	if limit > 0 {
+		if len(messages) > limit {
+			// The extra row only proved an older page exists. The cursor is the
+			// oldest sequence kept, so the next page is everything before it.
+			messages, sequences = messages[:limit], sequences[:limit]
+			next = sequences[limit-1]
+		}
+		for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+			messages[i], messages[j] = messages[j], messages[i]
+			sequences[i], sequences[j] = sequences[j], sequences[i]
+		}
+	}
+	for i := range messages {
+		if messages[i].Role != "assistant" {
+			continue
+		}
+		citations, err := r.listRAGCitations(ctx, messages[i].ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		messages[i].Citations = citations
+	}
+	return messages, next, nil
 }
 
 func (r *Repository) DeleteRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID) error {
@@ -433,4 +566,36 @@ func lockRAGWorkspaceMembership(ctx context.Context, tx database.Queryer, worksp
 		return constant.ErrForbidden
 	}
 	return err
+}
+
+// SearchDocumentTitles lists the documents the actor may read in the workspace
+// whose title contains the text, newest change first. An empty text lists the
+// most recently changed ones. Only titles are searched, never document text.
+func (r *Repository) SearchDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, text string, limit int) ([]model.RAGDocumentHit, error) {
+	escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.TrimSpace(text))
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT d.id, d.title, d.type::text,
+		       CASE WHEN p.id IS NOT NULL AND `+projectMetadataPredicate("$2", "p")+` THEN p.name ELSE '' END
+		FROM documents d
+		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
+		WHERE d.workspace_id = $1
+		  AND d.deleted_at IS NULL
+		  AND d.title ILIKE '%' || $3 || '%'
+	`+documentReadPredicate+`
+		ORDER BY d.updated_at DESC, d.id
+		LIMIT $4
+	`, workspaceID, actorID, escaped, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	hits := make([]model.RAGDocumentHit, 0)
+	for rows.Next() {
+		var hit model.RAGDocumentHit
+		if err := rows.Scan(&hit.ID, &hit.Title, &hit.Type, &hit.ProjectName); err != nil {
+			return nil, err
+		}
+		hits = append(hits, hit)
+	}
+	return hits, rows.Err()
 }

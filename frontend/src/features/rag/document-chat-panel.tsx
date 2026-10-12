@@ -4,7 +4,6 @@ import { MessageSquarePlus, MessageSquareText } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import {
   createDocumentRAGConversation,
-  getRAGConversation,
   listDocumentRAGConversations,
 } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
@@ -15,8 +14,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { useChatRun } from './use-chat-run'
+import { useConversationHistory } from './use-conversation-history'
 
 /**
  * A Conversation about one document, for every document type. Each User keeps
@@ -78,13 +79,14 @@ function PanelBody({
   const selected =
     conversations.data?.find((item) => item.id === selectedID) ??
     conversations.data?.[0]
-  const historyKey = ['rag-conversation', userID, selected?.id]
-  const history = useQuery({
+  const {
     queryKey: historyKey,
-    queryFn: ({ signal }) => getRAGConversation(selected!.id, signal),
-    enabled: Boolean(selected),
-    retry: false,
-  })
+    history,
+    error: historyError,
+    hasOlder,
+    loadingOlder,
+    loadOlder,
+  } = useConversationHistory(userID, selected?.id)
   const create = useMutation({
     mutationFn: () => createDocumentRAGConversation(workspaceID, documentID),
     onSuccess: async (conversation) => {
@@ -130,7 +132,14 @@ function PanelBody({
           New chat
         </Button>
       </div>
-      <div className='min-h-0 flex-1 space-y-5 overflow-y-auto p-4'>
+      <ChatScroller
+        resetKey={selected?.id ?? ''}
+        firstKey={history?.messages[0]?.id ?? ''}
+        changeKey={`${history?.messages.at(-1)?.id ?? ''}|${run.view.phase}|${run.view.draft.length}|${history?.actions?.length ?? 0}`}
+        hasOlder={hasOlder}
+        loadingOlder={loadingOlder}
+        onLoadOlder={loadOlder}
+      >
         {conversations.isPending ? (
           <p role='status' className='text-sm text-muted-foreground'>
             Loading chats…
@@ -144,16 +153,16 @@ function PanelBody({
             No chats about this document yet. Start one to ask what it says or
             to have the assistant suggest changes.
           </p>
-        ) : history.isError ? (
+        ) : historyError ? (
           <p role='alert' className='text-sm text-destructive'>
             Could not load this chat.
           </p>
         ) : (
           <>
-            {history.data && history.data.messages.length > 0 ? (
+            {history && history.messages.length > 0 ? (
               <ChatMessages
-                messages={history.data.messages}
-                actions={history.data.actions}
+                messages={history.messages}
+                actions={history.actions}
                 workspaceID={workspaceID}
                 conversationID={selected.id}
                 queryKey={historyKey}
@@ -171,10 +180,11 @@ function PanelBody({
             {create.error.message}
           </p>
         ) : null}
-      </div>
+      </ChatScroller>
       {selected ? (
         <AskForm
           id='document-question'
+          workspaceID={workspaceID}
           pending={run.busy}
           error={run.error}
           placeholder='Ask about this document…'
