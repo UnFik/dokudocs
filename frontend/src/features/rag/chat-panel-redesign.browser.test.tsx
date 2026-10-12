@@ -45,6 +45,7 @@ async function setup(
   options: {
     chats?: Chat[]
     usage?: { used: number; limit: number }
+    role?: 'owner' | 'admin' | 'member'
     skills?: { id: string; name: string; description: string }[]
   } = {}
 ) {
@@ -60,6 +61,17 @@ async function setup(
     calls.push({ route, body })
     if (route === `GET /api/v1/rag/documents/${documentID}/conversations`)
       return Promise.resolve(jsonResponse(chats))
+    if (route === 'GET /api/v1/workspaces')
+      return Promise.resolve(
+        jsonResponse([
+          {
+            id: workspaceID,
+            name: 'Docs team',
+            plan: 'Free',
+            role: options.role ?? 'member',
+          },
+        ])
+      )
     if (route === 'GET /api/v1/rag/usage')
       return Promise.resolve(
         jsonResponse({ ...usage, resetsAt: '2026-11-01T00:00:00Z' })
@@ -263,4 +275,29 @@ it('disables Send with the reset date once the limit is spent', async () => {
     .element(screen.getByRole('button', { name: 'Send' }))
     .toBeDisabled()
   await expect.element(screen.getByText(/limit is spent.*Nov 1/)).toBeVisible()
+})
+
+it('points an Owner at the plan when the limit is spent', async () => {
+  const { screen } = await setup({
+    usage: { used: 3_000_000, limit: 3_000_000 },
+    role: 'owner',
+  })
+  await userEvent.click(screen.getByRole('button', { name: /Ask AI/ }))
+  await expect
+    .element(screen.getByRole('link', { name: 'Manage the plan' }))
+    .toHaveAttribute('href', '/settings')
+})
+
+it('tells a Member to ask an Owner when the limit is spent', async () => {
+  const { screen } = await setup({
+    usage: { used: 3_000_000, limit: 3_000_000 },
+    role: 'member',
+  })
+  await userEvent.click(screen.getByRole('button', { name: /Ask AI/ }))
+  await expect
+    .element(screen.getByText(/Ask an Owner of this workspace to upgrade/))
+    .toBeVisible()
+  await expect
+    .element(screen.getByRole('link', { name: 'Manage the plan' }))
+    .not.toBeInTheDocument()
 })

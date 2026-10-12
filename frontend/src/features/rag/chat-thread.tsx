@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { ArrowUp, Check, Link2, Square, X } from 'lucide-react'
+import { useAuthStore } from '@/stores/auth-store'
 import {
   MAX_DOCUMENT_MENTIONS,
   activeMentionQuery,
@@ -18,6 +19,7 @@ import {
 import {
   decideAgentAction,
   getRAGUsage,
+  listWorkspaces,
   listSkills,
   searchChatDocuments,
   type AgentAction,
@@ -483,6 +485,7 @@ export function AskForm({
     retry: false,
     staleTime: 60_000,
   })
+  const userID = useAuthStore((state) => state.auth.user?.id ?? '')
   const usage = useQuery({
     queryKey: ['rag-usage', workspaceID],
     queryFn: ({ signal }) => getRAGUsage(workspaceID!, signal),
@@ -491,6 +494,16 @@ export function AskForm({
     staleTime: 30_000,
   })
   const spent = Boolean(usage.data && usage.data.used >= usage.data.limit)
+  const workspaces = useQuery({
+    queryKey: ['workspaces', userID],
+    queryFn: ({ signal }) => listWorkspaces(signal),
+    enabled: spent && Boolean(userID),
+    retry: false,
+    staleTime: 60_000,
+  })
+  const isOwner =
+    workspaces.data?.find((workspace) => workspace.id === workspaceID)?.role ===
+    'owner'
   const typed = question.startsWith('/') ? question.slice(1).split(/\s/)[0] : ''
   const matches = question.startsWith('/')
     ? (skills.data ?? []).filter(
@@ -737,7 +750,17 @@ export function AskForm({
       {spent && usage.data ? (
         <p role='status' className='mt-2 text-sm text-muted-foreground'>
           This month&apos;s AI limit is spent. It resets on{' '}
-          {resetLabel(usage.data.resetsAt)}. Your chats stay readable.
+          {resetLabel(usage.data.resetsAt)}. Your chats stay readable.{' '}
+          {isOwner ? (
+            <a
+              href='/settings'
+              className='font-medium text-foreground underline underline-offset-2'
+            >
+              Manage the plan
+            </a>
+          ) : (
+            'Ask an Owner of this workspace to upgrade the plan.'
+          )}
         </p>
       ) : null}
       {error ? (
