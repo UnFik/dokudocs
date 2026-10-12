@@ -26,10 +26,15 @@ function beep() {
 
 /**
  * Tells the User an answer is ready, in the ways they switched on. It stays
- * quiet while they are looking at the page, since the answer is on screen.
+ * quiet while the chat is open on a visible page, since the answer is on
+ * screen; with the panel shut or the tab hidden it speaks up.
  */
-export function announceAnswer(preferences: ChatPreferences, title: string) {
-  if (!document.hidden) return
+export function announceAnswer(
+  preferences: ChatPreferences,
+  title: string,
+  chatOnScreen: boolean
+) {
+  if (chatOnScreen && !document.hidden) return
   if (preferences.sound) beep()
   if (
     preferences.browser &&
