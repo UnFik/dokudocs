@@ -210,12 +210,15 @@ const ragCitationSchema = z.object({
   documentTitle: z.string().optional().default(''),
   projectName: z.string().optional().default(''),
   nodeId: z.string().uuid(),
-  bodyVersion: z.number().int().positive(),
+  // 0 on a source the reader can no longer open.
+  bodyVersion: z.number().int().nonnegative(),
   sourceFingerprint: z.string().optional(),
   sourceChanged: z.boolean().optional().default(false),
   quotedText: z.string(),
   breadcrumb: z.string(),
   ordinal: z.number().int().nonnegative(),
+  /** The reader lost access to the document: the server withholds its title and quote. */
+  unavailable: z.boolean().optional().default(false),
 })
 const ragConversationSchema = z.object({
   id: z.string().uuid(),
