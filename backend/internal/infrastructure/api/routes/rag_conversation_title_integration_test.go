@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"backend/internal/application/airuns"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/infrastructure/runtime/container"
 )
@@ -19,13 +20,17 @@ import (
 type titleModel struct {
 	mu    sync.Mutex
 	shown []string
+	// sawRunOutput is set when a title request still carried the answer run's output.
+	sawRunOutput bool
 }
 
-func (m *titleModel) Answer(_ context.Context, input appchat.ModelInput) (appchat.ModelOutput, error) {
+func (m *titleModel) Answer(ctx context.Context, input appchat.ModelInput) (appchat.ModelOutput, error) {
 	if !strings.HasPrefix(input.Question, appchat.TitleRequest) {
 		return appchat.ModelOutput{}, nil
 	}
 	m.mu.Lock()
+	// The run has ended by now; writing to its output would hit a closed channel.
+	m.sawRunOutput = m.sawRunOutput || airuns.HasOutput(ctx)
 	for _, source := range input.Sources {
 		m.shown = append(m.shown, source.Text)
 	}
@@ -69,7 +74,11 @@ func TestConversationGetsAModelTitleAfterItsFirstAnswer(t *testing.T) {
 	}
 	model.mu.Lock()
 	shown := strings.Join(model.shown, " ")
+	leaked := model.sawRunOutput
 	model.mu.Unlock()
+	if leaked {
+		t.Fatal("the title request carried the answer run's output; it would write to a run that has ended")
+	}
 	if !strings.Contains(shown, "How do I ship a release?") {
 		t.Fatalf("the title model saw %q, want the first question", shown)
 	}
