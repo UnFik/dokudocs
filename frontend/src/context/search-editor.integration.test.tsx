@@ -97,7 +97,7 @@ describe('page search beside the editor', () => {
       .element(screen.getByPlaceholder(PLACEHOLDER))
       .not.toBeInTheDocument()
     await expect
-      .poll(() => editor.view.dom.contains(document.activeElement))
+      .poll(() => document.activeElement === editor.view.dom)
       .toBe(true)
   })
 
