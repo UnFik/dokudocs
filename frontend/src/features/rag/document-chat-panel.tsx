@@ -57,7 +57,9 @@ export function DocumentChatPanel({
   const conversations = useQuery({
     queryKey: listKey,
     queryFn: ({ signal }) => listDocumentRAGConversations(documentID, signal),
-    // EXPERIMENT: only once the panel is open or an answer is awaited.
+    // Not on every document page: with it, the editor smoke specs that select text lost
+    // their selection (E2E failed 4 runs in a row, passed once this was lazy). So the list
+    // is read once the panel is opened or an answer is awaited behind a shut panel.
     enabled: Boolean(userID) && (open || Boolean(awaiting)),
     retry: false,
     // Only while an answer is pending behind a shut panel, even in a hidden tab.
