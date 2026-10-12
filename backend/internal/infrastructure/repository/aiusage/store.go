@@ -100,3 +100,28 @@ func (s *Store) UsageSummary(ctx context.Context, since time.Time, topUsers int)
 	}
 	return out, rows.Err()
 }
+
+// MonthlyTokens counts what a User's answers, Agent runs and titles used in a
+// Workspace. Embeddings and the Superadmin's connection test are not the User's.
+func (s *Store) MonthlyTokens(ctx context.Context, userID, workspaceID uuid.UUID, since time.Time) (int64, error) {
+	var used int64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM ai_model_usage
+		WHERE user_id = $1 AND workspace_id = $2 AND at >= $3
+		  AND purpose <> 'embedding' AND feature <> 'connection_test'
+	`, userID, workspaceID, since).Scan(&used)
+	return used, err
+}
+
+// PlanLimit is the monthly token limit for the Workspace's Plan, or the Free
+// limit when the Plan has none.
+func (s *Store) PlanLimit(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
+	var limit int64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(
+			(SELECT l.monthly_tokens FROM ai_plan_limits l WHERE l.plan = w.plan),
+			(SELECT monthly_tokens FROM ai_plan_limits WHERE plan = 'Free'))
+		FROM workspaces w WHERE w.id = $1
+	`, workspaceID).Scan(&limit)
+	return limit, err
+}

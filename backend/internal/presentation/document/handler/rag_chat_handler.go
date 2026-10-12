@@ -11,6 +11,7 @@ import (
 	"backend/constant"
 	"backend/internal/application/agent"
 	"backend/internal/application/airuns"
+	"backend/internal/application/aiusage"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/domain/model"
 	"backend/internal/presentation/middleware"
@@ -24,6 +25,7 @@ type RAGChatHandler struct {
 	agent   *agentMode
 	runs    *airuns.Service
 	timeout time.Duration
+	limits  *aiusage.Limits
 }
 
 func NewRAGChatHandler(service *appchat.ChatUseCase) *RAGChatHandler {
@@ -46,6 +48,39 @@ type agentMode struct {
 func (h *RAGChatHandler) WithAgent(chat *agent.ChatService, ready func(context.Context) bool, actions ActionLister) *RAGChatHandler {
 	h.agent = &agentMode{chat: chat, ready: ready, actions: actions}
 	return h
+}
+
+// WithLimits refuses a new question once the User has spent the month's Usage limit.
+func (h *RAGChatHandler) WithLimits(limits *aiusage.Limits) *RAGChatHandler {
+	h.limits = limits
+	return h
+}
+
+// checkLimit refuses a new question when the Usage limit is spent.
+func (h *RAGChatHandler) checkLimit(ctx context.Context, actorID, workspaceID uuid.UUID) error {
+	if h.limits == nil {
+		return nil
+	}
+	return h.limits.Check(ctx, actorID, workspaceID)
+}
+
+// Usage reports how much of the month's Usage limit the User has spent in the workspace.
+func (h *RAGChatHandler) Usage(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, err := getUserAndWorkspace(r)
+	if err != nil {
+		writeDocumentError(w, err)
+		return
+	}
+	if h.limits == nil {
+		response.Error(w, http.StatusNotFound, "usage is not tracked")
+		return
+	}
+	status, err := h.limits.Status(r.Context(), actorID, workspaceID)
+	if err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, status)
 }
 
 // WithRuns makes chat jobs outlive the request that started them. A run lasts at
@@ -312,6 +347,10 @@ func (h *RAGChatHandler) Ask(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	if err := h.checkLimit(r.Context(), actorID, workspaceID); err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
 	if h.runs == nil {
 		resolved, err := h.service.ResolveMentions(r.Context(), workspaceID, actorID, strings.TrimSpace(request.Question))
 		if err != nil {
@@ -365,6 +404,8 @@ func authenticatedRAGUserID(r *http.Request) (uuid.UUID, error) {
 
 func writeRAGChatError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, aiusage.ErrLimitReached):
+		response.ErrorWithCode(w, http.StatusTooManyRequests, "ai_limit_reached", "this month's AI usage limit is spent")
 	case errors.Is(err, appchat.ErrTooManyMentions):
 		response.Error(w, http.StatusBadRequest, "mention at most 5 documents in one question")
 	case errors.Is(err, appchat.ErrMentionUnavailable):

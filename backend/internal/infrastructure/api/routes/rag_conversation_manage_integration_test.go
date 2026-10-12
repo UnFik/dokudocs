@@ -30,6 +30,7 @@ import (
 type conversationClient struct {
 	t           *testing.T
 	db          *sql.DB
+	userID      uuid.UUID
 	api         http.Handler
 	token       string
 	workspaceID uuid.UUID
@@ -70,7 +71,7 @@ func newConversationClient(t *testing.T) *conversationClient {
 	if err != nil {
 		t.Fatalf("issue access token: %v", err)
 	}
-	return &conversationClient{t: t, db: db, api: api, token: user.AccessToken, workspaceID: workspaceID}
+	return &conversationClient{t: t, db: db, userID: actorID, api: api, token: user.AccessToken, workspaceID: workspaceID}
 }
 
 func (c *conversationClient) do(method, path, body string) *httptest.ResponseRecorder {

@@ -36,6 +36,9 @@ func (h *RAGChatHandler) startRun(r *http.Request, actorID, workspaceID, convers
 	if err := h.service.Authorize(r.Context(), workspaceID, conversationID, actorID); err != nil {
 		return airuns.Run{}, false, err
 	}
+	if err := h.checkLimit(r.Context(), actorID, workspaceID); err != nil {
+		return airuns.Run{}, false, err
+	}
 	resolved, err := h.service.ResolveMentions(r.Context(), workspaceID, actorID, question)
 	if err != nil {
 		return airuns.Run{}, false, err
