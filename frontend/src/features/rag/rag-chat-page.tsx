@@ -100,8 +100,8 @@ export function RAGChatPage() {
           </p>
         </div>
       </Header>
-      <Main fluid className='flex min-h-0 flex-1 flex-col p-4 sm:p-6'>
-        <div className='grid min-h-0 flex-1 gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]'>
+      <Main fixed fluid className='min-h-0 p-4 sm:p-6'>
+        <div className='grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[17rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-visible'>
           <aside className='flex min-h-0 flex-col rounded-lg border bg-card'>
             <div className='flex items-center justify-between border-b p-3'>
               <h2 className='text-sm font-semibold'>Your chats</h2>
@@ -177,7 +177,7 @@ export function RAGChatPage() {
             </div>
           </aside>
 
-          <section className='flex min-h-[26rem] min-w-0 flex-col rounded-lg border bg-card'>
+          <section className='flex h-[34rem] max-h-[80svh] min-w-0 flex-col rounded-lg border bg-card lg:h-auto lg:max-h-none'>
             {selectedConversation && historyQuery.isPending ? (
               <p role='status' className='m-4 text-sm text-muted-foreground'>
                 Loading conversation…
