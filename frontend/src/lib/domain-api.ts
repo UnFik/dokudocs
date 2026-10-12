@@ -242,6 +242,16 @@ const ragMessageSchema = z.object({
       skill: z.string().optional(),
     })
     .optional(),
+  /** The documents a question names; available is false once the User cannot read one. */
+  mentions: z
+    .array(
+      z.object({
+        documentId: z.string().uuid(),
+        title: z.string(),
+        available: z.boolean(),
+      })
+    )
+    .optional(),
   createdAt: z.string(),
 })
 const agentActionSchema = z.object({
@@ -997,6 +1007,37 @@ export async function getRAGConversation(
       { signal }
     )
   )
+}
+
+export type ChatDocumentHit = {
+  id: string
+  title: string
+  type: string
+  projectName: string
+}
+
+/** Documents the User can read in the workspace whose title contains the text, for the @ picker. */
+export async function searchChatDocuments(
+  workspaceId: string,
+  text: string,
+  signal?: AbortSignal
+): Promise<ChatDocumentHit[]> {
+  const query = text ? `?search=${encodeURIComponent(text)}` : ''
+  return z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        title: z.string(),
+        type: z.string(),
+        projectName: z.string().optional().default(''),
+      })
+    )
+    .parse(
+      await apiFetch<unknown>(`/api/v1/rag/document-search${query}`, {
+        headers: workspaceHeaders(workspaceId),
+        signal,
+      })
+    )
 }
 
 export async function createRAGConversation(

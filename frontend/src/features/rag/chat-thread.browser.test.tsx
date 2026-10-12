@@ -331,3 +331,143 @@ it('stops animating once the run has ended', async () => {
   )
   expect(activity(screen.container)).toHaveLength(0)
 })
+
+const hits = [
+  {
+    id: '11111111-1111-4111-8111-111111111111',
+    title: 'Recovery runbook',
+    type: 'markdown',
+    projectName: 'Platform',
+  },
+  {
+    id: '22222222-2222-4222-8222-222222222222',
+    title: 'Incident [guide]',
+    type: 'markdown',
+    projectName: '',
+  },
+]
+
+async function mountMentionAsk(asked: string[], found = hits) {
+  const searches: string[] = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/api/v1/rag/document-search') {
+        searches.push(url.searchParams.get('search') ?? '')
+        return Promise.resolve(jsonResponse(found))
+      }
+      return Promise.resolve(jsonResponse(skillList))
+    })
+  )
+  const screen = await mount(
+    <AskForm
+      id='q'
+      pending={false}
+      placeholder='Ask'
+      workspaceID={workspaceID}
+      onAsk={(q) => asked.push(q)}
+      language='en'
+      onLanguage={() => {}}
+    />
+  )
+  return {
+    screen,
+    searches,
+    box: screen.getByRole('textbox', { name: 'Ask a question' }),
+  }
+}
+
+it('offers readable documents after @ and sends the picked one as a token', async () => {
+  const asked: string[] = []
+  const { screen, box, searches } = await mountMentionAsk(asked)
+  await userEvent.click(box)
+  await userEvent.keyboard('summarise @recov')
+  await expect
+    .element(screen.getByRole('button', { name: /Recovery runbook/ }))
+    .toBeVisible()
+  // The search follows the typing after a short pause.
+  await vi.waitFor(() => expect(searches.at(-1)).toBe('recov'))
+
+  await userEvent.keyboard('{Enter}')
+  await expect.element(box).toHaveValue('summarise @Recovery runbook ')
+  expect(asked).toEqual([])
+  await userEvent.keyboard('please{Enter}')
+  expect(asked).toEqual([
+    'summarise @[Recovery runbook](doc:11111111-1111-4111-8111-111111111111) please',
+  ])
+})
+
+it('picks a document with the mouse and cleans a title that would break the token', async () => {
+  const asked: string[] = []
+  const { screen, box } = await mountMentionAsk(asked)
+  await userEvent.click(box)
+  await userEvent.keyboard('@')
+  await userEvent.click(
+    screen.getByRole('button', { name: /Incident \[guide\]/ })
+  )
+  await expect.element(box).toHaveValue('@Incident guide ')
+  await userEvent.keyboard('{Enter}')
+  expect(asked).toEqual([
+    '@[Incident guide](doc:22222222-2222-4222-8222-222222222222)',
+  ])
+})
+
+it('sends plain text when the name of a mention is edited afterwards', async () => {
+  const asked: string[] = []
+  const { screen, box } = await mountMentionAsk(asked)
+  await userEvent.click(box)
+  await userEvent.keyboard('@recov')
+  await userEvent.click(
+    screen.getByRole('button', { name: /Recovery runbook/ })
+  )
+  await userEvent.keyboard('{Backspace}{Backspace}x')
+  // Its name was edited, so it is text again and typing after the @ offers the list anew.
+  await expect
+    .element(screen.getByRole('list', { name: 'Documents' }))
+    .toBeVisible()
+  await userEvent.keyboard('{Escape}')
+  await expect
+    .element(screen.getByRole('list', { name: 'Documents' }))
+    .not.toBeInTheDocument()
+  await userEvent.keyboard('{Enter}')
+  expect(asked).toHaveLength(1)
+  expect(asked[0]).not.toContain('doc:')
+})
+
+it('does not open the picker for an email address or without a workspace', async () => {
+  const asked: string[] = []
+  const { screen, box } = await mountMentionAsk(asked)
+  await userEvent.click(box)
+  await userEvent.keyboard('write to me@example')
+  expect(
+    screen.getByRole('list', { name: 'Documents' }).elements()
+  ).toHaveLength(0)
+})
+
+it('stops at five different documents and says so', async () => {
+  const asked: string[] = []
+  const many = Array.from({ length: 6 }, (_, i) => ({
+    id: `${i + 1}${i + 1}${i + 1}${i + 1}${i + 1}${i + 1}${i + 1}${i + 1}-1111-4111-8111-111111111111`,
+    title: `Doc ${i + 1}`,
+    type: 'markdown',
+    projectName: '',
+  }))
+  const { screen, box } = await mountMentionAsk(asked, many)
+  await userEvent.click(box)
+  for (let i = 0; i < 5; i++) {
+    await userEvent.keyboard('@')
+    await userEvent.click(
+      screen.getByRole('button', { name: new RegExp(`Doc ${i + 1}$`) })
+    )
+  }
+  await userEvent.keyboard('@')
+  await expect
+    .element(
+      screen.getByText('You can mention up to 5 documents in one question.')
+    )
+    .toBeVisible()
+  expect(screen.getByRole('button', { name: /Doc 6/ }).elements()).toHaveLength(
+    0
+  )
+})
