@@ -12,6 +12,7 @@ import { RAGChatPage } from './rag-chat-page'
 const workspaceID = '149a8d07-8490-43ed-98fa-ebaa91b05e90'
 const documentID = 'b1f973dd-b554-4540-95c0-4697726ad6e1'
 const idA = '65b7593c-3a2d-45a4-a47d-47e8a1c8136b'
+const opsID = 'a5b7593c-3a2d-45a4-a47d-47e8a1c8136b'
 const idDoc = '95b7593c-3a2d-45a4-a47d-47e8a1c8136b'
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString()
 const hour = 3_600_000
@@ -72,6 +73,22 @@ function setup(listed = [chat(idA, 'Deploy checklist', { unread: true })]) {
         return jsonResponse({ ...known.find((i) => i.id === one[1]), ...body })
       if (/\/read$/.test(url.pathname))
         return new Response(null, { status: 204 })
+      if (url.pathname === '/api/v1/rag/categories')
+        return jsonResponse([
+          { id: opsID, name: 'Ops', projectName: 'Platform' },
+        ])
+      if (/\/runs$/.test(url.pathname) && method === 'POST')
+        return jsonResponse(
+          {
+            id: '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d',
+            kind: 'chat',
+            status: 'failed',
+            draft: '',
+            sequence: 0,
+            error: 'stopped by the test',
+          },
+          202
+        )
       if (/\/runs$/.test(url.pathname)) return jsonResponse(null)
       return jsonResponse({ title: 'not found' }, 404)
     })
@@ -163,4 +180,24 @@ it('opens a document chat by id from the URL even though the list does not carry
         c.method === 'GET' && c.path === `/api/v1/rag/conversations/${idDoc}`
     )
   ).toBe(true)
+})
+
+it('narrows a workspace question to a category', async () => {
+  const { calls, queryClient } = setup()
+  const screen = await page(queryClient)
+  await userEvent.click(screen.getByRole('button', { name: 'Add context' }))
+  await userEvent.click(screen.getByRole('option', { name: /Ops/ }))
+  await expect
+    .element(screen.getByRole('button', { name: 'Remove category Ops' }))
+    .toBeVisible()
+  await userEvent.fill(
+    screen.getByRole('textbox', { name: 'Ask a question' }),
+    'Restart steps'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+  await vi.waitFor(() =>
+    expect(
+      calls.find((c) => c.method === 'POST' && /\/runs$/.test(c.path))?.body
+    ).toMatchObject({ question: 'Restart steps', categoryIds: [opsID] })
+  )
 })

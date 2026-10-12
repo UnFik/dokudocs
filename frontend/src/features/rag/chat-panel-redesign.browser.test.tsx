@@ -94,6 +94,20 @@ async function setup(
       const found = chats.find((item) => item.id === patch[1])!
       return Promise.resolve(jsonResponse({ ...found, ...body }))
     }
+    if (/^POST \/api\/v1\/rag\/conversations\/[^/]+\/runs$/.test(route))
+      return Promise.resolve(
+        jsonResponse(
+          {
+            id: '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d',
+            kind: 'chat',
+            status: 'failed',
+            draft: '',
+            sequence: 0,
+            error: 'stopped by the test',
+          },
+          202
+        )
+      )
     if (route === 'POST /api/v1/rag/conversations')
       return Promise.resolve(
         jsonResponse(chat('85b7593c-3a2d-45a4-a47d-47e8a1c8136b', ''), 201)
@@ -300,4 +314,81 @@ it('tells a Member to ask an Owner when the limit is spent', async () => {
   await expect
     .element(screen.getByRole('link', { name: 'Manage the plan' }))
     .not.toBeInTheDocument()
+})
+
+const runBody = (calls: Calls) =>
+  calls.find(
+    (call) => /\/runs$/.test(call.route) && call.route.startsWith('POST')
+  )?.body as Record<string, unknown>
+
+it('brings another chat in as context and sends its id with the question', async () => {
+  const { screen, calls } = await setup()
+  await userEvent.click(screen.getByRole('button', { name: /Ask AI/ }))
+  await userEvent.click(screen.getByRole('button', { name: 'Add context' }))
+  await expect
+    .element(screen.getByText('Category', { exact: true }))
+    .not.toBeInTheDocument()
+  // The chat being asked in is not offered as its own context.
+  await expect
+    .element(screen.getByRole('option', { name: 'Deploy checklist' }))
+    .not.toBeInTheDocument()
+  await userEvent.click(
+    screen.getByRole('option', { name: 'Schema questions' })
+  )
+  await expect
+    .element(
+      screen.getByRole('button', { name: 'Remove chat Schema questions' })
+    )
+    .toBeVisible()
+  await userEvent.fill(
+    screen.getByRole('textbox', { name: 'Ask a question' }),
+    'Continue from there'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+  await vi.waitFor(() =>
+    expect(runBody(calls)).toMatchObject({
+      question: 'Continue from there',
+      contextChatIds: [idB],
+    })
+  )
+})
+
+it('attaches a text file to one question and can take it off again', async () => {
+  const { screen, calls } = await setup()
+  await userEvent.click(screen.getByRole('button', { name: /Ask AI/ }))
+  await userEvent.click(screen.getByRole('button', { name: 'Add context' }))
+  await userEvent.upload(
+    screen.getByLabelText('Attach a text file'),
+    new File(['The vault code is 314.'], 'notes.txt', { type: 'text/plain' })
+  )
+  await expect
+    .element(screen.getByRole('button', { name: 'Remove file notes.txt' }))
+    .toBeVisible()
+  await userEvent.fill(
+    screen.getByRole('textbox', { name: 'Ask a question' }),
+    'What is the code?'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+  await vi.waitFor(() =>
+    expect(runBody(calls)).toMatchObject({
+      attachments: [{ name: 'notes.txt', text: 'The vault code is 314.' }],
+    })
+  )
+  // The file belonged to that question only.
+  await expect
+    .element(screen.getByRole('button', { name: 'Remove file notes.txt' }))
+    .not.toBeInTheDocument()
+})
+
+it('says why a file was refused instead of attaching it', async () => {
+  const { screen } = await setup()
+  await userEvent.click(screen.getByRole('button', { name: /Ask AI/ }))
+  await userEvent.click(screen.getByRole('button', { name: 'Add context' }))
+  await userEvent.upload(
+    screen.getByLabelText('Attach a text file'),
+    new File(['x'], 'logo.png', { type: 'image/png' })
+  )
+  await expect
+    .element(screen.getByRole('alert'))
+    .toHaveTextContent('logo.png is not a text file')
 })

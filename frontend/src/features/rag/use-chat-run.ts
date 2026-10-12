@@ -7,6 +7,7 @@ import {
   type AIRun,
   type AIRunEvent,
 } from '@/lib/ai-runs'
+import { noExtras, type QuestionExtras } from './question-extras'
 
 export type ToolProgress = {
   name: string
@@ -142,7 +143,7 @@ export function useChatRun({
 }) {
   const [view, dispatch] = useReducer(reduce, idle)
   const watching = useRef<AbortController | null>(null)
-  const retry = useRef<{ question: string; key: string } | null>(null)
+  const retry = useRef<{ identity: string; key: string } | null>(null)
   const answered = useRef(onAnswered)
   useEffect(() => {
     answered.current = onAnswered
@@ -193,21 +194,33 @@ export function useChatRun({
   }, [conversationID, watch])
 
   const ask = useCallback(
-    async (question: string, publicLinkTokens?: string[]) => {
+    async (
+      question: string,
+      publicLinkTokens?: string[],
+      extras: QuestionExtras = noExtras
+    ) => {
       if (!conversationID) return
       // The same question after a failed start reuses its key, so a lost reply
-      // does not start a second answer.
+      // does not start a second answer. Other categories, chats or files make it another question.
+      const identity = JSON.stringify([question, extras])
       const key =
-        retry.current?.question === question
+        retry.current?.identity === identity
           ? retry.current.key
           : crypto.randomUUID()
-      retry.current = { question, key }
+      retry.current = { identity, key }
       dispatch({ type: 'starting', question })
       try {
         const run = await startChatRun(
           workspaceID,
           conversationID,
-          { question, language, publicLinkTokens },
+          {
+            question,
+            language,
+            publicLinkTokens,
+            categoryIds: extras.categoryIds,
+            contextChatIds: extras.contextChatIds,
+            attachments: extras.attachments,
+          },
           key
         )
         retry.current = null

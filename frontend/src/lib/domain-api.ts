@@ -232,6 +232,11 @@ const ragConversationSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 })
+const ragCategorySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  projectName: z.string(),
+})
 const ragUsageSchema = z.object({
   used: z.number().int().nonnegative(),
   limit: z.number().int().positive(),
@@ -344,6 +349,7 @@ export type CommentThread = z.infer<typeof commentThreadSchema>
 export type RAGCitation = z.infer<typeof ragCitationSchema>
 export type RAGConversation = z.infer<typeof ragConversationSchema>
 export type RAGUsage = z.infer<typeof ragUsageSchema>
+export type RAGCategory = z.infer<typeof ragCategorySchema>
 export type RAGMessage = z.infer<typeof ragMessageSchema>
 export type RAGConversationHistory = z.infer<typeof ragHistorySchema>
 export type AgentAction = z.infer<typeof agentActionSchema>
@@ -1135,6 +1141,19 @@ export async function markRAGConversationRead(
   await apiFetch<void>(`/api/v1/rag/conversations/${conversationID}/read`, {
     method: 'POST',
   })
+}
+
+/** The categories the User may narrow a workspace question to. */
+export async function listRAGCategories(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<RAGCategory[]> {
+  return z.array(ragCategorySchema).parse(
+    await apiFetch<unknown>('/api/v1/rag/categories', {
+      signal,
+      headers: workspaceHeaders(workspaceId),
+    })
+  )
 }
 
 /** Tokens the User has used this month in the workspace, and the Plan's limit. */
