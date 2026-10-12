@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
 import { ApiError, apiFetch } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
+import { PlanLimits } from './plan-limits'
 
 const total = {
   calls: z.number(),
@@ -139,6 +140,7 @@ export function PlatformUsagePage() {
             </select>
           </label>
         </div>
+        <PlanLimits />
         {usage.isPending ? <p role='status'>Loading usage…</p> : null}
         {forbidden ? (
           <p role='alert'>Only a superadmin can open this page.</p>
