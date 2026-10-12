@@ -25,9 +25,9 @@ export type PlacedDocumentMention = DocumentMention & {
 
 /** A title as a token label: no brackets, parentheses, "@" or control characters. */
 export function documentLabel(title: string): string {
-  // eslint-disable-next-line no-control-regex
   const cleaned = title
     .replace(/[[\]()@]/g, '')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f\s]+/g, ' ')
   const label = Array.from(cleaned.trim()).slice(0, 100).join('').trim()
   return label || 'Untitled'
