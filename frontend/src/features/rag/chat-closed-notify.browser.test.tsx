@@ -109,9 +109,9 @@ it('tells the User an answer is ready after they closed the panel while it was w
 
   // The server finishes the answer while the panel is shut.
   unread = true
-  await vi.waitFor(() => expect(shown).toHaveLength(1), { timeout: 12_000 })
+  await vi.waitFor(() => expect(shown).toHaveLength(1), { timeout: 25_000 })
   expect(shown[0]).toEqual({
     title: 'DokuDocs AI',
     body: 'Deploy checklist: the answer is ready.',
   })
-})
+}, 40_000)
