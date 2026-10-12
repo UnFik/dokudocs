@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquarePlus, Trash2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import {
-  askRAGQuestion,
   createRAGConversation,
   deleteRAGConversation,
   getRAGConversation,
@@ -14,7 +13,8 @@ import { Button } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
-import { AskForm, ChatMessages } from './chat-thread'
+import { AskForm, ChatMessages, RunProgress } from './chat-thread'
+import { useChatRun } from './use-chat-run'
 
 export function RAGChatPage() {
   const queryClient = useQueryClient()
@@ -47,23 +47,14 @@ export function RAGChatPage() {
       })
     },
   })
-  const askMutation = useMutation({
-    mutationFn: (input: {
-      workspaceID: string
-      conversationID: string
-      question: string
-      language: 'id' | 'en'
-    }) =>
-      askRAGQuestion(input.workspaceID, input.conversationID, {
-        question: input.question,
-        language: input.language,
-        publicLinkTokens: getOpenedPublicLinkTokens(),
+  const run = useChatRun({
+    conversationID: selectedConversation?.id,
+    workspaceID: selectedConversation?.workspaceId ?? '',
+    language,
+    onAnswered: () =>
+      queryClient.invalidateQueries({
+        queryKey: ['rag-conversation', userID, selectedConversation?.id],
       }),
-    onSuccess: async (_answer, input) => {
-      await queryClient.invalidateQueries({
-        queryKey: ['rag-conversation', userID, input.conversationID],
-      })
-    },
   })
   const deleteMutation = useMutation({
     mutationFn: deleteRAGConversation,
@@ -89,14 +80,8 @@ export function RAGChatPage() {
   )
 
   const submitQuestion = (text: string) => {
-    if (!selectedConversation || !canAsk || askMutation.isPending) return
-    askMutation.reset()
-    askMutation.mutate({
-      workspaceID: selectedConversation.workspaceId,
-      conversationID: selectedConversation.id,
-      question: text,
-      language,
-    })
+    if (!selectedConversation || !canAsk || run.busy) return
+    void run.ask(text, getOpenedPublicLinkTokens())
   }
 
   return (
@@ -212,7 +197,8 @@ export function RAGChatPage() {
                   </p>
                 </div>
                 <div className='min-h-0 flex-1 space-y-5 overflow-y-auto p-4'>
-                  {history.messages.length === 0 ? (
+                  {history.messages.length === 0 &&
+                  run.view.phase === 'idle' ? (
                     <p className='text-sm text-muted-foreground'>
                       Ask about policies, decisions, or details in this
                       workspace’s documents. Type / to use a skill.
@@ -230,14 +216,16 @@ export function RAGChatPage() {
                       ]}
                     />
                   )}
+                  <RunProgress view={run.view} />
                 </div>
                 {canAsk ? (
                   <AskForm
                     id='rag-question'
-                    pending={askMutation.isPending}
-                    error={askMutation.error}
+                    pending={run.busy}
+                    error={run.error}
                     placeholder='Ask about documents in this workspace…'
                     onAsk={submitQuestion}
+                    onStop={() => void run.stop()}
                     language={language}
                     onLanguage={setLanguage}
                   />

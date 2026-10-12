@@ -155,3 +155,20 @@ it('offers skills when the question starts with a slash', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Send' }))
   expect(asked).toEqual(['/write-adr for the login change'])
 })
+
+it('says plainly when an approved action never recorded how it ended', async () => {
+  const screen = await mount(
+    <ChatMessages
+      messages={[answer]}
+      actions={[{ ...action, status: 'approved', result: '' }]}
+      workspaceID={workspaceID}
+      conversationID={conversationID}
+      queryKey={['history']}
+    />
+  )
+  await expect.element(screen.getByText(/never recorded/)).toBeVisible()
+  await expect.element(screen.getByText(/It is not run again/)).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Approve' }).elements()
+  ).toHaveLength(0)
+})

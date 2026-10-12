@@ -279,9 +279,9 @@ func (r *Repository) StoreRAGAnswer(ctx context.Context, workspaceID, conversati
 		return errors.New("storing RAG answer requires a transaction-capable database")
 	}
 	return r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
-		if err := lockRAGWorkspaceMembership(ctx, tx, workspaceID, actorID); err != nil {
-			return err
-		}
+		// The answer was made from the sources readable when the question was
+		// asked (ADR-0046). Access revoked or a body edited since then does not
+		// discard it, so only the conversation itself is checked here.
 		var actualWorkspaceID uuid.UUID
 		if err := tx.QueryRowContext(ctx, `
 			SELECT workspace_id FROM rag_conversations
@@ -302,72 +302,43 @@ func (r *Repository) StoreRAGAnswer(ctx context.Context, workspaceID, conversati
 			return err
 		}
 
+		// A source deleted since the snapshot cannot be cited: its row is held
+		// against deletion until this commits, and a missing one is left out.
+		kept := make([]model.RAGCitation, 0, len(citations))
+		chunkExists := make(map[uuid.UUID]bool, len(citations))
 		documentIDs := make([]uuid.UUID, 0, len(citations))
-		seenDocuments := make(map[uuid.UUID]struct{}, len(citations))
+		seenDocuments := make(map[uuid.UUID]bool, len(citations))
 		for _, citation := range citations {
-			if _, exists := seenDocuments[citation.DocumentID]; !exists {
-				seenDocuments[citation.DocumentID] = struct{}{}
+			if !seenDocuments[citation.DocumentID] {
+				seenDocuments[citation.DocumentID] = true
 				documentIDs = append(documentIDs, citation.DocumentID)
 			}
 		}
 		sort.Slice(documentIDs, func(i, j int) bool { return documentIDs[i].String() < documentIDs[j].String() })
+		present := make(map[uuid.UUID]bool, len(documentIDs))
 		for _, documentID := range documentIDs {
-			doc, access, err := lockDocumentAccess(ctx, tx, documentID, workspaceID, actorID, false, nil)
-			if err != nil {
+			var found int
+			err := tx.QueryRowContext(ctx, `SELECT 1 FROM documents WHERE id = $1 FOR KEY SHARE`, documentID).Scan(&found)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
-			if doc.Visibility == "public_link" && !doc.IsDraft {
-				var currentToken sql.NullString
-				if err := tx.QueryRowContext(ctx, "SELECT share_token FROM documents WHERE id = $1", documentID).Scan(&currentToken); err != nil {
-					return err
-				}
-				for _, token := range publicLinkTokens {
-					if currentToken.Valid && token == currentToken.String {
-						access.PublicLinkTokenValid = true
-						break
-					}
-				}
-			}
-			if doc.Visibility == "public_link" && !doc.IsDraft && !access.PublicLinkTokenValid {
-				return constant.ErrForbidden
-			}
-			if !policy.CanReadDocument(doc, access) {
-				return constant.ErrForbidden
-			}
+			present[documentID] = err == nil
 		}
 		for _, citation := range citations {
-			var currentVersion, indexedVersion, chunkVersion int64
-			var currentFingerprint, chunkFingerprint string
-			var nodeID uuid.UUID
-			var quotedText string
-			err := tx.QueryRowContext(ctx, `
-				SELECT d.body_version, ri.indexed_body_version, ri.source_fingerprint,
-				       c.body_version, c.source_fingerprint, c.node_id, c.text
-				FROM documents d
-				JOIN rag_document_indexes ri ON ri.document_id = d.id
-				JOIN rag_chunks c ON c.document_id = d.id
-				LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
-				WHERE d.id = $1 AND c.chunk_id = $2
-				  AND ri.indexed_title = d.title
-				  AND ri.indexed_project_id IS NOT DISTINCT FROM d.project_id
-				  AND ri.indexed_project_name = COALESCE(p.name, '')
-				  AND ri.renderer_version = 2
-			`, citation.DocumentID, citation.ChunkID).Scan(
-				&currentVersion, &indexedVersion, &currentFingerprint,
-				&chunkVersion, &chunkFingerprint, &nodeID, &quotedText,
-			)
-			if err != nil {
-				if errors.Is(err, sql.ErrNoRows) {
-					return constant.ErrDocumentConflict
+			if !present[citation.DocumentID] {
+				continue
+			}
+			if _, known := chunkExists[citation.ChunkID]; !known {
+				var found int
+				err := tx.QueryRowContext(ctx, `SELECT 1 FROM rag_chunks WHERE chunk_id = $1 FOR KEY SHARE`, citation.ChunkID).Scan(&found)
+				if err != nil && !errors.Is(err, sql.ErrNoRows) {
+					return err
 				}
-				return err
+				chunkExists[citation.ChunkID] = err == nil
 			}
-			if currentVersion != citation.BodyVersion || indexedVersion != currentVersion || chunkVersion != currentVersion ||
-				currentFingerprint != citation.SourceFingerprint || chunkFingerprint != citation.SourceFingerprint ||
-				nodeID != citation.NodeID || quotedText != citation.QuotedText {
-				return constant.ErrDocumentConflict
-			}
+			kept = append(kept, citation)
 		}
+		citations = kept
 
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO rag_messages (conversation_id, sequence_no, role, content) VALUES ($1, $2, 'user', $3)
@@ -388,7 +359,7 @@ func (r *Repository) StoreRAGAnswer(ctx context.Context, workspaceID, conversati
 					message_id, document_id, chunk_id, node_id, body_version,
 					source_fingerprint, quoted_text, breadcrumb, ordinal, document_title, project_name
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-			`, answerID, citation.DocumentID, citation.ChunkID, citation.NodeID, citation.BodyVersion,
+			`, answerID, citation.DocumentID, nullableChunk(citation.ChunkID, chunkExists), citation.NodeID, citation.BodyVersion,
 				citation.SourceFingerprint, citation.QuotedText, citation.Breadcrumb, ordinal,
 				citation.DocumentTitle, citation.ProjectName); err != nil {
 				return err
@@ -442,6 +413,15 @@ func (r *Repository) listRAGCitations(ctx context.Context, messageID uuid.UUID) 
 		citations = append(citations, citation)
 	}
 	return citations, rows.Err()
+}
+
+// nullableChunk is the chunk to cite, or nil when it was replaced by a re-index
+// after the snapshot; the quoted text is kept in the citation either way.
+func nullableChunk(id uuid.UUID, exists map[uuid.UUID]bool) any {
+	if exists[id] {
+		return id
+	}
+	return nil
 }
 
 func lockRAGWorkspaceMembership(ctx context.Context, tx database.Queryer, workspaceID, actorID uuid.UUID) error {

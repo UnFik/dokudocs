@@ -108,3 +108,43 @@ export async function apiBlob(endpoint: string): Promise<Blob> {
     throw new ApiError(response.status, response.statusText || 'Request failed')
   return response.blob()
 }
+
+/**
+ * A response read as it arrives (server-sent events). It carries the same session
+ * checks as apiFetch, but the body is left for the caller to read.
+ */
+export async function apiStream(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const url = new URL(endpoint, window.location.origin)
+  if (
+    url.origin !== window.location.origin ||
+    !url.pathname.startsWith('/api/')
+  ) {
+    throw new Error('API requests must use the same-origin /api/ path')
+  }
+  synchronizeSession()
+  const { accessToken, revision } = useAuthStore.getState().auth
+  const headers = new Headers(options.headers)
+  headers.delete('Authorization')
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+  const response = await fetch(url.href, {
+    ...options,
+    headers,
+    credentials: 'same-origin',
+    cache: 'no-store',
+  })
+  synchronizeSession()
+  if (accessToken && useAuthStore.getState().auth.revision !== revision) {
+    void response.body?.cancel()
+    throw new DOMException('Session changed', 'AbortError')
+  }
+  if (!response.ok) {
+    if (response.status === 401 && accessToken)
+      useAuthStore.getState().auth.reset()
+    void response.body?.cancel()
+    throw new ApiError(response.status, response.statusText || 'Request failed')
+  }
+  return response
+}

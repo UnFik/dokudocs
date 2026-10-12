@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"backend/internal/application/agent"
+	"backend/internal/application/airuns"
 	"backend/internal/application/aisettings"
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/domain/contract/mail"
@@ -26,6 +27,8 @@ type Container struct {
 	LiveRooms agent.LiveRooms
 	// AISettings is the Superadmin's AI provider settings; nil leaves their routes off.
 	AISettings *aisettings.Service
+	// AIRuns runs AI jobs on the server, apart from the requests that start them; routes create one when nil.
+	AIRuns *airuns.Service
 	// Mailer sends email; nil when SMTP is not configured.
 	Mailer mail.Mailer
 	// Push sends to a person's browsers; nil when push is not configured.

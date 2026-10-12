@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/application/airuns"
 	"backend/internal/infrastructure/netguard"
 
 	"github.com/google/uuid"
@@ -30,7 +31,21 @@ const (
 var (
 	ErrForbidden = errors.New("only a superadmin can change the AI provider")
 	ErrInvalid   = errors.New("the AI provider setting is not valid")
+	// ErrStale means the setting changed while a Save was testing it, so the Save was not applied.
+	ErrStale = errors.New("the AI provider setting changed while it was being tested; review it and save again")
 )
+
+// TestReport is what a connection test learned besides "it works".
+type TestReport struct {
+	// Streaming is "supported", "unsupported" or "unverified" for the tested address, protocol and model.
+	Streaming string `json:"streaming"`
+}
+
+// Saved is a kept setting with the report of the test that allowed it.
+type Saved struct {
+	Overview Overview   `json:"overview"`
+	Report   TestReport `json:"report"`
+}
 
 // ConnectionError is a failed connection test; Message is safe to show.
 type ConnectionError struct{ Message string }
@@ -68,6 +83,9 @@ type Store interface {
 	Get(ctx context.Context, purpose string) (Record, bool, error)
 	// Put replaces the row for the record's purpose and clears its last error.
 	Put(context.Context, Record) error
+	// Replace is Put only when the row is still the version the caller saw: nil expects no row.
+	// It reports false, writing nothing, when the row changed.
+	Replace(ctx context.Context, record Record, expected *time.Time) (bool, error)
 	Delete(ctx context.Context, purpose string) error
 	RecordError(ctx context.Context, purpose, message string) error
 	AddChange(context.Context, Change) error
@@ -86,7 +104,7 @@ type Cipher interface {
 }
 
 type Tester interface {
-	Test(ctx context.Context, purpose string, cfg Config) error
+	Test(ctx context.Context, purpose string, cfg Config) (TestReport, error)
 }
 
 type Deps struct {
@@ -251,21 +269,43 @@ func (s *Service) prepare(ctx context.Context, purpose string, in Input) (prepar
 	return prepared{}, fmt.Errorf("%w: an API key is required", ErrInvalid)
 }
 
-func (s *Service) test(ctx context.Context, purpose string, cfg Config) error {
-	if err := s.d.Tester.Test(ctx, purpose, cfg); err != nil {
-		return &ConnectionError{Message: err.Error()}
+func (s *Service) test(ctx context.Context, purpose string, cfg Config) (TestReport, error) {
+	_ = airuns.Emit(ctx, "status", map[string]string{"phase": "testing", "purpose": purpose})
+	report, err := s.d.Tester.Test(ctx, purpose, cfg)
+	if err != nil {
+		return TestReport{}, &ConnectionError{Message: err.Error()}
 	}
-	return nil
+	return report, nil
+}
+
+// Validate checks an input the way a test would, without calling the provider.
+func (s *Service) Validate(ctx context.Context, actor uuid.UUID, purpose string, in Input) error {
+	if err := s.authorize(ctx, actor); err != nil {
+		return err
+	}
+	_, err := s.prepare(ctx, purpose, in)
+	return err
+}
+
+// Authorize says whether the actor may change the AI provider, as of now.
+func (s *Service) Authorize(ctx context.Context, actor uuid.UUID) error {
+	return s.authorize(ctx, actor)
 }
 
 // Test checks a setting against the provider without saving it.
 func (s *Service) Test(ctx context.Context, actor uuid.UUID, purpose string, in Input) error {
+	_, err := s.Check(ctx, actor, purpose, in)
+	return err
+}
+
+// Check is Test with what the test learned about the provider.
+func (s *Service) Check(ctx context.Context, actor uuid.UUID, purpose string, in Input) (TestReport, error) {
 	if err := s.authorize(ctx, actor); err != nil {
-		return err
+		return TestReport{}, err
 	}
 	p, err := s.prepare(ctx, purpose, in)
 	if err != nil {
-		return err
+		return TestReport{}, err
 	}
 	return s.test(ctx, purpose, p.cfg)
 }
@@ -273,49 +313,97 @@ func (s *Service) Test(ctx context.Context, actor uuid.UUID, purpose string, in 
 // Save keeps a setting once its connection test passes. A different embedding model
 // than the active one is stored as pending until every document has been re-embedded.
 func (s *Service) Save(ctx context.Context, actor uuid.UUID, purpose string, in Input) (Overview, error) {
+	saved, err := s.SaveChecked(ctx, actor, purpose, in)
+	return saved.Overview, err
+}
+
+// versionOf is when a stored setting was last written; nil when there is none.
+func versionOf(r Record, found bool) *time.Time {
+	if !found {
+		return nil
+	}
+	at := r.UpdatedAt
+	return &at
+}
+
+func sameVersion(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Equal(*b)
+}
+
+// SaveChecked is Save with the test report. The setting is written only if it is
+// still as it was when the test began, so a slow Save cannot overwrite a newer one.
+func (s *Service) SaveChecked(ctx context.Context, actor uuid.UUID, purpose string, in Input) (Saved, error) {
 	if err := s.authorize(ctx, actor); err != nil {
-		return Overview{}, err
+		return Saved{}, err
 	}
 	p, err := s.prepare(ctx, purpose, in)
 	if err != nil {
-		return Overview{}, err
+		return Saved{}, err
 	}
-	if err := s.test(ctx, purpose, p.cfg); err != nil {
-		return Overview{}, err
+	seen := map[string]*time.Time{}
+	for _, name := range []string{purpose, PurposeEmbeddingPending} {
+		record, found, err := s.d.Store.Get(ctx, name)
+		if err != nil {
+			return Saved{}, err
+		}
+		seen[name] = versionOf(record, found)
 	}
+	report, err := s.test(ctx, purpose, p.cfg)
+	if err != nil {
+		return Saved{}, err
+	}
+	// The test can take a while: the actor may have lost the role meanwhile.
+	if err := s.authorize(ctx, actor); err != nil {
+		return Saved{}, err
+	}
+	_ = airuns.Emit(ctx, "status", map[string]string{"phase": "saving", "purpose": purpose})
 	sealed, err := s.d.Cipher.Seal(p.cfg.APIKey)
 	if err != nil {
-		return Overview{}, err
+		return Saved{}, err
 	}
 	target := purpose
 	previous, hadPrevious, err := s.d.Store.Get(ctx, purpose)
 	if err != nil {
-		return Overview{}, err
+		return Saved{}, err
 	}
 	if purpose == PurposeEmbedding && hadPrevious {
 		if s.d.ProviderName(previous.BaseURL) != s.d.ProviderName(p.cfg.BaseURL) || previous.Model != p.cfg.Model {
 			target = PurposeEmbeddingPending
 			if previous, hadPrevious, err = s.d.Store.Get(ctx, target); err != nil {
-				return Overview{}, err
+				return Saved{}, err
 			}
-		} else if err := s.d.Store.Delete(ctx, PurposeEmbeddingPending); err != nil {
-			return Overview{}, err
 		}
 	}
+	if !sameVersion(seen[target], versionOf(previous, hadPrevious)) {
+		return Saved{}, ErrStale
+	}
 	actorID := actor
-	if err := s.d.Store.Put(ctx, Record{
+	written, err := s.d.Store.Replace(ctx, Record{
 		Purpose: target, BaseURL: p.cfg.BaseURL, Protocol: p.cfg.Protocol, Model: p.cfg.Model,
 		APIKeyCiphertext: sealed, UpdatedBy: &actorID, UpdatedAt: time.Now(),
-	}); err != nil {
-		return Overview{}, err
+	}, seen[target])
+	if err != nil {
+		return Saved{}, err
+	}
+	if !written {
+		return Saved{}, ErrStale
+	}
+	if purpose == PurposeEmbedding && target == PurposeEmbedding {
+		if err := s.d.Store.Delete(ctx, PurposeEmbeddingPending); err != nil {
+			return Saved{}, err
+		}
 	}
 	if err := s.d.Store.AddChange(ctx, Change{
 		Purpose: target, ChangedBy: actor, Changes: diff(previous, hadPrevious, p),
 	}); err != nil {
-		return Overview{}, err
+		return Saved{}, err
 	}
 	s.changed()
-	return s.overview(ctx)
+	overview, err := s.overview(ctx)
+	return Saved{Overview: overview, Report: report}, err
 }
 
 func (s *Service) changed() {

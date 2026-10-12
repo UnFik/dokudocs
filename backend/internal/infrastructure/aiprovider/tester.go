@@ -7,6 +7,7 @@ import (
 	"time"
 
 	agentapp "backend/internal/application/agent"
+	"backend/internal/application/airuns"
 	app "backend/internal/application/aisettings"
 	"backend/internal/application/aiusage"
 	appchat "backend/internal/application/rag/usecase"
@@ -38,9 +39,16 @@ func (t *Tester) openaiConfig(purpose string, cfg app.Config) openai.Config {
 	return out
 }
 
-func (t *Tester) Test(ctx context.Context, purpose string, cfg app.Config) error {
+// Test makes one request and reports what it learned. Inside an AI run the request
+// streams, so the report can say whether the provider streams; elsewhere it stays
+// unverified. The sample text the model writes is dropped: it is not a chat message.
+func (t *Tester) Test(ctx context.Context, purpose string, cfg app.Config) (app.TestReport, error) {
 	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()
+	ctx, streams := openai.WithStreamReport(ctx)
+	if airuns.HasOutput(ctx) {
+		ctx = airuns.WithOutput(ctx, func(airuns.Event) error { return nil })
+	}
 	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: aiusage.FeatureConnectionTest})
 	var err error
 	switch purpose {
@@ -56,15 +64,20 @@ func (t *Tester) Test(ctx context.Context, purpose string, cfg app.Config) error
 			{Role: "user", Content: "ping"},
 		}, []agentapp.ToolSpec{{Name: "ping", Description: "Answers pong.", Parameters: map[string]any{"type": "object", "properties": map[string]any{}}}})
 		if err == nil && len(reply.ToolCalls) == 0 {
-			return errors.New("the model answered without calling a tool; pick a model and protocol that support tool calling")
+			return app.TestReport{}, errors.New("the model answered without calling a tool; pick a model and protocol that support tool calling")
 		}
 	default:
 		_, err = openai.NewEmbedding(t.openaiConfig(purpose, cfg)).Embed(ctx, []string{"connection test"})
 	}
 	if err != nil {
-		return errors.New(trimPrefix(err.Error()))
+		return app.TestReport{}, errors.New(trimPrefix(err.Error()))
 	}
-	return nil
+	report := app.TestReport{Streaming: streams.Supported()}
+	if purpose == app.PurposeEmbedding {
+		// A vector has no text to stream.
+		report.Streaming = "unverified"
+	}
+	return report, nil
 }
 
 // trimPrefix drops the generic "RAG model provider is unavailable: " lead so the

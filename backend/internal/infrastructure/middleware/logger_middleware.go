@@ -19,6 +19,9 @@ type statusRecorder struct {
 	status int
 }
 
+// Unwrap lets http.ResponseController reach Flush and deadlines on the real writer.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	hijacker, ok := r.ResponseWriter.(http.Hijacker)
 	if !ok {
