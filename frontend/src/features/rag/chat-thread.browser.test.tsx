@@ -172,3 +172,115 @@ it('says plainly when an approved action never recorded how it ended', async () 
     screen.getByRole('button', { name: 'Approve' }).elements()
   ).toHaveLength(0)
 })
+
+const skillList = {
+  skills: [
+    {
+      id: '0f8fad5b-d9cb-469f-a165-70867728950e',
+      name: 'write-adr',
+      description: 'Draft an ADR',
+    },
+    {
+      id: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+      name: 'summary',
+      description: 'Three bullets',
+    },
+  ],
+}
+
+async function mountAsk(asked: string[]) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(jsonResponse(skillList)))
+  )
+  const screen = await mount(
+    <AskForm
+      id='q'
+      pending={false}
+      placeholder='Ask'
+      onAsk={(q) => asked.push(q)}
+      language='en'
+      onLanguage={() => {}}
+    />
+  )
+  return {
+    screen,
+    box: screen.getByRole('textbox', { name: 'Ask a question' }),
+  }
+}
+
+it('sends on Enter', async () => {
+  const asked: string[] = []
+  const { box } = await mountAsk(asked)
+  await userEvent.click(box)
+  await userEvent.keyboard('How does recovery work?{Enter}')
+  expect(asked).toEqual(['How does recovery work?'])
+  await expect.element(box).toHaveValue('')
+})
+
+it('starts a new line on Shift+Enter and sends nothing', async () => {
+  const asked: string[] = []
+  const { box } = await mountAsk(asked)
+  await userEvent.click(box)
+  await userEvent.keyboard('first{Shift>}{Enter}{/Shift}second')
+  await expect.element(box).toHaveValue('first\nsecond')
+  expect(asked).toEqual([])
+})
+
+it('does not send an empty question on Enter', async () => {
+  const asked: string[] = []
+  const { box } = await mountAsk(asked)
+  await userEvent.click(box)
+  await userEvent.keyboard('   {Enter}')
+  expect(asked).toEqual([])
+})
+
+it('leaves Enter to the input method while text is being composed', async () => {
+  const asked: string[] = []
+  const { box } = await mountAsk(asked)
+  await userEvent.fill(box, 'konnichiwa')
+  const element = box.element()
+  element.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'Enter',
+      isComposing: true,
+      bubbles: true,
+      cancelable: true,
+    })
+  )
+  expect(asked).toEqual([])
+  await expect.element(box).toHaveValue('konnichiwa')
+})
+
+it('picks the highlighted skill on Enter instead of sending', async () => {
+  const asked: string[] = []
+  const { screen, box } = await mountAsk(asked)
+  await userEvent.click(box)
+  await userEvent.keyboard('/')
+  await expect
+    .element(screen.getByRole('button', { name: /\/write-adr/ }))
+    .toBeVisible()
+  await userEvent.keyboard('{ArrowDown}{Enter}')
+  await expect.element(box).toHaveValue('/summary ')
+  expect(asked).toEqual([])
+  await userEvent.keyboard('in short{Enter}')
+  expect(asked).toEqual(['/summary in short'])
+})
+
+it('keeps Enter as a new line on a touch keyboard', async () => {
+  const asked: string[] = []
+  const { box } = await mountAsk(asked)
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: query === '(pointer: coarse)',
+      media: query,
+      addEventListener() {},
+      removeEventListener() {},
+    }))
+  )
+  await userEvent.click(box)
+  await userEvent.keyboard('one{Enter}two')
+  await expect.element(box).toHaveValue('one\ntwo')
+  expect(asked).toEqual([])
+})
