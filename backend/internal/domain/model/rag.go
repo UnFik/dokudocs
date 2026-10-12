@@ -78,4 +78,6 @@ type RAGDocumentHit struct {
 	Title       string    `json:"title"`
 	Type        string    `json:"type"`
 	ProjectName string    `json:"projectName"`
+	// Categories are the document's categories in its project, in the project's order.
+	Categories []string `json:"categories"`
 }
