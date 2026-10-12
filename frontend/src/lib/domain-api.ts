@@ -1014,6 +1014,8 @@ export type ChatDocumentHit = {
   title: string
   type: string
   projectName: string
+  /** In the project's order. */
+  categories: string[]
 }
 
 /** Documents the User can read in the workspace whose title contains the text, for the @ picker. */
@@ -1030,6 +1032,7 @@ export async function searchChatDocuments(
         title: z.string(),
         type: z.string(),
         projectName: z.string().optional().default(''),
+        categories: z.array(z.string()).optional().default([]),
       })
     )
     .parse(

@@ -6,11 +6,9 @@ import {
   Copy,
   Eye,
   HelpCircle,
-  Moon,
   Redo2,
   RefreshCw,
   Search,
-  Sun,
   Undo2,
   Zap,
   ZapOff,
@@ -96,7 +94,7 @@ export function UnifiedMonacoEditor({
   showLiveRenderToggle = true,
   showSyncScrollToggle = false,
 }: UnifiedMonacoEditorProps) {
-  const { resolvedTheme, setTheme } = useTheme()
+  const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
 
   const [scope] = useState(getLocalUserScope)
@@ -1062,31 +1060,6 @@ export function UnifiedMonacoEditor({
                       navigateToSource,
                     })
                   : previewContent}
-
-                <div className='pointer-events-auto absolute right-5 bottom-5 z-30 select-none'>
-                  <div className='flex items-center gap-1 rounded-md border border-border/80 bg-background/90 p-1 transition-all hover:border-border'>
-                    <Button
-                      variant='ghost'
-                      size='icon'
-                      onClick={() =>
-                        setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
-                      }
-                      className='size-7 cursor-pointer rounded-md text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground'
-                      title={
-                        resolvedTheme === 'dark'
-                          ? 'Switch to Light theme'
-                          : 'Switch to Dark theme'
-                      }
-                      aria-label='Toggle theme'
-                    >
-                      {resolvedTheme === 'dark' ? (
-                        <Sun className='size-3.5 text-muted-foreground transition-transform duration-300 hover:rotate-45' />
-                      ) : (
-                        <Moon className='size-3.5 text-muted-foreground transition-transform duration-300 hover:-rotate-12' />
-                      )}
-                    </Button>
-                  </div>
-                </div>
               </div>
             </div>
           )}

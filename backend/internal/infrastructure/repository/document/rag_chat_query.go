@@ -595,7 +595,27 @@ func (r *Repository) SearchDocumentTitles(ctx context.Context, workspaceID, acto
 		if err := rows.Scan(&hit.ID, &hit.Title, &hit.Type, &hit.ProjectName); err != nil {
 			return nil, err
 		}
+		hit.Categories = []string{}
 		hits = append(hits, hit)
 	}
-	return hits, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(hits) == 0 {
+		return hits, nil
+	}
+	ids := make([]uuid.UUID, len(hits))
+	for i, hit := range hits {
+		ids[i] = hit.ID
+	}
+	categories, err := r.fetchCategoriesForDocuments(ctx, ids, actorID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range hits {
+		if names := categories[hits[i].ID]; len(names) > 0 {
+			hits[i].Categories = names
+		}
+	}
+	return hits, nil
 }

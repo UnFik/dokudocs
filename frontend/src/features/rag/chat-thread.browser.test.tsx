@@ -196,14 +196,16 @@ async function mountAsk(asked: string[]) {
     vi.fn(() => Promise.resolve(jsonResponse(skillList)))
   )
   const screen = await mount(
-    <AskForm
-      id='q'
-      pending={false}
-      placeholder='Ask'
-      onAsk={(q) => asked.push(q)}
-      language='en'
-      onLanguage={() => {}}
-    />
+    <div style={{ paddingTop: 360 }}>
+      <AskForm
+        id='q'
+        pending={false}
+        placeholder='Ask'
+        onAsk={(q) => asked.push(q)}
+        language='en'
+        onLanguage={() => {}}
+      />
+    </div>
   )
   return {
     screen,
@@ -338,6 +340,7 @@ const hits = [
     title: 'Recovery runbook',
     type: 'markdown',
     projectName: 'Platform',
+    categories: ['Ops', 'On-call', 'Runbooks'],
   },
   {
     id: '22222222-2222-4222-8222-222222222222',
@@ -361,15 +364,17 @@ async function mountMentionAsk(asked: string[], found = hits) {
     })
   )
   const screen = await mount(
-    <AskForm
-      id='q'
-      pending={false}
-      placeholder='Ask'
-      workspaceID={workspaceID}
-      onAsk={(q) => asked.push(q)}
-      language='en'
-      onLanguage={() => {}}
-    />
+    <div style={{ paddingTop: 360 }}>
+      <AskForm
+        id='q'
+        pending={false}
+        placeholder='Ask'
+        workspaceID={workspaceID}
+        onAsk={(q) => asked.push(q)}
+        language='en'
+        onLanguage={() => {}}
+      />
+    </div>
   )
   return {
     screen,
@@ -458,7 +463,7 @@ it('stops at five different documents and says so', async () => {
   for (let i = 0; i < 5; i++) {
     await userEvent.keyboard('@')
     await userEvent.click(
-      screen.getByRole('button', { name: new RegExp(`Doc ${i + 1}$`) })
+      screen.getByRole('button', { name: new RegExp(`^Doc ${i + 1}\\b`) })
     )
   }
   await userEvent.keyboard('@')
@@ -517,4 +522,56 @@ it('shows the question of a running answer with its documents as names', async (
   )
   await expect.element(screen.getByText('@Runbook')).toBeVisible()
   expect(screen.container.textContent).not.toContain('doc:')
+})
+
+it('opens the picker above the box, so it never pushes the Send button down', async () => {
+  const asked: string[] = []
+  const { screen, box } = await mountMentionAsk(asked)
+  const form = box.element().closest('form')!
+  const heightBefore = form.getBoundingClientRect().height
+  await userEvent.click(box)
+  await userEvent.keyboard('@')
+  const list = screen.getByRole('list', { name: 'Documents' })
+  await expect.element(list).toBeVisible()
+  const listBox = list.element().getBoundingClientRect()
+  const boxTop = box.element().getBoundingClientRect().top
+  expect(listBox.bottom).toBeLessThanOrEqual(boxTop + 1)
+  expect(form.getBoundingClientRect().height).toBe(heightBefore)
+})
+
+it('opens the skills above the box as well', async () => {
+  const asked: string[] = []
+  const { screen, box } = await mountAsk(asked)
+  await userEvent.click(box)
+  await userEvent.keyboard('/')
+  const list = screen.getByRole('list', { name: 'Skills' })
+  await expect.element(list).toBeVisible()
+  expect(list.element().getBoundingClientRect().bottom).toBeLessThanOrEqual(
+    box.element().getBoundingClientRect().top + 1
+  )
+})
+
+it('tells project, type and the first two categories of each document', async () => {
+  const asked: string[] = []
+  const bare = {
+    id: '33333333-3333-4333-8333-333333333333',
+    title: 'Scratch diagram',
+    type: 'dbdiagram',
+    projectName: '',
+    categories: [],
+  }
+  const { screen, box } = await mountMentionAsk(asked, [...hits, bare])
+  await userEvent.click(box)
+  await userEvent.keyboard('@')
+  const first = screen.getByRole('button', { name: /Recovery runbook/ })
+  await expect.element(first).toBeVisible()
+  await expect
+    .element(first.getByText('Platform · Markdown · Ops, On-call +1'))
+    .toBeVisible()
+  // Nothing is lost to the cut: the full list is on the row's title.
+  expect(
+    first.getByTitle('Platform · Markdown · Ops, On-call, Runbooks').elements()
+  ).toHaveLength(1)
+  const second = screen.getByRole('button', { name: /Scratch diagram/ })
+  await expect.element(second.getByText('No project · DBML')).toBeVisible()
 })
