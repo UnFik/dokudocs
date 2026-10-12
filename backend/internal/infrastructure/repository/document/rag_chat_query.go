@@ -176,6 +176,7 @@ func (r *Repository) ListDocumentRAGConversations(ctx context.Context, actorID, 
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at, EXISTS (SELECT 1 FROM rag_messages m WHERE m.conversation_id = rag_conversations.conversation_id AND m.role = 'assistant' AND m.created_at > rag_conversations.last_read_at)
 		FROM rag_conversations WHERE creator_id = $1 AND document_id = $2
+		  AND NOT EXISTS (SELECT 1 FROM documents d WHERE d.id = $2 AND d.deleted_at IS NOT NULL)
 		ORDER BY `+conversationListOrder+`
 	`, actorID, documentID)
 	if err != nil {
