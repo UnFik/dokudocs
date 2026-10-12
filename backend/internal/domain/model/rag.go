@@ -71,3 +71,11 @@ type RAGConversationHistory struct {
 	Conversation RAGConversation `json:"conversation"`
 	Messages     []RAGMessage    `json:"messages"`
 }
+
+// RAGDocumentHit is a document a question can name: just enough to pick it.
+type RAGDocumentHit struct {
+	ID          uuid.UUID `json:"id"`
+	Title       string    `json:"title"`
+	Type        string    `json:"type"`
+	ProjectName string    `json:"projectName"`
+}

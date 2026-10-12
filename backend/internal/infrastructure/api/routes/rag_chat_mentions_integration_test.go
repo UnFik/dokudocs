@@ -147,3 +147,58 @@ func TestAChipForADeletedDocumentIsMarkedUnavailable(t *testing.T) {
 		t.Errorf("mentions after the document was deleted = %+v, want one unavailable chip keeping its title", got)
 	}
 }
+
+type documentHits struct {
+	Data []struct {
+		ID          string  `json:"id"`
+		Title       string  `json:"title"`
+		Type        string  `json:"type"`
+		ProjectName string  `json:"projectName"`
+		Content     *string `json:"content"`
+	} `json:"data"`
+}
+
+func (r *runEnv) searchDocuments(u tokenUser, query string) (int, documentHits) {
+	r.t.Helper()
+	res := r.do(http.MethodGet, "/api/v1/rag/document-search?"+query, nil, r.headers(u, ""), "")
+	var out documentHits
+	res.json(&out)
+	return res.Code, out
+}
+
+func TestTheMentionPickerFindsReadableDocumentsByTitle(t *testing.T) {
+	r := newRunEnv(t)
+	runbook := r.newDocument(r.ws, "Recovery runbook")
+	r.newDocument(r.ws, "Hiring plan")
+	trashed := r.newDocument(r.ws, "Recovery notes (old)")
+	if res := r.do(http.MethodDelete, "/api/v1/documents/"+trashed, nil, r.headers(r.owner, ""), ""); res.Code >= 300 {
+		t.Fatalf("trash = %d", res.Code)
+	}
+
+	code, hits := r.searchDocuments(r.owner, "search=recov")
+	if code != http.StatusOK || len(hits.Data) != 1 || hits.Data[0].ID != runbook || hits.Data[0].Title != "Recovery runbook" {
+		t.Fatalf("search=recov = %d %+v, want only the live runbook", code, hits.Data)
+	}
+	if hits.Data[0].Content != nil {
+		t.Error("a picker row carries the document body")
+	}
+
+	// An empty search lists the most recently changed documents, within the limit.
+	_, recent := r.searchDocuments(r.owner, "limit=2")
+	if len(recent.Data) != 2 {
+		t.Errorf("limit=2 returned %d rows", len(recent.Data))
+	}
+	// The text of a document is not searched, only its title.
+	if _, body := r.searchDocuments(r.owner, "search=zzz-not-a-title"); len(body.Data) != 0 {
+		t.Errorf("a title that matches nothing returned %d rows", len(body.Data))
+	}
+}
+
+func TestTheMentionPickerNeverListsADocumentTheUserCannotRead(t *testing.T) {
+	r := newRunEnv(t)
+	r.newDocument(r.ws, "Shared plan")
+	outsider := r.registerWithToken("")
+	if code, hits := r.searchDocuments(outsider, "search=plan"); code == http.StatusOK && len(hits.Data) != 0 {
+		t.Fatalf("a non-member found %+v", hits.Data)
+	}
+}
