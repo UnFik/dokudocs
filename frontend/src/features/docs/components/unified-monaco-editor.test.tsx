@@ -186,20 +186,19 @@ describe('UnifiedMonacoEditor component', () => {
     )
   })
 
-  it('renders floating theme toggle button in preview pane and allows clicking', async () => {
-    const handleChange = vi.fn()
+  it('leaves the theme switch to the document controls, so there is only one', async () => {
     const screen = await render(
       <UnifiedMonacoEditor
         content='# Preview test'
-        onChange={handleChange}
+        onChange={vi.fn()}
         language='markdown'
         previewContent={<div>Preview Content</div>}
       />
     )
 
-    const themeToggleBtn = screen.getByRole('button', { name: /toggle theme/i })
-    await expect.element(themeToggleBtn).toBeInTheDocument()
-    await userEvent.click(themeToggleBtn)
-    await expect.element(themeToggleBtn).toBeInTheDocument()
+    await expect.element(screen.getByText('Preview Content')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /toggle theme/i }).elements()
+    ).toHaveLength(0)
   })
 })
