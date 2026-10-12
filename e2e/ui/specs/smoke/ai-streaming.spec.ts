@@ -294,6 +294,9 @@ test('@smoke: on every kind of document the AI panel has the one-row header and 
       await expect(options, where).toBeVisible({ timeout: 20_000 })
       await expect(page.getByRole('button', { name: 'New chat' }), where).toBeVisible()
       await expect(page.getByRole('button', { name: 'Close' }), where).toBeVisible()
+      // The box appears once there is a chat to write in.
+      await page.getByRole('button', { name: 'New chat' }).click()
+      await expect(page.getByRole('textbox', { name: 'Ask a question' }), where).toBeVisible()
       // The composer has no visible label and sends with an icon.
       await expect(page.getByText('Ask a question', { exact: true }), where).toHaveCount(0)
       await expect(page.getByRole('button', { name: 'Add context' }), where).toBeVisible()
