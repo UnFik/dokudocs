@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 
@@ -87,6 +88,11 @@ Before you change a document, read it with read_document and pass its version to
 In this chat, Markdown changes become suggestions the User reviews, and other changes wait for the User to approve them; say so plainly when you ask for one.
 Do not invent documents, people or facts. If the documents do not say, say that.
 Answer in the User's language (%s). Use plain text with Markdown formatting; never include images or links to outside addresses.`
+
+// logToolFailure records the real cause: errorText hides it from the model and the User.
+func logToolFailure(ctx context.Context, tool string, err error) {
+	slog.WarnContext(ctx, "agent tool failed", "tool", tool, "error", err)
+}
 
 func errorText(err error) string {
 	var refusal *ToolError
@@ -196,6 +202,7 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 		}
 		reply, err := c.model.Step(ctx, messages, specs)
 		if err != nil {
+			slog.WarnContext(ctx, "agent model step failed", "conversation_id", input.ConversationID, "step", step+1, "error", err)
 			return ChatAnswer{}, err
 		}
 		if len(reply.ToolCalls) == 0 {
@@ -217,6 +224,7 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 	}
 	raw, _ := json.Marshal(meta)
 	if err := c.convs.StoreAgentAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, input.Extras.Annotate(input.Question), answer.Text, raw); err != nil {
+		slog.ErrorContext(ctx, "agent answer not stored", "conversation_id", input.ConversationID, "error", err)
 		return ChatAnswer{}, err
 	}
 	return answer, nil
@@ -227,6 +235,7 @@ func (c *ChatService) run(ctx context.Context, actor Actor, conversationID uuid.
 	_ = airuns.Emit(ctx, "tool_status", map[string]string{"name": tc.Name, "state": "running"})
 	out, err := c.exec.Call(ctx, actor, tc.Name, tc.Arguments)
 	if err != nil {
+		logToolFailure(ctx, tc.Name, err)
 		_ = airuns.Emit(ctx, "tool_status", map[string]string{"name": tc.Name, "state": "failed"})
 		return `{"error":` + mustJSON(errorText(err)) + `}`
 	}
@@ -235,6 +244,7 @@ func (c *ChatService) run(ctx context.Context, actor Actor, conversationID uuid.
 			ConversationID: conversationID, UserID: actor.UserID, Tool: out.Pending.Tool, Arguments: out.Pending.Arguments, Summary: out.Pending.Summary,
 		})
 		if err != nil {
+			slog.ErrorContext(ctx, "pending action not saved", "tool", out.Pending.Tool, "error", err)
 			return `{"error":"the request could not be saved for approval"}`
 		}
 		answer.Actions = append(answer.Actions, action)
@@ -281,6 +291,7 @@ func (c *ChatService) Decide(ctx context.Context, userID, actionID uuid.UUID, ap
 	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: aiusage.FeatureChatWorkspace, UserID: userID, WorkspaceID: actor.WorkspaceID})
 	out, err := c.exec.Call(ctx, actor, action.Tool, action.Arguments)
 	if err != nil {
+		logToolFailure(ctx, action.Tool, err)
 		action.Status, action.Result = "failed", errorText(err)
 	} else {
 		action.Result = out.Text

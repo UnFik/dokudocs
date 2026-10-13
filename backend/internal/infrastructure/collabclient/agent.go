@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"backend/internal/application/agent"
@@ -105,5 +106,8 @@ func refusal(status int, raw []byte) error {
 	case http.StatusUnprocessableEntity:
 		return &agent.ToolError{Message: body.Error}
 	}
-	return fmt.Errorf("collaboration service answered %d", status)
+	if body.Error != "" {
+		return fmt.Errorf("collaboration service answered %d: %s", status, body.Error)
+	}
+	return fmt.Errorf("collaboration service answered %d: %s", status, strings.TrimSpace(string(raw)))
 }
