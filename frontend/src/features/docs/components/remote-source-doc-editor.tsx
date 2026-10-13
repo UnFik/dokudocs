@@ -32,6 +32,7 @@ import {
 import { DbmlEditor } from './dbml-editor'
 import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
+import { DocBodySkeleton } from './document-skeleton'
 import { EditorHeader } from './editor-header'
 import { MermaidEditor } from './mermaid-editor'
 import { RecoveryCopyNotice } from './recovery-copy-notice'
@@ -451,9 +452,7 @@ function SourceEditor({
       <div className='flex flex-1 overflow-hidden'>
         <div className='min-w-0 flex-1 overflow-hidden'>
           {!collab ? (
-            <div className='p-6 text-sm text-muted-foreground'>
-              Loading diagram…
-            </div>
+            <DocBodySkeleton label='Loading diagram' className='p-6' />
           ) : doc.type === 'dbdiagram' ? (
             <DbmlEditor
               docId={doc.id}
