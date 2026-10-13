@@ -116,3 +116,39 @@ func (s *Service) requireSuperadmin(ctx context.Context, actor uuid.UUID) error 
 	}
 	return nil
 }
+
+// Quota is one User's spend in one Workspace this month, for the Superadmin.
+type Quota struct {
+	UserID      uuid.UUID `json:"userId"`
+	Name        string    `json:"name"`
+	Email       string    `json:"email"`
+	WorkspaceID uuid.UUID `json:"workspaceId"`
+	Workspace   string    `json:"workspace"`
+	Plan        string    `json:"plan"`
+	Used        int64     `json:"used"`
+	Limit       int64     `json:"limit"`
+}
+
+// QuotaStore lists and resets the month's spend per User and Workspace.
+type QuotaStore interface {
+	ListQuotas(ctx context.Context, since time.Time) ([]Quota, error)
+	ResetQuota(ctx context.Context, userID, workspaceID uuid.UUID) error
+}
+
+// Quotas lists this month's use per User and Workspace; only a Superadmin may.
+func (s *Service) Quotas(ctx context.Context, actor uuid.UUID, store QuotaStore) ([]Quota, error) {
+	if err := s.requireSuperadmin(ctx, actor); err != nil {
+		return nil, err
+	}
+	now := s.now().UTC()
+	return store.ListQuotas(ctx, time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC))
+}
+
+// ResetQuota gives a User their full allowance back in a Workspace for the rest
+// of the month. Their recorded usage stays in the model usage table.
+func (s *Service) ResetQuota(ctx context.Context, actor uuid.UUID, store QuotaStore, userID, workspaceID uuid.UUID) error {
+	if err := s.requireSuperadmin(ctx, actor); err != nil {
+		return err
+	}
+	return store.ResetQuota(ctx, userID, workspaceID)
+}

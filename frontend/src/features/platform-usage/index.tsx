@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ApiError, apiFetch } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { PlanLimits } from './plan-limits'
+import { UserQuotas } from './user-quotas'
 
 const total = {
   calls: z.number(),
@@ -141,6 +142,7 @@ export function PlatformUsagePage() {
           </label>
         </div>
         <PlanLimits />
+        <UserQuotas />
         {usage.isPending ? <p role='status'>Loading usage…</p> : null}
         {forbidden ? (
           <p role='alert'>Only a superadmin can open this page.</p>
