@@ -223,3 +223,44 @@ func TestConversationUnreadFollowsTheLatestAnswer(t *testing.T) {
 		t.Fatalf("after a newer answer = %+v, want unread again", got)
 	}
 }
+
+func TestWorkspaceListIncludesChatsOfDocumentsTheMemberCanRead(t *testing.T) {
+	client := newConversationClient(t)
+	ctx := context.Background()
+	workspaceChat := client.create()
+
+	documentID := uuid.New()
+	if _, err := client.db.ExecContext(ctx, `
+		INSERT INTO documents (id, workspace_id, author_id, title, type) VALUES ($1, $2, $3, 'Runbook', 'markdown')
+	`, documentID, client.workspaceID, client.userID); err != nil {
+		t.Fatalf("create document: %v", err)
+	}
+	var documentChat uuid.UUID
+	if err := client.db.QueryRowContext(ctx, `
+		INSERT INTO rag_conversations (workspace_id, creator_id, document_id) VALUES ($1, $2, $3) RETURNING conversation_id
+	`, client.workspaceID, client.userID, documentID).Scan(&documentChat); err != nil {
+		t.Fatalf("create document chat: %v", err)
+	}
+
+	byID := map[uuid.UUID]model.RAGConversation{}
+	for _, conversation := range client.list() {
+		byID[conversation.ID] = conversation
+	}
+	if _, ok := byID[workspaceChat.ID]; !ok {
+		t.Fatalf("list = %+v, want the workspace chat", byID)
+	}
+	got, ok := byID[documentChat]
+	if !ok || got.DocumentTitle != "Runbook" {
+		t.Fatalf("list = %+v, want the document chat labelled with its document title", byID)
+	}
+
+	// A document the Member can no longer read takes its chat out of the list.
+	if _, err := client.db.ExecContext(ctx, `UPDATE documents SET deleted_at = now() WHERE id = $1`, documentID); err != nil {
+		t.Fatalf("trash document: %v", err)
+	}
+	for _, conversation := range client.list() {
+		if conversation.ID == documentChat {
+			t.Fatalf("list still shows the chat of a trashed document: %+v", conversation)
+		}
+	}
+}

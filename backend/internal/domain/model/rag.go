@@ -44,7 +44,9 @@ type RAGConversation struct {
 	CreatorID   uuid.UUID `json:"creatorId,omitempty"`
 	// DocumentID is set on a Conversation opened from one document.
 	DocumentID *uuid.UUID `json:"documentId,omitempty"`
-	Title      string     `json:"title"`
+	// DocumentTitle names that document in the workspace-wide list.
+	DocumentTitle string `json:"documentTitle,omitempty"`
+	Title         string `json:"title"`
 	// PinnedAt is set while the User keeps the Conversation at the top of its list.
 	PinnedAt *time.Time `json:"pinnedAt,omitempty"`
 	// ArchivedAt is set while the Conversation sits in the Archived section.
