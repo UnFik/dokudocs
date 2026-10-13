@@ -715,6 +715,35 @@ func lockRAGWorkspaceMembership(ctx context.Context, tx database.Queryer, worksp
 	return err
 }
 
+// LookupDocuments reads the named documents the actor may read in the workspace.
+func (r *Repository) LookupDocuments(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) ([]model.RAGDocumentHit, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT d.id, d.title, d.type::text,
+		       CASE WHEN p.id IS NOT NULL AND `+projectMetadataPredicate("$2", "p")+` THEN p.name ELSE '' END
+		FROM documents d
+		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
+		WHERE d.workspace_id = $1
+		  AND d.deleted_at IS NULL
+		  AND d.id = ANY($3::uuid[])
+	`+documentReadPredicate+`
+		ORDER BY d.id
+	`, workspaceID, actorID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	hits := make([]model.RAGDocumentHit, 0, len(ids))
+	for rows.Next() {
+		var hit model.RAGDocumentHit
+		if err := rows.Scan(&hit.ID, &hit.Title, &hit.Type, &hit.ProjectName); err != nil {
+			return nil, err
+		}
+		hit.Categories = []string{}
+		hits = append(hits, hit)
+	}
+	return hits, rows.Err()
+}
+
 // SearchDocumentTitles lists the documents the actor may read in the workspace
 // whose title contains the text, newest change first. An empty text lists the
 // most recently changed ones. Only titles are searched, never document text.

@@ -12,6 +12,8 @@ import { noExtras, type QuestionExtras } from './question-extras'
 export type ToolProgress = {
   name: string
   state: 'running' | 'done' | 'failed' | 'waiting'
+  /** The document the call works on, when it names one. */
+  documentId?: string
 }
 
 export type ChatRunView = {
@@ -104,8 +106,14 @@ function applyEvent(
     case 'tool_status': {
       const name = String(body.name ?? '')
       const state = body.state as ToolProgress['state']
-      const others = view.tools.filter((tool) => tool.name !== name)
-      return { ...view, tools: [...others, { name, state }] }
+      const documentId =
+        typeof body.documentId === 'string' && body.documentId
+          ? body.documentId
+          : undefined
+      const others = view.tools.filter(
+        (tool) => tool.name !== name || tool.documentId !== documentId
+      )
+      return { ...view, tools: [...others, { name, state, documentId }] }
     }
     case 'failed':
     case 'cancelled':

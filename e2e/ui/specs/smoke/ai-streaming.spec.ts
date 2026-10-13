@@ -196,6 +196,28 @@ test('@smoke: a document named with @ is read, and shows as a link in the chat',
   await expect(page.getByRole('log', { name: 'Messages' }).getByText('The recovery codeword is cobalt.', { exact: true }).last()).toBeVisible()
 })
 
+test('@smoke: an answer is drawn as Markdown, and its source opens a preview card', async ({ page }) => {
+  test.setTimeout(120_000)
+  await signIn(page)
+  provider.release()
+  const original = [provider.first, provider.second] as const
+  provider.setAnswer('The codeword is ', '**cobalt**, kept in `vault.txt`.')
+  try {
+    await ask(page, false)
+    const log = page.getByRole('log', { name: 'Messages' })
+    await expect(log.locator('strong', { hasText: 'cobalt' }).last()).toBeVisible()
+    await expect(log.locator('code', { hasText: 'vault.txt' }).last()).toBeVisible()
+    await expect(log.getByText('**cobalt**')).toHaveCount(0)
+
+    await page.getByRole('link', { name: 'Open block' }).last().hover()
+    await expect(page.getByRole('img', { name: `Preview of ${documentTitle}` })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('img', { name: `Preview of ${documentTitle}` })).toHaveCount(0)
+  } finally {
+    provider.setAnswer(...original)
+  }
+})
+
 test('@smoke: a long chat opens at its newest message and loads earlier ones on the way up', async ({ page }) => {
   test.setTimeout(180_000)
   await signIn(page)
