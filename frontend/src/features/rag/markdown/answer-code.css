@@ -1,0 +1,38 @@
+/* Code colours come from the theme tokens, so both themes keep their contrast. */
+.answer-code .token.comment,
+.answer-code .token.prolog,
+.answer-code .token.doctype,
+.answer-code .token.cdata {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+.answer-code .token.keyword,
+.answer-code .token.selector,
+.answer-code .token.atrule,
+.answer-code .token.important {
+  color: var(--signal);
+}
+
+.answer-code .token.string,
+.answer-code .token.attr-value,
+.answer-code .token.char,
+.answer-code .token.inserted {
+  color: var(--ok);
+}
+
+.answer-code .token.number,
+.answer-code .token.boolean,
+.answer-code .token.constant,
+.answer-code .token.symbol {
+  color: var(--warn);
+}
+
+.answer-code .token.deleted {
+  color: var(--destructive);
+}
+
+.answer-code .token.function,
+.answer-code .token.class-name {
+  font-weight: 600;
+}

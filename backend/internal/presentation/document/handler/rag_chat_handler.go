@@ -560,3 +560,37 @@ func (h *RAGChatHandler) SearchDocuments(w http.ResponseWriter, r *http.Request)
 	}
 	_ = response.Data(w, http.StatusOK, hits)
 }
+
+type lookupRequest struct {
+	IDs []string `json:"ids"`
+}
+
+// LookupDocuments names the documents an answer refers to: the ones the User may
+// read now, with their title, type and project.
+func (h *RAGChatHandler) LookupDocuments(w http.ResponseWriter, r *http.Request) {
+	actorID, workspaceID, err := getUserAndWorkspace(r)
+	if err != nil {
+		writeDocumentError(w, err)
+		return
+	}
+	var request lookupRequest
+	if err := response.DecodeJSON(r, &request); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	ids := make([]uuid.UUID, 0, len(request.IDs))
+	for _, raw := range request.IDs {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			writeRAGChatError(w, appchat.ErrInvalidChatRequest)
+			return
+		}
+		ids = append(ids, id)
+	}
+	hits, err := h.service.LookupDocuments(r.Context(), workspaceID, actorID, ids)
+	if err != nil {
+		writeRAGChatError(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, hits)
+}

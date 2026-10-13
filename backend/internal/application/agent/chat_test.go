@@ -255,3 +255,53 @@ func TestADocumentConversationIsToldWhichDocumentItIsAbout(t *testing.T) {
 		}
 	}
 }
+
+func TestEachToolCallRemembersTheDocumentItWorkedOn(t *testing.T) {
+	doc := uuid.New()
+	e := newChatEnv([]string{CapRead},
+		call("read_document", `{"document_id":"`+doc.String()+`"}`),
+		call("list_documents", `{}`),
+		call("read_document", `{"document_id":"not-an-id"}`),
+		Message{Role: "assistant", Content: "Done."})
+	answer, err := e.ask("What does the runbook say?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []ToolRef{{Name: "read_document", DocumentID: doc.String()}, {Name: "list_documents"}, {Name: "read_document"}}
+	if len(answer.Calls) != len(want) {
+		t.Fatalf("Calls = %+v, want %+v", answer.Calls, want)
+	}
+	for i := range want {
+		if answer.Calls[i] != want[i] {
+			t.Fatalf("Calls[%d] = %+v, want %+v", i, answer.Calls[i], want[i])
+		}
+	}
+	var meta struct {
+		Tools []string  `json:"tools"`
+		Calls []ToolRef `json:"calls"`
+	}
+	if err := json.Unmarshal(e.convs.meta[0], &meta); err != nil || len(meta.Calls) != 3 || meta.Calls[0].DocumentID != doc.String() || len(meta.Tools) != 3 {
+		t.Fatalf("stored meta = %s, %v", e.convs.meta[0], err)
+	}
+}
+
+func TestADocumentConversationNamesItsOwnDocumentOnEveryCall(t *testing.T) {
+	doc := uuid.New()
+	e := newChatEnv([]string{CapRead}, call("read_document", `{}`), Message{Role: "assistant", Content: "ok"})
+	e.convs.history.Conversation.DocumentID = &doc
+	answer, err := e.ask("summarize")
+	if err != nil || len(answer.Calls) != 1 || answer.Calls[0].DocumentID != doc.String() {
+		t.Fatalf("Calls = %+v, %v, want the conversation's document", answer.Calls, err)
+	}
+}
+
+func TestTheAgentIsToldHowToLinkADocumentItMentions(t *testing.T) {
+	e := newChatEnv([]string{CapRead}, Message{Role: "assistant", Content: "ok"})
+	if _, err := e.ask("hi"); err != nil {
+		t.Fatal(err)
+	}
+	system := e.model.seen[0][0].Content
+	if !strings.Contains(system, "](doc:") || !strings.Contains(system, "never include images or links to outside addresses") {
+		t.Fatalf("system prompt = %q", system)
+	}
+}
