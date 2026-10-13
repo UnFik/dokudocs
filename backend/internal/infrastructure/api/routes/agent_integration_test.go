@@ -23,7 +23,12 @@ type fakeRooms struct {
 	edits []agent.LiveEdit
 }
 
+const integrationCanvas = `{"version":1,"nodes":[{"id":"vps","kind":"host","parentId":null,"x":0,"y":0,"w":400,"h":240,"name":"VPS-1","catalog":"vps","tags":[],"description":"","repoUrl":null,"links":[]}],"connections":[]}`
+
 func (f *fakeRooms) Read(_ context.Context, _, docType string) (agent.LiveText, error) {
+	if docType == "architecture" {
+		return agent.LiveText{Text: integrationCanvas, Version: "v1"}, nil
+	}
 	return agent.LiveText{Text: "# Spec\n\nThe login uses passkeys.", Version: "v1"}, nil
 }
 
@@ -513,5 +518,100 @@ func TestAnMCPCallWhoseClientLeavesDoesNotHangTheServer(t *testing.T) {
 	again, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "read_document", Arguments: map[string]any{"workspace_id": e.ws, "document_id": e.doc}})
 	if err != nil || again.IsError {
 		t.Fatalf("call after a cancelled one = %v, %v", again, err)
+	}
+}
+
+// newCanvas makes an Architecture document in the environment's workspace.
+func (e *agentEnv) newCanvas() string {
+	e.t.Helper()
+	res := e.do(http.MethodPost, "/api/v1/documents", map[string]any{"title": "Prod", "type": "architecture", "visibility": "workspace"},
+		map[string]string{"Authorization": "Bearer " + e.owner.token, "X-Workspace-Id": e.ws, "Idempotency-Key": uuid.NewString()}, "")
+	var created struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	res.json(&created)
+	if res.Code != http.StatusCreated || created.Data.ID == "" {
+		e.t.Fatalf("create canvas = %d %s", res.Code, res.Body.String())
+	}
+	return created.Data.ID
+}
+
+func TestAnMCPClientListsTheCatalogAndEditsACanvasWithSlugsChecked(t *testing.T) {
+	e := newAgentEnv(t)
+	canvas := e.newCanvas()
+	e.allow(agent.CapRead, agent.CapContent)
+	session, err := e.connect(e.newKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	names := strings.Join(toolNames(t, session), ",")
+	if !strings.Contains(names, "edit_architecture") || !strings.Contains(names, "list_architecture_catalog") {
+		t.Fatalf("tools = %s", names)
+	}
+	listed, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_architecture_catalog", Arguments: map[string]any{"category": "protocol", "query": "grpc"}})
+	if err != nil || listed.IsError || !strings.Contains(text(listed), `"grpc"`) || strings.Contains(text(listed), `"redis"`) {
+		t.Fatalf("catalog = %s, %v", text(listed), err)
+	}
+
+	args := func(catalog string) map[string]any {
+		return map[string]any{"workspace_id": e.ws, "document_id": canvas, "version": "v1", "operations": []any{
+			map[string]any{"type": "add_node", "ref": "cache", "kind": "system", "name": "Redis", "catalog": catalog, "parent": "vps"},
+		}}
+	}
+	wrong, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "edit_architecture", Arguments: args("reddis")})
+	if err != nil || !wrong.IsError || !strings.Contains(text(wrong), "did you mean redis") || len(e.rooms.edits) != 0 {
+		t.Fatalf("a wrong slug = %s, %v, edits %d", text(wrong), err, len(e.rooms.edits))
+	}
+	right, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "edit_architecture", Arguments: args("redis")})
+	if err != nil || right.IsError || !strings.Contains(text(right), `"mode":"direct"`) {
+		t.Fatalf("edit = %s, %v", text(right), err)
+	}
+	if len(e.rooms.edits) != 1 || e.rooms.edits[0].Type != "architecture" || e.rooms.edits[0].UserID != e.owner.id {
+		t.Fatalf("room edits = %+v", e.rooms.edits)
+	}
+	var revisions int
+	_ = e.db.QueryRow(`SELECT COUNT(*) FROM document_revisions WHERE document_id = $1 AND title LIKE 'Before AI edit, key Laptop%'`, canvas).Scan(&revisions)
+	if revisions != 1 {
+		t.Fatalf("named versions before the edit = %d", revisions)
+	}
+}
+
+func TestInChatACanvasEditWaitsForApprovalAndThenLands(t *testing.T) {
+	e := newAgentEnv(t)
+	canvas := e.newCanvas()
+	e.allow(agent.CapRead, agent.CapContent)
+	e.model.replies = []agent.Message{
+		{Role: "assistant", ToolCalls: []agent.ToolCall{{ID: "c1", Name: "edit_architecture", Arguments: json.RawMessage(`{"version":"v1","operations":[{"type":"add_node","kind":"system","name":"Redis","catalog":"redis","parent":"vps"}]}`)}}},
+		{Role: "assistant", Content: "I asked to add Redis."},
+	}
+	headers := map[string]string{"Authorization": "Bearer " + e.owner.token, "X-Workspace-Id": e.ws}
+	created := e.do(http.MethodPost, "/api/v1/rag/conversations", map[string]any{"documentId": canvas}, headers, "")
+	var conv struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	created.json(&conv)
+	res := e.do(http.MethodPost, "/api/v1/rag/conversations/"+conv.Data.ID+"/messages", map[string]any{"question": "add redis", "language": "en"}, headers, "")
+	var answer struct {
+		Data struct {
+			Actions []struct {
+				ID      string `json:"id"`
+				Summary string `json:"summary"`
+				Status  string `json:"status"`
+			} `json:"actions"`
+		} `json:"data"`
+	}
+	res.json(&answer)
+	if res.Code != http.StatusOK || len(answer.Data.Actions) != 1 || answer.Data.Actions[0].Status != "pending" ||
+		answer.Data.Actions[0].Summary != "Change the Architecture diagram:\n- Add System \"Redis\" inside Host \"VPS-1\"" || len(e.rooms.edits) != 0 {
+		t.Fatalf("ask = %d %s, edits %d", res.Code, res.Body.String(), len(e.rooms.edits))
+	}
+	approve := e.as(e.owner, http.MethodPost, "/api/v1/rag/conversations/"+conv.Data.ID+"/actions/"+answer.Data.Actions[0].ID, map[string]bool{"approve": true})
+	if approve.Code != http.StatusOK || len(e.rooms.edits) != 1 || e.rooms.edits[0].Mode != "direct" || e.rooms.edits[0].Type != "architecture" {
+		t.Fatalf("approve = %d %s, edits %+v", approve.Code, approve.Body.String(), e.rooms.edits)
 	}
 }

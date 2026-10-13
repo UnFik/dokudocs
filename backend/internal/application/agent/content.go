@@ -45,6 +45,10 @@ type LiveEdit struct {
 type LiveEditResult struct {
 	Version       string
 	SuggestionIDs []string
+	// A canvas edit also says which ids its refs became and how much it removed.
+	Created            map[string]string
+	RemovedNodes       int
+	RemovedConnections int
 }
 
 // LiveRooms reads and edits the room through the collaboration service, the only
@@ -69,6 +73,7 @@ type ContentService struct {
 	rooms     LiveRooms
 	revisions RevisionMaker
 	marks     AIAssistedMarker
+	catalog   ArchitectureCatalog
 }
 
 func NewContentService(heads RoomHeads, rooms LiveRooms, revisions RevisionMaker, marks AIAssistedMarker) *ContentService {
@@ -88,6 +93,10 @@ type EditResult struct {
 	Version       string      `json:"version"`
 	SuggestionIDs []uuid.UUID `json:"suggestionIds,omitempty"`
 	RevisionID    uuid.UUID   `json:"revisionId,omitempty"`
+	// A canvas edit answers with the ids its refs became and what it removed.
+	Created            map[string]string `json:"created,omitempty"`
+	RemovedNodes       int               `json:"removedNodes,omitempty"`
+	RemovedConnections int               `json:"removedConnections,omitempty"`
 }
 
 func isSource(docType string) bool { return docType == "dbdiagram" || docType == "mermaid" }
@@ -122,9 +131,6 @@ func (s *ContentService) Read(ctx context.Context, actor Actor, workspaceID, doc
 		return ReadResult{}, err
 	}
 	result := ReadResult{Type: head.DocumentType, CanEdit: access.CanEdit, CanSuggest: access.CanSuggest && head.DocumentType == "markdown"}
-	if head.DocumentType == "architecture" {
-		return result, nil
-	}
 	live, err := s.rooms.Read(ctx, roomName(workspaceID, documentID, head), head.DocumentType)
 	if err != nil {
 		return ReadResult{}, err
@@ -148,7 +154,7 @@ func (s *ContentService) Edit(ctx context.Context, actor Actor, workspaceID, doc
 		return EditResult{}, err
 	}
 	if head.DocumentType == "architecture" {
-		return EditResult{}, &ToolError{Message: "Architecture documents are read-only for the Agent"}
+		return EditResult{}, &ToolError{Message: "An Architecture document is changed with edit_architecture, not edit_document_content"}
 	}
 	mode := ""
 	switch {
