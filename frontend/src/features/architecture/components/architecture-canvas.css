@@ -13,10 +13,14 @@
 }
 .architecture-canvas[data-tool='hand'] .react-flow__pane,
 .architecture-canvas[data-tool='hand'] .react-flow__node,
-.architecture-canvas[data-tool='hand'] .react-flow__edge {
+.architecture-canvas[data-tool='hand'] .react-flow__node *,
+.architecture-canvas[data-tool='hand'] .react-flow__edge,
+.architecture-canvas[data-tool='hand'] .react-flow__edge * {
   cursor: grab;
 }
-.architecture-canvas[data-tool='hand'] .react-flow__pane.dragging {
+.architecture-canvas[data-tool='hand'] .react-flow__pane.dragging,
+.architecture-canvas[data-tool='hand'] .react-flow__pane.dragging .react-flow__node,
+.architecture-canvas[data-tool='hand'] .react-flow__pane.dragging .react-flow__node * {
   cursor: grabbing;
 }
 .architecture-canvas[data-tool='eraser'] .react-flow__pane,
