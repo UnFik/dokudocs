@@ -14,6 +14,7 @@ import {
 } from './agent-edit'
 import { isSourceType, type DocumentType } from './backend-api'
 import { toMarkdown } from './markdown'
+import { log } from './operations'
 import { parseRoom } from './room'
 import { documentBodySchema } from './schema'
 import { sourceName } from './source'
@@ -149,7 +150,10 @@ export async function handleAgentRequest(url: URL, request: IncomingMessage, res
         const after = liveText(doc, type)
         outcome = { status: 200, body: { version: textVersion(after), suggestionIDs } }
       } catch (error) {
-        if (!(error instanceof AgentEditError)) throw error
+        if (!(error instanceof AgentEditError)) {
+          log('agent_edit_failed', { room, type, error: error instanceof Error ? error.stack ?? error.message : String(error) }, 'ERROR')
+          throw error
+        }
         outcome = { status: 422, body: { error: error.message } }
       }
     })
