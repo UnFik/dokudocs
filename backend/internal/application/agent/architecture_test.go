@@ -251,3 +251,20 @@ func TestTheSummaryNamesAnIdItDoesNotKnowInsteadOfFailing(t *testing.T) {
 		t.Fatalf("summary = %q, %v", got, err)
 	}
 }
+
+func TestAnOperationWithoutAKnownTypeIsRefusedBeforeTheUserApprovesOrAVersionIsMade(t *testing.T) {
+	ops := `[{"type":"add_node","kind":"system","name":"Redis","catalog":"redis"},{"kind":"system","name":"Cache"}]`
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	_, err := e.svc.ArchitectureSummary(context.Background(), chat(e), e.ws, e.doc, json.RawMessage(ops))
+	if msg := refused(t, err); !strings.Contains(msg, "operation 2: type must be one of add_node") {
+		t.Fatalf("summary refusal = %q", msg)
+	}
+	revisionsBefore := len(e.revisions.titles)
+	_, err = edit(e, chat(e), ops)
+	if msg := refused(t, err); !strings.Contains(msg, "operation 2") {
+		t.Fatalf("edit refusal = %q", msg)
+	}
+	if len(e.revisions.titles) != revisionsBefore {
+		t.Fatalf("a version was made for an edit that could not run: %v", e.revisions.titles)
+	}
+}

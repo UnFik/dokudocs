@@ -97,8 +97,23 @@ func parseOperations(raw json.RawMessage) ([]operation, error) {
 	if err := json.Unmarshal(raw, &ops); err != nil {
 		return nil, &ToolError{Message: "operations must be a list of objects"}
 	}
+	for i, op := range ops {
+		if !architectureOperations[op.text("type")] {
+			return nil, &ToolError{Message: fmt.Sprintf("operation %d: type must be one of %s", i+1, architectureOperationList)}
+		}
+	}
 	return ops, nil
 }
+
+const architectureOperationList = "add_node, update_node, move_node, remove_node, add_connection, update_connection, remove_connection, link_document, unlink_document"
+
+var architectureOperations = func() map[string]bool {
+	known := map[string]bool{}
+	for _, name := range strings.Split(architectureOperationList, ", ") {
+		known[name] = true
+	}
+	return known
+}()
 
 func title(word string) string {
 	if word == "" {
