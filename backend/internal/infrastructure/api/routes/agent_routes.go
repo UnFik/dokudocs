@@ -7,6 +7,7 @@ import (
 	"backend/internal/application/agent"
 	"backend/internal/application/aiusage"
 	appauth "backend/internal/application/auth/usecase"
+	appcatalog "backend/internal/application/catalog"
 	appdoc "backend/internal/application/document/usecase"
 	mcpapp "backend/internal/application/mcp"
 	appproject "backend/internal/application/project/usecase"
@@ -18,6 +19,7 @@ import (
 	agentrepo "backend/internal/infrastructure/repository/agent"
 	settingsrepo "backend/internal/infrastructure/repository/aisettings"
 	aiusagerepo "backend/internal/infrastructure/repository/aiusage"
+	catalogrepo "backend/internal/infrastructure/repository/catalog"
 	docrepo "backend/internal/infrastructure/repository/document"
 	mcprepo "backend/internal/infrastructure/repository/mcp"
 	"backend/internal/infrastructure/runtime/container"
@@ -58,7 +60,8 @@ func newAgentKit(c *container.Container, cfg config.Config) *agentKit {
 	skillService := skills.NewService(mcpStore, superadmins)
 	permissions := agent.NewPermissionService(store)
 	revisions := appdoc.NewDocumentRevisionUseCase(documents).WithRoomReloader(collab)
-	content := agent.NewContentService(documents, rooms, revisions, store)
+	kinds := appcatalog.NewService(catalogrepo.NewStore(c.DB))
+	content := agent.NewContentService(documents, rooms, revisions, store).WithCatalog(kinds)
 	tools := agent.DokudocsTools(agent.ToolDeps{
 		Workspaces:  appws.NewUseCase(c.DB),
 		Documents:   appdoc.NewUseCase(c.DB),
@@ -68,6 +71,7 @@ func newAgentKit(c *container.Container, cfg config.Config) *agentKit {
 		Revisions:   revisions,
 		Search:      documents,
 		Content:     content,
+		Catalog:     kinds,
 	})
 	executor := agent.NewExecutor(permissions, tools, mcpService.MaxResultBytes)
 	var model agent.Model = notConfigured{}
