@@ -201,3 +201,20 @@ it('narrows a workspace question to a category', async () => {
     ).toMatchObject({ question: 'Restart steps', categoryIds: [opsID] })
   )
 })
+
+it('lists a chat opened from a document with that document and the workspace under it', async () => {
+  const { queryClient } = setup([
+    chat(idA, 'Deploy checklist'),
+    chat(idDoc, 'About the runbook', {
+      documentId: documentID,
+      documentTitle: 'Runbook',
+    }),
+  ])
+  const screen = await page(queryClient)
+  const list = screen.getByRole('list', { name: 'Chats' })
+  await expect.element(list.getByText('About the runbook')).toBeVisible()
+  await expect.element(list.getByText('Runbook · Engineering')).toBeVisible()
+  await expect
+    .element(list.getByText('Engineering', { exact: true }))
+    .toBeVisible()
+})

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"backend/constant"
+
+	"github.com/google/uuid"
 )
 
 func TestADocumentConversationIsListedApartAndFollowsDocumentAccess(t *testing.T) {
@@ -29,8 +31,15 @@ func TestADocumentConversationIsListedApartAndFollowsDocumentAccess(t *testing.T
 	}
 
 	listed, err := f.repo.ListRAGConversations(f.ctx, f.owner)
-	if err != nil || len(listed) != 1 || listed[0].ID != workspaceConv.ID {
-		t.Fatalf("workspace list = %+v, %v; want only the workspace conversation", listed, err)
+	if err != nil || len(listed) != 2 {
+		t.Fatalf("workspace list = %+v, %v; want the workspace conversation and the document's", listed, err)
+	}
+	titles := map[uuid.UUID]string{}
+	for _, item := range listed {
+		titles[item.ID] = item.DocumentTitle
+	}
+	if _, ok := titles[workspaceConv.ID]; !ok || titles[conv.ID] != "Spec" {
+		t.Fatalf("workspace list titles = %v, want the document chat labelled Spec", titles)
 	}
 	onDoc, err := f.repo.ListDocumentRAGConversations(f.ctx, f.owner, doc)
 	if err != nil || len(onDoc) != 1 || onDoc[0].ID != conv.ID {

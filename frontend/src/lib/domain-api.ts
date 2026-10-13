@@ -225,6 +225,7 @@ const ragConversationSchema = z.object({
   workspaceId: z.string().uuid(),
   creatorId: z.guid().optional(),
   documentId: z.string().uuid().optional(),
+  documentTitle: z.string().optional(),
   title: z.string(),
   pinnedAt: z.string().optional(),
   archivedAt: z.string().optional(),
