@@ -10,6 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { classifyHref } from './answer-links'
 import { closeOpenMarkdown } from './close-open-markdown'
 import { CodeBlock } from './code-block'
+import { DocumentReference } from './document-references'
 
 export type AnswerMarkdownProps = {
   content: string
@@ -95,8 +96,12 @@ export default function AnswerMarkdown({
             {children}
           </a>
         )
-      if (link.kind === 'document' && renderDocument)
-        return <>{renderDocument(link.id, children)}</>
+      if (link.kind === 'document')
+        return renderDocument ? (
+          <>{renderDocument(link.id, children)}</>
+        ) : (
+          <DocumentReference documentID={link.id} label={children} />
+        )
       return <>{children}</>
     },
   }

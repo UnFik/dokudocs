@@ -255,6 +255,15 @@ const ragMessageSchema = z.object({
     .object({
       agent: z.boolean().optional(),
       tools: z.array(z.string()).optional(),
+      /** Each tool call, with the document it worked on when it named one. */
+      calls: z
+        .array(
+          z.object({
+            name: z.string(),
+            documentId: z.string().uuid().optional(),
+          })
+        )
+        .optional(),
       actions: z.array(z.string()).optional(),
       skill: z.string().optional(),
     })
@@ -1088,6 +1097,33 @@ export async function searchChatDocuments(
     .parse(
       await apiFetch<unknown>(`/api/v1/rag/document-search${query}`, {
         headers: workspaceHeaders(workspaceId),
+        signal,
+      })
+    )
+}
+
+/** Names the documents an answer refers to; those the User cannot read now are left out. */
+export async function lookupChatDocuments(
+  workspaceId: string,
+  ids: string[],
+  signal?: AbortSignal
+): Promise<ChatDocumentHit[]> {
+  if (ids.length === 0) return []
+  return z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        title: z.string(),
+        type: z.string(),
+        projectName: z.string().optional().default(''),
+        categories: z.array(z.string()).optional().default([]),
+      })
+    )
+    .parse(
+      await apiFetch<unknown>('/api/v1/rag/documents/lookup', {
+        method: 'POST',
+        headers: workspaceHeaders(workspaceId),
+        body: JSON.stringify({ ids }),
         signal,
       })
     )

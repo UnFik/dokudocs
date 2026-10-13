@@ -20,3 +20,12 @@ export function classifyHref(href: string): AnswerLink {
   if (OUTSIDE.test(value)) return { kind: 'external', href: value }
   return { kind: 'none' }
 }
+
+const DOC_LINK = new RegExp(`\\]\\(doc:(${UUID})\\)`, 'gi')
+
+/** The documents an answer links with `doc:`, each once, in the order they first appear. */
+export function documentIdsIn(text: string): string[] {
+  const found = new Set<string>()
+  for (const match of text.matchAll(DOC_LINK)) found.add(match[1].toLowerCase())
+  return [...found]
+}

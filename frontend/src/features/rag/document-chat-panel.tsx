@@ -30,6 +30,7 @@ import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { ConversationHistory } from './conversation-history'
 import { downloadConversation } from './download-conversation'
+import { CurrentDocument } from './markdown/document-references'
 import { useChatRun } from './use-chat-run'
 import { useConversationHistory } from './use-conversation-history'
 import { usePanelOptions } from './use-panel-options'
@@ -216,122 +217,128 @@ function PanelBody({
   }, [viewing, selected?.id, selected?.unread])
 
   return (
-    <div className='flex min-h-0 flex-1 flex-col'>
-      <ChatPanelHeader
-        title={selected?.title ?? ''}
-        historyOpen={view === 'history'}
-        onToggleHistory={() => setView(view === 'history' ? 'chat' : 'history')}
-        onNew={() => create.mutate()}
-        newDisabled={create.isPending}
-        canDownload={Boolean(history && history.messages.length > 0)}
-        onDownload={() => {
-          if (history)
-            downloadConversation(selected?.title ?? '', history.messages)
-        }}
-        {...options}
-        close={
-          <SheetClose asChild>
-            <Button
-              variant='ghost'
-              size='icon'
-              aria-label='Close'
-              className='max-sm:size-11'
-            >
-              <X />
-            </Button>
-          </SheetClose>
-        }
-      />
-      {view === 'history' ? (
-        <ConversationHistory
-          conversations={chats ?? []}
-          selectedID={selected?.id}
-          loading={conversations.isPending}
-          failed={conversations.isError}
-          problem={problem}
-          onSelect={(id) => {
-            setSelectedID(id)
-            setView('chat')
-          }}
-          onRename={(id, next) => change.mutate({ id, patch: { title: next } })}
-          onPin={(id, pinned) => change.mutate({ id, patch: { pinned } })}
-          onArchive={(id, archived) =>
-            change.mutate({ id, patch: { archived } })
+    <CurrentDocument documentID={documentID}>
+      <div className='flex min-h-0 flex-1 flex-col'>
+        <ChatPanelHeader
+          title={selected?.title ?? ''}
+          historyOpen={view === 'history'}
+          onToggleHistory={() =>
+            setView(view === 'history' ? 'chat' : 'history')
           }
-          assistantHref={(id) => `/assistant?conversation=${id}`}
+          onNew={() => create.mutate()}
+          newDisabled={create.isPending}
+          canDownload={Boolean(history && history.messages.length > 0)}
+          onDownload={() => {
+            if (history)
+              downloadConversation(selected?.title ?? '', history.messages)
+          }}
+          {...options}
+          close={
+            <SheetClose asChild>
+              <Button
+                variant='ghost'
+                size='icon'
+                aria-label='Close'
+                className='max-sm:size-11'
+              >
+                <X />
+              </Button>
+            </SheetClose>
+          }
         />
-      ) : (
-        <>
-          <ChatScroller
-            resetKey={selected?.id ?? ''}
-            firstKey={history?.messages[0]?.id ?? ''}
-            changeKey={`${history?.messages.at(-1)?.id ?? ''}|${run.view.phase}|${run.view.draft.length}|${history?.actions?.length ?? 0}`}
-            hasOlder={hasOlder}
-            loadingOlder={loadingOlder}
-            onLoadOlder={loadOlder}
-          >
-            {conversations.isPending ? (
-              <p role='status' className='text-sm text-muted-foreground'>
-                Loading chats…
-              </p>
-            ) : conversations.isError ? (
-              <p role='alert' className='text-sm text-destructive'>
-                Could not load the chats about this document.
-              </p>
-            ) : !selected ? (
-              <p className='text-sm text-muted-foreground'>
-                No chats about this document yet. Start one to ask what it says
-                or to have the assistant suggest changes.
-              </p>
-            ) : historyError ? (
-              <p role='alert' className='text-sm text-destructive'>
-                Could not load this chat.
-              </p>
-            ) : (
-              <>
-                {history && history.messages.length > 0 ? (
-                  <ChatMessages
-                    messages={history.messages}
-                    actions={history.actions}
-                    workspaceID={workspaceID}
-                    conversationID={selected.id}
-                    queryKey={historyKey}
-                  />
-                ) : run.view.phase === 'idle' ? (
-                  <p className='text-sm text-muted-foreground'>
-                    Ask about this document. Type / to use a skill.
-                  </p>
-                ) : null}
-                <RunProgress view={run.view} />
-              </>
-            )}
-            {create.error ? (
-              <p role='alert' className='text-sm text-destructive'>
-                {create.error.message}
-              </p>
+        {view === 'history' ? (
+          <ConversationHistory
+            conversations={chats ?? []}
+            selectedID={selected?.id}
+            loading={conversations.isPending}
+            failed={conversations.isError}
+            problem={problem}
+            onSelect={(id) => {
+              setSelectedID(id)
+              setView('chat')
+            }}
+            onRename={(id, next) =>
+              change.mutate({ id, patch: { title: next } })
+            }
+            onPin={(id, pinned) => change.mutate({ id, patch: { pinned } })}
+            onArchive={(id, archived) =>
+              change.mutate({ id, patch: { archived } })
+            }
+            assistantHref={(id) => `/assistant?conversation=${id}`}
+          />
+        ) : (
+          <>
+            <ChatScroller
+              resetKey={selected?.id ?? ''}
+              firstKey={history?.messages[0]?.id ?? ''}
+              changeKey={`${history?.messages.at(-1)?.id ?? ''}|${run.view.phase}|${run.view.draft.length}|${history?.actions?.length ?? 0}`}
+              hasOlder={hasOlder}
+              loadingOlder={loadingOlder}
+              onLoadOlder={loadOlder}
+            >
+              {conversations.isPending ? (
+                <p role='status' className='text-sm text-muted-foreground'>
+                  Loading chats…
+                </p>
+              ) : conversations.isError ? (
+                <p role='alert' className='text-sm text-destructive'>
+                  Could not load the chats about this document.
+                </p>
+              ) : !selected ? (
+                <p className='text-sm text-muted-foreground'>
+                  No chats about this document yet. Start one to ask what it
+                  says or to have the assistant suggest changes.
+                </p>
+              ) : historyError ? (
+                <p role='alert' className='text-sm text-destructive'>
+                  Could not load this chat.
+                </p>
+              ) : (
+                <>
+                  {history && history.messages.length > 0 ? (
+                    <ChatMessages
+                      messages={history.messages}
+                      actions={history.actions}
+                      workspaceID={workspaceID}
+                      conversationID={selected.id}
+                      queryKey={historyKey}
+                    />
+                  ) : run.view.phase === 'idle' ? (
+                    <p className='text-sm text-muted-foreground'>
+                      Ask about this document. Type / to use a skill.
+                    </p>
+                  ) : null}
+                  <RunProgress view={run.view} workspaceID={workspaceID} />
+                </>
+              )}
+              {create.error ? (
+                <p role='alert' className='text-sm text-destructive'>
+                  {create.error.message}
+                </p>
+              ) : null}
+            </ChatScroller>
+            {selected ? (
+              <AskForm
+                id='document-question'
+                scope='document'
+                workspaceID={workspaceID}
+                pending={run.busy}
+                error={run.error}
+                placeholder='Ask about this document…'
+                chats={(chats ?? [])
+                  .filter((chat) => chat.id !== selected.id && !chat.archivedAt)
+                  .map((chat) => ({ id: chat.id, title: chat.title }))}
+                onAsk={(question, extras) =>
+                  void run.ask(question, undefined, extras)
+                }
+                onStop={() => void run.stop()}
+                language={language}
+                onLanguage={setLanguage}
+              />
             ) : null}
-          </ChatScroller>
-          {selected ? (
-            <AskForm
-              id='document-question'
-              scope='document'
-              workspaceID={workspaceID}
-              pending={run.busy}
-              error={run.error}
-              placeholder='Ask about this document…'
-              chats={(chats ?? [])
-                .filter((chat) => chat.id !== selected.id && !chat.archivedAt)
-                .map((chat) => ({ id: chat.id, title: chat.title }))}
-              onAsk={(question, extras) =>
-                void run.ask(question, undefined, extras)
-              }
-              onStop={() => void run.stop()}
-              language={language}
-              onLanguage={setLanguage}
-            />
-          ) : null}
-        </>
-      )}
-    </div>
+          </>
+        )}
+      </div>
+    </CurrentDocument>
   )
 }

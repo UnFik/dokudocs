@@ -241,7 +241,10 @@ export function RAGChatPage() {
                       ]}
                     />
                   )}
-                  <RunProgress view={run.view} />
+                  <RunProgress
+                    view={run.view}
+                    workspaceID={history.conversation.workspaceId}
+                  />
                 </ChatScroller>
                 {canAsk ? (
                   <AskForm
