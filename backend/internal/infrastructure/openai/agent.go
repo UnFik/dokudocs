@@ -42,7 +42,8 @@ func (m *AgentModel) Step(ctx context.Context, messages []agent.Message, tools [
 		return agent.Message{}, errors.New("agent request is invalid")
 	}
 	var usage tokenUsage
-	defer func() { m.cfg.report(ctx, usage.in(), usage.out(), err == nil) }()
+	started := time.Now()
+	defer func() { m.cfg.report(ctx, started, usage.in(), usage.out(), err == nil) }()
 	if m.protocol == ProtocolResponses {
 		return m.responsesStep(ctx, messages, tools, &usage)
 	}
