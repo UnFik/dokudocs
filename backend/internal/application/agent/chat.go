@@ -202,6 +202,7 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 		}
 		reply, err := c.model.Step(ctx, messages, specs)
 		if err != nil {
+			slog.WarnContext(ctx, "agent model step failed", "conversation_id", input.ConversationID, "step", step+1, "error", err)
 			return ChatAnswer{}, err
 		}
 		if len(reply.ToolCalls) == 0 {
@@ -223,6 +224,7 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 	}
 	raw, _ := json.Marshal(meta)
 	if err := c.convs.StoreAgentAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, input.Extras.Annotate(input.Question), answer.Text, raw); err != nil {
+		slog.ErrorContext(ctx, "agent answer not stored", "conversation_id", input.ConversationID, "error", err)
 		return ChatAnswer{}, err
 	}
 	return answer, nil
@@ -242,6 +244,7 @@ func (c *ChatService) run(ctx context.Context, actor Actor, conversationID uuid.
 			ConversationID: conversationID, UserID: actor.UserID, Tool: out.Pending.Tool, Arguments: out.Pending.Arguments, Summary: out.Pending.Summary,
 		})
 		if err != nil {
+			slog.ErrorContext(ctx, "pending action not saved", "tool", out.Pending.Tool, "error", err)
 			return `{"error":"the request could not be saved for approval"}`
 		}
 		answer.Actions = append(answer.Actions, action)
