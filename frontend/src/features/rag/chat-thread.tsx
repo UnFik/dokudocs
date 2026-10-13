@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { AddContextMenu, type ContextChat } from './add-context-menu'
 import { resetLabel } from './conversation-format'
+import { AnswerText } from './markdown/answer-text'
 import {
   MAX_CATEGORIES,
   MAX_CONTEXT_CHATS,
@@ -265,18 +266,21 @@ export function RunProgress({ view }: { view: ChatRunView }) {
           dokudocs ai · draft
         </h3>
         {view.draft ? (
-          <p
-            className={`text-sm leading-6 whitespace-pre-wrap ${view.phase === 'ended' ? 'text-muted-foreground' : ''}`}
+          <div
+            className={view.phase === 'ended' ? 'text-muted-foreground' : ''}
           >
-            {view.draft}
+            <AnswerText
+              content={view.draft}
+              streaming={view.phase === 'running'}
+            />
             {view.phase === 'running' ? (
               <span
                 data-activity='caret'
                 aria-hidden='true'
-                className='ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 animate-[caret-blink_1s_steps(1,end)_infinite] bg-foreground motion-reduce:animate-none'
+                className='mt-1 inline-block h-4 w-0.5 animate-[caret-blink_1s_steps(1,end)_infinite] bg-foreground motion-reduce:animate-none'
               />
             ) : null}
-          </p>
+          </div>
         ) : null}
         {view.tools.length > 0 ? (
           <ul className='flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground'>
@@ -348,8 +352,8 @@ export function ChatMessage({
       <h3 className='font-mono text-[11px] text-muted-foreground'>
         dokudocs ai{message.meta?.skill ? ` · /${message.meta.skill}` : ''}
       </h3>
-      {/* Plain text only: an answer never loads images or links from outside. */}
-      <p className='text-sm leading-6 whitespace-pre-wrap'>{message.content}</p>
+      {/* Markdown built as elements: images never load, and outside links open in a new tab. */}
+      <AnswerText content={message.content} />
       {tools.length > 0 ? (
         <p className='flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground'>
           Tools used:
