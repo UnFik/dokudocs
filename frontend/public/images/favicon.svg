@@ -1,4 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:svgjs="http://svgjs.com/svgjs" width="24" height="24"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokewidth="2" strokelinecap="round" strokelinejoin="round">
-  <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"></path>
-</svg><style>@media (prefers-color-scheme: light) { :root { filter: contrast(1) brightness(0.8); } }
-</style></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><title>DokuDocs</title><style>.a{fill:#14171A}.b{fill:#0369A1}@media (prefers-color-scheme:dark){.a{fill:#E6E8EB}.b{fill:#38BDF8}}</style><g transform="translate(-68.61 -68.61) scale(1.536)"><path class="a" d="M56 48H120A80 80 0 0 1 170.3 65.8L56 180Z"/><path class="b" d="M56 208L184 80A80 80 0 0 1 120 208Z"/></g></svg>
