@@ -100,3 +100,55 @@ func (s *Store) UsageSummary(ctx context.Context, since time.Time, topUsers int)
 	}
 	return out, rows.Err()
 }
+
+// MonthlyTokens counts what a User's answers, Agent runs and titles used in a
+// Workspace. Embeddings and the Superadmin's connection test are not the User's.
+func (s *Store) MonthlyTokens(ctx context.Context, userID, workspaceID uuid.UUID, since time.Time) (int64, error) {
+	var used int64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM ai_model_usage
+		WHERE user_id = $1 AND workspace_id = $2 AND at >= $3
+		  AND purpose <> 'embedding' AND feature <> 'connection_test'
+	`, userID, workspaceID, since).Scan(&used)
+	return used, err
+}
+
+// PlanLimit is the monthly token limit for the Workspace's Plan, or the Free
+// limit when the Plan has none.
+func (s *Store) PlanLimit(ctx context.Context, workspaceID uuid.UUID) (int64, error) {
+	var limit int64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(
+			(SELECT l.monthly_tokens FROM ai_plan_limits l WHERE l.plan = w.plan),
+			(SELECT monthly_tokens FROM ai_plan_limits WHERE plan = 'Free'))
+		FROM workspaces w WHERE w.id = $1
+	`, workspaceID).Scan(&limit)
+	return limit, err
+}
+
+// ListPlanLimits returns every Plan's monthly token limit, smallest first.
+func (s *Store) ListPlanLimits(ctx context.Context) ([]app.PlanLimit, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT plan, monthly_tokens FROM ai_plan_limits ORDER BY monthly_tokens, plan`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	limits := []app.PlanLimit{}
+	for rows.Next() {
+		var limit app.PlanLimit
+		if err := rows.Scan(&limit.Plan, &limit.MonthlyTokens); err != nil {
+			return nil, err
+		}
+		limits = append(limits, limit)
+	}
+	return limits, rows.Err()
+}
+
+// SetPlanLimit adds or changes a Plan's monthly token limit.
+func (s *Store) SetPlanLimit(ctx context.Context, plan string, monthlyTokens int64) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO ai_plan_limits (plan, monthly_tokens) VALUES ($1, $2)
+		ON CONFLICT (plan) DO UPDATE SET monthly_tokens = EXCLUDED.monthly_tokens, updated_at = NOW()
+	`, plan, monthlyTokens)
+	return err
+}

@@ -36,22 +36,34 @@ func (h *RAGChatHandler) startRun(r *http.Request, actorID, workspaceID, convers
 	if err := h.service.Authorize(r.Context(), workspaceID, conversationID, actorID); err != nil {
 		return airuns.Run{}, false, err
 	}
+	if err := h.checkLimit(r.Context(), actorID, workspaceID); err != nil {
+		return airuns.Run{}, false, err
+	}
 	resolved, err := h.service.ResolveMentions(r.Context(), workspaceID, actorID, question)
 	if err != nil {
 		return airuns.Run{}, false, err
 	}
 	request.Question = resolved
+	extras, err := h.extras(r.Context(), actorID, workspaceID, conversationID, request)
+	if err != nil {
+		return airuns.Run{}, false, err
+	}
 	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	if key == "" {
 		key = uuid.NewString()
 	}
 	sum := sha256.New()
 	_, _ = fmt.Fprintf(sum, "%s\x00%s\x00%s\x00%s", conversationID, request.Question, request.Language, strings.Join(request.PublicLinkTokens, "\x00"))
+	// A retry with other categories, chats or files is a different question.
+	_, _ = fmt.Fprintf(sum, "\x00%v\x00%v", extras.CategoryIDs, request.ContextChatIDs)
+	for _, file := range extras.Attachments {
+		_, _ = fmt.Fprintf(sum, "\x00%s\x00%s", file.Name, file.Text)
+	}
 	return h.runs.Start(r.Context(), airuns.Start{
 		OwnerID: actorID, WorkspaceID: &workspaceID, ConversationID: &conversationID, Kind: "chat",
 		IdempotencyKey: key, Fingerprint: hex.EncodeToString(sum.Sum(nil)), Deadline: time.Now().Add(h.timeout),
 	}, func(ctx context.Context) (json.RawMessage, error) {
-		answer, err := h.answer(ctx, actorID, workspaceID, conversationID, request)
+		answer, err := h.answer(ctx, actorID, workspaceID, conversationID, request, extras)
 		if err != nil {
 			return nil, err
 		}

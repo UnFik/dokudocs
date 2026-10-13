@@ -16,6 +16,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import {
   createMCPKey,
   getAIPermissions,
@@ -26,12 +27,14 @@ import {
   type MCPKey,
 } from './api/ai-access-api'
 import { AuditList } from './audit-list'
+import { AINotifications, AIUsage } from './usage-and-notifications'
 
 const message = (error: unknown, fallback: string) =>
   error instanceof ApiError && error.title ? error.title : fallback
 
 /** What the assistant and outside AI clients may do as this User, and the keys those clients use. */
 export function AIAccessPage() {
+  const { activeWorkspaceId } = useWorkspaces()
   return (
     <main className='flex flex-1 flex-col overflow-y-auto p-6'>
       <div className='mx-auto w-full max-w-4xl space-y-10'>
@@ -42,6 +45,8 @@ export function AIAccessPage() {
             with an MCP key. It never gets more access than you have.
           </p>
         </div>
+        <AIUsage workspaceID={activeWorkspaceId} />
+        <AINotifications />
         <Permissions />
         <Keys />
         <RecentCalls />

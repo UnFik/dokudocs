@@ -9,11 +9,13 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"backend/internal/application/airuns"
 	"backend/internal/application/aiusage"
 	"backend/internal/domain/mention"
 	"backend/internal/domain/model"
+	"backend/internal/domain/searchscope"
 
 	"github.com/google/uuid"
 )
@@ -36,6 +38,10 @@ type ModelInput struct {
 	Language string
 	History  []model.RAGMessage
 	Sources  []model.RAGChunk
+	// Context is other chats of the User, background only and never evidence.
+	Context []model.ContextChat
+	// Attachments are files the User attached to this question; the model may cite them by ID.
+	Attachments []model.QuestionAttachment
 }
 
 type ModelOutput struct {
@@ -63,6 +69,13 @@ type ChatRepository interface {
 	SearchDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, text string, limit int) ([]model.RAGDocumentHit, error)
 	GetRAGConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, before int64, limit int) (model.RAGConversationHistory, int64, error)
 	DeleteRAGConversation(context.Context, uuid.UUID, uuid.UUID) error
+	RAGTitleSource(ctx context.Context, conversationID, actorID uuid.UUID) (question, answer string, ok bool, err error)
+	SetGeneratedRAGTitle(ctx context.Context, conversationID, actorID uuid.UUID, title string) error
+	RAGCategories(ctx context.Context, workspaceID, actorID uuid.UUID) ([]model.RAGCategory, error)
+	CountVisibleRAGCategories(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) (int, error)
+	RAGContextChats(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) ([]model.ContextChat, error)
+	MarkRAGConversationRead(ctx context.Context, conversationID, actorID uuid.UUID) error
+	UpdateRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error)
 	SearchRAGChunksWithPublicLinkTokens(context.Context, uuid.UUID, uuid.UUID, string, int, []string) ([]model.RAGChunk, error)
 	SearchRAGChunksWithEmbedding(context.Context, uuid.UUID, uuid.UUID, string, []float32, string, string, int, []string) ([]model.RAGChunk, error)
 	HasStaleReadableRAGIndex(context.Context, uuid.UUID, uuid.UUID, []string, string, string) (bool, error)
@@ -73,6 +86,8 @@ type ChatRepository interface {
 }
 
 type AskInput struct {
+	// Extras were checked by PrepareExtras.
+	Extras           model.QuestionExtras
 	WorkspaceID      uuid.UUID
 	ConversationID   uuid.UUID
 	ActorID          uuid.UUID
@@ -210,6 +225,80 @@ func (u *ChatUseCase) GetConversationPage(ctx context.Context, conversationID, a
 	return history, base64.RawURLEncoding.EncodeToString([]byte(strconv.FormatInt(next, 10))), nil
 }
 
+// maxConversationTitle is the longest title a User may give a Conversation.
+const maxConversationTitle = 120
+
+// UpdateConversation renames, pins, unpins, archives or restores one of the
+// actor's Conversations. A title is trimmed and may not end up empty.
+func (u *ChatUseCase) UpdateConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error) {
+	if conversationID == uuid.Nil || actorID == uuid.Nil || (patch.Title == nil && patch.Pinned == nil && patch.Archived == nil) {
+		return model.RAGConversation{}, ErrInvalidChatRequest
+	}
+	if patch.Title != nil {
+		title := strings.TrimSpace(*patch.Title)
+		if title == "" || utf8.RuneCountInString(title) > maxConversationTitle {
+			return model.RAGConversation{}, ErrInvalidChatRequest
+		}
+		patch.Title = &title
+	}
+	return u.repository.UpdateRAGConversation(ctx, conversationID, actorID, patch)
+}
+
+// TitleRequest opens the request that asks the model for a Conversation's title.
+const TitleRequest = "Write a short title (at most six words, no quotes) for this conversation."
+
+const maxGeneratedTitle = 60
+
+// TitleConversation asks the model for a short title once a Conversation has its
+// first answer, and keeps it unless the User renamed the Conversation meanwhile.
+// It does nothing when no model is set up.
+func (u *ChatUseCase) TitleConversation(ctx context.Context, workspaceID, conversationID, actorID uuid.UUID, language string) error {
+	if u.model == nil {
+		return nil
+	}
+	question, answer, ok, err := u.repository.RAGTitleSource(ctx, conversationID, actorID)
+	if err != nil || !ok {
+		return err
+	}
+	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: aiusage.FeatureChatTitle, UserID: actorID, WorkspaceID: workspaceID})
+	exchange := "Question: " + clip(mention.VisibleDocuments(question), 1000) + "\nAnswer: " + clip(answer, 1000)
+	generated, err := u.model.Answer(ctx, ModelInput{
+		Question: TitleRequest + " Reply in the language of the question.",
+		Language: normalizeRAGLanguage(language),
+		Sources:  []model.RAGChunk{{ChunkID: uuid.New(), Text: exchange}},
+	})
+	if err != nil {
+		return err
+	}
+	title := tidyTitle(generated.Text)
+	if title == "" {
+		return nil
+	}
+	return u.repository.SetGeneratedRAGTitle(ctx, conversationID, actorID, title)
+}
+
+func clip(text string, runes int) string {
+	if utf8.RuneCountInString(text) <= runes {
+		return text
+	}
+	return string([]rune(text)[:runes])
+}
+
+// tidyTitle keeps the first line, drops quotes and extra spaces, and shortens it.
+func tidyTitle(text string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
+	line = strings.Join(strings.Fields(strings.Trim(strings.TrimSpace(line), "\"'`“”‘’")), " ")
+	return strings.TrimSpace(clip(line, maxGeneratedTitle))
+}
+
+// MarkConversationRead records that the actor has seen the Conversation's latest answer.
+func (u *ChatUseCase) MarkConversationRead(ctx context.Context, conversationID, actorID uuid.UUID) error {
+	if conversationID == uuid.Nil || actorID == uuid.Nil {
+		return ErrInvalidChatRequest
+	}
+	return u.repository.MarkRAGConversationRead(ctx, conversationID, actorID)
+}
+
 func (u *ChatUseCase) DeleteConversation(ctx context.Context, conversationID, actorID uuid.UUID) error {
 	if conversationID == uuid.Nil || actorID == uuid.Nil {
 		return ErrInvalidChatRequest
@@ -272,6 +361,7 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 		feature = aiusage.FeatureChatDocument
 	}
 	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: feature, UserID: input.ActorID, WorkspaceID: input.WorkspaceID})
+	ctx = searchscope.WithCategories(ctx, input.Extras.CategoryIDs)
 	if history.Conversation.DocumentID != nil {
 		// A document Conversation draws on its document alone.
 		chunks, err = u.repository.ListRAGChunksForDocument(ctx, input.WorkspaceID, input.ActorID, *history.Conversation.DocumentID, 40)
@@ -318,9 +408,10 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 		ConversationID: input.ConversationID, Citations: []model.RAGCitation{},
 		SourcesMayBeIncomplete: sourcesMayBeIncomplete,
 	}
-	if len(chunks) == 0 {
+	storedQuestion := input.Extras.Annotate(question)
+	if len(chunks) == 0 && len(input.Extras.Attachments) == 0 {
 		answer.Text = noEvidenceMessage(language)
-		if err := u.repository.StoreRAGAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, question, answer.Text, answer.CoveragePartial, answer.SourcesMayBeIncomplete, nil, linkTokens); err != nil {
+		if err := u.repository.StoreRAGAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, storedQuestion, answer.Text, answer.CoveragePartial, answer.SourcesMayBeIncomplete, nil, linkTokens); err != nil {
 			return Answer{}, err
 		}
 		return answer, nil
@@ -331,7 +422,10 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	if err := airuns.Emit(ctx, "status", map[string]string{"phase": "answering"}); err != nil {
 		return Answer{}, err
 	}
-	generated, err := u.model.Answer(ctx, ModelInput{Question: visible, Language: language, History: previousQuestions, Sources: chunks})
+	generated, err := u.model.Answer(ctx, ModelInput{
+		Question: visible, Language: language, History: previousQuestions, Sources: chunks,
+		Context: input.Extras.ContextChats, Attachments: input.Extras.Attachments,
+	})
 	if err != nil {
 		return Answer{}, err
 	}
@@ -340,8 +434,17 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 		chunkByID[chunk.ChunkID] = chunk
 		answer.CoveragePartial = answer.CoveragePartial || chunk.CoverageStatus == "partial"
 	}
+	attached := make(map[uuid.UUID]bool, len(input.Extras.Attachments))
+	for _, attachment := range input.Extras.Attachments {
+		attached[attachment.ID] = true
+	}
+	citedAttachment := false
 	seen := make(map[uuid.UUID]struct{}, len(generated.SourceIDs))
 	for _, sourceID := range generated.SourceIDs {
+		if attached[sourceID] {
+			citedAttachment = true
+			continue
+		}
 		chunk, ok := chunkByID[sourceID]
 		if !ok {
 			continue
@@ -357,14 +460,14 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 			QuotedText: chunk.Text, Breadcrumb: chunk.Breadcrumb, Ordinal: len(answer.Citations),
 		})
 	}
-	if strings.TrimSpace(generated.Text) == "" || len(answer.Citations) == 0 {
+	if strings.TrimSpace(generated.Text) == "" || (len(answer.Citations) == 0 && !citedAttachment) {
 		answer.Text = noEvidenceMessage(language)
 		answer.Citations = []model.RAGCitation{}
 		answer.CoveragePartial = false
 	} else {
 		answer.Text = strings.TrimSpace(generated.Text)
 	}
-	if err := u.repository.StoreRAGAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, question, answer.Text, answer.CoveragePartial, answer.SourcesMayBeIncomplete, answer.Citations, linkTokens); err != nil {
+	if err := u.repository.StoreRAGAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, storedQuestion, answer.Text, answer.CoveragePartial, answer.SourcesMayBeIncomplete, answer.Citations, linkTokens); err != nil {
 		return Answer{}, err
 	}
 	return answer, nil

@@ -5,7 +5,8 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { Check, Link2, Send, Square, X } from 'lucide-react'
+import { ArrowUp, Check, Link2, Square, X } from 'lucide-react'
+import { useAuthStore } from '@/stores/auth-store'
 import {
   MAX_DOCUMENT_MENTIONS,
   activeMentionQuery,
@@ -17,6 +18,10 @@ import {
 } from '@/lib/document-mentions'
 import {
   decideAgentAction,
+  getRAGUsage,
+  listRAGCategories,
+  listWorkspaces,
+  type RAGCategory,
   listSkills,
   searchChatDocuments,
   type AgentAction,
@@ -28,6 +33,17 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { AddContextMenu, type ContextChat } from './add-context-menu'
+import { resetLabel } from './conversation-format'
+import {
+  MAX_CATEGORIES,
+  MAX_CONTEXT_CHATS,
+  MAX_FILES,
+  readAttachments,
+  type Attachment,
+  type QuestionExtras,
+} from './question-extras'
+import { UsageRing } from './usage-ring'
 import type { ChatRunView } from './use-chat-run'
 
 /** An action the Agent asked for: it runs only when the User approves it here. */
@@ -380,6 +396,13 @@ function Citation({
   citation: RAGCitation
   workspaceID: string
 }) {
+  if (citation.unavailable)
+    return (
+      <li className='rounded-md border bg-background p-3 text-xs text-muted-foreground'>
+        <span className='font-medium'>Document not available</span>
+        <p className='mt-1'>You no longer have access to this source.</p>
+      </li>
+    )
   const href = `/docs/${encodeURIComponent(citation.documentId)}?workspaceId=${encodeURIComponent(workspaceID)}&nodeId=${encodeURIComponent(citation.nodeId)}#node-${encodeURIComponent(citation.nodeId)}`
   return (
     <li className='rounded-md border bg-background p-3 text-xs'>
@@ -452,6 +475,8 @@ export function AskForm({
   onStop,
   language,
   onLanguage,
+  scope = 'workspace',
+  chats = [],
 }: {
   id: string
   pending: boolean
@@ -459,13 +484,21 @@ export function AskForm({
   placeholder: string
   /** Where @ looks for documents to name; without it @ is plain text. */
   workspaceID?: string
-  onAsk: (question: string) => void
+  onAsk: (question: string, extras: QuestionExtras) => void
   /** Stops the answer being written; while it runs the form offers Stop in place of Send. */
   onStop?: () => void
   language: 'id' | 'en'
   onLanguage: (language: 'id' | 'en') => void
+  /** A document chat has no Category to narrow by. */
+  scope?: 'document' | 'workspace'
+  /** Other chats of the User that can be brought in as context (not the open one). */
+  chats?: ContextChat[]
 }) {
   const [question, setQuestion] = useState('')
+  const [categories, setCategories] = useState<RAGCategory[]>([])
+  const [contextChats, setContextChats] = useState<ContextChat[]>([])
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [fileError, setFileError] = useState<string>()
   const [placed, setPlaced] = useState<PlacedDocumentMention[]>([])
   const [caret, setCaret] = useState(0)
   const [dismissedAt, setDismissedAt] = useState<number | null>(null)
@@ -476,6 +509,32 @@ export function AskForm({
     retry: false,
     staleTime: 60_000,
   })
+  const userID = useAuthStore((state) => state.auth.user?.id ?? '')
+  const usage = useQuery({
+    queryKey: ['rag-usage', workspaceID],
+    queryFn: ({ signal }) => getRAGUsage(workspaceID!, signal),
+    enabled: Boolean(workspaceID),
+    retry: false,
+    staleTime: 30_000,
+  })
+  const categoryList = useQuery({
+    queryKey: ['rag-categories', workspaceID],
+    queryFn: ({ signal }) => listRAGCategories(workspaceID!, signal),
+    enabled: scope === 'workspace' && Boolean(workspaceID),
+    retry: false,
+    staleTime: 60_000,
+  })
+  const spent = Boolean(usage.data && usage.data.used >= usage.data.limit)
+  const workspaces = useQuery({
+    queryKey: ['workspaces', userID],
+    queryFn: ({ signal }) => listWorkspaces(signal),
+    enabled: spent && Boolean(userID),
+    retry: false,
+    staleTime: 60_000,
+  })
+  const isOwner =
+    workspaces.data?.find((workspace) => workspace.id === workspaceID)?.role ===
+    'owner'
   const typed = question.startsWith('/') ? question.slice(1).split(/\s/)[0] : ''
   const matches = question.startsWith('/')
     ? (skills.data ?? []).filter(
@@ -574,40 +633,141 @@ export function AskForm({
     event.preventDefault()
     const text = serialize(question, placed).trim()
     if (!text || pending) return
-    onAsk(text)
+    onAsk(text, {
+      categoryIds: categories.map((category) => category.id),
+      contextChatIds: contextChats.map((chat) => chat.id),
+      attachments,
+    })
+    setCategories([])
+    setContextChats([])
+    setAttachments([])
+    setFileError(undefined)
     setQuestion('')
     setPlaced([])
     setCaret(0)
   }
   return (
     <form onSubmit={submit} className='border-t p-3'>
-      <label htmlFor={id} className='mb-2 block text-sm font-medium'>
-        Ask a question
-      </label>
       <div className='relative'>
-        <Textarea
-          ref={box}
-          id={id}
-          value={question}
-          onChange={(event) => {
-            const next = event.target.value
-            setPlaced(trackEdit(placed, question, next))
-            setQuestion(next)
-            setCaret(event.target.selectionStart)
-            setHighlighted(0)
-            if (
-              activeMentionQuery(next, event.target.selectionStart)?.start !==
-              dismissedAt
-            )
-              setDismissedAt(null)
-          }}
-          onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          maxLength={10000}
-          disabled={pending}
-          className='min-h-20 resize-y'
-        />
+        <div className='rounded-md border border-input bg-card focus-within:ring-2 focus-within:ring-ring'>
+          {categories.length + contextChats.length + attachments.length > 0 ? (
+            <ul
+              aria-label='Added to this question'
+              className='flex flex-wrap gap-1.5 px-2 pt-2'
+            >
+              {categories.map((category) => (
+                <ContextChip
+                  key={category.id}
+                  label={category.name}
+                  remove={`Remove category ${category.name}`}
+                  onRemove={() =>
+                    setCategories(
+                      categories.filter((c) => c.id !== category.id)
+                    )
+                  }
+                />
+              ))}
+              {contextChats.map((chat) => (
+                <ContextChip
+                  key={chat.id}
+                  label={chat.title || 'Untitled chat'}
+                  remove={`Remove chat ${chat.title || 'Untitled chat'}`}
+                  onRemove={() =>
+                    setContextChats(
+                      contextChats.filter((c) => c.id !== chat.id)
+                    )
+                  }
+                />
+              ))}
+              {attachments.map((file) => (
+                <ContextChip
+                  key={file.name}
+                  label={file.name}
+                  remove={`Remove file ${file.name}`}
+                  onRemove={() =>
+                    setAttachments(
+                      attachments.filter((a) => a.name !== file.name)
+                    )
+                  }
+                />
+              ))}
+            </ul>
+          ) : null}
+          <Textarea
+            ref={box}
+            id={id}
+            aria-label='Ask a question'
+            value={question}
+            onChange={(event) => {
+              const next = event.target.value
+              setPlaced(trackEdit(placed, question, next))
+              setQuestion(next)
+              setCaret(event.target.selectionStart)
+              setHighlighted(0)
+              if (
+                activeMentionQuery(next, event.target.selectionStart)?.start !==
+                dismissedAt
+              )
+                setDismissedAt(null)
+            }}
+            onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            maxLength={10000}
+            disabled={pending}
+            className='min-h-20 resize-none border-0 bg-transparent shadow-none focus-visible:border-transparent focus-visible:ring-0'
+          />
+          <div className='flex items-center justify-between px-2 pb-2'>
+            <AddContextMenu
+              skills={skills.data ?? []}
+              chats={chats.filter(
+                (chat) => !contextChats.some((chosen) => chosen.id === chat.id)
+              )}
+              categories={(categoryList.data ?? []).filter(
+                (category) =>
+                  !categories.some((chosen) => chosen.id === category.id)
+              )}
+              scope={scope}
+              disabled={pending}
+              chatsFull={contextChats.length >= MAX_CONTEXT_CHATS}
+              categoriesFull={categories.length >= MAX_CATEGORIES}
+              filesFull={attachments.length >= MAX_FILES}
+              onPickSkill={chooseSkill}
+              onPickChat={(chat) => setContextChats([...contextChats, chat])}
+              onPickCategory={(category) =>
+                setCategories([...categories, category])
+              }
+              onFiles={(files) => {
+                void readAttachments(files, attachments).then((result) => {
+                  setAttachments(result.attachments)
+                  setFileError(result.error)
+                })
+              }}
+            />
+            {pending && onStop ? (
+              <Button
+                type='button'
+                size='icon'
+                variant='outline'
+                aria-label='Stop'
+                onClick={onStop}
+                className='size-8 max-sm:size-11'
+              >
+                <Square />
+              </Button>
+            ) : (
+              <Button
+                type='submit'
+                size='icon'
+                aria-label='Send'
+                disabled={pending || spent || !question.trim()}
+                className='size-8 max-sm:size-11'
+              >
+                <ArrowUp />
+              </Button>
+            )}
+          </div>
+        </div>
         {matches.length > 0 ? (
           <ul aria-label='Skills' className={floatingList}>
             {matches.map((skill, index) => (
@@ -674,40 +834,72 @@ export function AskForm({
           )
         ) : null}
       </div>
-      <div className='mt-2 flex flex-wrap items-center justify-between gap-2'>
-        <label className='flex items-center gap-2 text-xs text-muted-foreground'>
-          Answer language
+      <div className='mt-2 flex items-center justify-between gap-2'>
+        <label className='flex min-w-0 items-center gap-2 text-xs text-muted-foreground'>
+          <span className='sr-only'>Answer language</span>
           <select
             aria-label='Answer language'
             value={language}
             onChange={(event) => onLanguage(event.target.value as 'id' | 'en')}
-            className='h-8 rounded-md border bg-background px-2 text-foreground'
+            className='h-8 rounded-md border border-input bg-card px-2 text-xs text-foreground max-sm:h-11'
           >
             <option value='en'>English</option>
             <option value='id'>Bahasa Indonesia</option>
           </select>
         </label>
-        {pending && onStop ? (
-          <Button type='button' size='sm' variant='outline' onClick={onStop}>
-            <Square />
-            Stop
-          </Button>
-        ) : (
-          <Button
-            type='submit'
-            size='sm'
-            disabled={pending || !question.trim()}
-          >
-            <Send />
-            {pending ? 'Working…' : 'Send'}
-          </Button>
-        )}
+        {usage.data ? <UsageRing usage={usage.data} /> : null}
       </div>
+      {fileError ? (
+        <p role='alert' className='mt-2 text-sm text-destructive'>
+          {fileError}
+        </p>
+      ) : null}
+      {spent && usage.data ? (
+        <p role='status' className='mt-2 text-sm text-muted-foreground'>
+          This month&apos;s AI limit is spent. It resets on{' '}
+          {resetLabel(usage.data.resetsAt)}. Your chats stay readable.{' '}
+          {isOwner ? (
+            <a
+              href='/settings'
+              className='font-medium text-foreground underline underline-offset-2'
+            >
+              Manage the plan
+            </a>
+          ) : (
+            'Ask an Owner of this workspace to upgrade the plan.'
+          )}
+        </p>
+      ) : null}
       {error ? (
         <p role='alert' className='mt-2 text-sm text-destructive'>
           {error.message}
         </p>
       ) : null}
     </form>
+  )
+}
+
+/** One thing added to the question being written, with a way to take it off. */
+function ContextChip({
+  label,
+  remove,
+  onRemove,
+}: {
+  label: string
+  remove: string
+  onRemove: () => void
+}) {
+  return (
+    <li className='flex max-w-full items-center gap-1 rounded-sm bg-border py-0.5 ps-2 pe-0.5 font-mono text-[11px]'>
+      <span className='truncate'>{label}</span>
+      <button
+        type='button'
+        aria-label={remove}
+        onClick={onRemove}
+        className='inline-flex size-5 shrink-0 items-center justify-center rounded-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-sm:size-8'
+      >
+        <X className='size-3.5' aria-hidden='true' />
+      </button>
+    </li>
   )
 }

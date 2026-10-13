@@ -22,6 +22,7 @@ const conversation: RAGConversationHistory['conversation'] = {
   workspaceId: workspaceID,
   creatorId: testSession().user.id,
   title: 'Recovery policy',
+  unread: false,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 }
@@ -52,6 +53,7 @@ const history: RAGConversationHistory = {
           bodyVersion: 4,
           sourceFingerprint: 'source-v4',
           sourceChanged: true,
+          unavailable: false,
           quotedText: 'The runbook says restart the service.',
           breadcrumb: 'Recovery',
           ordinal: 0,
@@ -281,6 +283,10 @@ it('asks before deleting a chat and keeps it when cancelled', async () => {
     </QueryClientProvider>
   )
 
+  // Keyboard focus on the row shows its actions, as hovering does.
+  const row = screen.getByRole('button', { name: /Recovery policy/ }).first()
+  await expect.element(row).toBeVisible()
+  row.element().focus()
   await userEvent.click(
     screen.getByRole('button', { name: 'Delete chat' }).first()
   )
@@ -307,6 +313,10 @@ it('deletes the chat once the dialog is confirmed', async () => {
     </QueryClientProvider>
   )
 
+  // Keyboard focus on the row shows its actions, as hovering does.
+  const row = screen.getByRole('button', { name: /Recovery policy/ }).first()
+  await expect.element(row).toBeVisible()
+  row.element().focus()
   await userEvent.click(
     screen.getByRole('button', { name: 'Delete chat' }).first()
   )

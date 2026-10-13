@@ -134,11 +134,11 @@ test('@smoke: the answer shows while the provider is still writing, and joins th
   await ask(page)
 
   // The first part is on screen as a draft; the provider has not finished.
-  await expect(page.getByText('The recovery codeword is', { exact: false })).toBeVisible()
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('The recovery codeword is', { exact: false })).toBeVisible()
   await expect(page.getByText('dokudocs ai · draft')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible()
   expect(provider.completed).toBe(completedBefore)
-  await expect(page.getByText('cobalt.', { exact: false })).toHaveCount(0)
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('cobalt.', { exact: false })).toHaveCount(0)
 
   // Reloading the page picks the same run up; it does not start a second one.
   const starts: string[] = []
@@ -146,14 +146,16 @@ test('@smoke: the answer shows while the provider is still writing, and joins th
     if (request.method() === 'POST' && /\/runs$/.test(new URL(request.url()).pathname)) starts.push(request.url())
   })
   await page.reload()
-  await expect(page.getByText('The recovery codeword is', { exact: false })).toBeVisible()
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('The recovery codeword is', { exact: false })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible()
 
   provider.release()
-  await expect(page.getByText('The recovery codeword is cobalt.', { exact: true })).toBeVisible()
+  // The finished answer is in the message log; the chat's own title (written from the answer) also shows elsewhere.
+  const log = page.getByRole('log', { name: 'Messages' })
+  await expect(log.getByText('The recovery codeword is cobalt.', { exact: true })).toBeVisible()
   await expect(page.getByText('dokudocs ai · draft')).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Open block' })).toBeVisible()
-  await expect(page.getByText('The recovery codeword is cobalt.', { exact: true })).toHaveCount(1)
+  await expect(log.getByText('The recovery codeword is cobalt.', { exact: true })).toHaveCount(1)
   expect(starts).toHaveLength(0)
 })
 
@@ -164,7 +166,7 @@ test('@smoke: Stop ends the answer, keeps the draft labelled, and lets the next 
   provider.hold()
   const abandonedBefore = provider.abandoned
   await ask(page, false)
-  await expect(page.getByText('The recovery codeword is', { exact: false })).toBeVisible()
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('The recovery codeword is', { exact: false })).toBeVisible()
   await page.getByRole('button', { name: 'Stop' }).click()
   await expect(page.getByText(/This draft was not saved to the chat/)).toBeVisible()
   await expect.poll(() => provider.abandoned).toBeGreaterThan(abandonedBefore)
@@ -191,7 +193,7 @@ test('@smoke: a document named with @ is read, and shows as a link in the chat',
   expect(response.status()).toBe(202)
   expect(response.request().postDataJSON().question).toMatch(/^What does @\[Vault runbook .*\]\(doc:[0-9a-f-]{36}\) say about/)
   await expect(page.getByRole('link', { name: documentTitle })).toBeVisible()
-  await expect(page.getByText('The recovery codeword is cobalt.', { exact: true }).last()).toBeVisible()
+  await expect(page.getByRole('log', { name: 'Messages' }).getByText('The recovery codeword is cobalt.', { exact: true }).last()).toBeVisible()
 })
 
 test('@smoke: a long chat opens at its newest message and loads earlier ones on the way up', async ({ page }) => {
@@ -260,6 +262,52 @@ test('@smoke: on every kind of document the theme switch sits above Ask AI, whic
       expect(themeBox.y + themeBox.height, `${kind}: theme above Ask AI`).toBeLessThanOrEqual(askBox.y + 1)
       expect(Math.round(viewport.height - (askBox.y + askBox.height)), `${kind}: Ask AI 16px from the bottom`).toBe(16)
       expect(Math.round(viewport.width - (askBox.x + askBox.width)), `${kind}: Ask AI 16px from the right`).toBe(16)
+    }
+  }
+})
+
+test('@smoke: on every kind of document the AI panel has the one-row header and the icon composer', async ({ page }) => {
+  test.setTimeout(120_000)
+  await signIn(page)
+  const make = async (data: Record<string, unknown>) => {
+    const response = await page.request.post(`${apiURL}/api/v1/documents`, {
+      headers: { ...apiHeaders, 'Idempotency-Key': randomUUID() },
+      data,
+    })
+    expect(response.status()).toBe(201)
+    return (await response.json()).data.id as string
+  }
+  const documents = {
+    markdown: markdownDocumentID,
+    dbdiagram: await make({ title: 'Panel dbml', type: 'dbdiagram', isDraft: true, content: 'Table t { id int }' }),
+    mermaid: await make({ title: 'Panel mermaid', type: 'mermaid', isDraft: true, content: 'graph TD; A-->B' }),
+  }
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 800 }]) {
+    await page.setViewportSize(viewport)
+    for (const [kind, id] of Object.entries(documents)) {
+      const where = `${kind} at ${viewport.width}px`
+      await page.goto(`/docs/${id}`)
+      await page.getByRole('button', { name: 'Ask AI' }).click()
+      // The header is one row: no "Ask about this document" title, the controls are there.
+      await expect(page.getByRole('heading', { name: 'Ask about this document' }), where).toHaveCount(0)
+      const options = page.getByRole('button', { name: 'Chat options' })
+      await expect(options, where).toBeVisible({ timeout: 20_000 })
+      await expect(page.getByRole('button', { name: 'New chat' }), where).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Close' }), where).toBeVisible()
+      // The box appears once there is a chat to write in.
+      await page.getByRole('button', { name: 'New chat' }).click()
+      await expect(page.getByRole('textbox', { name: 'Ask a question' }), where).toBeVisible()
+      // The composer has no visible label and sends with an icon.
+      await expect(page.getByText('Ask a question', { exact: true }), where).toHaveCount(0)
+      await expect(page.getByRole('button', { name: 'Add context' }), where).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Send' }), where).toBeDisabled()
+      await options.click()
+      await expect(page.getByRole('menuitem', { name: 'Download conversation' }), where).toBeVisible()
+      await expect(page.getByRole('menuitem', { name: 'Settings' }), where).toBeVisible()
+      await expect(page.getByRole('menuitemcheckbox', { name: 'Browser notification' }), where).toBeVisible()
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: 'Close' }).click()
+      await expect(page.getByRole('button', { name: 'Chat options' }), where).toHaveCount(0)
     }
   }
 })

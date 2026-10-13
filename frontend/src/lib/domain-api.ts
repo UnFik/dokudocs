@@ -210,12 +210,15 @@ const ragCitationSchema = z.object({
   documentTitle: z.string().optional().default(''),
   projectName: z.string().optional().default(''),
   nodeId: z.string().uuid(),
-  bodyVersion: z.number().int().positive(),
+  // 0 on a source the reader can no longer open.
+  bodyVersion: z.number().int().nonnegative(),
   sourceFingerprint: z.string().optional(),
   sourceChanged: z.boolean().optional().default(false),
   quotedText: z.string(),
   breadcrumb: z.string(),
   ordinal: z.number().int().nonnegative(),
+  /** The reader lost access to the document: the server withholds its title and quote. */
+  unavailable: z.boolean().optional().default(false),
 })
 const ragConversationSchema = z.object({
   id: z.string().uuid(),
@@ -223,8 +226,21 @@ const ragConversationSchema = z.object({
   creatorId: z.guid().optional(),
   documentId: z.string().uuid().optional(),
   title: z.string(),
+  pinnedAt: z.string().optional(),
+  archivedAt: z.string().optional(),
+  unread: z.boolean().optional().default(false),
   createdAt: z.string(),
   updatedAt: z.string(),
+})
+const ragCategorySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  projectName: z.string(),
+})
+const ragUsageSchema = z.object({
+  used: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  resetsAt: z.string(),
 })
 const ragMessageSchema = z.object({
   id: z.string().uuid(),
@@ -332,6 +348,8 @@ export type CommentReply = z.infer<typeof commentReplySchema>
 export type CommentThread = z.infer<typeof commentThreadSchema>
 export type RAGCitation = z.infer<typeof ragCitationSchema>
 export type RAGConversation = z.infer<typeof ragConversationSchema>
+export type RAGUsage = z.infer<typeof ragUsageSchema>
+export type RAGCategory = z.infer<typeof ragCategorySchema>
 export type RAGMessage = z.infer<typeof ragMessageSchema>
 export type RAGConversationHistory = z.infer<typeof ragHistorySchema>
 export type AgentAction = z.infer<typeof agentActionSchema>
@@ -1132,6 +1150,54 @@ export async function listSkills(signal?: AbortSignal): Promise<Skill[]> {
   return z
     .object({ skills: z.array(skillSchema) })
     .parse(await apiFetch<unknown>('/api/v1/skills', { signal })).skills
+}
+
+/** Renames, pins, unpins, archives or restores one of the User's chats. */
+export async function updateRAGConversation(
+  conversationID: string,
+  patch: { title?: string; pinned?: boolean; archived?: boolean }
+): Promise<RAGConversation> {
+  return ragConversationSchema.parse(
+    await apiFetch<unknown>(`/api/v1/rag/conversations/${conversationID}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    })
+  )
+}
+
+/** Records that the User has seen the chat's latest answer. */
+export async function markRAGConversationRead(
+  conversationID: string
+): Promise<void> {
+  await apiFetch<void>(`/api/v1/rag/conversations/${conversationID}/read`, {
+    method: 'POST',
+  })
+}
+
+/** The categories the User may narrow a workspace question to. */
+export async function listRAGCategories(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<RAGCategory[]> {
+  return z.array(ragCategorySchema).parse(
+    await apiFetch<unknown>('/api/v1/rag/categories', {
+      signal,
+      headers: workspaceHeaders(workspaceId),
+    })
+  )
+}
+
+/** Tokens the User has used this month in the workspace, and the Plan's limit. */
+export async function getRAGUsage(
+  workspaceId: string,
+  signal?: AbortSignal
+): Promise<RAGUsage> {
+  return ragUsageSchema.parse(
+    await apiFetch<unknown>('/api/v1/rag/usage', {
+      signal,
+      headers: workspaceHeaders(workspaceId),
+    })
+  )
 }
 
 export async function deleteRAGConversation(

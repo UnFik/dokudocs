@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,9 @@ type RAGCitation struct {
 	QuotedText        string    `json:"quotedText"`
 	Breadcrumb        string    `json:"breadcrumb"`
 	Ordinal           int       `json:"ordinal"`
+	// Unavailable is set when the reader may no longer read the document; the
+	// title, quote and place are then withheld.
+	Unavailable bool `json:"unavailable,omitempty"`
 }
 
 type RAGConversation struct {
@@ -41,8 +45,22 @@ type RAGConversation struct {
 	// DocumentID is set on a Conversation opened from one document.
 	DocumentID *uuid.UUID `json:"documentId,omitempty"`
 	Title      string     `json:"title"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	UpdatedAt  time.Time  `json:"updatedAt"`
+	// PinnedAt is set while the User keeps the Conversation at the top of its list.
+	PinnedAt *time.Time `json:"pinnedAt,omitempty"`
+	// ArchivedAt is set while the Conversation sits in the Archived section.
+	ArchivedAt *time.Time `json:"archivedAt,omitempty"`
+	// Unread is true while the latest answer has not been seen by the User.
+	Unread    bool      `json:"unread"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// RAGConversationPatch changes a Conversation's title, pin or archive state.
+// A nil field is left as it is.
+type RAGConversationPatch struct {
+	Title    *string
+	Pinned   *bool
+	Archived *bool
 }
 
 type RAGMessage struct {
@@ -80,4 +98,51 @@ type RAGDocumentHit struct {
 	ProjectName string    `json:"projectName"`
 	// Categories are the document's categories in its project, in the project's order.
 	Categories []string `json:"categories"`
+}
+
+// RAGCategory is a category the User may narrow a question to.
+type RAGCategory struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	ProjectName string    `json:"projectName"`
+}
+
+// QuestionAttachment is a text file the User attached to one question. It is
+// read for that question only and never stored as a document.
+type QuestionAttachment struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	Text string    `json:"text"`
+}
+
+// ContextMessage is one message of another chat the User brought in as context.
+type ContextMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// ContextChat is another of the User's own chats, shown to the model as background.
+type ContextChat struct {
+	Title    string           `json:"title"`
+	Messages []ContextMessage `json:"messages"`
+}
+
+// QuestionExtras is what a question carries besides its text, already checked.
+type QuestionExtras struct {
+	CategoryIDs  []uuid.UUID
+	ContextChats []ContextChat
+	Attachments  []QuestionAttachment
+}
+
+// Annotate adds the names of the attached files under a question, so the saved
+// chat says what the answer was given.
+func (e QuestionExtras) Annotate(question string) string {
+	if len(e.Attachments) == 0 {
+		return question
+	}
+	names := make([]string, len(e.Attachments))
+	for i, file := range e.Attachments {
+		names[i] = file.Name
+	}
+	return question + "\n\n(Attached: " + strings.Join(names, ", ") + ")"
 }
