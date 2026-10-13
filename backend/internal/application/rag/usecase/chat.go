@@ -67,6 +67,7 @@ type ChatRepository interface {
 	GetRAGConversation(context.Context, uuid.UUID, uuid.UUID) (model.RAGConversationHistory, error)
 	ReadableDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]string, error)
 	SearchDocumentTitles(ctx context.Context, workspaceID, actorID uuid.UUID, text string, limit int) ([]model.RAGDocumentHit, error)
+	LookupDocuments(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) ([]model.RAGDocumentHit, error)
 	GetRAGConversationPage(ctx context.Context, conversationID, actorID uuid.UUID, before int64, limit int) (model.RAGConversationHistory, int64, error)
 	DeleteRAGConversation(context.Context, uuid.UUID, uuid.UUID) error
 	RAGTitleSource(ctx context.Context, conversationID, actorID uuid.UUID) (question, answer string, ok bool, err error)
@@ -157,6 +158,22 @@ func (u *ChatUseCase) SearchDocuments(ctx context.Context, workspaceID, actorID 
 		return nil, ErrInvalidChatRequest
 	}
 	return u.repository.SearchDocumentTitles(ctx, workspaceID, actorID, text, min(limit, 20))
+}
+
+// MaxLookup is how many documents one answer may ask about at once.
+const MaxLookup = 20
+
+// LookupDocuments names the documents an answer refers to. Only those the User
+// may read now, in this workspace and not in the trash, come back; the rest are
+// left out, so an unknown, hidden or removed id looks the same.
+func (u *ChatUseCase) LookupDocuments(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) ([]model.RAGDocumentHit, error) {
+	if workspaceID == uuid.Nil || actorID == uuid.Nil || len(ids) > MaxLookup {
+		return nil, ErrInvalidChatRequest
+	}
+	if len(ids) == 0 {
+		return []model.RAGDocumentHit{}, nil
+	}
+	return u.repository.LookupDocuments(ctx, workspaceID, actorID, ids)
 }
 
 // MaxMentions is how many different documents one question may name.
