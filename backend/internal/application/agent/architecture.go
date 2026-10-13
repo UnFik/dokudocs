@@ -175,7 +175,7 @@ func (s *ContentService) EditArchitecture(ctx context.Context, actor Actor, work
 	}, nil
 }
 
-var errStale = &ToolError{Message: "the document changed since you read it; read it again and retry with the new version"}
+var errStale = &ToolError{Message: "the version is not the document's current one: it changed since you read it, or it is not the exact version read_document returned; read it again and retry with that version"}
 
 // checkArchitectureOperations refuses what only this side can judge: a slug the catalog
 // does not have, and a linked document the User cannot read. The collaboration service
