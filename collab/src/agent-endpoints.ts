@@ -12,6 +12,8 @@ import {
   type MarkdownOperation,
   type SourceOperation,
 } from './agent-edit'
+import { applyArchitectureOperations, architectureText, architectureVersion, type ArchitectureEditResult } from './agent-architecture'
+import { architectureToJSON } from './architecture'
 import { isSourceType, type DocumentType } from './backend-api'
 import { toMarkdown } from './markdown'
 import { log } from './operations'
@@ -51,11 +53,17 @@ function readBody(request: IncomingMessage): Promise<string> {
   })
 }
 
-const editable = (type: string): type is DocumentType => type === 'markdown' || type === 'dbdiagram' || type === 'mermaid'
+const editable = (type: string): type is DocumentType => type === 'markdown' || type === 'dbdiagram' || type === 'mermaid' || type === 'architecture'
 
 /** The text the Agent reads, from the room's live state. */
 function liveText(doc: Y.Doc, type: DocumentType): string {
+  if (type === 'architecture') return architectureText(doc)
   return isSourceType(type) ? doc.getText(sourceName).toString() : toMarkdown(yDocToProsemirrorJSON(doc, fragmentName))
+}
+
+/** What an edit names as the version it was written against. */
+function versionOf(doc: Y.Doc, text: string, type: DocumentType): string {
+  return type === 'architecture' ? architectureVersion(architectureToJSON(doc)) : textVersion(text)
 }
 
 /** Rewrites a shared text with the smallest change, so a cursor elsewhere stays put. */
@@ -106,6 +114,10 @@ export async function handleAgentRequest(url: URL, request: IncomingMessage, res
     send(response, 422, { error: 'DBML and Mermaid documents have no suggestions; only a direct edit is possible' })
     return true
   }
+  if (isEdit && payload.mode === 'suggest' && type === 'architecture') {
+    send(response, 422, { error: 'an Architecture document has no suggestions; only a direct edit is possible' })
+    return true
+  }
   if (isEdit && !payload.userID) {
     send(response, 400, { error: 'userID is required' })
     return true
@@ -115,22 +127,27 @@ export async function handleAgentRequest(url: URL, request: IncomingMessage, res
   try {
     if (isRead) {
       let text = ''
+      let version = ''
       await connection.transact((doc) => {
         text = liveText(doc, type)
+        version = versionOf(doc, text, type)
       })
-      send(response, 200, { text, version: textVersion(text) })
+      send(response, 200, { text, version })
       return true
     }
     let outcome: { status: number; body: unknown } = { status: 500, body: { error: 'the edit was not applied' } }
     await connection.transact((doc) => {
       const before = liveText(doc, type)
-      if (payload.baseVersion && payload.baseVersion !== textVersion(before)) {
-        outcome = { status: 409, body: { error: 'the document changed since it was read; read it again', version: textVersion(before) } }
+      if (payload.baseVersion && payload.baseVersion !== versionOf(doc, before, type)) {
+        outcome = { status: 409, body: { error: 'the document changed since it was read; read it again', version: versionOf(doc, before, type) } }
         return
       }
       try {
         let suggestionIDs: string[] = []
-        if (isSourceType(type)) {
+        let architecture: ArchitectureEditResult | undefined
+        if (type === 'architecture') {
+          architecture = applyArchitectureOperations(doc, payload.operations)
+        } else if (isSourceType(type)) {
           replaceSource(doc.getText(sourceName), applySourceOperations(before, payload.operations as SourceOperation[]))
         } else {
           const current = yDocToProsemirrorJSON(doc, fragmentName)
@@ -148,7 +165,7 @@ export async function handleAgentRequest(url: URL, request: IncomingMessage, res
           suggestionIDs = result.suggestionIDs
         }
         const after = liveText(doc, type)
-        outcome = { status: 200, body: { version: textVersion(after), suggestionIDs } }
+        outcome = { status: 200, body: { version: versionOf(doc, after, type), suggestionIDs, ...architecture } }
       } catch (error) {
         if (!(error instanceof AgentEditError)) {
           log('agent_edit_failed', { room, type, error: error instanceof Error ? error.stack ?? error.message : String(error) }, 'ERROR')
