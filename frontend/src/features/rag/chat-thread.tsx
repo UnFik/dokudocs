@@ -78,7 +78,9 @@ export function AgentActionCard({
     >
       <p>
         <span className='text-muted-foreground'>The assistant asks to: </span>
-        <span className='font-medium'>{action.summary}</span>
+        <span className='font-medium whitespace-pre-line'>
+          {action.summary}
+        </span>
       </p>
       {status === 'pending' ? (
         <div className='flex flex-wrap gap-2'>

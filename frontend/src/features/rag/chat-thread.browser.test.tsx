@@ -91,6 +91,34 @@ it('shows what the assistant did and runs an action only when approved', async (
   expect(JSON.parse(String(init?.body))).toEqual({ approve: true })
 })
 
+it('shows each change of a long summary on its own line', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(jsonResponse({})))
+  )
+  const screen = await mount(
+    <ChatMessages
+      messages={[answer]}
+      actions={[
+        {
+          ...action,
+          tool: 'edit_architecture',
+          summary:
+            'Change the Architecture diagram:\n- Rename "API" to "Order API"\n- Remove Host "VPS-1" with 2 Systems and 1 Connection',
+        },
+      ]}
+      workspaceID={workspaceID}
+      conversationID={conversationID}
+      queryKey={['rag-conversation']}
+    />
+  )
+  const summary = screen.getByText(/Change the Architecture diagram:/)
+  await expect.element(summary).toBeVisible()
+  expect((summary.element() as HTMLElement).innerText).toContain(
+    'diagram:\n- Rename "API"'
+  )
+})
+
 it('a declined action says nothing changed', async () => {
   vi.stubGlobal(
     'fetch',
