@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyHref } from './answer-links'
+import { classifyHref, documentIdsIn } from './answer-links'
 
 const id = '3f2a9c1e-5b7d-4e8a-9c3b-1a2b3c4d5e6f'
 
@@ -48,5 +48,22 @@ describe('classifyHref', () => {
       '',
     ])
       expect(classifyHref(href), href).toEqual({ kind: 'none' })
+  })
+})
+
+describe('documentIdsIn', () => {
+  const other = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d'
+  it('lists each linked document once, in order', () => {
+    expect(
+      documentIdsIn(
+        `See [A](doc:${id}), then [B](doc:${other}) and [A again](doc:${id}).`
+      )
+    ).toEqual([id, other])
+  })
+
+  it('ignores links that are not complete doc: links', () => {
+    expect(
+      documentIdsIn(`[x](doc:nope) [y](https://e.co/${id}) [z](doc:${id}`)
+    ).toEqual([])
   })
 })

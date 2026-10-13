@@ -30,12 +30,17 @@ import {
   type RAGMessage,
 } from '@/lib/domain-api'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { AddContextMenu, type ContextChat } from './add-context-menu'
 import { resetLabel } from './conversation-format'
+import { documentIdsIn } from './markdown/answer-links'
 import { AnswerText } from './markdown/answer-text'
+import {
+  DocumentCard,
+  DocumentReferences,
+  ToolChip,
+} from './markdown/document-references'
 import {
   MAX_CATEGORIES,
   MAX_CONTEXT_CHATS,
@@ -246,84 +251,103 @@ const endings = {
  * The answer while it is being written. The text is a draft: it joins the chat
  * only when the server finishes, and a stopped or failed one says so.
  */
-export function RunProgress({ view }: { view: ChatRunView }) {
+export function RunProgress({
+  view,
+  workspaceID,
+}: {
+  view: ChatRunView
+  /** Where the documents it names are looked up; without it they stay plain. */
+  workspaceID?: string
+}) {
   if (view.phase === 'idle') return null
   const ending = view.outcome ? endings[view.outcome] : null
+  const named = [
+    ...view.tools.flatMap((tool) => (tool.documentId ? [tool.documentId] : [])),
+    ...documentIdsIn(view.draft),
+  ]
   return (
-    <div className='space-y-3'>
-      {view.question ? (
-        <article className='ml-auto max-w-3xl rounded-lg bg-primary/10 px-4 py-3'>
-          <h3 className='sr-only'>You</h3>
-          <QuestionText content={view.question} />
-        </article>
-      ) : null}
-      <article
-        className='max-w-4xl space-y-3'
-        aria-busy={view.phase !== 'ended'}
-        aria-label='Answer in progress'
-      >
-        <h3 className='font-mono text-[11px] text-muted-foreground'>
-          dokudocs ai · draft
-        </h3>
-        {view.draft ? (
-          <div
-            className={view.phase === 'ended' ? 'text-muted-foreground' : ''}
-          >
-            <AnswerText
-              content={view.draft}
-              streaming={view.phase === 'running'}
-            />
-            {view.phase === 'running' ? (
-              <span
-                data-activity='caret'
-                aria-hidden='true'
-                className='mt-1 inline-block h-4 w-0.5 animate-[caret-blink_1s_steps(1,end)_infinite] bg-foreground motion-reduce:animate-none'
-              />
-            ) : null}
-          </div>
+    <DocumentReferences workspaceID={workspaceID} ids={named}>
+      <div className='space-y-3'>
+        {view.question ? (
+          <article className='ml-auto max-w-3xl rounded-lg bg-primary/10 px-4 py-3'>
+            <h3 className='sr-only'>You</h3>
+            <QuestionText content={view.question} />
+          </article>
         ) : null}
-        {view.tools.length > 0 ? (
-          <ul className='flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground'>
-            {view.tools.map((tool) => (
-              <li key={tool.name} className='flex items-center gap-1.5'>
-                <Badge variant='tag'>{tool.name}</Badge>
-                {toolStates[tool.state]}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {view.phase === 'ended' ? (
-          <p role='alert' className='text-sm text-destructive'>
-            {ending}
-            {view.outcome === 'failed' && view.message
-              ? ` ${view.message}.`
-              : null}
-          </p>
-        ) : (
-          <p
-            role='status'
-            className='flex items-center gap-2 text-xs text-muted-foreground'
-          >
-            <span
-              data-activity='dots'
-              aria-hidden='true'
-              className='flex items-center gap-1'
+        <article
+          className='max-w-4xl space-y-3'
+          aria-busy={view.phase !== 'ended'}
+          aria-label='Answer in progress'
+        >
+          <h3 className='font-mono text-[11px] text-muted-foreground'>
+            dokudocs ai · draft
+          </h3>
+          {view.draft ? (
+            <div
+              className={view.phase === 'ended' ? 'text-muted-foreground' : ''}
             >
-              {[0, 1, 2].map((dot) => (
+              <AnswerText
+                content={view.draft}
+                streaming={view.phase === 'running'}
+              />
+              {view.phase === 'running' ? (
                 <span
-                  key={dot}
-                  className='size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none'
-                  style={{ animationDelay: `${dot * 200}ms` }}
+                  data-activity='caret'
+                  aria-hidden='true'
+                  className='mt-1 inline-block h-4 w-0.5 animate-[caret-blink_1s_steps(1,end)_infinite] bg-foreground motion-reduce:animate-none'
                 />
+              ) : null}
+            </div>
+          ) : null}
+          {view.tools.length > 0 ? (
+            <ul className='flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground'>
+              {view.tools.map((tool) => (
+                <li
+                  key={`${tool.name}:${tool.documentId ?? ''}`}
+                  className='flex items-center gap-1.5'
+                >
+                  <ToolChip
+                    name={tool.name}
+                    documentID={tool.documentId}
+                    suffix={toolStates[tool.state]}
+                  />
+                </li>
               ))}
-            </span>
-            {view.phase === 'starting'
-              ? 'Sending your question…'
-              : (stepLabels[view.step] ?? 'Working on it…')}
-          </p>
-        )}
-      </article>
-    </div>
+            </ul>
+          ) : null}
+          {view.phase === 'ended' ? (
+            <p role='alert' className='text-sm text-destructive'>
+              {ending}
+              {view.outcome === 'failed' && view.message
+                ? ` ${view.message}.`
+                : null}
+            </p>
+          ) : (
+            <p
+              role='status'
+              className='flex items-center gap-2 text-xs text-muted-foreground'
+            >
+              <span
+                data-activity='dots'
+                aria-hidden='true'
+                className='flex items-center gap-1'
+              >
+                {[0, 1, 2].map((dot) => (
+                  <span
+                    key={dot}
+                    className='size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none'
+                    style={{ animationDelay: `${dot * 200}ms` }}
+                  />
+                ))}
+              </span>
+              {view.phase === 'starting'
+                ? 'Sending your question…'
+                : (stepLabels[view.step] ?? 'Working on it…')}
+            </p>
+          )}
+        </article>
+      </div>
+    </DocumentReferences>
   )
 }
 
@@ -346,51 +370,77 @@ export function ChatMessage({
       </article>
     )
 
-  const tools = [...new Set(message.meta?.tools ?? [])]
+  const calls = toolCallsOf(message)
+  const named = [
+    ...calls.flatMap((call) => (call.documentId ? [call.documentId] : [])),
+    ...documentIdsIn(message.content),
+  ]
   return (
-    <article className='max-w-4xl space-y-3'>
-      <h3 className='font-mono text-[11px] text-muted-foreground'>
-        dokudocs ai{message.meta?.skill ? ` · /${message.meta.skill}` : ''}
-      </h3>
-      {/* Markdown built as elements: images never load, and outside links open in a new tab. */}
-      <AnswerText content={message.content} />
-      {tools.length > 0 ? (
-        <p className='flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground'>
-          Tools used:
-          {tools.map((tool) => (
-            <Badge key={tool} variant='tag'>
-              {tool}
-            </Badge>
-          ))}
-        </p>
-      ) : null}
-      {message.sourcesMayBeIncomplete ? (
-        <p role='status' className='text-xs text-warn'>
-          Some readable documents have stale indexes. This answer may be
-          incomplete.
-        </p>
-      ) : null}
-      {message.coveragePartial ? (
-        <p role='status' className='text-xs text-warn'>
-          Some document blocks could not be indexed, so coverage is partial.
-        </p>
-      ) : null}
-      {message.citations.length > 0 ? (
-        <div className='border-t pt-3'>
-          <h4 className='mb-2 text-xs font-semibold'>Sources</h4>
-          <ol className='space-y-2'>
-            {message.citations.map((citation) => (
-              <Citation
-                key={`${citation.documentId}:${citation.nodeId}`}
-                citation={citation}
-                workspaceID={workspaceID}
-              />
+    <DocumentReferences workspaceID={workspaceID} ids={named}>
+      <article className='max-w-4xl space-y-3'>
+        <h3 className='font-mono text-[11px] text-muted-foreground'>
+          dokudocs ai{message.meta?.skill ? ` · /${message.meta.skill}` : ''}
+        </h3>
+        {/* Markdown built as elements: images never load, and outside links open in a new tab. */}
+        <AnswerText content={message.content} />
+        {calls.length > 0 ? (
+          <p className='flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground'>
+            Tools used:
+            {calls.map((call) => (
+              <span
+                key={`${call.name}:${call.documentId ?? ''}`}
+                className='inline-flex items-center gap-1.5'
+              >
+                <ToolChip name={call.name} documentID={call.documentId} />
+              </span>
             ))}
-          </ol>
-        </div>
-      ) : null}
-    </article>
+          </p>
+        ) : null}
+        {message.sourcesMayBeIncomplete ? (
+          <p role='status' className='text-xs text-warn'>
+            Some readable documents have stale indexes. This answer may be
+            incomplete.
+          </p>
+        ) : null}
+        {message.coveragePartial ? (
+          <p role='status' className='text-xs text-warn'>
+            Some document blocks could not be indexed, so coverage is partial.
+          </p>
+        ) : null}
+        {message.citations.length > 0 ? (
+          <div className='border-t pt-3'>
+            <h4 className='mb-2 text-xs font-semibold'>Sources</h4>
+            <ol className='space-y-2'>
+              {message.citations.map((citation) => (
+                <Citation
+                  key={`${citation.documentId}:${citation.nodeId}`}
+                  citation={citation}
+                  workspaceID={workspaceID}
+                />
+              ))}
+            </ol>
+          </div>
+        ) : null}
+      </article>
+    </DocumentReferences>
   )
+}
+
+/** The tool calls of an answer, each tool once per document; older answers only kept the names. */
+function toolCallsOf(message: RAGMessage) {
+  const calls =
+    message.meta?.calls ??
+    (message.meta?.tools ?? []).map((name) => ({
+      name,
+      documentId: undefined,
+    }))
+  const seen = new Set<string>()
+  return calls.filter((call) => {
+    const key = `${call.name}:${call.documentId ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function Citation({
@@ -416,13 +466,22 @@ function Citation({
           {citation.projectName ? ` · ${citation.projectName}` : ''}
           {citation.breadcrumb ? ` · ${citation.breadcrumb}` : ''}
         </span>
-        <a
-          href={href}
-          className='inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline'
+        <DocumentCard
+          workspaceID={workspaceID}
+          hit={{
+            id: citation.documentId,
+            title: citation.documentTitle || 'Workspace document',
+            projectName: citation.projectName ?? '',
+          }}
         >
-          <Link2 className='size-3.5' />
-          Open block
-        </a>
+          <a
+            href={href}
+            className='inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline'
+          >
+            <Link2 className='size-3.5' />
+            Open block
+          </a>
+        </DocumentCard>
       </div>
       <blockquote className='mt-2 border-l-2 pl-3 text-muted-foreground'>
         {citation.quotedText}
