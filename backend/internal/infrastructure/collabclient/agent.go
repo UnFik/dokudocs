@@ -85,13 +85,21 @@ func (c *Client) Edit(ctx context.Context, edit agent.LiveEdit) (agent.LiveEditR
 		return agent.LiveEditResult{}, refusal(status, raw)
 	}
 	var body struct {
-		Version       string   `json:"version"`
-		SuggestionIDs []string `json:"suggestionIDs"`
+		Version       string            `json:"version"`
+		SuggestionIDs []string          `json:"suggestionIDs"`
+		Created       map[string]string `json:"created"`
+		Removed       struct {
+			Nodes       int `json:"nodes"`
+			Connections int `json:"connections"`
+		} `json:"removed"`
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return agent.LiveEditResult{}, err
 	}
-	return agent.LiveEditResult{Version: body.Version, SuggestionIDs: body.SuggestionIDs}, nil
+	return agent.LiveEditResult{
+		Version: body.Version, SuggestionIDs: body.SuggestionIDs,
+		Created: body.Created, RemovedNodes: body.Removed.Nodes, RemovedConnections: body.Removed.Connections,
+	}, nil
 }
 
 func refusal(status int, raw []byte) error {

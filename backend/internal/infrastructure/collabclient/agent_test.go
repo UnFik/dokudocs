@@ -66,3 +66,14 @@ func TestWithoutAServiceTheAgentCannotReachDocuments(t *testing.T) {
 		t.Fatal("a client without a URL pretended to read")
 	}
 }
+
+func TestAgentEditPassesBackWhatACanvasEditMade(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"version":"v2","suggestionIDs":[],"created":{"cache":"id-1"},"removed":{"nodes":3,"connections":1}}`))
+	}))
+	defer server.Close()
+	got, err := New(server.URL, "s").Edit(context.Background(), agent.LiveEdit{Room: "w.d", Type: "architecture", UserID: "u", Mode: "direct", Operations: json.RawMessage(`[]`)})
+	if err != nil || got.Created["cache"] != "id-1" || got.RemovedNodes != 3 || got.RemovedConnections != 1 {
+		t.Fatalf("Edit() = %+v, %v", got, err)
+	}
+}
