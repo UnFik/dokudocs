@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -180,6 +181,7 @@ func (d Deps) call(actor agent.Actor, tool agent.Tool) mcp.ToolHandler {
 			if !errors.As(err, &refusal) && !errors.Is(err, agent.ErrNotAllowed) && !errors.Is(err, agent.ErrInvalidArguments) &&
 				!strings.Contains(entry.Detail, "access") && !strings.Contains(entry.Detail, "Not found") {
 				entry.Outcome = mcpapp.OutcomeError
+				slog.ErrorContext(ctx, "mcp tool failed", "tool", tool.Name, "key_id", actor.KeyID, "error", err)
 			}
 			_ = d.Keys.Audit(ctx, entry)
 			return textResult(entry.Detail, true), nil
