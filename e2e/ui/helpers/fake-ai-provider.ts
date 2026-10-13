@@ -16,8 +16,8 @@ export class FakeAIProvider {
   /** Streaming requests that ended before the provider finished its answer. */
   abandoned = 0
   completed = 0
-  readonly first = 'The recovery codeword is '
-  readonly second = 'cobalt.'
+  first = 'The recovery codeword is '
+  second = 'cobalt.'
 
   get url() {
     return `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`
@@ -32,6 +32,12 @@ export class FakeAIProvider {
     this.release()
     this.server.closeAllConnections()
     await new Promise((resolve) => this.server.close(resolve))
+  }
+
+  /** From now on the answer is these two parts; the first is shown while the provider waits. */
+  setAnswer(first: string, second: string) {
+    this.first = first
+    this.second = second
   }
 
   /** From now on, answers stop after their first part until release(). */
