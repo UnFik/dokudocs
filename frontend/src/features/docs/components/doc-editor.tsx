@@ -25,6 +25,7 @@ import {
 import { DbmlEditor } from './dbml-editor'
 import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
 import { DocumentFloatingControls } from './document-floating-controls'
+import { DocEditorSkeleton } from './document-skeleton'
 import { EditorHeader } from './editor-header'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
@@ -135,18 +136,13 @@ export function DocEditor() {
     )
   }
 
-  if (workspacesLoading)
-    return (
-      <div className='p-6 text-sm text-muted-foreground'>Loading document…</div>
-    )
+  if (workspacesLoading) return <DocEditorSkeleton label='Loading document' />
   if (!workspaceID)
     return (
       <DocumentLoadError message='No workspace is available for this document' />
     )
   if (documentQuery.isPending)
-    return (
-      <div className='p-6 text-sm text-muted-foreground'>Loading document…</div>
-    )
+    return <DocEditorSkeleton label='Loading document' />
   if (documentQuery.error || !documentQuery.data)
     return (
       <DocumentLoadError
@@ -239,7 +235,7 @@ function HydrateLegacyDocument({
   return hydrated ? (
     <ScopedDocEditor key={`${generation}:${docId}`} docId={docId} />
   ) : (
-    <div className='p-6 text-sm text-muted-foreground'>Loading document…</div>
+    <DocEditorSkeleton label='Loading document' />
   )
 }
 

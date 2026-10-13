@@ -53,6 +53,7 @@ import { slidesOf } from '../lib/slides'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { DocumentInfoLine } from './document-info-line'
 import { DocumentInsightsDialog } from './document-insights-dialog'
+import { DocBodySkeleton } from './document-skeleton'
 import { DocumentStatsDialog } from './document-stats-dialog'
 import { DocumentTitleRow } from './document-title-row'
 import { HistoryButtons, SelectionToolbar } from './editor-format-toolbar'
@@ -450,6 +451,8 @@ function CollaborativeMarkdownBody({
   const canEdit = access?.canEdit ?? false
   const canSuggest = access?.canSuggest ?? false
   const [error, setError] = useState('')
+  // An offline copy opens from this device and a failed start is reported, so neither waits behind the skeleton.
+  const awaitingSync = status === 'connecting' && !offline && !error
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false)
   const [cards, setCards] = useState<SuggestionCard[]>([])
   const [focusedSuggestionID, setFocusedSuggestionID] = useState<string | null>(
@@ -1009,7 +1012,10 @@ function CollaborativeMarkdownBody({
               commentsOpen={isSuggestionsOpen}
             />
           </div>
-          <div ref={mountRef} />
+          {awaitingSync ? (
+            <DocBodySkeleton label='Loading document content' />
+          ) : null}
+          <div ref={mountRef} className={awaitingSync ? 'hidden' : undefined} />
         </div>
         {showSource ? <MarkdownSource markdown={markdown} /> : null}
         {(mode === 'edit' && canEdit) || mode === 'suggest' ? (

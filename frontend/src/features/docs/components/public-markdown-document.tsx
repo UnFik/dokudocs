@@ -8,6 +8,7 @@ import {
 } from '@/features/architecture/components/architecture-preview'
 import '../lib/prosemirror/blocks/blocks.css'
 import { drawDiagrams, renderMarkdown } from '../lib/render-markdown'
+import { DocBodySkeleton } from './document-skeleton'
 import './markdown-body.css'
 
 export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
@@ -29,9 +30,12 @@ export function PublicMarkdownDocument({ shareToken }: { shareToken: string }) {
 
   if (documentQuery.isPending)
     return (
-      <p role='status' className='p-6'>
-        Loading shared document…
-      </p>
+      <main className='min-h-screen bg-background'>
+        <DocBodySkeleton
+          label='Loading shared document'
+          className='mx-auto max-w-4xl px-6 py-8 sm:px-10'
+        />
+      </main>
     )
   if (documentQuery.error || !documentQuery.data)
     return (
