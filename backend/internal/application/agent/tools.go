@@ -42,6 +42,7 @@ type ToolDeps struct {
 		SearchRAGChunksWithPublicLinkTokens(ctx context.Context, workspaceID, actorID uuid.UUID, query string, limit int, tokens []string) ([]model.RAGChunk, error)
 	}
 	Content *ContentService
+	Catalog ArchitectureCatalog
 }
 
 // schema helpers
@@ -222,8 +223,9 @@ func DokudocsTools(d ToolDeps) []Tool {
 		},
 		{
 			Name: "read_document", Capability: CapRead, DocumentTool: true,
-			Description: "Read a document: its title, type and full text, and the version to pass to edit_document_content.",
-			Parameters:  object([]string{"workspace_id", "document_id"}, map[string]any{"workspace_id": pWorkspace, "document_id": pDocument}),
+			Description: "Read a document: its title, type and full text, and the version to pass to edit_document_content. " +
+				"An Architecture document comes back as its canvas in JSON (every node and connection with its id and place); change it with edit_architecture, passing this version.",
+			Parameters: object([]string{"workspace_id", "document_id"}, map[string]any{"workspace_id": pWorkspace, "document_id": pDocument}),
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
 				a, err := parse[wsDoc](args)
 				if err != nil {
@@ -242,9 +244,6 @@ func DokudocsTools(d ToolDeps) []Tool {
 					return nil, err
 				}
 				text := live.Text
-				if meta.Type == "architecture" {
-					text = meta.Content
-				}
 				return map[string]any{
 					"id": meta.ID, "title": meta.Title, "type": meta.Type, "project": meta.ProjectName, "tags": meta.Tags,
 					"categories": meta.Categories, "updatedAt": meta.UpdatedAt, "content": text, "version": live.Version,
@@ -540,6 +539,113 @@ func DokudocsTools(d ToolDeps) []Tool {
 					return nil, err
 				}
 				return d.Content.Edit(ctx, actor, ws, doc, a.Version, a.Operations)
+			},
+		},
+		{
+			Name: "list_architecture_catalog", Capability: CapRead,
+			Description: "List the kinds an Architecture document can use: Host and System kinds (catalog) and protocols for Connections, each with the slug to write. Narrow it with category or query.",
+			Parameters: object(nil, map[string]any{
+				"category": map[string]any{"type": "string", "enum": []string{"host", "system", "protocol"}, "description": "Only this category."},
+				"query":    pText("Only entries whose slug or name contains this text."),
+			}),
+			Run: func(ctx context.Context, _ Actor, args json.RawMessage) (any, error) {
+				a, err := parse[struct {
+					Category string `json:"category"`
+					Query    string `json:"query"`
+				}](args)
+				if err != nil {
+					return nil, err
+				}
+				entries, err := d.Catalog.List(ctx)
+				if err != nil {
+					return nil, err
+				}
+				query := strings.ToLower(strings.TrimSpace(a.Query))
+				out := make([]map[string]any, 0, len(entries))
+				for _, e := range entries {
+					if e.Deprecated || (a.Category != "" && e.Category != a.Category) {
+						continue
+					}
+					if query != "" && !strings.Contains(strings.ToLower(e.Slug), query) && !strings.Contains(strings.ToLower(e.Name), query) {
+						continue
+					}
+					out = append(out, map[string]any{"slug": e.Slug, "name": e.Name, "category": e.Category, "subkind": e.Subkind})
+				}
+				return out, nil
+			},
+		},
+		{
+			Name: "edit_architecture", Capability: CapContent, Write: true, DocumentTool: true,
+			Description: "Change an Architecture document (a canvas of Hosts, Systems, Groups and Connections) with operations, using the version from read_document. " +
+				"Operations run all together or not at all, at most 50 per call. Name an existing element by its id; name one you add in the same call by the ref you gave it. " +
+				"add_node {kind host|system|group, name, catalog, parent, ref, description, tags, repoUrl, x, y, w, h}; update_node {id, name, catalog, description, tags, repoUrl}; " +
+				"move_node {id, parent (an id, or null for the top level), x, y, w, h}; remove_node {id, cascade (required to remove a Host or Group that holds elements)}; " +
+				"add_connection {source, target, protocol, ref, label, port} between two Systems; update_connection {id, protocol, label, port}; remove_connection {id}; " +
+				"link_document {id, document_id} and unlink_document {id, document_id} on a node or Connection. " +
+				"catalog and protocol are slugs from list_architecture_catalog. Leave x and y out and the element is placed in a free spot. " +
+				"From a Dokudocs chat the User approves the change first.",
+			Parameters: object([]string{"workspace_id", "document_id", "version", "operations"}, map[string]any{
+				"workspace_id": pWorkspace, "document_id": pDocument, "version": pText("The version read_document returned."),
+				"operations": map[string]any{"type": "array", "items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"type": map[string]any{"type": "string", "enum": []string{
+							"add_node", "update_node", "move_node", "remove_node", "add_connection", "update_connection", "remove_connection", "link_document", "unlink_document",
+						}},
+						"id":          map[string]any{"type": "string"},
+						"ref":         map[string]any{"type": "string"},
+						"kind":        map[string]any{"type": "string", "enum": []string{"host", "system", "group"}},
+						"name":        map[string]any{"type": "string"},
+						"catalog":     map[string]any{"type": []string{"string", "null"}},
+						"parent":      map[string]any{"type": []string{"string", "null"}},
+						"description": map[string]any{"type": "string"},
+						"tags":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+						"repoUrl":     map[string]any{"type": []string{"string", "null"}},
+						"x":           map[string]any{"type": "number"},
+						"y":           map[string]any{"type": "number"},
+						"w":           map[string]any{"type": "number"},
+						"h":           map[string]any{"type": "number"},
+						"cascade":     map[string]any{"type": "boolean"},
+						"source":      map[string]any{"type": "string"},
+						"target":      map[string]any{"type": "string"},
+						"protocol":    map[string]any{"type": "string"},
+						"label":       map[string]any{"type": "string"},
+						"port":        map[string]any{"type": []string{"string", "null"}},
+						"document_id": map[string]any{"type": "string"},
+					},
+					"required": []string{"type"},
+				}},
+			}),
+			// A canvas has no suggestions, so in chat the User always approves first.
+			NeedsApproval: func(ctx context.Context, actor Actor, args json.RawMessage) (bool, string, error) {
+				a, err := parse[struct {
+					wsDoc
+					Operations json.RawMessage `json:"operations"`
+				}](args)
+				if err != nil {
+					return false, "", err
+				}
+				ws, doc, err := a.ids()
+				if err != nil {
+					return false, "", err
+				}
+				summary, err := d.Content.ArchitectureSummary(ctx, actor, ws, doc, a.Operations)
+				return true, summary, err
+			},
+			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
+				a, err := parse[struct {
+					wsDoc
+					Version    string          `json:"version"`
+					Operations json.RawMessage `json:"operations"`
+				}](args)
+				if err != nil {
+					return nil, err
+				}
+				ws, doc, err := a.ids()
+				if err != nil {
+					return nil, err
+				}
+				return d.Content.EditArchitecture(ctx, actor, ws, doc, a.Version, a.Operations)
 			},
 		},
 		{

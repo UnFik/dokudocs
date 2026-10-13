@@ -20,6 +20,8 @@ type fakeRooms struct {
 	edits []LiveEdit
 	text  string
 	err   error
+	// created is what a canvas edit answers: the ids its refs became.
+	created map[string]string
 }
 
 func (f *fakeRooms) ReadRoomHead(context.Context, uuid.UUID, uuid.UUID, []uuid.UUID) (collaboration.RoomHead, error) {
@@ -38,7 +40,7 @@ func (f *fakeRooms) Edit(_ context.Context, edit LiveEdit) (LiveEditResult, erro
 	if edit.Mode == "suggest" {
 		ids = []string{uuid.NewString()}
 	}
-	return LiveEditResult{Version: "v2", SuggestionIDs: ids}, nil
+	return LiveEditResult{Version: "v2", SuggestionIDs: ids, Created: f.created}, nil
 }
 
 type fakeRevisions struct{ titles []string }
