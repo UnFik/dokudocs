@@ -49,6 +49,7 @@ type Record struct {
 	Feature      string
 	InputTokens  int
 	OutputTokens int
+	DurationMS   int
 	UserID       uuid.UUID
 	WorkspaceID  uuid.UUID
 	OK           bool
@@ -131,14 +132,14 @@ func (s *Service) Summary(ctx context.Context, actor uuid.UUID, days int) (Summa
 
 // Recorder returns the hook a model client calls after each request. It writes
 // with its own short context so a canceled request is still counted.
-func Recorder(store Store, provider, model, purpose string) func(ctx context.Context, in, out int, ok bool) {
-	return func(ctx context.Context, in, out int, ok bool) {
+func Recorder(store Store, provider, model, purpose string) func(ctx context.Context, in, out int, took time.Duration, ok bool) {
+	return func(ctx context.Context, in, out int, took time.Duration, ok bool) {
 		a := From(ctx)
 		write, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 		defer cancel()
 		_ = store.RecordUsage(write, Record{
 			Provider: provider, Model: model, Purpose: purpose, Feature: a.Feature,
-			InputTokens: in, OutputTokens: out, UserID: a.UserID, WorkspaceID: a.WorkspaceID, OK: ok,
+			InputTokens: in, OutputTokens: out, DurationMS: int(took.Milliseconds()), UserID: a.UserID, WorkspaceID: a.WorkspaceID, OK: ok,
 		})
 	}
 }

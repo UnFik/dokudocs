@@ -59,7 +59,8 @@ func NewAnswer(cfg Config) *AnswerModel {
 
 func (m *AnswerModel) Answer(ctx context.Context, input appchat.ModelInput) (out appchat.ModelOutput, err error) {
 	var usage tokenUsage
-	defer func() { m.cfg.report(ctx, usage.in(), usage.out(), err == nil) }()
+	started := time.Now()
+	defer func() { m.cfg.report(ctx, started, usage.in(), usage.out(), err == nil) }()
 	if strings.TrimSpace(m.apiKey) == "" || strings.TrimSpace(m.model) == "" || (len(input.Sources) == 0 && len(input.Attachments) == 0) {
 		return appchat.ModelOutput{}, errors.New("answer request is invalid")
 	}

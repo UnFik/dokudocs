@@ -37,7 +37,8 @@ func (*EmbeddingModel) Dimensions() int    { return embeddingDimensions }
 
 func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) (vectors [][]float32, err error) {
 	tokens := 0
-	defer func() { m.cfg.report(ctx, tokens, 0, err == nil) }()
+	started := time.Now()
+	defer func() { m.cfg.report(ctx, started, tokens, 0, err == nil) }()
 	if strings.TrimSpace(m.apiKey) == "" || strings.TrimSpace(m.model) == "" || len(inputs) == 0 || len(inputs) > 32 {
 		return nil, errors.New("embedding request is invalid")
 	}
