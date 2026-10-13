@@ -511,7 +511,11 @@ func DokudocsTools(d ToolDeps) []Tool {
 			}),
 			// Chat writes Markdown as suggestions; a source has none, so the User approves first.
 			NeedsApproval: func(ctx context.Context, actor Actor, args json.RawMessage) (bool, string, error) {
-				a, err := parse[wsDoc](args)
+				a, err := parse[struct {
+					wsDoc
+					Version    string          `json:"version"`
+					Operations json.RawMessage `json:"operations"`
+				}](args)
 				if err != nil {
 					return false, "", err
 				}
@@ -523,7 +527,13 @@ func DokudocsTools(d ToolDeps) []Tool {
 				if err != nil {
 					return false, "", err
 				}
-				return isSource(docType), "Change the diagram source", nil
+				if !isSource(docType) {
+					return false, "", nil
+				}
+				if err := checkContentOperations(docType, a.Operations); err != nil {
+					return false, "", err
+				}
+				return true, "Change the diagram source", d.Content.CheckVersion(ctx, actor, ws, doc, a.Version)
 			},
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
 				a, err := parse[struct {
@@ -620,6 +630,7 @@ func DokudocsTools(d ToolDeps) []Tool {
 			NeedsApproval: func(ctx context.Context, actor Actor, args json.RawMessage) (bool, string, error) {
 				a, err := parse[struct {
 					wsDoc
+					Version    string          `json:"version"`
 					Operations json.RawMessage `json:"operations"`
 				}](args)
 				if err != nil {
@@ -627,6 +638,9 @@ func DokudocsTools(d ToolDeps) []Tool {
 				}
 				ws, doc, err := a.ids()
 				if err != nil {
+					return false, "", err
+				}
+				if err := d.Content.CheckVersion(ctx, actor, ws, doc, a.Version); err != nil {
 					return false, "", err
 				}
 				summary, err := d.Content.ArchitectureSummary(ctx, actor, ws, doc, a.Operations)
