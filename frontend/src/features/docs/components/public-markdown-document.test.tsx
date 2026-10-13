@@ -113,3 +113,28 @@ it('draws a shared Architecture document from its canvas, read-only', async () =
     .toBeInTheDocument()
   await expect.element(screen.getByText('Order API')).toBeInTheDocument()
 })
+
+it('shows a busy skeleton instead of a bare line while the shared document loads', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise<Response>(() => {}))
+  )
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
+  const screen = await render(
+    <QueryClientProvider client={queryClient}>
+      <PublicMarkdownDocument shareToken={shareToken} />
+    </QueryClientProvider>
+  )
+
+  const busy = screen.container.querySelector('[aria-busy="true"]')
+  expect(busy).not.toBeNull()
+  expect(
+    busy!.querySelectorAll('[data-slot="skeleton"]').length
+  ).toBeGreaterThan(2)
+  await expect
+    .element(screen.getByText('Loading shared document'))
+    .toBeInTheDocument()
+})
