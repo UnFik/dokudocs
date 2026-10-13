@@ -179,10 +179,14 @@ export function RAGChatPage() {
                 changeMutation.mutate({ id, patch: { archived } })
               }
               onDelete={setDeleting}
-              subtitle={(chat) =>
-                workspaces.find((item) => item.id === chat.workspaceId)?.name ??
-                'Former workspace'
-              }
+              subtitle={(chat) => {
+                const workspace =
+                  workspaces.find((item) => item.id === chat.workspaceId)
+                    ?.name ?? 'Former workspace'
+                return chat.documentId
+                  ? `${chat.documentTitle?.trim() || 'Untitled'} · ${workspace}`
+                  : workspace
+              }}
             />
           </aside>
 

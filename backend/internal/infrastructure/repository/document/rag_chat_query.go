@@ -131,11 +131,20 @@ func (r *Repository) CreateRAGConversation(ctx context.Context, workspaceID, act
 	return conversation, err
 }
 
+// ListRAGConversations lists the actor's own Conversations: the workspace-wide
+// ones and those opened from a document the actor can still read.
 func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID) ([]model.RAGConversation, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at, EXISTS (SELECT 1 FROM rag_messages m WHERE m.conversation_id = rag_conversations.conversation_id AND m.role = 'assistant' AND m.created_at > rag_conversations.last_read_at)
-		FROM rag_conversations WHERE creator_id = $1 AND document_id IS NULL
-		ORDER BY `+conversationListOrder+`
+		SELECT c.conversation_id, c.workspace_id, c.creator_id, c.document_id, COALESCE(d.title, ''), c.title, c.pinned_at, c.archived_at, c.created_at, c.updated_at, c.unread
+		FROM (
+			SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at,
+			       EXISTS (SELECT 1 FROM rag_messages m WHERE m.conversation_id = rag_conversations.conversation_id AND m.role = 'assistant' AND m.created_at > rag_conversations.last_read_at) AS unread
+			FROM rag_conversations WHERE creator_id = $1
+		) c
+		LEFT JOIN documents d ON d.id = c.document_id
+		WHERE c.document_id IS NULL
+		   OR (d.id IS NOT NULL AND d.deleted_at IS NULL AND d.workspace_id = c.workspace_id `+strings.ReplaceAll(documentReadPredicate, "$2", "$1")+`)
+		ORDER BY (c.archived_at IS NOT NULL), c.pinned_at DESC NULLS LAST, c.updated_at DESC, c.conversation_id
 	`, actorID)
 	if err != nil {
 		return nil, err
@@ -144,7 +153,7 @@ func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID
 	conversations := make([]model.RAGConversation, 0)
 	for rows.Next() {
 		var conversation model.RAGConversation
-		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt, &conversation.Unread); err != nil {
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.DocumentTitle, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt, &conversation.Unread); err != nil {
 			return nil, err
 		}
 		conversations = append(conversations, conversation)
