@@ -17,6 +17,105 @@ import (
 	"github.com/google/uuid"
 )
 
+// conversationListOrder puts pinned Conversations first and archived ones last.
+const conversationListOrder = `(archived_at IS NOT NULL), pinned_at DESC NULLS LAST, updated_at DESC, conversation_id`
+
+// MaxPinnedConversations is how many Conversations one User may pin in one scope
+// (the workspace scope, or one document).
+const MaxPinnedConversations = 5
+
+// UpdateRAGConversation renames, pins, unpins, archives or restores one of the
+// actor's own Conversations and returns it as stored. Pinning past
+// MaxPinnedConversations in the Conversation's scope fails with
+// constant.ErrConversationPinLimit.
+func (r *Repository) UpdateRAGConversation(ctx context.Context, conversationID, actorID uuid.UUID, patch model.RAGConversationPatch) (model.RAGConversation, error) {
+	var conversation model.RAGConversation
+	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
+		var documentID *uuid.UUID
+		var alreadyPinned bool
+		if err := tx.QueryRowContext(ctx, `
+			SELECT document_id, pinned_at IS NOT NULL FROM rag_conversations
+			WHERE conversation_id = $1 AND creator_id = $2
+		`, conversationID, actorID).Scan(&documentID, &alreadyPinned); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return constant.ErrDocumentNotFound
+			}
+			return err
+		}
+		if patch.Pinned != nil && *patch.Pinned && !alreadyPinned {
+			// One pin at a time per User, or two pins could both see room.
+			if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "rag-pins:"+actorID.String()); err != nil {
+				return err
+			}
+			var pinned int
+			if err := tx.QueryRowContext(ctx, `
+				SELECT count(*) FROM rag_conversations
+				WHERE creator_id = $1 AND document_id IS NOT DISTINCT FROM $2 AND pinned_at IS NOT NULL
+			`, actorID, documentID).Scan(&pinned); err != nil {
+				return err
+			}
+			if pinned >= MaxPinnedConversations {
+				return constant.ErrConversationPinLimit
+			}
+		}
+		return tx.QueryRowContext(ctx, `
+			UPDATE rag_conversations SET
+				title = COALESCE($3, title),
+				title_generated = title_generated OR $3::text IS NOT NULL,
+				pinned_at = CASE WHEN $4::boolean IS NULL THEN pinned_at WHEN $4 THEN COALESCE(pinned_at, NOW()) ELSE NULL END,
+				archived_at = CASE WHEN $5::boolean IS NULL THEN archived_at WHEN $5 THEN COALESCE(archived_at, NOW()) ELSE NULL END
+			WHERE conversation_id = $1 AND creator_id = $2
+			RETURNING conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at, EXISTS (SELECT 1 FROM rag_messages m WHERE m.conversation_id = rag_conversations.conversation_id AND m.role = 'assistant' AND m.created_at > rag_conversations.last_read_at)
+		`, conversationID, actorID, patch.Title, patch.Pinned, patch.Archived).Scan(
+			&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID,
+			&conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt, &conversation.Unread)
+	})
+	return conversation, err
+}
+
+// RAGTitleSource reads the first question and first answer of a Conversation
+// whose title the model has not yet written. ok is false when there is nothing
+// to do: the title was already written or renamed, or no answer exists yet.
+func (r *Repository) RAGTitleSource(ctx context.Context, conversationID, actorID uuid.UUID) (question, answer string, ok bool, err error) {
+	err = r.db.QueryRowContext(ctx, `
+		SELECT
+			COALESCE((SELECT content FROM rag_messages WHERE conversation_id = c.conversation_id AND role = 'user' ORDER BY sequence_no LIMIT 1), ''),
+			COALESCE((SELECT content FROM rag_messages WHERE conversation_id = c.conversation_id AND role = 'assistant' ORDER BY sequence_no LIMIT 1), '')
+		FROM rag_conversations c
+		WHERE c.conversation_id = $1 AND c.creator_id = $2 AND NOT c.title_generated
+	`, conversationID, actorID).Scan(&question, &answer)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", false, nil
+	}
+	return question, answer, err == nil && question != "" && answer != "", err
+}
+
+// SetGeneratedRAGTitle stores the model's title unless the User renamed the
+// Conversation, or it was titled, in the meantime.
+func (r *Repository) SetGeneratedRAGTitle(ctx context.Context, conversationID, actorID uuid.UUID, title string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE rag_conversations SET title = $3, title_generated = true
+		WHERE conversation_id = $1 AND creator_id = $2 AND NOT title_generated
+	`, conversationID, actorID, title)
+	return err
+}
+
+// MarkRAGConversationRead records that the actor has seen the Conversation up to now.
+func (r *Repository) MarkRAGConversationRead(ctx context.Context, conversationID, actorID uuid.UUID) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE rag_conversations SET last_read_at = NOW() WHERE conversation_id = $1 AND creator_id = $2
+	`, conversationID, actorID)
+	if err != nil {
+		return err
+	}
+	if updated, err := result.RowsAffected(); err != nil {
+		return err
+	} else if updated == 0 {
+		return constant.ErrDocumentNotFound
+	}
+	return nil
+}
+
 func (r *Repository) CreateRAGConversation(ctx context.Context, workspaceID, actorID uuid.UUID) (model.RAGConversation, error) {
 	var conversation model.RAGConversation
 	err := r.tx.WithTransaction(ctx, func(tx database.Queryer) error {
@@ -34,9 +133,9 @@ func (r *Repository) CreateRAGConversation(ctx context.Context, workspaceID, act
 
 func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID) ([]model.RAGConversation, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT conversation_id, workspace_id, creator_id, document_id, title, created_at, updated_at
+		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at, EXISTS (SELECT 1 FROM rag_messages m WHERE m.conversation_id = rag_conversations.conversation_id AND m.role = 'assistant' AND m.created_at > rag_conversations.last_read_at)
 		FROM rag_conversations WHERE creator_id = $1 AND document_id IS NULL
-		ORDER BY updated_at DESC, conversation_id
+		ORDER BY `+conversationListOrder+`
 	`, actorID)
 	if err != nil {
 		return nil, err
@@ -45,7 +144,7 @@ func (r *Repository) ListRAGConversations(ctx context.Context, actorID uuid.UUID
 	conversations := make([]model.RAGConversation, 0)
 	for rows.Next() {
 		var conversation model.RAGConversation
-		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt, &conversation.Unread); err != nil {
 			return nil, err
 		}
 		conversations = append(conversations, conversation)
@@ -75,9 +174,9 @@ func (r *Repository) CreateDocumentRAGConversation(ctx context.Context, workspac
 // ListDocumentRAGConversations lists the actor's own Conversations on one document.
 func (r *Repository) ListDocumentRAGConversations(ctx context.Context, actorID, documentID uuid.UUID) ([]model.RAGConversation, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT conversation_id, workspace_id, creator_id, document_id, title, created_at, updated_at
+		SELECT conversation_id, workspace_id, creator_id, document_id, title, pinned_at, archived_at, created_at, updated_at, EXISTS (SELECT 1 FROM rag_messages m WHERE m.conversation_id = rag_conversations.conversation_id AND m.role = 'assistant' AND m.created_at > rag_conversations.last_read_at)
 		FROM rag_conversations WHERE creator_id = $1 AND document_id = $2
-		ORDER BY updated_at DESC, conversation_id
+		ORDER BY `+conversationListOrder+`
 	`, actorID, documentID)
 	if err != nil {
 		return nil, err
@@ -86,7 +185,7 @@ func (r *Repository) ListDocumentRAGConversations(ctx context.Context, actorID, 
 	conversations := make([]model.RAGConversation, 0)
 	for rows.Next() {
 		var conversation model.RAGConversation
-		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.CreatedAt, &conversation.UpdatedAt); err != nil {
+		if err := rows.Scan(&conversation.ID, &conversation.WorkspaceID, &conversation.CreatorID, &conversation.DocumentID, &conversation.Title, &conversation.PinnedAt, &conversation.ArchivedAt, &conversation.CreatedAt, &conversation.UpdatedAt, &conversation.Unread); err != nil {
 			return nil, err
 		}
 		conversations = append(conversations, conversation)
@@ -232,7 +331,46 @@ func (r *Repository) GetRAGConversationPage(ctx context.Context, conversationID,
 	if err != nil {
 		return history, 0, err
 	}
-	return history, next, r.attachMentions(ctx, history.Conversation.WorkspaceID, actorID, history.Messages)
+	if err := r.attachMentions(ctx, history.Conversation.WorkspaceID, actorID, history.Messages); err != nil {
+		return history, next, err
+	}
+	return history, next, r.withholdUnreadableCitations(ctx, history.Conversation.WorkspaceID, actorID, history.Messages)
+}
+
+// withholdUnreadableCitations hides what a citation shows of a document the
+// actor can no longer read: its title, project, place and quote. The answer
+// itself stays (ADR 0046); the citation keeps its position so the text still
+// lines up.
+func (r *Repository) withholdUnreadableCitations(ctx context.Context, workspaceID, actorID uuid.UUID, messages []model.RAGMessage) error {
+	var ids []uuid.UUID
+	seen := map[uuid.UUID]bool{}
+	for _, message := range messages {
+		for _, citation := range message.Citations {
+			if !seen[citation.DocumentID] {
+				seen[citation.DocumentID] = true
+				ids = append(ids, citation.DocumentID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	readable, err := r.ReadableDocumentTitles(ctx, workspaceID, actorID, ids)
+	if err != nil {
+		return err
+	}
+	for i := range messages {
+		for j, citation := range messages[i].Citations {
+			if _, ok := readable[citation.DocumentID]; ok {
+				continue
+			}
+			messages[i].Citations[j] = model.RAGCitation{
+				DocumentID: citation.DocumentID, ChunkID: citation.ChunkID,
+				NodeID: citation.NodeID, Ordinal: citation.Ordinal, Unavailable: true,
+			}
+		}
+	}
+	return nil
 }
 
 // ReadableDocumentTitles returns the current title of each listed document the
@@ -618,4 +756,95 @@ func (r *Repository) SearchDocumentTitles(ctx context.Context, workspaceID, acto
 		}
 	}
 	return hits, nil
+}
+
+// RAGCategories lists the categories of the projects in the workspace the actor
+// may see, for narrowing a question. Projects come first by name, then each
+// project's own category order.
+func (r *Repository) RAGCategories(ctx context.Context, workspaceID, actorID uuid.UUID) ([]model.RAGCategory, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT pc.id, pc.name, p.name
+		FROM project_categories pc
+		JOIN projects p ON p.id = pc.project_id AND p.workspace_id = $1 AND p.deleted_at IS NULL
+		WHERE `+projectVisiblePredicate("$2", "p")+`
+		ORDER BY p.name, pc.sort_order, pc.created_at
+	`, workspaceID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	categories := make([]model.RAGCategory, 0)
+	for rows.Next() {
+		var category model.RAGCategory
+		if err := rows.Scan(&category.ID, &category.Name, &category.ProjectName); err != nil {
+			return nil, err
+		}
+		categories = append(categories, category)
+	}
+	return categories, rows.Err()
+}
+
+// CountVisibleRAGCategories says how many of the ids are categories the actor
+// may see in the workspace, so a question cannot name one it should not know of.
+func (r *Repository) CountVisibleRAGCategories(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) (int, error) {
+	texts := make([]string, len(ids))
+	for i, id := range ids {
+		texts[i] = id.String()
+	}
+	var visible int
+	err := r.db.QueryRowContext(ctx, `
+		SELECT count(*)
+		FROM project_categories pc
+		JOIN projects p ON p.id = pc.project_id AND p.workspace_id = $1 AND p.deleted_at IS NULL
+		WHERE pc.id = ANY($3::uuid[]) AND `+projectVisiblePredicate("$2", "p"),
+		workspaceID, actorID, texts).Scan(&visible)
+	return visible, err
+}
+
+// contextMessagesPerChat is how many of a chat's latest messages the model gets.
+const contextMessagesPerChat = 12
+
+// RAGContextChats reads the actor's own chats in the workspace, newest messages
+// last. It fails with ErrDocumentNotFound when one of them is not theirs.
+func (r *Repository) RAGContextChats(ctx context.Context, workspaceID, actorID uuid.UUID, ids []uuid.UUID) ([]model.ContextChat, error) {
+	chats := make([]model.ContextChat, 0, len(ids))
+	for _, id := range ids {
+		var title string
+		if err := r.db.QueryRowContext(ctx, `
+			SELECT title FROM rag_conversations
+			WHERE conversation_id = $1 AND creator_id = $2 AND workspace_id = $3
+		`, id, actorID, workspaceID).Scan(&title); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, constant.ErrDocumentNotFound
+			}
+			return nil, err
+		}
+		rows, err := r.db.QueryContext(ctx, `
+			SELECT role, content FROM (
+				SELECT role, content, sequence_no FROM rag_messages
+				WHERE conversation_id = $1 ORDER BY sequence_no DESC LIMIT $2
+			) latest ORDER BY sequence_no
+		`, id, contextMessagesPerChat)
+		if err != nil {
+			return nil, err
+		}
+		chat := model.ContextChat{Title: title, Messages: []model.ContextMessage{}}
+		for rows.Next() {
+			var message model.ContextMessage
+			if err := rows.Scan(&message.Role, &message.Content); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			chat.Messages = append(chat.Messages, message)
+		}
+		rows.Close()
+		chats = append(chats, chat)
+	}
+	return chats, nil
+}
+
+// projectVisiblePredicate is projectMetadataPredicate for a query that has no
+// document: the project's own workspace stands in for the document's.
+func projectVisiblePredicate(actorPlaceholder, projectAlias string) string {
+	return strings.ReplaceAll(projectMetadataPredicate(actorPlaceholder, projectAlias), "d.workspace_id", projectAlias+".workspace_id")
 }

@@ -16,6 +16,7 @@ var (
 	ErrCategoryNotFound      = errors.New("category not found")
 	ErrDocumentNotFound      = errors.New("document not found")
 	ErrDocumentConflict      = errors.New("document changed; retry the update")
+	ErrConversationPinLimit  = errors.New("too many pinned conversations")
 	ErrInvalidIdempotencyKey = errors.New("invalid idempotency key")
 	ErrAccessNotFound        = errors.New("document access not found")
 	ErrUnauthorized          = errors.New("unauthorized")

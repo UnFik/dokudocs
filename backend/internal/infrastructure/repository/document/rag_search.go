@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"backend/internal/domain/model"
+	"backend/internal/domain/searchscope"
 
 	"github.com/google/uuid"
 )
@@ -87,6 +88,10 @@ func (r *Repository) searchRAGChunks(ctx context.Context, workspaceID, actorID u
 	if publicLinkTokens == nil {
 		publicLinkTokens = []string{}
 	}
+	categoryStrings := make([]string, 0)
+	for _, id := range searchscope.Categories(ctx) {
+		categoryStrings = append(categoryStrings, id.String())
+	}
 	query = strings.TrimSpace(query)
 	tsQuery := buildRAGTSQuery(query)
 	metadataPredicate := projectMetadataPredicate("$4", "p")
@@ -111,6 +116,9 @@ func (r *Repository) searchRAGChunks(ctx context.Context, workspaceID, actorID u
 			  AND ri.source_fingerprint = c.source_fingerprint AND ri.indexed_title = d.title
 			  AND ri.indexed_project_id IS NOT DISTINCT FROM d.project_id
 			  AND ri.indexed_project_name = COALESCE(p.name, '') AND ri.renderer_version = 2
+			  AND (cardinality($11::uuid[]) = 0 OR EXISTS (
+				SELECT 1 FROM document_category_mappings m
+				WHERE m.document_id = d.id AND m.category_id = ANY($11::uuid[])))
 			  AND (
 				(
 					(d.visibility <> 'public_link' OR d.is_draft = TRUE)
@@ -139,7 +147,7 @@ func (r *Repository) searchRAGChunks(ctx context.Context, workspaceID, actorID u
 		FROM eligible e JOIN ranked r ON r.chunk_id = e.chunk_id
 		ORDER BY r.score DESC, e.ordinal
 		LIMIT $6
-	`, workspaceID, tsQuery, query, actorID, publicLinkTokens, limit, embedding, provider, embeddingModel, ragSemanticMaxDistance)
+	`, workspaceID, tsQuery, query, actorID, publicLinkTokens, limit, embedding, provider, embeddingModel, ragSemanticMaxDistance, categoryStrings)
 	if err != nil {
 		return nil, err
 	}

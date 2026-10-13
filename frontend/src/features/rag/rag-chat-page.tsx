@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { MessageSquarePlus, Trash2 } from 'lucide-react'
+import { MessageSquarePlus } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
+import { ApiError } from '@/lib/api-client'
 import {
   createRAGConversation,
   deleteRAGConversation,
   listRAGConversations,
+  markRAGConversationRead,
+  updateRAGConversation,
 } from '@/lib/domain-api'
 import { getOpenedPublicLinkTokens } from '@/lib/public-link-session'
 import {
@@ -22,18 +25,31 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
+import { announceAnswer } from './chat-notify'
+import { ChatPanelHeader } from './chat-panel-header'
 import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
+import { ConversationHistory } from './conversation-history'
+import { downloadConversation } from './download-conversation'
+import type { QuestionExtras } from './question-extras'
 import { useChatRun } from './use-chat-run'
 import { useConversationHistory } from './use-conversation-history'
+import { usePanelOptions } from './use-panel-options'
 
 export function RAGChatPage() {
   const queryClient = useQueryClient()
   const userID = useAuthStore((state) => state.auth.user?.id ?? '')
   const { workspaces, activeWorkspaceId } = useWorkspaces()
-  const [selectedID, setSelectedID] = useState<string>()
+  // "Open in AI chat" from a document panel arrives as ?conversation=<id>.
+  const [selectedID, setSelectedID] = useState<string | undefined>(
+    () =>
+      new URLSearchParams(window.location.search).get('conversation') ??
+      undefined
+  )
   const [language, setLanguage] = useState<'id' | 'en'>('en')
   const [deleting, setDeleting] = useState<string>()
+  const [problem, setProblem] = useState<string>()
+  const options = usePanelOptions()
   const conversationsQuery = useQuery({
     queryKey: ['rag-conversations', userID],
     queryFn: ({ signal }) => listRAGConversations(signal),
@@ -41,9 +57,15 @@ export function RAGChatPage() {
     retry: false,
   })
   const conversations = conversationsQuery.data ?? []
-  const selectedConversation =
-    conversations.find((item) => item.id === selectedID) ?? conversations[0]
-  const historyQuery = useConversationHistory(userID, selectedConversation?.id)
+  const listed =
+    conversations.find((item) => item.id === selectedID) ??
+    (selectedID ? undefined : conversations[0])
+  // A chat opened by id may be a document chat, which the list does not carry.
+  const historyQuery = useConversationHistory(
+    userID,
+    listed?.id ?? selectedID ?? conversations[0]?.id
+  )
+  const selectedConversation = listed ?? historyQuery.history?.conversation
   const createMutation = useMutation({
     mutationFn: createRAGConversation,
     onSuccess: async (conversation) => {
@@ -57,10 +79,38 @@ export function RAGChatPage() {
     conversationID: selectedConversation?.id,
     workspaceID: selectedConversation?.workspaceId ?? '',
     language,
-    onAnswered: () =>
-      queryClient.invalidateQueries({
+    onAnswered: () => {
+      void queryClient.invalidateQueries({
         queryKey: ['rag-conversation', userID, selectedConversation?.id],
-      }),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['rag-conversations', userID],
+      })
+      void queryClient.invalidateQueries({ queryKey: ['rag-usage'] })
+      announceAnswer(
+        options.preferences,
+        selectedConversation?.title ?? '',
+        true
+      )
+    },
+  })
+  const refreshList = () =>
+    queryClient.invalidateQueries({ queryKey: ['rag-conversations', userID] })
+  const changeMutation = useMutation({
+    mutationFn: (input: {
+      id: string
+      patch: { title?: string; pinned?: boolean; archived?: boolean }
+    }) => updateRAGConversation(input.id, input.patch),
+    onMutate: () => setProblem(undefined),
+    onSuccess: refreshList,
+    onError: (error) =>
+      setProblem(
+        error instanceof ApiError ? error.title : 'Could not change the chat.'
+      ),
+  })
+  const markRead = useMutation({
+    mutationFn: markRAGConversationRead,
+    onSuccess: refreshList,
   })
   const deleteMutation = useMutation({
     mutationFn: deleteRAGConversation,
@@ -78,6 +128,12 @@ export function RAGChatPage() {
   })
 
   const history = historyQuery.history
+  // A chat counts as read once its latest answer is on screen.
+  useEffect(() => {
+    if (history && selectedConversation?.unread && !markRead.isPending)
+      markRead.mutate(selectedConversation.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(history), selectedConversation?.id, selectedConversation?.unread])
   const canAsk = Boolean(
     selectedConversation &&
     workspaces.some(
@@ -85,9 +141,9 @@ export function RAGChatPage() {
     )
   )
 
-  const submitQuestion = (text: string) => {
+  const submitQuestion = (text: string, extras: QuestionExtras) => {
     if (!selectedConversation || !canAsk || run.busy) return
-    void run.ask(text, getOpenedPublicLinkTokens())
+    void run.ask(text, getOpenedPublicLinkTokens(), extras)
   }
 
   return (
@@ -103,78 +159,31 @@ export function RAGChatPage() {
       <Main fixed fluid className='min-h-0 p-4 sm:p-6'>
         <div className='grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[17rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-visible'>
           <aside className='flex min-h-0 flex-col rounded-lg border bg-card'>
-            <div className='flex items-center justify-between border-b p-3'>
+            <div className='border-b p-3'>
               <h2 className='text-sm font-semibold'>Your chats</h2>
-              <Button
-                size='sm'
-                variant='outline'
-                aria-label='New chat'
-                title='New chat'
-                disabled={!activeWorkspaceId || createMutation.isPending}
-                onClick={() => createMutation.mutate(activeWorkspaceId)}
-              >
-                <MessageSquarePlus />
-              </Button>
             </div>
-            <div className='min-h-0 flex-1 overflow-y-auto p-2'>
-              {conversationsQuery.isPending ? (
-                <p role='status' className='p-2 text-sm text-muted-foreground'>
-                  Loading chats…
-                </p>
-              ) : conversationsQuery.error ? (
-                <p role='alert' className='p-2 text-sm text-destructive'>
-                  Could not load chat history.
-                </p>
-              ) : conversations.length === 0 ? (
-                <p className='p-2 text-sm text-muted-foreground'>
-                  No saved chats yet.
-                </p>
-              ) : (
-                <ul className='space-y-1'>
-                  {conversations.map((conversation) => {
-                    const workspace = workspaces.find(
-                      (item) => item.id === conversation.workspaceId
-                    )
-                    return (
-                      <li key={conversation.id}>
-                        <div
-                          className={`flex items-center gap-1 rounded-md ${selectedConversation?.id === conversation.id ? 'bg-accent' : ''}`}
-                        >
-                          <button
-                            type='button'
-                            className='min-w-0 flex-1 px-2 py-2 text-left text-sm hover:bg-accent/70'
-                            aria-current={
-                              selectedConversation?.id === conversation.id
-                                ? 'page'
-                                : undefined
-                            }
-                            onClick={() => setSelectedID(conversation.id)}
-                          >
-                            <span className='block truncate font-medium'>
-                              {conversation.title || 'Workspace chat'}
-                            </span>
-                            <span className='block truncate text-xs text-muted-foreground'>
-                              {workspace?.name ?? 'Former workspace'}
-                            </span>
-                          </button>
-                          <Button
-                            size='icon'
-                            variant='ghost'
-                            className='mr-1 size-8'
-                            aria-label='Delete chat'
-                            title='Delete chat'
-                            disabled={deleteMutation.isPending}
-                            onClick={() => setDeleting(conversation.id)}
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </div>
+            <ConversationHistory
+              conversations={conversations}
+              selectedID={selectedConversation?.id}
+              loading={conversationsQuery.isPending}
+              failed={Boolean(conversationsQuery.error)}
+              problem={problem}
+              onSelect={setSelectedID}
+              onRename={(id, title) =>
+                changeMutation.mutate({ id, patch: { title } })
+              }
+              onPin={(id, pinned) =>
+                changeMutation.mutate({ id, patch: { pinned } })
+              }
+              onArchive={(id, archived) =>
+                changeMutation.mutate({ id, patch: { archived } })
+              }
+              onDelete={setDeleting}
+              subtitle={(chat) =>
+                workspaces.find((item) => item.id === chat.workspaceId)?.name ??
+                'Former workspace'
+              }
+            />
           </aside>
 
           <section className='flex h-[34rem] max-h-[80svh] min-w-0 flex-col rounded-lg border bg-card lg:h-auto lg:max-h-none'>
@@ -188,18 +197,19 @@ export function RAGChatPage() {
               </p>
             ) : selectedConversation && history ? (
               <>
-                <div className='border-b px-4 py-3'>
-                  <h2 className='font-semibold'>
-                    {history.conversation.title || 'Workspace chat'}
-                  </h2>
-                  <p className='text-xs text-muted-foreground'>
-                    {workspaces.find(
-                      (item) => item.id === history.conversation.workspaceId
-                    )?.name ?? 'Former workspace'}
-                    {' · '}
-                    Whole workspace
-                  </p>
-                </div>
+                <ChatPanelHeader
+                  title={history.conversation.title}
+                  onNew={() => createMutation.mutate(activeWorkspaceId)}
+                  newDisabled={!activeWorkspaceId || createMutation.isPending}
+                  canDownload={history.messages.length > 0}
+                  onDownload={() =>
+                    downloadConversation(
+                      history.conversation.title,
+                      history.messages
+                    )
+                  }
+                  {...options}
+                />
                 <ChatScroller
                   resetKey={history.conversation.id}
                   firstKey={history.messages[0]?.id ?? ''}
@@ -236,6 +246,15 @@ export function RAGChatPage() {
                     pending={run.busy}
                     error={run.error}
                     placeholder='Ask about documents in this workspace…'
+                    chats={conversations
+                      .filter(
+                        (chat) =>
+                          chat.id !== history.conversation.id &&
+                          chat.workspaceId ===
+                            history.conversation.workspaceId &&
+                          !chat.archivedAt
+                      )
+                      .map((chat) => ({ id: chat.id, title: chat.title }))}
                     onAsk={submitQuestion}
                     onStop={() => void run.stop()}
                     language={language}

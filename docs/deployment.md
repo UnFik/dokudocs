@@ -159,7 +159,21 @@ before.
 - **Platform → Skills** holds instructions every User calls with `/name` in chat;
   MCP apps see them as prompts. A skill never adds access.
 - **Platform → Model usage** shows tokens per day, model, use and User for the
-  Dokudocs models. MCP apps use their own models and are not counted.
+  Dokudocs models. MCP apps use their own models and are not counted. Its
+  **Usage limits** section sets how many tokens one User may use in one workspace
+  per calendar month (reset on the 1st, UTC), by the workspace's Plan. The limits
+  live in the `ai_plan_limits` table; a Plan with no row gets the **Free** limit.
+  A migration seeds `Free` 300,000, `Pro` 3,000,000 and `Business` 15,000,000:
+  change them, and add a row for every Plan name the billing provider will set,
+  before launch.
+  A spent limit refuses new questions with `429` and code `ai_limit_reached`; a
+  run already going finishes, so use can pass the limit by one run.
+- **Chats** carry more than a question. A User can narrow a workspace question to
+  categories, bring up to 2 of their own chats as background, and attach up to 5
+  text files (`.txt`, `.md`, `.csv`, `.tsv`, `.json`, `.log`; 200,000 characters in
+  all) to one question. Files are read by the browser, sent with the question and
+  never stored as documents; PDF is not supported. After a chat's first answer
+  the answer model writes its title, which counts toward the limit.
 
 ## Rolling back
 

@@ -14,6 +14,7 @@ import (
 const (
 	FeatureChatWorkspace  = "chat_workspace"
 	FeatureChatDocument   = "chat_document"
+	FeatureChatTitle      = "chat_title"
 	FeatureIndexing       = "indexing"
 	FeatureConnectionTest = "connection_test"
 )
