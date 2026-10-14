@@ -126,7 +126,7 @@ func TestResponsesStreamsAnswerTextWithoutChatOnlyOptions(t *testing.T) {
 		}
 		return nil
 	})
-	model := NewAnswer(Config{BaseURL: server.URL, APIKey: "test-key", Model: "test-model", Protocol: ProtocolResponses, AllowPrivate: true, OnUsage: func(_ context.Context, in, out int, ok bool) {
+	model := NewAnswer(Config{BaseURL: server.URL, APIKey: "test-key", Model: "test-model", Protocol: ProtocolResponses, AllowPrivate: true, OnUsage: func(_ context.Context, in, out int, _ time.Duration, ok bool) {
 		success := 0
 		if ok {
 			success = 1
