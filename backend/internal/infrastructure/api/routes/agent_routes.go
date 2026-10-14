@@ -95,7 +95,7 @@ func newAgentKit(c *container.Container, cfg config.Config) *agentKit {
 // Superadmin's MCP settings, audit, Skills and model usage.
 func addAgentRoutes(mux *http.ServeMux, f Router, c *container.Container, cfg config.Config, kit *agentKit) {
 	authRequired := signedIn(appauth.NewUseCase(c.DB, cfg.JWTSecret, cfg.AccessTokenTTL), cfg)
-	h := agenthandler.New(kit.permissions, kit.mcp, kit.skills, kit.usage).WithPlanLimits(aiusagerepo.NewStore(c.DB))
+	h := agenthandler.New(kit.permissions, kit.mcp, kit.skills, kit.usage).WithPlanLimits(aiusagerepo.NewStore(c.DB)).WithQuotas(aiusagerepo.NewStore(c.DB))
 
 	// Under /api so the same proxy rule reaches it.
 	mux.Handle("/api/v1/mcp", mcpserver.New(mcpserver.Deps{Keys: kit.mcp, Executor: kit.executor, Skills: kit.skills}))
@@ -117,6 +117,8 @@ func addAgentRoutes(mux *http.ServeMux, f Router, c *container.Container, cfg co
 	platform.Get("/usage", h.Usage)
 	platform.Get("/ai/limits", h.PlanLimits)
 	platform.Put("/ai/limits/{plan}", h.SetPlanLimit)
+	platform.Get("/ai/quotas", h.Quotas)
+	platform.Post("/ai/quotas/{workspaceID}/{userID}/reset", h.ResetQuota)
 	platform.Post("/skills", h.CreateSkill)
 	platform.Put("/skills/{skillID}", h.UpdateSkill)
 	platform.Delete("/skills/{skillID}", h.DeleteSkill)

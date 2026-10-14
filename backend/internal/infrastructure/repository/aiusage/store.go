@@ -106,9 +106,10 @@ func (s *Store) UsageSummary(ctx context.Context, since time.Time, topUsers int)
 func (s *Store) MonthlyTokens(ctx context.Context, userID, workspaceID uuid.UUID, since time.Time) (int64, error) {
 	var used int64
 	err := s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(input_tokens + output_tokens), 0) FROM ai_model_usage
-		WHERE user_id = $1 AND workspace_id = $2 AND at >= $3
-		  AND purpose <> 'embedding' AND feature <> 'connection_test'
+		SELECT COALESCE(SUM(m.input_tokens + m.output_tokens), 0) FROM ai_model_usage m
+		LEFT JOIN ai_usage_resets r ON r.user_id = m.user_id AND r.workspace_id = m.workspace_id
+		WHERE m.user_id = $1 AND m.workspace_id = $2 AND m.at >= $3 AND m.at >= COALESCE(r.reset_at, $3)
+		  AND m.purpose <> 'embedding' AND m.feature <> 'connection_test'
 	`, userID, workspaceID, since).Scan(&used)
 	return used, err
 }
@@ -150,5 +151,44 @@ func (s *Store) SetPlanLimit(ctx context.Context, plan string, monthlyTokens int
 		INSERT INTO ai_plan_limits (plan, monthly_tokens) VALUES ($1, $2)
 		ON CONFLICT (plan) DO UPDATE SET monthly_tokens = EXCLUDED.monthly_tokens, updated_at = NOW()
 	`, plan, monthlyTokens)
+	return err
+}
+
+// ListQuotas returns what each User has used in each Workspace since a moment,
+// after any reset, most used first.
+func (s *Store) ListQuotas(ctx context.Context, since time.Time) ([]app.Quota, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT u.id, u.full_name, u.email, w.id, w.name, w.plan,
+		       SUM(m.input_tokens + m.output_tokens),
+		       COALESCE((SELECT monthly_tokens FROM ai_plan_limits WHERE plan = w.plan),
+		                (SELECT monthly_tokens FROM ai_plan_limits WHERE plan = 'Free'))
+		FROM ai_model_usage m
+		JOIN users u ON u.id = m.user_id
+		JOIN workspaces w ON w.id = m.workspace_id
+		LEFT JOIN ai_usage_resets r ON r.user_id = m.user_id AND r.workspace_id = m.workspace_id
+		WHERE m.at >= $1 AND m.at >= COALESCE(r.reset_at, $1)
+		  AND m.purpose <> 'embedding' AND m.feature <> 'connection_test'
+		GROUP BY u.id, u.full_name, u.email, w.id, w.name, w.plan
+		ORDER BY SUM(m.input_tokens + m.output_tokens) DESC, u.email`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	quotas := []app.Quota{}
+	for rows.Next() {
+		var q app.Quota
+		if err := rows.Scan(&q.UserID, &q.Name, &q.Email, &q.WorkspaceID, &q.Workspace, &q.Plan, &q.Used, &q.Limit); err != nil {
+			return nil, err
+		}
+		quotas = append(quotas, q)
+	}
+	return quotas, rows.Err()
+}
+
+// ResetQuota starts a User's count in a Workspace again from now.
+func (s *Store) ResetQuota(ctx context.Context, userID, workspaceID uuid.UUID) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO ai_usage_resets (user_id, workspace_id) VALUES ($1, $2)
+		ON CONFLICT (user_id, workspace_id) DO UPDATE SET reset_at = NOW()`, userID, workspaceID)
 	return err
 }
