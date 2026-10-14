@@ -40,7 +40,7 @@ func TestUsageIsSummedByDayModelPurposeAndUser(t *testing.T) {
 	store := NewStore(database.NewSQLDB(db))
 	ctx := context.Background()
 	for _, r := range []app.Record{
-		{Provider: "openai", Model: "gpt-x", Purpose: "agent", Feature: app.FeatureChatWorkspace, InputTokens: 100, OutputTokens: 10, UserID: heavy, OK: true},
+		{Provider: "openai", Model: "gpt-x", Purpose: "agent", Feature: app.FeatureChatWorkspace, InputTokens: 100, OutputTokens: 10, DurationMS: 1234, UserID: heavy, OK: true},
 		{Provider: "openai", Model: "gpt-x", Purpose: "agent", Feature: app.FeatureChatDocument, InputTokens: 50, OutputTokens: 5, UserID: heavy, OK: true},
 		{Provider: "openai", Model: "emb", Purpose: "embedding", Feature: app.FeatureIndexing, InputTokens: 7, OK: true},
 		{Provider: "openai", Model: "gpt-x", Purpose: "answer", Feature: app.FeatureChatWorkspace, InputTokens: 1, UserID: light, OK: false},
@@ -48,6 +48,10 @@ func TestUsageIsSummedByDayModelPurposeAndUser(t *testing.T) {
 		if err := store.RecordUsage(ctx, r); err != nil {
 			t.Fatalf("RecordUsage(): %v", err)
 		}
+	}
+	var took sql.NullInt64
+	if err := db.QueryRow(`SELECT duration_ms FROM ai_model_usage WHERE feature = $1 AND user_id = $2 AND input_tokens = 100`, app.FeatureChatWorkspace, heavy).Scan(&took); err != nil || took.Int64 != 1234 {
+		t.Fatalf("duration_ms = %v, %v", took, err)
 	}
 	s, err := store.UsageSummary(ctx, time.Now().Add(-24*time.Hour), 10)
 	if err != nil {

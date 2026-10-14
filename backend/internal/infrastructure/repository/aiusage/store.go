@@ -24,9 +24,9 @@ func nullable(id uuid.UUID) any {
 
 func (s *Store) RecordUsage(ctx context.Context, r app.Record) error {
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO ai_model_usage (provider, model, purpose, feature, input_tokens, output_tokens, user_id, workspace_id, ok)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		r.Provider, r.Model, r.Purpose, r.Feature, r.InputTokens, r.OutputTokens, nullable(r.UserID), nullable(r.WorkspaceID), r.OK)
+		INSERT INTO ai_model_usage (provider, model, purpose, feature, input_tokens, output_tokens, duration_ms, user_id, workspace_id, ok)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		r.Provider, r.Model, r.Purpose, r.Feature, r.InputTokens, r.OutputTokens, r.DurationMS, nullable(r.UserID), nullable(r.WorkspaceID), r.OK)
 	return err
 }
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"backend/internal/application/agent"
 	appchat "backend/internal/application/rag/usecase"
@@ -46,7 +47,7 @@ func TestChatCompletionsAgentSendsToolsAndReadsToolCalls(t *testing.T) {
 	defer server.Close()
 	var usage [2]int
 	model := NewAgent(Config{BaseURL: server.URL + "/v1", APIKey: "k", Model: "m", Protocol: ProtocolChatCompletions, AllowPrivate: true,
-		OnUsage: func(_ context.Context, in, out int, ok bool) { usage = [2]int{in, out} }})
+		OnUsage: func(_ context.Context, in, out int, _ time.Duration, ok bool) { usage = [2]int{in, out} }})
 	reply, err := model.Step(context.Background(), conversation(), specs)
 	if err != nil || len(reply.ToolCalls) != 1 || reply.ToolCalls[0].ID != "c2" || string(reply.ToolCalls[0].Arguments) != `{"document_id":"e"}` {
 		t.Fatalf("Step() = %+v, %v", reply, err)
@@ -96,7 +97,7 @@ func TestAgentFailuresAreProviderErrorsAndStillCountUsage(t *testing.T) {
 	defer server.Close()
 	failed := false
 	model := NewAgent(Config{BaseURL: server.URL, APIKey: "k", Model: "m", Protocol: ProtocolChatCompletions, AllowPrivate: true,
-		OnUsage: func(_ context.Context, _, _ int, ok bool) { failed = !ok }})
+		OnUsage: func(_ context.Context, _, _ int, _ time.Duration, ok bool) { failed = !ok }})
 	if _, err := model.Step(context.Background(), conversation(), specs); !errors.Is(err, appchat.ErrRAGProviderUnavailable) {
 		t.Fatalf("Step() error = %v", err)
 	}
@@ -120,7 +121,7 @@ func TestAnswersAndEmbeddingsReportTheirTokens(t *testing.T) {
 	}))
 	defer server.Close()
 	var got [][2]int
-	record := func(_ context.Context, in, out int, _ bool) { got = append(got, [2]int{in, out}) }
+	record := func(_ context.Context, in, out int, _ time.Duration, _ bool) { got = append(got, [2]int{in, out}) }
 	cfg := Config{BaseURL: server.URL, APIKey: "k", Model: "m", Protocol: ProtocolChatCompletions, AllowPrivate: true, OnUsage: record}
 	if _, err := NewEmbedding(cfg).Embed(context.Background(), []string{"x"}); err != nil {
 		t.Fatal(err)
@@ -130,5 +131,22 @@ func TestAnswersAndEmbeddingsReportTheirTokens(t *testing.T) {
 	}
 	if len(got) != 2 || got[0] != [2]int{9, 0} || got[1] != [2]int{30, 4} {
 		t.Fatalf("usage = %v", got)
+	}
+}
+
+func TestAgentStepReportsHowLongTheCallTook(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(40 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":3,"completion_tokens":1}}`))
+	}))
+	defer server.Close()
+	var took time.Duration
+	model := NewAgent(Config{BaseURL: server.URL, APIKey: "k", Model: "m", Protocol: ProtocolChatCompletions, AllowPrivate: true,
+		OnUsage: func(_ context.Context, _, _ int, d time.Duration, _ bool) { took = d }})
+	if _, err := model.Step(context.Background(), conversation(), specs); err != nil {
+		t.Fatal(err)
+	}
+	if took < 40*time.Millisecond {
+		t.Fatalf("took = %v, want at least the 40ms the server waited", took)
 	}
 }
