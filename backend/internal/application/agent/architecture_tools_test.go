@@ -130,3 +130,47 @@ func TestReadingACanvasGivesTheAgentTheJSONItEditsNotTheSearchSummary(t *testing
 		t.Fatalf("Call() = %+v, %v", out, err)
 	}
 }
+
+func TestAMadeUpVersionIsRefusedBeforeTheUserIsAskedToApprove(t *testing.T) {
+	chatActor := func(e *contentEnv) Actor { return Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws} }
+	args := func(e *contentEnv, tool string) json.RawMessage {
+		ops := renameOps
+		if tool == "edit_document_content" {
+			ops = `[{"type":"append","text":"Table t {}"}]`
+		}
+		return json.RawMessage(`{"workspace_id":"` + e.ws.String() + `","document_id":"` + e.doc.String() + `","version":"1.0","operations":` + ops + `}`)
+	}
+
+	canvas := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	out, err := canvasExecutor(canvas, CapRead, CapContent).Call(context.Background(), chatActor(canvas), "edit_architecture", args(canvas, "edit_architecture"))
+	if out.Pending != nil || !strings.Contains(refused(t, err), "exact version read_document returned") {
+		t.Fatalf("canvas: Call() = %+v, %v; want a refusal and no approval card", out, err)
+	}
+
+	source := newContentEnv("dbdiagram", collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	source.rooms.text = "Table a {}"
+	tools := DokudocsTools(ToolDeps{Documents: docsStub{doc: model.Document{ID: source.doc, Type: "dbdiagram"}}, Content: source.svc, Catalog: testCatalog})
+	exec := NewExecutor(NewPermissionService(memPermissions{source.user: {CapRead, CapContent}}), tools, func(context.Context) int { return 1 << 20 })
+	out, err = exec.Call(context.Background(), chatActor(source), "edit_document_content", args(source, "edit_document_content"))
+	if out.Pending != nil || !strings.Contains(refused(t, err), "exact version read_document returned") {
+		t.Fatalf("source: Call() = %+v, %v; want a refusal and no approval card", out, err)
+	}
+}
+
+func TestAnEditOperationWithoutATypeIsRefusedBeforeApprovalAndBeforeAVersion(t *testing.T) {
+	source := newContentEnv("dbdiagram", collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	source.rooms.text = "Table a {}"
+	tools := DokudocsTools(ToolDeps{Documents: docsStub{doc: model.Document{ID: source.doc, Type: "dbdiagram"}}, Content: source.svc, Catalog: testCatalog})
+	exec := NewExecutor(NewPermissionService(memPermissions{source.user: {CapRead, CapContent}}), tools, func(context.Context) int { return 1 << 20 })
+	args := json.RawMessage(`{"workspace_id":"` + source.ws.String() + `","document_id":"` + source.doc.String() + `","version":"v1","operations":[{"find":"a","replace":"b"}]}`)
+	out, err := exec.Call(context.Background(), Actor{UserID: source.user, Channel: ChannelChat, WorkspaceID: source.ws}, "edit_document_content", args)
+	if out.Pending != nil || !strings.Contains(refused(t, err), "operation 1: type must be one of replace_text, replace_all, append") {
+		t.Fatalf("Call() = %+v, %v; want a refusal and no approval card", out, err)
+	}
+	if _, err := source.svc.Edit(context.Background(), Actor{UserID: source.user, Channel: ChannelMCP, KeyName: "k"}, source.ws, source.doc, "v1", json.RawMessage(`[{"find":"a"}]`)); err == nil {
+		t.Fatal("Edit() ran an operation with no type")
+	}
+	if len(source.revisions.titles) != 0 || len(source.rooms.edits) != 0 {
+		t.Fatalf("revisions %v, edits %v", source.revisions.titles, source.rooms.edits)
+	}
+}

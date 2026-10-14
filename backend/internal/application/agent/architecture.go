@@ -97,8 +97,23 @@ func parseOperations(raw json.RawMessage) ([]operation, error) {
 	if err := json.Unmarshal(raw, &ops); err != nil {
 		return nil, &ToolError{Message: "operations must be a list of objects"}
 	}
+	for i, op := range ops {
+		if !architectureOperations[op.text("type")] {
+			return nil, &ToolError{Message: fmt.Sprintf("operation %d: type must be one of %s", i+1, architectureOperationList)}
+		}
+	}
 	return ops, nil
 }
+
+const architectureOperationList = "add_node, update_node, move_node, remove_node, add_connection, update_connection, remove_connection, link_document, unlink_document"
+
+var architectureOperations = func() map[string]bool {
+	known := map[string]bool{}
+	for _, name := range strings.Split(architectureOperationList, ", ") {
+		known[name] = true
+	}
+	return known
+}()
 
 func title(word string) string {
 	if word == "" {
@@ -160,7 +175,7 @@ func (s *ContentService) EditArchitecture(ctx context.Context, actor Actor, work
 	}, nil
 }
 
-var errStale = &ToolError{Message: "the document changed since you read it; read it again and retry with the new version"}
+var errStale = &ToolError{Message: "the version is not the document's current one: it changed since you read it, or it is not the exact version read_document returned; read it again and retry with that version"}
 
 // checkArchitectureOperations refuses what only this side can judge: a slug the catalog
 // does not have, and a linked document the User cannot read. The collaboration service
