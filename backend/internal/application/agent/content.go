@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"backend/constant"
 	"backend/internal/application/collaboration"
@@ -140,6 +142,50 @@ func (s *ContentService) Read(ctx context.Context, actor Actor, workspaceID, doc
 }
 
 // DocumentType says what kind of document it is, for deciding whether chat asks first.
+var (
+	markdownOperations = []string{"replace_text", "insert_after_heading", "append_section"}
+	sourceOperations   = []string{"replace_text", "replace_all", "append"}
+)
+
+// checkContentOperations refuses an operation the document's type does not have, so a
+// change that cannot run is not put in front of the User to approve.
+func checkContentOperations(docType string, raw json.RawMessage) error {
+	var ops []operation
+	if err := json.Unmarshal(raw, &ops); err != nil || len(ops) == 0 {
+		return &ToolError{Message: "operations must be a non-empty list of objects"}
+	}
+	allowed := markdownOperations
+	if isSource(docType) {
+		allowed = sourceOperations
+	}
+	for i, op := range ops {
+		if !slices.Contains(allowed, op.text("type")) {
+			return &ToolError{Message: fmt.Sprintf("operation %d: type must be one of %s", i+1, strings.Join(allowed, ", "))}
+		}
+	}
+	return nil
+}
+
+// CheckVersion refuses a version the document does not have now, so the User is
+// not asked to approve a change that cannot run.
+func (s *ContentService) CheckVersion(ctx context.Context, actor Actor, workspaceID, documentID uuid.UUID, version string) error {
+	if version == "" {
+		return nil
+	}
+	head, _, err := s.head(ctx, actor, workspaceID, documentID)
+	if err != nil {
+		return err
+	}
+	live, err := s.rooms.Read(ctx, roomName(workspaceID, documentID, head), head.DocumentType)
+	if err != nil {
+		return err
+	}
+	if live.Version != version {
+		return errStale
+	}
+	return nil
+}
+
 func (s *ContentService) DocumentType(ctx context.Context, actor Actor, workspaceID, documentID uuid.UUID) (string, error) {
 	head, _, err := s.head(ctx, actor, workspaceID, documentID)
 	return head.DocumentType, err
@@ -155,6 +201,9 @@ func (s *ContentService) Edit(ctx context.Context, actor Actor, workspaceID, doc
 	}
 	if head.DocumentType == "architecture" {
 		return EditResult{}, &ToolError{Message: "An Architecture document is changed with edit_architecture, not edit_document_content"}
+	}
+	if err := checkContentOperations(head.DocumentType, operations); err != nil {
+		return EditResult{}, err
 	}
 	mode := ""
 	switch {
@@ -182,7 +231,7 @@ func (s *ContentService) Edit(ctx context.Context, actor Actor, workspaceID, doc
 			return EditResult{}, err
 		}
 		if live.Version != version {
-			return EditResult{}, &ToolError{Message: "the document changed since you read it; read it again and retry with the new version"}
+			return EditResult{}, errStale
 		}
 	}
 	if mode == "direct" {
@@ -203,7 +252,7 @@ func (s *ContentService) Edit(ctx context.Context, actor Actor, workspaceID, doc
 	if err != nil {
 		var conflict *ConflictError
 		if errors.As(err, &conflict) {
-			return EditResult{}, &ToolError{Message: "the document changed since you read it; read it again and retry with the new version"}
+			return EditResult{}, errStale
 		}
 		return EditResult{}, err
 	}
