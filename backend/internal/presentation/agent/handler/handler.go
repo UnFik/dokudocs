@@ -25,6 +25,7 @@ type Handler struct {
 	skills      *skills.Service
 	usage       *aiusage.Service
 	planLimits  aiusage.PlanLimitStore
+	quotas      aiusage.QuotaStore
 }
 
 func New(permissions *agent.PermissionService, mcp *mcpapp.Service, skillService *skills.Service, usage *aiusage.Service) *Handler {
@@ -34,6 +35,12 @@ func New(permissions *agent.PermissionService, mcp *mcpapp.Service, skillService
 // WithPlanLimits lets a Superadmin read and change the Usage limit of each Plan.
 func (h *Handler) WithPlanLimits(store aiusage.PlanLimitStore) *Handler {
 	h.planLimits = store
+	return h
+}
+
+// WithQuotas lets a Superadmin see each User's spend and reset it.
+func (h *Handler) WithQuotas(store aiusage.QuotaStore) *Handler {
+	h.quotas = store
 	return h
 }
 
@@ -261,6 +268,39 @@ func (h *Handler) SetPlanLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = response.Data(w, http.StatusOK, aiusage.PlanLimit{Plan: strings.TrimSpace(plan), MonthlyTokens: body.MonthlyTokens})
+}
+
+// Quotas lists this month's use per User and Workspace.
+func (h *Handler) Quotas(w http.ResponseWriter, r *http.Request) {
+	id, ok := actor(w, r)
+	if !ok {
+		return
+	}
+	quotas, err := h.usage.Quotas(r.Context(), id, h.quotas)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	_ = response.Data(w, http.StatusOK, map[string]any{"quotas": quotas})
+}
+
+// ResetQuota gives one User their allowance back in one Workspace.
+func (h *Handler) ResetQuota(w http.ResponseWriter, r *http.Request) {
+	id, ok := actor(w, r)
+	if !ok {
+		return
+	}
+	workspaceID, wErr := uuid.Parse(r.PathValue("workspaceID"))
+	userID, uErr := uuid.Parse(r.PathValue("userID"))
+	if wErr != nil || uErr != nil {
+		response.Error(w, http.StatusBadRequest, "the user or workspace id is not valid")
+		return
+	}
+	if err := h.usage.ResetQuota(r.Context(), id, h.quotas, userID, workspaceID); err != nil {
+		fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ListSkills is open to every signed-in User, for the chat's / picker.
