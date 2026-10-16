@@ -175,3 +175,37 @@ func TestAStaleDirectEditMakesNoVersion(t *testing.T) {
 		t.Fatalf("revisions %v, edits %v after a stale edit", e.revisions.titles, e.rooms.edits)
 	}
 }
+
+func TestAnOperationThatLacksAFieldIsRefusedWithAnExampleBeforeTheUserIsAsked(t *testing.T) {
+	cases := map[string]string{
+		`[{"type":"replace_section","heading":"Deploy"}]`: `"text"`,
+		`[{"type":"replace_text","replace":"x"}]`:         `"find"`,
+		`[{"type":"delete_section"}]`:                     `"heading"`,
+		`[{"type":"append","text":"  "}]`:                 `"text"`,
+	}
+	for raw, field := range cases {
+		err := checkContentOperations("markdown", json.RawMessage(raw))
+		var refusal *ToolError
+		if !errors.As(err, &refusal) || !strings.Contains(refusal.Message, field) || !strings.Contains(refusal.Message, `{"type":`) {
+			t.Fatalf("%s: error = %v", raw, err)
+		}
+	}
+	for _, raw := range []string{
+		`[{"type":"replace_section","heading":"Deploy","text":"New."},{"type":"delete_section","heading":"Old"},{"type":"append","text":"End."}]`,
+		`[{"type":"replace_text","find":"a","replace":""}]`,
+	} {
+		if err := checkContentOperations("markdown", json.RawMessage(raw)); err != nil {
+			t.Fatalf("%s refused: %v", raw, err)
+		}
+	}
+}
+
+func TestAWronglyTypedArgumentNamesTheField(t *testing.T) {
+	_, err := parse[struct {
+		Version string `json:"version"`
+	}](json.RawMessage(`{"version":3}`))
+	var refusal *ToolError
+	if !errors.As(err, &refusal) || !strings.Contains(refusal.Message, `"version"`) || !strings.Contains(refusal.Message, "a string") {
+		t.Fatalf("error = %v", err)
+	}
+}

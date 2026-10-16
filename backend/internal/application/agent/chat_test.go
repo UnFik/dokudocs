@@ -226,7 +226,7 @@ func TestTheLoopStopsAfterTooManySteps(t *testing.T) {
 	}
 	e := newChatEnv([]string{CapRead}, replies...)
 	answer, err := e.ask("loop forever")
-	if err != nil || len(e.model.seen) > maxAgentSteps || answer.Text == "" {
+	if err != nil || len(e.model.seen) > maxWorkSteps || answer.Text == "" {
 		t.Fatalf("Ask() = %+v, %v after %d steps", answer, err, len(e.model.seen))
 	}
 }

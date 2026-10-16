@@ -110,6 +110,9 @@ func streamPostOnce(ctx context.Context, client *http.Client, url, key string, p
 	complete := false
 	ended := false
 	var responseBody []byte
+	// cut is set when the model stopped at its output limit; only the Agent accepts
+	// that, so it can tell the model its tool call was cut off.
+	cut := false
 	type functionCall struct {
 		ID       string `json:"id"`
 		Type     string `json:"type"`
@@ -172,7 +175,22 @@ func streamPostOnce(ctx context.Context, client *http.Client, url, key string, p
 				complete = true
 				ended = true
 				return streamFinished
-			case "error", "response.failed", "response.incomplete", "response.refusal.delta", "response.refusal.done":
+			case "response.incomplete":
+				var response struct {
+					IncompleteDetails struct {
+						Reason string `json:"reason"`
+					} `json:"incomplete_details"`
+					Usage tokenUsage `json:"usage"`
+				}
+				if answer || json.Unmarshal(event.Response, &response) != nil || response.IncompleteDetails.Reason != "max_output_tokens" {
+					return errors.New("Responses generation failed")
+				}
+				usage = response.Usage
+				responseBody = event.Response
+				complete = true
+				ended = true
+				return streamFinished
+			case "error", "response.failed", "response.refusal.delta", "response.refusal.done":
 				return errors.New("Responses generation failed")
 			}
 			return nil
@@ -222,7 +240,9 @@ func streamPostOnce(ctx context.Context, client *http.Client, url, key string, p
 				return airuns.ErrLimit
 			}
 			if choice.FinishReason != nil {
-				if *choice.FinishReason != "stop" && !(!answer && *choice.FinishReason == "tool_calls") {
+				if *choice.FinishReason == "length" && !answer {
+					cut = true
+				} else if *choice.FinishReason != "stop" && !(!answer && *choice.FinishReason == "tool_calls") {
 					return errors.New("provider stream was incomplete")
 				}
 				complete = true
@@ -239,7 +259,7 @@ func streamPostOnce(ctx context.Context, client *http.Client, url, key string, p
 				call.ID += delta.ID
 				call.Function.Name += delta.Function.Name
 				call.Function.Arguments += delta.Function.Arguments
-				if len(call.Function.Arguments) > 64<<10 || len(call.ID) > 200 || len(call.Function.Name) > 200 {
+				if len(call.Function.Arguments) > 192<<10 || len(call.ID) > 200 || len(call.Function.Name) > 200 {
 					return airuns.ErrLimit
 				}
 			}
@@ -266,12 +286,17 @@ func streamPostOnce(ctx context.Context, client *http.Client, url, key string, p
 	toolCalls := make([]*functionCall, 0, len(indices))
 	for _, index := range indices {
 		call := calls[index]
-		if call.ID == "" || call.Function.Name == "" || !json.Valid([]byte(call.Function.Arguments)) {
-			return nil, res.StatusCode, fmt.Errorf("%w: invalid streamed tool arguments", appchat.ErrRAGProviderUnavailable)
+		// Arguments that are not valid JSON go on to the Agent, which tells the model.
+		if call.ID == "" || call.Function.Name == "" {
+			return nil, res.StatusCode, fmt.Errorf("%w: invalid streamed tool call", appchat.ErrRAGProviderUnavailable)
 		}
 		toolCalls = append(toolCalls, call)
 	}
-	body, err := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": text, "tool_calls": toolCalls}}}, "usage": usage})
+	finish := "stop"
+	if cut {
+		finish = "length"
+	}
+	body, err := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": text, "tool_calls": toolCalls}, "finish_reason": finish}}, "usage": usage})
 	return body, res.StatusCode, err
 }
 

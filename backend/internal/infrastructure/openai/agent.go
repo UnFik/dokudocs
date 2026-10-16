@@ -114,7 +114,7 @@ func (m *AgentModel) chatStep(ctx context.Context, messages []agent.Message, too
 		}
 		out = append(out, item)
 	}
-	payload := map[string]any{"model": m.cfg.Model, "messages": out, "max_completion_tokens": 2000}
+	payload := map[string]any{"model": m.cfg.Model, "messages": out, "max_completion_tokens": agent.OutputBudget(ctx)}
 	if len(tools) > 0 {
 		specs := make([]map[string]any, len(tools))
 		for i, t := range tools {
@@ -129,7 +129,8 @@ func (m *AgentModel) chatStep(ctx context.Context, messages []agent.Message, too
 	var response struct {
 		Usage   tokenUsage `json:"usage"`
 		Choices []struct {
-			Message message `json:"message"`
+			Message      message `json:"message"`
+			FinishReason string  `json:"finish_reason"`
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil || len(response.Choices) == 0 {
@@ -137,13 +138,9 @@ func (m *AgentModel) chatStep(ctx context.Context, messages []agent.Message, too
 	}
 	*usage = response.Usage
 	got := response.Choices[0].Message
-	reply := agent.Message{Role: "assistant", Content: got.Content}
+	reply := agent.Message{Role: "assistant", Content: got.Content, Truncated: response.Choices[0].FinishReason == "length"}
 	for _, c := range got.ToolCalls {
-		args := json.RawMessage(c.Function.Arguments)
-		if !json.Valid(args) {
-			args = json.RawMessage(`{}`)
-		}
-		reply.ToolCalls = append(reply.ToolCalls, agent.ToolCall{ID: c.ID, Name: c.Function.Name, Arguments: args})
+		reply.ToolCalls = append(reply.ToolCalls, toolCall(c.ID, c.Function.Name, c.Function.Arguments))
 	}
 	return reply, nil
 }
@@ -168,7 +165,7 @@ func (m *AgentModel) responsesStep(ctx context.Context, messages []agent.Message
 			input = append(input, map[string]any{"role": "user", "content": msg.Content})
 		}
 	}
-	payload := map[string]any{"model": m.cfg.Model, "store": false, "max_output_tokens": 2000, "instructions": strings.Join(instructions, "\n\n"), "input": input}
+	payload := map[string]any{"model": m.cfg.Model, "store": false, "max_output_tokens": agent.OutputBudget(ctx), "instructions": strings.Join(instructions, "\n\n"), "input": input}
 	if len(tools) > 0 {
 		specs := make([]map[string]any, len(tools))
 		for i, t := range tools {
@@ -183,6 +180,10 @@ func (m *AgentModel) responsesStep(ctx context.Context, messages []agent.Message
 	var response struct {
 		Usage  tokenUsage `json:"usage"`
 		Status string     `json:"status"`
+		// IncompleteDetails says why a response stopped before it was done.
+		IncompleteDetails struct {
+			Reason string `json:"reason"`
+		} `json:"incomplete_details"`
 		Output []struct {
 			Type      string `json:"type"`
 			CallID    string `json:"call_id"`
@@ -194,11 +195,13 @@ func (m *AgentModel) responsesStep(ctx context.Context, messages []agent.Message
 			} `json:"content"`
 		} `json:"output"`
 	}
-	if err := json.Unmarshal(body, &response); err != nil || (response.Status != "" && response.Status != "completed") {
+	err = json.Unmarshal(body, &response)
+	truncated := response.Status == "incomplete" && response.IncompleteDetails.Reason == "max_output_tokens"
+	if err != nil || (response.Status != "" && response.Status != "completed" && !truncated) {
 		return agent.Message{}, fmt.Errorf("%w: agent provider returned an invalid response", appchat.ErrRAGProviderUnavailable)
 	}
 	*usage = response.Usage
-	reply := agent.Message{Role: "assistant"}
+	reply := agent.Message{Role: "assistant", Truncated: truncated}
 	for _, item := range response.Output {
 		switch item.Type {
 		case "message":
@@ -208,12 +211,18 @@ func (m *AgentModel) responsesStep(ctx context.Context, messages []agent.Message
 				}
 			}
 		case "function_call":
-			args := json.RawMessage(item.Arguments)
-			if !json.Valid(args) {
-				args = json.RawMessage(`{}`)
-			}
-			reply.ToolCalls = append(reply.ToolCalls, agent.ToolCall{ID: item.CallID, Name: item.Name, Arguments: args})
+			reply.ToolCalls = append(reply.ToolCalls, toolCall(item.CallID, item.Name, item.Arguments))
 		}
 	}
 	return reply, nil
+}
+
+// toolCall keeps valid arguments as they are. Arguments that are not valid JSON were
+// cut off or garbled; they are flagged, not run as if the model had sent nothing.
+func toolCall(id, name, arguments string) agent.ToolCall {
+	args := json.RawMessage(arguments)
+	if json.Valid(args) {
+		return agent.ToolCall{ID: id, Name: name, Arguments: args}
+	}
+	return agent.ToolCall{ID: id, Name: name, Arguments: json.RawMessage(`{}`), Invalid: true}
 }
