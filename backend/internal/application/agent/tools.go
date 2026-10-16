@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -63,9 +65,27 @@ var (
 func parse[T any](args json.RawMessage) (T, error) {
 	var v T
 	if err := json.Unmarshal(args, &v); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) && typeErr.Field != "" {
+			return v, &ToolError{Message: fmt.Sprintf("the argument %q must be %s, not %s; fix it and call again", typeErr.Field, jsonKind(typeErr.Type), typeErr.Value)}
+		}
 		return v, ErrInvalidArguments
 	}
 	return v, nil
+}
+
+func jsonKind(t reflect.Type) string {
+	switch t.Kind() {
+	case reflect.String:
+		return "a string"
+	case reflect.Bool:
+		return "true or false"
+	case reflect.Slice, reflect.Array:
+		return "a list"
+	case reflect.Struct, reflect.Map:
+		return "an object"
+	}
+	return "a number"
 }
 
 func id(raw string) (uuid.UUID, error) {
@@ -223,11 +243,23 @@ func DokudocsTools(d ToolDeps) []Tool {
 		},
 		{
 			Name: "read_document", Capability: CapRead, DocumentTool: true,
-			Description: "Read a document: its title, type and full text, and the version to pass to edit_document_content. " +
+			Description: "Read a document: its title, type and text, and the version to pass to edit_document_content. " +
+				"A long Markdown, DBML or Mermaid document comes back in parts of limit characters (default 24000) with an outline of its headings and nextOffset; " +
+				"call again with offset to read on, or with outline true to get only the outline. The version is the same for every part. " +
 				"An Architecture document comes back as its canvas in JSON (every node and connection with its id and place); change it with edit_architecture, passing this version.",
-			Parameters: object([]string{"workspace_id", "document_id"}, map[string]any{"workspace_id": pWorkspace, "document_id": pDocument}),
+			Parameters: object([]string{"workspace_id", "document_id"}, map[string]any{
+				"workspace_id": pWorkspace, "document_id": pDocument,
+				"offset":  map[string]any{"type": "integer", "minimum": 0, "description": "Character to start reading at; use nextOffset from the previous part."},
+				"limit":   map[string]any{"type": "integer", "minimum": 1, "maximum": maxReadWindow, "description": "Characters to read at most."},
+				"outline": map[string]any{"type": "boolean", "description": "Only the outline of headings with their offsets, no text."},
+			}),
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
-				a, err := parse[wsDoc](args)
+				a, err := parse[struct {
+					wsDoc
+					Offset  int  `json:"offset"`
+					Limit   int  `json:"limit"`
+					Outline bool `json:"outline"`
+				}](args)
 				if err != nil {
 					return nil, err
 				}
@@ -243,12 +275,16 @@ func DokudocsTools(d ToolDeps) []Tool {
 				if err != nil {
 					return nil, err
 				}
-				text := live.Text
-				return map[string]any{
-					"id": meta.ID, "title": meta.Title, "type": meta.Type, "project": meta.ProjectName, "tags": meta.Tags,
-					"categories": meta.Categories, "updatedAt": meta.UpdatedAt, "content": text, "version": live.Version,
-					"canEdit": live.CanEdit, "canSuggest": live.CanSuggest,
-				}, nil
+				out := readOutput{
+					ID: meta.ID, Title: meta.Title, Type: meta.Type, Project: meta.ProjectName, Tags: meta.Tags, Categories: meta.Categories,
+					UpdatedAt: meta.UpdatedAt, Version: live.Version, CanEdit: live.CanEdit, CanSuggest: live.CanSuggest,
+				}
+				if meta.Type == "architecture" {
+					out.Content = live.Text
+					return out, nil
+				}
+				out.window(live.Text, a.Offset, a.Limit, a.Outline, meta.Type == "markdown")
+				return out, nil
 			},
 		},
 		{
@@ -316,7 +352,8 @@ func DokudocsTools(d ToolDeps) []Tool {
 		// Documents
 		{
 			Name: "create_document", Capability: CapDocuments, Write: true,
-			Description: "Create a document. For Markdown, text may hold headings (lines starting with #) and paragraphs separated by blank lines; for DBML or Mermaid it is the source.",
+			Description: "Create a document. For Markdown, text may hold headings (lines starting with #) and paragraphs separated by blank lines; for DBML or Mermaid it is the source. " +
+				"For a long Markdown document put the first sections in text (up to about 1500 words) and add the rest with edit_document_content (append_section), about 300 to 400 words per call, after read_document gives the version.",
 			Parameters: object([]string{"workspace_id", "title", "type"}, map[string]any{
 				"workspace_id": pWorkspace, "title": pText("Title."), "type": docTypes, "project_id": pProject, "text": pText("Initial content."),
 			}),
@@ -491,15 +528,18 @@ func DokudocsTools(d ToolDeps) []Tool {
 		{
 			Name: "edit_document_content", Capability: CapContent, Write: true, DocumentTool: true,
 			Description: "Change what a Markdown, DBML or Mermaid document says with targeted operations, using the version from read_document. " +
-				"Markdown operations: replace_text {find, replace} (find must appear once), insert_after_heading {heading, text}, append_section {heading, level, text}. " +
+				"Markdown operations: replace_text {find, replace} (find must appear once; copy it exactly from read_document), " +
+				"insert_after_heading {heading, text}, insert_before_heading {heading, text}, append_section {heading, level, text}, append {text} (paragraphs at the end), " +
+				"replace_section {heading, text} (replaces the body under a heading, up to the next heading of the same or higher level, and keeps the heading), delete_section {heading}. " +
+				"Separate paragraphs in text with a blank line. Prefer one operation per section and about 300 to 400 words of text per call; send long text in several calls, each with the version the previous one returned. " +
 				"DBML and Mermaid operations: replace_text {find, replace}, replace_all {text}, append {text}. " +
-				"From a Dokudocs chat, Markdown changes become suggestions for the User to review.",
+				"From a Dokudocs chat, Markdown changes become suggestions for the User to review. The result gives the new version to use for the next call.",
 			Parameters: object([]string{"workspace_id", "document_id", "version", "operations"}, map[string]any{
 				"workspace_id": pWorkspace, "document_id": pDocument, "version": pText("The version read_document returned."),
 				"operations": map[string]any{"type": "array", "items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"type":    map[string]any{"type": "string", "enum": []string{"replace_text", "insert_after_heading", "append_section", "replace_all", "append"}},
+						"type":    map[string]any{"type": "string", "enum": []string{"replace_text", "insert_after_heading", "insert_before_heading", "append_section", "append", "replace_section", "delete_section", "replace_all"}},
 						"find":    map[string]any{"type": "string"},
 						"replace": map[string]any{"type": "string"},
 						"heading": map[string]any{"type": "string"},
