@@ -5,12 +5,14 @@ import (
 	"fmt"
 
 	"backend/internal/application/aisettings"
+	"backend/internal/application/aitrace"
 	mcpapp "backend/internal/application/mcp"
 	"backend/internal/config"
 	"backend/internal/infrastructure/aiprovider"
 	"backend/internal/infrastructure/database"
 	"backend/internal/infrastructure/openai"
 	settingsrepo "backend/internal/infrastructure/repository/aisettings"
+	aitracerepo "backend/internal/infrastructure/repository/aitrace"
 	aiusagerepo "backend/internal/infrastructure/repository/aiusage"
 	documentrepo "backend/internal/infrastructure/repository/document"
 	mcprepo "backend/internal/infrastructure/repository/mcp"
@@ -52,6 +54,7 @@ func setUpAISettings(ctx context.Context, cfg config.Config, c *container.Contai
 	c.RAGAnswerModel = resolver
 	c.RAGEmbeddingModel = resolver.Embedder(aisettings.PurposeEmbedding)
 	c.AgentModel = resolver
+	c.AgentSmallModel = resolver.SmallAgent()
 	return resolver, service, nil
 }
 
@@ -59,4 +62,9 @@ func setUpAISettings(ctx context.Context, cfg config.Config, c *container.Contai
 func pruneMCPAudit(ctx context.Context, c *container.Container) (int64, error) {
 	store := mcprepo.NewStore(c.DB)
 	return mcpapp.NewService(store, store, store, settingsrepo.NewStore(c.DB)).Prune(ctx)
+}
+
+// pruneAITraces drops Agent traces older than the retention the Superadmin set.
+func pruneAITraces(ctx context.Context, c *container.Container) (int64, error) {
+	return aitrace.NewService(aitracerepo.NewStore(c.DB), settingsrepo.NewStore(c.DB)).Prune(ctx)
 }
