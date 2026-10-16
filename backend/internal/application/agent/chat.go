@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"time"
 
 	"backend/constant"
 	"backend/internal/application/airuns"
@@ -46,6 +47,30 @@ type ChatService struct {
 	convs   Conversations
 	actions PendingActions
 	skills  Skills
+	// gate, small and switches are the entry gate and the model router; without them
+	// every request goes to the main model.
+	gate     *Gate
+	small    Model
+	switches HarnessSwitches
+	traces   TraceStore
+}
+
+// WithTraceStore makes every request keep a trace of the steps it took.
+func (c *ChatService) WithTraceStore(store TraceStore) *ChatService {
+	c.traces = store
+	return c
+}
+
+// HarnessSwitches turns the gate and the router on and off without a deploy.
+type HarnessSwitches interface {
+	GateEnabled(ctx context.Context) bool
+	RouterEnabled(ctx context.Context) bool
+}
+
+// WithRouting adds the entry gate and the small model the router may choose.
+func (c *ChatService) WithRouting(gate *Gate, small Model, switches HarnessSwitches) *ChatService {
+	c.gate, c.small, c.switches = gate, small, switches
+	return c
 }
 
 func NewChatService(model Model, exec *Executor, convs Conversations, actions PendingActions, skills Skills) *ChatService {
@@ -127,6 +152,18 @@ func ErrorText(err error) string { return errorText(err) }
 // Ask answers one question, calling tools as needed. Actions that need the User's
 // approval are stored and returned; they run only through Decide.
 func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, error) {
+	if _, traced := ctx.Value(traceKey{}).(*tracer); !traced {
+		ctx = WithTrace(ctx, c.traces)
+	}
+	answer, err := c.ask(ctx, input)
+	if err != nil && traceBegan(ctx) {
+		// A run that fails ends its trace with the failure, so no trace is left hanging.
+		Record(ctx, Step{Node: NodeRespond, Edge: EdgeStopped, Status: StatusFailed, Reason: toolFailureCode(err)})
+	}
+	return answer, err
+}
+
+func (c *ChatService) ask(ctx context.Context, input ChatInput) (ChatAnswer, error) {
 	question := strings.TrimSpace(input.Question)
 	if input.WorkspaceID == uuid.Nil || input.ConversationID == uuid.Nil || input.ActorID == uuid.Nil || question == "" || len(question) > 10000 {
 		return ChatAnswer{}, ErrInvalidArguments
@@ -138,6 +175,7 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 	if err != nil {
 		return ChatAnswer{}, err
 	}
+	Record(ctx, Step{Node: NodeInput, Status: StatusOK})
 
 	meta := answerMeta{Agent: true}
 	system := fmt.Sprintf(systemPrompt, languageName(input.Language), harnessPrompt)
@@ -171,6 +209,27 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 	ctx = aiusage.With(ctx, aiusage.Attribution{Feature: feature, UserID: input.ActorID, WorkspaceID: input.WorkspaceID})
 	ctx = searchscope.WithCategories(ctx, input.Extras.CategoryIDs)
 	system += backgroundPrompt(input.Extras)
+	Record(ctx, Step{Node: NodeContext, Status: StatusOK})
+
+	decision := c.gateDecision(ctx, GateInput{
+		Question: question, Skill: meta.Skill, DocumentScoped: actor.DocumentID != uuid.Nil,
+		HasMentions: len(mention.ParseDocuments(question)) > 0, Language: input.Language,
+	})
+	if text, stop := decision.answer(input.Language); stop {
+		node := NodeReject
+		if decision.Label == LabelClarify {
+			node = NodeClarify
+		}
+		Record(ctx, Step{Node: node, Edge: string(decision.Label), Status: StatusRejected, Reason: decision.Reason})
+		answer := ChatAnswer{ConversationID: input.ConversationID, Text: text, Tools: []string{}, Calls: []ToolRef{}, Actions: []PendingAction{}}
+		raw, _ := json.Marshal(answerMeta{Agent: true, Skill: meta.Skill})
+		if err := c.convs.StoreAgentAnswer(ctx, input.WorkspaceID, input.ConversationID, input.ActorID, input.Extras.Annotate(input.Question), answer.Text, raw); err != nil {
+			slog.ErrorContext(ctx, "agent answer not stored", "conversation_id", input.ConversationID, "error", err)
+			return ChatAnswer{}, err
+		}
+		return answer, nil
+	}
+	model, tier := c.route(ctx, decision)
 
 	tools, err := c.exec.Tools(ctx, actor)
 	if err != nil {
@@ -199,9 +258,15 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 
 	answer := ChatAnswer{ConversationID: input.ConversationID, Tools: []string{}, Calls: []ToolRef{}, Actions: []PendingAction{}}
 	state := newRunState()
+	edge := EdgeFull
+	if tier == NodeModelSmall {
+		edge = EdgeSimple
+	}
+	ending := EdgeAnswer
 	for step := 0; ; step++ {
 		if limit := state.stepLimit(); step >= limit {
 			answer.Text = state.stoppedText(limit)
+			ending = EdgeStopped
 			break
 		}
 		if step > 0 {
@@ -217,7 +282,7 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 		if reminder := state.planReminder(); reminder != "" {
 			stepMessages = append(append([]Message{}, messages...), Message{Role: "system", Content: reminder})
 		}
-		reply, err := c.modelStep(ctx, stepMessages, specs)
+		reply, err := c.modelStep(ctx, model, tier, edge, stepMessages, specs)
 		if err != nil {
 			slog.WarnContext(ctx, "agent model step failed", "conversation_id", input.ConversationID, "step", step+1, "error", err)
 			return ChatAnswer{}, err
@@ -237,12 +302,18 @@ func (c *ChatService) Ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 		}
 		if state.question != "" {
 			answer.Text = state.question
+			Record(ctx, Step{Node: NodeClarify, Edge: EdgeToolCall, Status: StatusWaiting, Reason: "ask_user"})
 			break
 		}
 		if state.stuck {
 			answer.Text = "I kept repeating the same step without getting anywhere, so I stopped. Tell me what to change, or try a smaller request."
+			ending = EdgeStopped
 			break
 		}
+		edge = EdgeToolResult
+	}
+	if state.question == "" {
+		Record(ctx, Step{Node: NodeRespond, Edge: ending, Status: StatusOK})
 	}
 	if answer.Text == "" {
 		answer.Text = "Done."
@@ -292,9 +363,13 @@ func (c *ChatService) run(ctx context.Context, actor Actor, conversationID uuid.
 		return map[string]string{"name": tc.Name, "state": state, "documentId": ref.DocumentID}
 	}
 	_ = airuns.Emit(ctx, "tool_status", status("running"))
+	started := time.Now()
 	out, err := c.exec.Call(ctx, actor, tc.Name, tc.Arguments)
+	tool := Step{Node: NodeTools, Edge: EdgeToolCall, Tool: tc.Name, StartedAt: started, DurationMS: time.Since(started).Milliseconds()}
 	if err != nil {
 		logToolFailure(ctx, tc.Name, err)
+		tool.Status, tool.Reason = StatusFailed, toolFailureCode(err)
+		Record(ctx, tool)
 		_ = airuns.Emit(ctx, "tool_status", status("failed"))
 		return `{"error":` + mustJSON(errorText(err)) + `}`
 	}
@@ -306,11 +381,19 @@ func (c *ChatService) run(ctx context.Context, actor Actor, conversationID uuid.
 			slog.ErrorContext(ctx, "pending action not saved", "tool", out.Pending.Tool, "error", err)
 			return `{"error":"the request could not be saved for approval"}`
 		}
+		tool.Status = StatusWaiting
+		Record(ctx, tool)
+		Record(ctx, Step{Node: NodeApproval, Edge: EdgeNeedsOK, Tool: out.Pending.Tool, Status: StatusWaiting})
 		answer.Actions = append(answer.Actions, action)
 		_ = airuns.Emit(ctx, "action_pending", map[string]any{"id": action.ID, "tool": action.Tool, "summary": action.Summary})
 		_ = airuns.Emit(ctx, "tool_status", status("waiting"))
 		return `{"status":"waiting for the User to approve","summary":` + mustJSON(action.Summary) + `}`
 	}
+	tool.Status = StatusOK
+	if out.Truncated {
+		tool.Reason = "result_cut"
+	}
+	Record(ctx, tool)
 	_ = airuns.Emit(ctx, "tool_status", status("done"))
 	return out.Text
 }

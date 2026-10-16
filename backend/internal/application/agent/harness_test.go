@@ -55,7 +55,7 @@ func TestAToolCallCutOffByTheOutputLimitIsRetriedWithABiggerLimit(t *testing.T) 
 	whole := call("list_documents", `{}`)
 	m := &budgetModel{replies: []Message{cut, whole}}
 	c := &ChatService{model: m}
-	reply, err := c.modelStep(context.Background(), nil, nil)
+	reply, err := c.modelStep(context.Background(), m, NodeModelLarge, EdgeFull, nil, nil)
 	if err != nil || hasInvalidCall(reply) || len(m.budgets) != 2 || m.budgets[1] <= m.budgets[0] {
 		t.Fatalf("modelStep() = %+v, %v, budgets %v", reply, err, m.budgets)
 	}
@@ -64,7 +64,7 @@ func TestAToolCallCutOffByTheOutputLimitIsRetriedWithABiggerLimit(t *testing.T) 
 func TestAProviderFailureForAMomentIsTriedAgain(t *testing.T) {
 	m := &budgetModel{errs: []error{fmt.Errorf("%w: down", appchat.ErrRAGProviderUnavailable), nil}, replies: []Message{{Role: "assistant", Content: "fine"}}}
 	c := &ChatService{model: m}
-	reply, err := c.modelStep(context.Background(), nil, nil)
+	reply, err := c.modelStep(context.Background(), m, NodeModelLarge, EdgeFull, nil, nil)
 	if err != nil || reply.Content != "fine" || len(m.budgets) != 2 {
 		t.Fatalf("modelStep() = %+v, %v after %d tries", reply, err, len(m.budgets))
 	}

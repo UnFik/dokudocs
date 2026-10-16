@@ -5,10 +5,25 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type outputKey struct{}
 type outputFunc func(Event) error
+
+type runKey struct{}
+
+// WithRun puts the id of the run a piece of work belongs to in its context.
+func WithRun(ctx context.Context, id uuid.UUID) context.Context {
+	return context.WithValue(ctx, runKey{}, id)
+}
+
+// RunID is the run the work belongs to, or uuid.Nil outside a run.
+func RunID(ctx context.Context) uuid.UUID {
+	id, _ := ctx.Value(runKey{}).(uuid.UUID)
+	return id
+}
 
 func WithOutput(ctx context.Context, fn func(Event) error) context.Context {
 	return context.WithValue(ctx, outputKey{}, outputFunc(fn))
