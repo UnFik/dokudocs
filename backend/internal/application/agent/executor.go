@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -193,14 +195,22 @@ func envelope(result any, max int) (string, bool) {
 		raw = []byte(`null`)
 	}
 	truncated := false
+	hint := ""
 	if max > 0 && len(raw) > max {
-		raw, truncated = []byte(mustJSON(string(raw[:max]))), true
+		// The hint counts against the cap, so a result never grows past it.
+		hint = fmt.Sprintf("Cut at %d bytes. Ask for less: filter or search, or read_document with offset and limit.", max)
+		keep := 0
+		if max > len(hint) {
+			keep = max - len(hint)
+		}
+		raw, truncated = []byte(mustJSON(strings.ToValidUTF8(string(raw[:keep]), ""))), true
 	}
 	out, _ := json.Marshal(struct {
 		Note      string          `json:"note"`
 		Data      json.RawMessage `json:"data"`
 		Truncated bool            `json:"truncated,omitempty"`
-	}{dataNote, raw, truncated})
+		Hint      string          `json:"hint,omitempty"`
+	}{dataNote, raw, truncated, hint})
 	return string(out), truncated
 }
 
@@ -228,12 +238,40 @@ type Message struct {
 	Content    string
 	ToolCalls  []ToolCall
 	ToolCallID string
+	// Truncated is set when the model stopped because it reached its output limit.
+	Truncated bool
+}
+
+const (
+	// DefaultOutputTokens is how much one model step may write. A tool call that carries
+	// the text of a document needs far more than a short answer does.
+	DefaultOutputTokens = 8000
+	// MaxOutputTokens is the most a retry after a cut-off step may ask for.
+	MaxOutputTokens = 32000
+)
+
+type outputBudgetKey struct{}
+
+// WithOutputBudget sets how many tokens the next model steps may write.
+func WithOutputBudget(ctx context.Context, tokens int) context.Context {
+	return context.WithValue(ctx, outputBudgetKey{}, tokens)
+}
+
+// OutputBudget is how many tokens a model step may write.
+func OutputBudget(ctx context.Context) int {
+	if n, ok := ctx.Value(outputBudgetKey{}).(int); ok && n > 0 {
+		return min(n, MaxOutputTokens)
+	}
+	return DefaultOutputTokens
 }
 
 type ToolCall struct {
 	ID        string
 	Name      string
 	Arguments json.RawMessage
+	// Invalid is set when the model's arguments were not valid JSON, almost always
+	// because it ran out of output tokens in the middle of them; Arguments is then {}.
+	Invalid bool
 }
 
 // ToolSpec is a tool as the model sees it.
