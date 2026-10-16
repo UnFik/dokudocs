@@ -23,6 +23,8 @@ type Container struct {
 	RAGEmbeddingModel appchat.EmbeddingModel
 	// AgentModel thinks for the Agent; nil, or not ready, keeps chat on documents only.
 	AgentModel AgentModel
+	// AgentSmallModel is the small model for short read-only questions and the entry gate; nil keeps everything on AgentModel.
+	AgentSmallModel agent.Model
 	// LiveRooms reads and edits rooms for the Agent; nil uses the collaboration service from the config.
 	LiveRooms agent.LiveRooms
 	// AISettings is the Superadmin's AI provider settings; nil leaves their routes off.
