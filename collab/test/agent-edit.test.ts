@@ -106,3 +106,75 @@ describe('versions', () => {
     expect(textVersion('a')).toMatch(/^[0-9a-f]{16}$/)
   })
 })
+
+describe('section edits', () => {
+  const sections = () =>
+    doc(
+      heading('h1', 'Overview', 1),
+      paragraph('p1', 'The API runs on one server.'),
+      heading('h2', 'Deploy'),
+      paragraph('p2', 'Push to main.'),
+      heading('h3', 'Steps', 3),
+      paragraph('p3', 'Tag a release.'),
+      heading('h4', 'Rollback'),
+      paragraph('p4', 'Restore the backup.')
+    )
+  const direct = { mode: 'direct', author: ME, newID: ids } as const
+  const suggest = { mode: 'suggest', author: ME, newID: ids } as const
+
+  it('replaces everything under a heading, including its subsections, and keeps the next section', () => {
+    const { json } = applyMarkdownOperations(sections(), [{ type: 'replace_section', heading: 'Deploy', text: 'Use the pipeline.\n\nNo manual pushes.' }], direct)
+    const markdown = toMarkdown(json)
+    expect(markdown).toContain('## Deploy\n\nUse the pipeline.\n\nNo manual pushes.\n\n## Rollback')
+    expect(markdown).not.toContain('Push to main.')
+    expect(markdown).not.toContain('Tag a release.')
+  })
+
+  it('deletes a section with its heading', () => {
+    const { json } = applyMarkdownOperations(sections(), [{ type: 'delete_section', heading: 'Steps' }], direct)
+    const markdown = toMarkdown(json)
+    expect(markdown).not.toContain('Steps')
+    expect(markdown).toContain('Push to main.')
+    expect(markdown).toContain('## Rollback')
+  })
+
+  it('inserts before a heading and appends plain paragraphs at the end', () => {
+    const { json } = applyMarkdownOperations(
+      sections(),
+      [
+        { type: 'insert_before_heading', heading: 'Rollback', text: 'Before you roll back, tell the team.' },
+        { type: 'append', text: 'The end.' },
+      ],
+      direct
+    )
+    const markdown = toMarkdown(json)
+    expect(markdown.indexOf('tell the team')).toBeLessThan(markdown.indexOf('## Rollback'))
+    expect(markdown.trimEnd().endsWith('The end.')).toBe(true)
+  })
+
+  it('proposes a section replacement as suggestions that pass the suggester check', () => {
+    const before = sections()
+    const { json, suggestionIDs } = applyMarkdownOperations(
+      before,
+      [
+        { type: 'replace_section', heading: 'Deploy', text: 'Use the pipeline.' },
+        { type: 'delete_section', heading: 'Rollback' },
+      ],
+      suggest
+    )
+    expect(suggestionIDs.length).toBeGreaterThanOrEqual(4)
+    expect(JSON.stringify(json)).toContain('\\"kind\\":\\"delete\\"')
+    expect(validateSuggesterChange(before, json, ME)).toEqual({ ok: true })
+  })
+
+  it('names the sections when a text appears more than once, and says when only spacing differs', () => {
+    const twice = doc(heading('a', 'First'), paragraph('b', 'same words'), heading('c', 'Second'), paragraph('d', 'same words'))
+    expect(() => applyMarkdownOperations(twice, [{ type: 'replace_text', find: 'same', replace: 'x' }], direct)).toThrow(/First.*Second/)
+    expect(() => applyMarkdownOperations(sections(), [{ type: 'replace_text', find: 'push  to MAIN.', replace: 'x' }], direct)).toThrow(/spacing or capitals/)
+  })
+
+  it('refuses a missing heading or empty text with a message that says what to send', () => {
+    expect(() => applyMarkdownOperations(sections(), [{ type: 'replace_section', heading: 'Nope', text: 'x' }], direct)).toThrow(/no heading "Nope"/)
+    expect(() => applyMarkdownOperations(sections(), [{ type: 'append', text: '  ' }], direct)).toThrow(/append needs text/)
+  })
+})
