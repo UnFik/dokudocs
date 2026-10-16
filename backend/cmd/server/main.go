@@ -76,6 +76,9 @@ func main() {
 				if _, err := pruneMCPAudit(workerCtx, c); err != nil {
 					log.Errorf("prune MCP audit: %v", err)
 				}
+				if _, err := pruneAITraces(workerCtx, c); err != nil {
+					log.Errorf("prune AI traces: %v", err)
+				}
 			}
 		}
 	}()

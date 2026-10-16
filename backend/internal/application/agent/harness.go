@@ -235,12 +235,18 @@ func earlierSummary(older []Message) string {
 
 // modelStep asks the model for its next turn. It tries again when the provider fails
 // for a moment, and with a larger output limit when the model was cut off in the
-// middle of a tool call, so a long argument is not lost to a small limit.
-func (c *ChatService) modelStep(ctx context.Context, messages []Message, specs []ToolSpec) (Message, error) {
+// middle of a tool call, so a long argument is not lost to a small limit. Each try is
+// a step in the trace.
+func (c *ChatService) modelStep(ctx context.Context, model Model, tier, edge string, messages []Message, specs []ToolSpec) (Message, error) {
 	budget := DefaultOutputTokens
 	for attempt := 1; ; attempt++ {
-		reply, err := c.model.Step(WithOutputBudget(ctx, budget), compactMessages(messages), specs)
+		started := time.Now()
+		reply, err := model.Step(WithOutputBudget(ctx, budget), compactMessages(messages), specs)
+		step := Step{Node: tier, Edge: edge, StartedAt: started, DurationMS: time.Since(started).Milliseconds(), Attempt: attempt,
+			Tier: strings.TrimPrefix(tier, "model_"), Model: reply.Model, FinishReason: reply.FinishReason, InputTokens: reply.InputTokens, OutputTokens: reply.OutputTokens}
 		if err != nil {
+			step.Status, step.Reason = StatusFailed, toolFailureCode(err)
+			Record(ctx, step)
 			if attempt < stepAttempts && errors.Is(err, appchat.ErrRAGProviderUnavailable) && ctx.Err() == nil {
 				_ = airuns.Emit(ctx, "text_reset", struct{}{})
 				select {
@@ -252,6 +258,11 @@ func (c *ChatService) modelStep(ctx context.Context, messages []Message, specs [
 			}
 			return Message{}, err
 		}
+		step.Status = StatusOK
+		if reply.Truncated {
+			step.Reason = "output_cut"
+		}
+		Record(ctx, step)
 		if reply.Truncated && hasInvalidCall(reply) && attempt < stepAttempts && budget < MaxOutputTokens {
 			budget = min(budget*2, MaxOutputTokens)
 			_ = airuns.Emit(ctx, "text_reset", struct{}{})

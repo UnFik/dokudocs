@@ -113,7 +113,7 @@ func (s *Service) execute(ctx context.Context, handle *activeRun, run Run, work 
 	var result json.RawMessage
 	var err error
 	output := newOutput(ctx, func(ctx context.Context, events []Event) error { return s.store.Append(ctx, run.ID, events) })
-	ctx = WithOutput(ctx, output.emit)
+	ctx = WithOutput(WithRun(ctx, run.ID), output.emit)
 	func() {
 		defer func() {
 			if recover() != nil {

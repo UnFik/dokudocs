@@ -477,3 +477,20 @@ func TestSaveStopsWhenTheActorLostTheRoleDuringTheTest(t *testing.T) {
 		t.Error("a setting was stored for an actor who is no longer a superadmin")
 	}
 }
+
+func TestTheSmallAgentModelIsASettingOfItsOwnAndIsTestedLikeTheAgent(t *testing.T) {
+	e := newEnv(t)
+	overview, err := e.svc.Save(context.Background(), e.admin, PurposeAgentSmall, answerInput())
+	if err != nil {
+		t.Fatalf("Save(): %v", err)
+	}
+	if overview.AgentSmall == nil || overview.AgentSmall.Model != "m-1" || overview.Agent != nil {
+		t.Fatalf("overview = %+v", overview)
+	}
+	if e.tester.purps[0] != PurposeAgentSmall {
+		t.Fatalf("tested as %v", e.tester.purps)
+	}
+	if _, found := e.store.rows[PurposeAgent]; found {
+		t.Fatal("saving the small model wrote the main agent setting")
+	}
+}

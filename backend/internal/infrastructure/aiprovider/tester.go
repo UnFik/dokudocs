@@ -57,7 +57,7 @@ func (t *Tester) Test(ctx context.Context, purpose string, cfg app.Config) (app.
 			Question: "Where is the service deployed?", Language: "en",
 			Sources: []model.RAGChunk{{ChunkID: uuid.New(), Text: "The service is deployed on a single server."}},
 		})
-	case app.PurposeAgent:
+	case app.PurposeAgent, app.PurposeAgentSmall:
 		var reply agentapp.Message
 		reply, err = openai.NewAgent(t.openaiConfig(purpose, cfg)).Step(ctx, []agentapp.Message{
 			{Role: "system", Content: "This is a connection test. Call the ping tool once."},

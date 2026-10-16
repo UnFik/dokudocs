@@ -1,4 +1,10 @@
-import { BarChart3, BookOpenCheck, Server, Unplug } from 'lucide-react'
+import {
+  BarChart3,
+  BookOpenCheck,
+  GitBranch,
+  Server,
+  Unplug,
+} from 'lucide-react'
 import { type NavGroup } from '../types'
 
 /**
@@ -16,6 +22,11 @@ export function platformNavGroup(
       { title: 'MCP', url: '/platform/mcp', icon: Unplug },
       { title: 'Skills', url: '/platform/skills', icon: BookOpenCheck },
       { title: 'Model usage', url: '/platform/usage', icon: BarChart3 },
+      {
+        title: 'Conversations',
+        url: '/platform/conversations',
+        icon: GitBranch,
+      },
     ],
   }
 }

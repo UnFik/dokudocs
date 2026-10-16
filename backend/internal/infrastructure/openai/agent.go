@@ -45,9 +45,12 @@ func (m *AgentModel) Step(ctx context.Context, messages []agent.Message, tools [
 	started := time.Now()
 	defer func() { m.cfg.report(ctx, started, usage.in(), usage.out(), err == nil) }()
 	if m.protocol == ProtocolResponses {
-		return m.responsesStep(ctx, messages, tools, &usage)
+		reply, err = m.responsesStep(ctx, messages, tools, &usage)
+	} else {
+		reply, err = m.chatStep(ctx, messages, tools, &usage)
 	}
-	return m.chatStep(ctx, messages, tools, &usage)
+	reply.Model, reply.InputTokens, reply.OutputTokens = m.cfg.Model, usage.in(), usage.out()
+	return reply, err
 }
 
 func (m *AgentModel) post(ctx context.Context, path string, payload any) ([]byte, error) {
@@ -138,7 +141,7 @@ func (m *AgentModel) chatStep(ctx context.Context, messages []agent.Message, too
 	}
 	*usage = response.Usage
 	got := response.Choices[0].Message
-	reply := agent.Message{Role: "assistant", Content: got.Content, Truncated: response.Choices[0].FinishReason == "length"}
+	reply := agent.Message{Role: "assistant", Content: got.Content, Truncated: response.Choices[0].FinishReason == "length", FinishReason: response.Choices[0].FinishReason}
 	for _, c := range got.ToolCalls {
 		reply.ToolCalls = append(reply.ToolCalls, toolCall(c.ID, c.Function.Name, c.Function.Arguments))
 	}
@@ -201,7 +204,10 @@ func (m *AgentModel) responsesStep(ctx context.Context, messages []agent.Message
 		return agent.Message{}, fmt.Errorf("%w: agent provider returned an invalid response", appchat.ErrRAGProviderUnavailable)
 	}
 	*usage = response.Usage
-	reply := agent.Message{Role: "assistant", Truncated: truncated}
+	reply := agent.Message{Role: "assistant", Truncated: truncated, FinishReason: "stop"}
+	if truncated {
+		reply.FinishReason = "length"
+	}
 	for _, item := range response.Output {
 		switch item.Type {
 		case "message":
