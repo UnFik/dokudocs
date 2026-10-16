@@ -21,6 +21,9 @@ const (
 	PurposeEmbeddingPending = "embedding_pending"
 	// PurposeAgent is the model the Agent thinks and calls tools with; without it chat answers from documents only.
 	PurposeAgent = "agent"
+	// PurposeAgentSmall is the cheaper model the Agent uses for short questions that only
+	// read, and for the entry gate; without it the main agent model does both.
+	PurposeAgentSmall = "agent_small"
 
 	ProtocolResponses       = "openai_responses"
 	ProtocolChatCompletions = "openai_chat_completions"
@@ -147,6 +150,7 @@ type Overview struct {
 	Embedding        *View     `json:"embedding"`
 	EmbeddingPending *View     `json:"embeddingPending"`
 	Agent            *View     `json:"agent"`
+	AgentSmall       *View     `json:"agentSmall"`
 	Progress         *Progress `json:"progress"`
 }
 
@@ -172,7 +176,7 @@ func (s *Service) overview(ctx context.Context) (Overview, error) {
 	var out Overview
 	for purpose, target := range map[string]**View{
 		PurposeAnswer: &out.Answer, PurposeEmbedding: &out.Embedding, PurposeEmbeddingPending: &out.EmbeddingPending,
-		PurposeAgent: &out.Agent,
+		PurposeAgent: &out.Agent, PurposeAgentSmall: &out.AgentSmall,
 	} {
 		record, found, err := s.d.Store.Get(ctx, purpose)
 		if err != nil {
@@ -227,7 +231,7 @@ type prepared struct {
 }
 
 func (s *Service) prepare(ctx context.Context, purpose string, in Input) (prepared, error) {
-	if purpose != PurposeAnswer && purpose != PurposeEmbedding && purpose != PurposeAgent {
+	if purpose != PurposeAnswer && purpose != PurposeEmbedding && purpose != PurposeAgent && purpose != PurposeAgentSmall {
 		return prepared{}, fmt.Errorf("%w: unknown purpose", ErrInvalid)
 	}
 	baseURL, err := netguard.ValidateBaseURL(in.BaseURL, s.d.AllowPrivate)

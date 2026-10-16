@@ -87,7 +87,7 @@ func (r *Resolver) load(ctx context.Context, purpose string) (entry, error) {
 		switch purpose {
 		case app.PurposeAnswer:
 			loaded.answer = openai.NewAnswer(cfg)
-		case app.PurposeAgent:
+		case app.PurposeAgent, app.PurposeAgentSmall:
 			loaded.agent = openai.NewAgent(cfg)
 		default:
 			loaded.embedding = openai.NewEmbedding(cfg)
@@ -213,6 +213,33 @@ func (r *Resolver) Step(ctx context.Context, messages []agentapp.Message, tools 
 	reply, err := loaded.agent.Step(ctx, messages, tools)
 	if err == nil || isProviderError(err) {
 		r.settle(app.PurposeAgent, err)
+	}
+	return reply, err
+}
+
+// SmallAgent is the Agent's small model: the setting of its own, or the main agent model
+// when there is none. It also says whether it is set, so the router can tell.
+func (r *Resolver) SmallAgent() *SmallAgent { return &SmallAgent{r: r} }
+
+type SmallAgent struct{ r *Resolver }
+
+// Ready says whether a small model is set up.
+func (s *SmallAgent) Ready(ctx context.Context) bool {
+	loaded, err := s.r.load(ctx, app.PurposeAgentSmall)
+	return err == nil && loaded.agent != nil
+}
+
+func (s *SmallAgent) Step(ctx context.Context, messages []agentapp.Message, tools []agentapp.ToolSpec) (agentapp.Message, error) {
+	loaded, err := s.r.load(ctx, app.PurposeAgentSmall)
+	if err != nil {
+		return agentapp.Message{}, err
+	}
+	if loaded.agent == nil {
+		return agentapp.Message{}, agentapp.ErrAgentNotConfigured
+	}
+	reply, err := loaded.agent.Step(ctx, messages, tools)
+	if err == nil || isProviderError(err) {
+		s.r.settle(app.PurposeAgentSmall, err)
 	}
 	return reply, err
 }

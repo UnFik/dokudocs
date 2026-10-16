@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"backend/internal/application/agent"
+	"backend/internal/application/aitrace"
 	"backend/internal/application/aiusage"
 	mcpapp "backend/internal/application/mcp"
 	"backend/internal/application/skills"
@@ -26,6 +27,7 @@ type Handler struct {
 	usage       *aiusage.Service
 	planLimits  aiusage.PlanLimitStore
 	quotas      aiusage.QuotaStore
+	traces      *aitrace.Service
 }
 
 func New(permissions *agent.PermissionService, mcp *mcpapp.Service, skillService *skills.Service, usage *aiusage.Service) *Handler {
@@ -58,6 +60,12 @@ func fail(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, mcpapp.ErrForbidden), errors.Is(err, skills.ErrForbidden), errors.Is(err, aiusage.ErrForbidden):
 		response.Error(w, http.StatusForbidden, "only a superadmin can do this")
+	case errors.Is(err, aitrace.ErrForbidden):
+		response.Error(w, http.StatusForbidden, "only a superadmin can do this")
+	case errors.Is(err, aitrace.ErrNotFound):
+		response.Error(w, http.StatusNotFound, "there is no such trace; it may be older than the retention")
+	case errors.Is(err, aitrace.ErrInvalid):
+		response.Error(w, http.StatusBadRequest, "trace retention must be a whole number of days from 1 to 365")
 	case errors.Is(err, aiusage.ErrInvalidLimit):
 		response.Error(w, http.StatusBadRequest, "a limit needs a Plan name of up to 50 characters and a whole number of tokens from 1 to 1,000,000,000,000")
 	case errors.Is(err, agent.ErrUnknownCapability):

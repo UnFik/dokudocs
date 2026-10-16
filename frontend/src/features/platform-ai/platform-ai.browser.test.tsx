@@ -344,7 +344,7 @@ it('shows the agent provider as a third setting and tests it on its own', async 
   vi.stubGlobal('fetch', fetch)
   const screen = await mount()
   await expect
-    .element(screen.getByLabelText('Agent model'))
+    .element(screen.getByLabelText('Agent model', { exact: true }))
     .toHaveValue('agent-model')
   await expect.element(screen.getByText('••••9999')).toBeVisible()
   await screen.getByRole('button', { name: 'Test agent connection' }).click()
@@ -353,6 +353,35 @@ it('shows the agent provider as a third setting and tests it on its own', async 
     .element(screen.getByText(/answered the streaming request with a whole/))
     .toBeVisible()
   expect(calls(fetch, 'POST /api/v1/platform/ai/agent/runs')).toHaveLength(1)
+})
+
+it('shows the small agent model as a setting of its own and tests it on its own', async () => {
+  const fetch = api({
+    'GET /api/v1/platform/ai': () =>
+      jsonResponse(
+        overview({
+          agentSmall: {
+            ...answer,
+            purpose: 'agent_small',
+            model: 'small-model',
+            keyHint: '••••5555',
+          },
+        })
+      ),
+    ...job('agent_small', 'test', { streaming: 'supported' }),
+  })
+  vi.stubGlobal('fetch', fetch)
+  const screen = await mount()
+  await expect
+    .element(screen.getByLabelText('Small agent model'))
+    .toHaveValue('small-model')
+  await screen
+    .getByRole('button', { name: 'Test small agent connection' })
+    .click()
+  await expect.element(screen.getByText(/Connection works\./)).toBeVisible()
+  expect(
+    calls(fetch, 'POST /api/v1/platform/ai/agent_small/runs')
+  ).toHaveLength(1)
 })
 
 it('asks for a new key when the base URL changes, so the stored key is never sent to another address', async () => {

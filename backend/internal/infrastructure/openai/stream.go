@@ -295,6 +295,8 @@ func streamPostOnce(ctx context.Context, client *http.Client, url, key string, p
 	finish := "stop"
 	if cut {
 		finish = "length"
+	} else if len(toolCalls) > 0 {
+		finish = "tool_calls"
 	}
 	body, err := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": text, "tool_calls": toolCalls}, "finish_reason": finish}}, "usage": usage})
 	return body, res.StatusCode, err
