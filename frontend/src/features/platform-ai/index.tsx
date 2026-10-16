@@ -140,6 +140,13 @@ export function PlatformAiPage() {
               setting={overview.data.agent ?? null}
               note='Thinks and calls Dokudocs tools in chat. The model must support tool calling; the connection test asks it to call one. Leave it empty to keep chat answering from documents only.'
             />
+            <ProviderSection
+              purpose='agent_small'
+              title='Small agent provider'
+              modelLabel='Small agent model'
+              setting={overview.data.agentSmall ?? null}
+              note='A cheaper model for short questions that only read, and for the entry gate that catches unclear or off-topic requests. It must support tool calling. Leave it empty to use the agent model for everything.'
+            />
             <PendingSwitch overview={overview.data} />
             <section aria-labelledby='recent-changes' className='space-y-3'>
               <h2 id='recent-changes' className='text-lg font-medium'>

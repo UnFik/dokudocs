@@ -12,6 +12,7 @@ it('offers the AI provider page only to a superadmin', () => {
       { title: 'MCP', url: '/platform/mcp' },
       { title: 'Skills', url: '/platform/skills' },
       { title: 'Model usage', url: '/platform/usage' },
+      { title: 'Conversations', url: '/platform/conversations' },
     ],
   })
 })

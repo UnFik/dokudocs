@@ -51,6 +51,10 @@ const phaseText: Record<string, string> = {
 }
 
 /** The outcome of the last test or save, kept on the server so it is still there after the page was closed. */
+/** What a purpose is called in a button: agent_small reads as small agent. */
+const purposeName = (purpose: Purpose) =>
+  purpose === 'agent_small' ? 'small agent' : purpose
+
 function LastJob({ purpose, hidden }: { purpose: Purpose; hidden: boolean }) {
   const queryClient = useQueryClient()
   const key = ['platform-ai', 'job', purpose]
@@ -297,14 +301,14 @@ export function ProviderSection({
             variant='outline'
             disabled={!ready || busy}
             onClick={() => test.mutate()}
-            aria-label={`Test ${purpose} connection`}
+            aria-label={`Test ${purposeName(purpose)} connection`}
           >
             {test.isPending ? 'Testing...' : 'Test connection'}
           </Button>
           <Button
             type='submit'
             disabled={!ready || !changed || busy}
-            aria-label={`Save ${purpose} provider`}
+            aria-label={`Save ${purposeName(purpose)} provider`}
           >
             {save.isPending ? 'Testing and saving...' : 'Save'}
           </Button>
