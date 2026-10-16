@@ -9,6 +9,10 @@ export type MarkdownOperation =
   | { type: 'replace_text'; find: string; replace: string }
   | { type: 'insert_after_heading'; heading: string; text: string }
   | { type: 'append_section'; heading: string; level?: number; text: string }
+  | { type: 'append'; text: string }
+  | { type: 'insert_before_heading'; heading: string; text: string }
+  | { type: 'replace_section'; heading: string; text: string }
+  | { type: 'delete_section'; heading: string }
 
 export type SourceOperation =
   | { type: 'replace_text'; find: string; replace: string }
@@ -97,24 +101,44 @@ function newBlocks(items: { type: 'paragraph' | 'atx_heading'; text: string; lev
   })
 }
 
+function headingLevel(block: JSONNode): number {
+  try {
+    const level = Number((JSON.parse(String(block.attrs?.bodyAttributes ?? '{}')) as { level?: unknown }).level)
+    return Number.isFinite(level) && level >= 1 && level <= 6 ? level : 2
+  } catch {
+    return 2
+  }
+}
+
+const squash = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase()
+
 function replaceText(blocks: JSONNode[], operation: { find: string; replace: string }, options: EditOptions, ids: string[]) {
-  if (!operation.find) throw new AgentEditError('replace_text needs the text to find')
-  const matches: { run: JSONNode; index: number }[] = []
-  let crossing = 0
-  walkRuns(blocks, (run) => {
-    const runText = canonical(run)
-    for (let at = runText.indexOf(operation.find); at !== -1; at = runText.indexOf(operation.find, at + 1))
-      matches.push({ run, index: at })
-  })
+  if (!operation.find) throw new AgentEditError('replace_text needs the text to find, copied exactly from read_document')
+  const matches: { run: JSONNode; index: number; section: string }[] = []
+  let section = 'the start of the document'
+  for (const block of blocks) {
+    if (headings.has(block.type)) section = `the section "${plain(block).trim()}"`
+    walkRuns([block], (run) => {
+      const runText = canonical(run)
+      for (let at = runText.indexOf(operation.find); at !== -1; at = runText.indexOf(operation.find, at + 1))
+        matches.push({ run, index: at, section })
+    })
+  }
   if (matches.length === 0) {
-    for (const block of blocks) if (canonical(block).includes(operation.find)) crossing++
+    const crossing = blocks.some((block) => canonical(block).includes(operation.find))
+    const similar = blocks.find((block) => squash(canonical(block)).includes(squash(operation.find)))
     throw new AgentEditError(
       crossing
-        ? `"${operation.find}" spans differently formatted text; find a shorter piece inside one formatting`
-        : `"${operation.find}" was not found; read the document again`
+        ? `"${operation.find}" spans differently formatted text; use a shorter piece that sits inside one formatting`
+        : similar
+          ? `"${operation.find}" was not found, but the same words exist with different spacing or capitals; copy the text exactly from read_document`
+          : `"${operation.find}" was not found; the document may have changed, so read it again and copy the text exactly`
     )
   }
-  if (matches.length > 1) throw new AgentEditError(`"${operation.find}" appears ${matches.length} times; include more surrounding text`)
+  if (matches.length > 1) {
+    const where = [...new Set(matches.map((match) => match.section))].slice(0, 4).join(', ')
+    throw new AgentEditError(`"${operation.find}" appears ${matches.length} times (in ${where}); include more surrounding text so it appears once`)
+  }
   const { run, index } = matches[0]!
   run.content = spliceRun(run.content ?? [], index, operation.find.length, operation.replace, options, ids)
 }
@@ -169,10 +193,45 @@ function findHeading(blocks: JSONNode[], name: string): number {
   return found[0]!
 }
 
+/** The blocks under a heading, up to the next heading of the same or a higher level. */
+function sectionBody(blocks: JSONNode[], at: number): [number, number] {
+  const level = headingLevel(blocks[at]!)
+  let end = at + 1
+  while (end < blocks.length && !(headings.has(blocks[end]!.type) && headingLevel(blocks[end]!) <= level)) end++
+  return [at + 1, end]
+}
+
+/** Removes blocks; in suggest mode each stays, marked as a proposed deletion in the author's name. */
+function removeBlocks(blocks: JSONNode[], from: number, to: number, options: EditOptions, ids: string[]) {
+  if (options.mode === 'direct') {
+    blocks.splice(from, to - from)
+    return
+  }
+  for (const block of blocks.slice(from, to)) {
+    let attributes: Record<string, unknown> = {}
+    try {
+      attributes = JSON.parse(String(block.attrs?.bodyAttributes ?? '{}')) as Record<string, unknown>
+    } catch {
+      throw new AgentEditError('a block of the document has an unexpected shape')
+    }
+    if ((attributes.suggestion as { kind?: string } | undefined)?.kind === 'insert') continue
+    const id = options.newID()
+    ids.push(id)
+    attributes.suggestion = { kind: 'delete', id, author: options.author }
+    block.attrs = { ...block.attrs, bodyAttributes: JSON.stringify(attributes) }
+  }
+}
+
+const textBlocksOf = (text: string | undefined, name: string) => {
+  const paragraphs = paragraphsOf(text ?? '')
+  if (paragraphs.length === 0) throw new AgentEditError(`${name} needs text`)
+  return paragraphs.map((value) => ({ type: 'paragraph' as const, text: value }))
+}
+
 /** Applies the operations in order to a copy of the document. */
 export function applyMarkdownOperations(json: unknown, operations: MarkdownOperation[], options: EditOptions) {
   if (!Array.isArray(operations) || operations.length === 0) throw new AgentEditError('there are no operations')
-  if (operations.length > 50) throw new AgentEditError('at most 50 operations at a time')
+  if (operations.length > 50) throw new AgentEditError('at most 50 operations at a time; send the rest in another call')
   const copy = structuredClone(json) as JSONNode
   const blocks = body(copy)
   const suggestionIDs: string[] = []
@@ -201,8 +260,34 @@ export function applyMarkdownOperations(json: unknown, operations: MarkdownOpera
         )
         break
       }
+      case 'append':
+        blocks.push(...newBlocks(textBlocksOf(operation.text, 'append'), options, suggestionIDs))
+        break
+      case 'insert_before_heading': {
+        const at = findHeading(blocks, operation.heading ?? '')
+        blocks.splice(at, 0, ...newBlocks(textBlocksOf(operation.text, 'insert_before_heading'), options, suggestionIDs))
+        break
+      }
+      case 'replace_section': {
+        const fresh = textBlocksOf(operation.text, 'replace_section')
+        const at = findHeading(blocks, operation.heading ?? '')
+        const [from, to] = sectionBody(blocks, at)
+        removeBlocks(blocks, from, to, options, suggestionIDs)
+        // In suggest mode the old blocks stay, so the new ones go after them.
+        const insertAt = options.mode === 'direct' ? from : to
+        blocks.splice(insertAt, 0, ...newBlocks(fresh, options, suggestionIDs))
+        break
+      }
+      case 'delete_section': {
+        const at = findHeading(blocks, operation.heading ?? '')
+        const [, to] = sectionBody(blocks, at)
+        removeBlocks(blocks, at, to, options, suggestionIDs)
+        break
+      }
       default:
-        throw new AgentEditError(`unknown operation ${JSON.stringify((operation as { type?: unknown })?.type)}`)
+        throw new AgentEditError(
+          `unknown operation ${JSON.stringify((operation as { type?: unknown })?.type)}; use replace_text, insert_after_heading, insert_before_heading, append_section, append, replace_section or delete_section`
+        )
     }
   }
   return { json: copy, suggestionIDs: [...new Set(suggestionIDs)] }

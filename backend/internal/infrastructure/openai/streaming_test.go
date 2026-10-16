@@ -245,3 +245,64 @@ func TestAProviderThatRefusesStreamOptionsIsAskedAgainWithoutThem(t *testing.T) 
 		t.Fatalf("requests with/without stream_options = %d/%d, want 1/1", withOptions, without)
 	}
 }
+
+func TestAToolCallCutOffByTheOutputLimitReachesTheAgentFlaggedNotAsAFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		if payload["max_completion_tokens"] != float64(agent.DefaultOutputTokens) {
+			t.Errorf("max_completion_tokens = %v", payload["max_completion_tokens"])
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		chunks := []map[string]any{
+			{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "call-1", "function": map[string]string{"name": "edit_document_content", "arguments": `{"operations":[{"type":"append","text":"a long`}}}}}}},
+			{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{}, "finish_reason": "length"}}},
+		}
+		for _, chunk := range chunks {
+			raw, _ := json.Marshal(chunk)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", raw)
+		}
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+	ctx := airuns.WithOutput(context.Background(), func(airuns.Event) error { return nil })
+	model := NewAgent(Config{BaseURL: server.URL, APIKey: "test-key", Model: "test-model", Protocol: ProtocolChatCompletions, AllowPrivate: true})
+	reply, err := model.Step(ctx, []agent.Message{{Role: "user", Content: "Write a lot"}}, nil)
+	if err != nil {
+		t.Fatalf("a step cut off at the output limit failed the run: %v", err)
+	}
+	if !reply.Truncated || len(reply.ToolCalls) != 1 || !reply.ToolCalls[0].Invalid || string(reply.ToolCalls[0].Arguments) != `{}` {
+		t.Fatalf("reply = %+v", reply)
+	}
+}
+
+func TestACutOffAnswerStillFailsBecauseAnAnswerCannotBeHalfJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		raw, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"content": `{"answer":"x`}, "finish_reason": "length"}}})
+		_, _ = fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", raw)
+	}))
+	defer server.Close()
+	_, _, err := streamPost(context.Background(), server.Client(), server.URL+"/chat/completions", "k", map[string]any{}, true)
+	if err == nil {
+		t.Fatal("a cut-off structured answer was accepted")
+	}
+}
+
+func TestResponsesStreamEndingAtTheOutputLimitIsAcceptedForTheAgent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		event, _ := json.Marshal(map[string]any{"type": "response.incomplete", "response": map[string]any{
+			"status": "incomplete", "incomplete_details": map[string]string{"reason": "max_output_tokens"},
+			"output": []any{map[string]any{"type": "function_call", "call_id": "c1", "name": "edit_document_content", "arguments": `{"operations":[`}},
+		}})
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", event)
+	}))
+	defer server.Close()
+	ctx := airuns.WithOutput(context.Background(), func(airuns.Event) error { return nil })
+	model := NewAgent(Config{BaseURL: server.URL, APIKey: "test-key", Model: "test-model", Protocol: ProtocolResponses, AllowPrivate: true})
+	reply, err := model.Step(ctx, []agent.Message{{Role: "user", Content: "Write a lot"}}, nil)
+	if err != nil || !reply.Truncated || len(reply.ToolCalls) != 1 || !reply.ToolCalls[0].Invalid {
+		t.Fatalf("Step() = %+v, %v", reply, err)
+	}
+}

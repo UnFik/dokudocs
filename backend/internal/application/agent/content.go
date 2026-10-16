@@ -143,8 +143,31 @@ func (s *ContentService) Read(ctx context.Context, actor Actor, workspaceID, doc
 
 // DocumentType says what kind of document it is, for deciding whether chat asks first.
 var (
-	markdownOperations = []string{"replace_text", "insert_after_heading", "append_section"}
+	markdownOperations = []string{"replace_text", "insert_after_heading", "insert_before_heading", "append_section", "append", "replace_section", "delete_section"}
 	sourceOperations   = []string{"replace_text", "replace_all", "append"}
+
+	// operationFields are what each operation needs, so a call that lacks one is refused
+	// with a message that shows the right shape before anything is shown to the User.
+	operationFields = map[string][]string{
+		"replace_text":          {"find"},
+		"insert_after_heading":  {"heading", "text"},
+		"insert_before_heading": {"heading", "text"},
+		"append_section":        {"heading"},
+		"append":                {"text"},
+		"replace_section":       {"heading", "text"},
+		"delete_section":        {"heading"},
+		"replace_all":           {"text"},
+	}
+	operationExamples = map[string]string{
+		"replace_text":          `{"type":"replace_text","find":"old words","replace":"new words"}`,
+		"insert_after_heading":  `{"type":"insert_after_heading","heading":"Deploy","text":"One paragraph.\n\nAnother."}`,
+		"insert_before_heading": `{"type":"insert_before_heading","heading":"Rollback","text":"A paragraph."}`,
+		"append_section":        `{"type":"append_section","heading":"Rollback","level":2,"text":"Restore the backup."}`,
+		"append":                `{"type":"append","text":"More text at the end."}`,
+		"replace_section":       `{"type":"replace_section","heading":"Deploy","text":"The new body of the section."}`,
+		"delete_section":        `{"type":"delete_section","heading":"Rollback"}`,
+		"replace_all":           `{"type":"replace_all","text":"the whole source"}`,
+	}
 )
 
 // checkContentOperations refuses an operation the document's type does not have, so a
@@ -161,6 +184,11 @@ func checkContentOperations(docType string, raw json.RawMessage) error {
 	for i, op := range ops {
 		if !slices.Contains(allowed, op.text("type")) {
 			return &ToolError{Message: fmt.Sprintf("operation %d: type must be one of %s", i+1, strings.Join(allowed, ", "))}
+		}
+		for _, field := range operationFields[op.text("type")] {
+			if strings.TrimSpace(op.text(field)) == "" {
+				return &ToolError{Message: fmt.Sprintf("operation %d (%s) needs %q, for example %s", i+1, op.text("type"), field, operationExamples[op.text("type")])}
+			}
 		}
 	}
 	return nil
