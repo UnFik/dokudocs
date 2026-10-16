@@ -47,6 +47,7 @@ import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_au
 import { Route as AuthenticatedPlatformUsageRouteImport } from './routes/_authenticated/platform/usage'
 import { Route as AuthenticatedPlatformSkillsRouteImport } from './routes/_authenticated/platform/skills'
 import { Route as AuthenticatedPlatformMcpRouteImport } from './routes/_authenticated/platform/mcp'
+import { Route as AuthenticatedPlatformConversationsRouteImport } from './routes/_authenticated/platform/conversations'
 import { Route as AuthenticatedPlatformAiRouteImport } from './routes/_authenticated/platform/ai'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedSettingsAccountSetPasswordRouteImport } from './routes/_authenticated/settings/account_.set-password'
@@ -255,6 +256,12 @@ const AuthenticatedPlatformMcpRoute =
     path: '/platform/mcp',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPlatformConversationsRoute =
+  AuthenticatedPlatformConversationsRouteImport.update({
+    id: '/platform/conversations',
+    path: '/platform/conversations',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPlatformAiRoute = AuthenticatedPlatformAiRouteImport.update({
   id: '/platform/ai',
   path: '/platform/ai',
@@ -296,6 +303,7 @@ export interface FileRoutesByFullPath {
   '/docs/$docId': typeof DocsDocIdRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/platform/ai': typeof AuthenticatedPlatformAiRoute
+  '/platform/conversations': typeof AuthenticatedPlatformConversationsRoute
   '/platform/mcp': typeof AuthenticatedPlatformMcpRoute
   '/platform/skills': typeof AuthenticatedPlatformSkillsRoute
   '/platform/usage': typeof AuthenticatedPlatformUsageRoute
@@ -337,6 +345,7 @@ export interface FileRoutesByTo {
   '/docs/$docId': typeof DocsDocIdRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/platform/ai': typeof AuthenticatedPlatformAiRoute
+  '/platform/conversations': typeof AuthenticatedPlatformConversationsRoute
   '/platform/mcp': typeof AuthenticatedPlatformMcpRoute
   '/platform/skills': typeof AuthenticatedPlatformSkillsRoute
   '/platform/usage': typeof AuthenticatedPlatformUsageRoute
@@ -381,6 +390,7 @@ export interface FileRoutesById {
   '/docs/$docId': typeof DocsDocIdRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/platform/ai': typeof AuthenticatedPlatformAiRoute
+  '/_authenticated/platform/conversations': typeof AuthenticatedPlatformConversationsRoute
   '/_authenticated/platform/mcp': typeof AuthenticatedPlatformMcpRoute
   '/_authenticated/platform/skills': typeof AuthenticatedPlatformSkillsRoute
   '/_authenticated/platform/usage': typeof AuthenticatedPlatformUsageRoute
@@ -425,6 +435,7 @@ export interface FileRouteTypes {
     | '/docs/$docId'
     | '/errors/$error'
     | '/platform/ai'
+    | '/platform/conversations'
     | '/platform/mcp'
     | '/platform/skills'
     | '/platform/usage'
@@ -466,6 +477,7 @@ export interface FileRouteTypes {
     | '/docs/$docId'
     | '/errors/$error'
     | '/platform/ai'
+    | '/platform/conversations'
     | '/platform/mcp'
     | '/platform/skills'
     | '/platform/usage'
@@ -509,6 +521,7 @@ export interface FileRouteTypes {
     | '/docs/$docId'
     | '/_authenticated/errors/$error'
     | '/_authenticated/platform/ai'
+    | '/_authenticated/platform/conversations'
     | '/_authenticated/platform/mcp'
     | '/_authenticated/platform/skills'
     | '/_authenticated/platform/usage'
@@ -819,6 +832,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPlatformMcpRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/platform/conversations': {
+      id: '/_authenticated/platform/conversations'
+      path: '/platform/conversations'
+      fullPath: '/platform/conversations'
+      preLoaderRoute: typeof AuthenticatedPlatformConversationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/platform/ai': {
       id: '/_authenticated/platform/ai'
       path: '/platform/ai'
@@ -877,6 +897,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedPlatformAiRoute: typeof AuthenticatedPlatformAiRoute
+  AuthenticatedPlatformConversationsRoute: typeof AuthenticatedPlatformConversationsRoute
   AuthenticatedPlatformMcpRoute: typeof AuthenticatedPlatformMcpRoute
   AuthenticatedPlatformSkillsRoute: typeof AuthenticatedPlatformSkillsRoute
   AuthenticatedPlatformUsageRoute: typeof AuthenticatedPlatformUsageRoute
@@ -895,6 +916,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedPlatformAiRoute: AuthenticatedPlatformAiRoute,
+  AuthenticatedPlatformConversationsRoute:
+    AuthenticatedPlatformConversationsRoute,
   AuthenticatedPlatformMcpRoute: AuthenticatedPlatformMcpRoute,
   AuthenticatedPlatformSkillsRoute: AuthenticatedPlatformSkillsRoute,
   AuthenticatedPlatformUsageRoute: AuthenticatedPlatformUsageRoute,
