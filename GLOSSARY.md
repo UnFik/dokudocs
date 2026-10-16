@@ -115,6 +115,18 @@ _Avoid_: AI edit, bot suggestion
 A named set of instructions a Superadmin writes once for every User, called by name in a Conversation or from an outside AI client. A Skill tells the Agent how to do a task; it never grants an AI permission.
 _Avoid_: Prompt, template, command
 
+**Trace**:
+The record of how one Agent request went through the decision graph: each place it passed, how often it went around, how long it took and where it stopped. It holds codes, counts and names, never what anyone wrote (ADR-0050). Only a Superadmin reads it.
+_Avoid_: Log, transcript, history (a Conversation is the history)
+
+**Entry gate**:
+The first place a request passes in the decision graph. It catches a request that is clearly off-topic or cannot be answered without one more fact before the Agent works on it; every other request goes on as it came.
+_Avoid_: Filter, moderation
+
+**Model router**:
+The place after the entry gate that picks the small model for a short question that only reads and the main model for everything else. Without a small model set, everything uses the main one.
+_Avoid_: Load balancer
+
 **Conversation scope**:
 Whether a Conversation draws on one document (opened from that document) or on every document the User may read in a workspace. Each User keeps their own Conversations of both kinds.
 _Avoid_: Chat mode, context
