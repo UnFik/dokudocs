@@ -240,6 +240,12 @@ type Message struct {
 	ToolCallID string
 	// Truncated is set when the model stopped because it reached its output limit.
 	Truncated bool
+	// The rest describes the model's turn for the trace: which model, how many tokens it
+	// used and why it stopped. A provider fills what it knows.
+	Model        string
+	FinishReason string
+	InputTokens  int
+	OutputTokens int
 }
 
 const (

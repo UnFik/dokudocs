@@ -150,3 +150,27 @@ func TestAgentStepReportsHowLongTheCallTook(t *testing.T) {
 		t.Fatalf("took = %v, want at least the 40ms the server waited", took)
 	}
 }
+
+func TestAgentStepTellsWhichModelAnsweredHowManyTokensItUsedAndWhyItStopped(t *testing.T) {
+	for _, protocol := range []string{ProtocolChatCompletions, ProtocolResponses} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if protocol == ProtocolResponses {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"status": "completed", "usage": map[string]any{"input_tokens": 30, "output_tokens": 4},
+					"output": []any{map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text", "text": "hi"}}}},
+				})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []any{map[string]any{"message": map[string]any{"content": "hi"}, "finish_reason": "stop"}},
+				"usage":   map[string]any{"prompt_tokens": 30, "completion_tokens": 4},
+			})
+		}))
+		model := NewAgent(Config{BaseURL: server.URL, APIKey: "k", Model: "gpt-test", Protocol: protocol, AllowPrivate: true})
+		reply, err := model.Step(context.Background(), conversation(), nil)
+		server.Close()
+		if err != nil || reply.Model != "gpt-test" || reply.InputTokens != 30 || reply.OutputTokens != 4 || reply.FinishReason != "stop" {
+			t.Fatalf("%s: Step() = %+v, %v", protocol, reply, err)
+		}
+	}
+}
