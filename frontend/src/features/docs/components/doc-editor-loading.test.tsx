@@ -55,9 +55,8 @@ async function renderEditor() {
 function expectBusySkeleton(container: Element) {
   const busy = container.querySelector('[aria-busy="true"]')
   expect(busy).not.toBeNull()
-  expect(
-    busy!.querySelectorAll('[data-slot="skeleton"]').length
-  ).toBeGreaterThan(2)
+  // No type is known yet, so it is a title bar and one neutral block, never text lines.
+  expect(busy!.querySelectorAll('[data-slot="skeleton"]').length).toBe(2)
   // The toolbar's "Synced" is the only status region; specs find it by role.
   expect(container.querySelector('[role="status"]')).toBeNull()
 }
