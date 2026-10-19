@@ -148,8 +148,14 @@ func (s *ContentService) EditArchitecture(ctx context.Context, actor Actor, work
 	if err != nil {
 		return EditResult{}, err
 	}
-	if err := s.checkArchitectureOperations(ctx, actor, workspaceID, parseCanvas(live.Text), ops); err != nil {
+	bare, err := s.checkArchitectureOperations(ctx, actor, workspaceID, parseCanvas(live.Text), ops)
+	if err != nil {
 		return EditResult{}, err
+	}
+	if len(bare) > 0 {
+		if raw, err = json.Marshal(ops); err != nil {
+			return EditResult{}, err
+		}
 	}
 	title := "Before AI edit from chat"
 	if actor.Channel == ChannelMCP {
@@ -172,7 +178,21 @@ func (s *ContentService) EditArchitecture(ctx context.Context, actor Actor, work
 	return EditResult{
 		Mode: "direct", Version: edited.Version, RevisionID: revision.ID,
 		Created: edited.Created, RemovedNodes: edited.RemovedNodes, RemovedConnections: edited.RemovedConnections,
+		Uncataloged: bare, Next: uncatalogedNext(bare),
 	}, nil
+}
+
+// Uncataloged is a node drawn without a catalog entry because the catalog has none for it.
+type Uncataloged struct {
+	Name string `json:"name"`
+	Kind string `json:"kind,omitempty"`
+}
+
+func uncatalogedNext(bare []Uncataloged) string {
+	if len(bare) == 0 {
+		return ""
+	}
+	return "These nodes are drawn without a catalog entry, so they show a plain icon. Tell the User, and offer to ask for the missing entries with request_catalog_entry. Do not send a request unless the User says yes."
 }
 
 var errStale = &ToolError{Message: "the version is not the document's current one: it changed since you read it, or it is not the exact version read_document returned; read it again and retry with that version"}
@@ -180,13 +200,17 @@ var errStale = &ToolError{Message: "the version is not the document's current on
 // checkArchitectureOperations refuses what only this side can judge: a slug the catalog
 // does not have, and a linked document the User cannot read. The collaboration service
 // judges the shape of the canvas itself.
-func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor Actor, workspaceID uuid.UUID, c canvas, ops []operation) error {
+//
+// A catalog slug the catalog does not have and has nothing close to is not refused: the
+// node is drawn without a catalog entry and reported back, so the Agent can offer the User
+// to request the entry. A slug close to a real one is still refused, as a likely typo.
+func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor Actor, workspaceID uuid.UUID, c canvas, ops []operation) ([]Uncataloged, error) {
 	var entries map[string]catalog.Entry
 	var slugs []catalog.Entry
 	if s.catalog != nil {
 		list, err := s.catalog.List(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		slugs = list
 		entries = make(map[string]catalog.Entry, len(list))
@@ -195,11 +219,22 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 		}
 	}
 	kinds := map[string]string{}
+	names := map[string]string{}
 	for _, n := range c.Nodes {
 		kinds[n.ID] = n.Kind
+		names[n.ID] = n.Name
 	}
 	fail := func(i int, format string, args ...any) error {
 		return &ToolError{Message: fmt.Sprintf("operation %d: ", i+1) + fmt.Sprintf(format, args...)}
+	}
+	var drawn []Uncataloged
+	// without drops a catalog slug nothing in the catalog resembles; it is then drawn bare.
+	without := func(op operation, kind, name string) {
+		if !unknownSlug(entries, slugs, kind, op.text("catalog")) {
+			return
+		}
+		delete(op, "catalog")
+		drawn = append(drawn, Uncataloged{Name: name, Kind: kind})
 	}
 	for i, op := range ops {
 		switch op.text("type") {
@@ -207,33 +242,53 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 			if ref := op.text("ref"); ref != "" {
 				kinds[ref] = op.text("kind")
 			}
+			without(op, op.text("kind"), op.text("name"))
 			if msg := checkSlug(entries, slugs, op.text("kind"), op.text("catalog")); msg != "" {
-				return fail(i, "%s", msg)
+				return nil, fail(i, "%s", msg)
 			}
 		case "update_node":
-			if kind, ok := kinds[op.text("id")]; ok {
+			kind, known := kinds[op.text("id")]
+			name := op.text("name")
+			if name == "" {
+				name = names[op.text("id")]
+			}
+			without(op, kind, name)
+			if known {
 				if msg := checkSlug(entries, slugs, kind, op.text("catalog")); msg != "" {
-					return fail(i, "%s", msg)
+					return nil, fail(i, "%s", msg)
 				}
 			} else if msg := checkSlug(entries, slugs, "", op.text("catalog")); msg != "" {
-				return fail(i, "%s", msg)
+				return nil, fail(i, "%s", msg)
 			}
 		case "add_connection", "update_connection":
 			if msg := checkSlug(entries, slugs, "protocol", op.text("protocol")); msg != "" {
-				return fail(i, "%s", msg)
+				return nil, fail(i, "%s", msg)
 			}
 		case "link_document":
 			id := op.text("document_id")
 			if err := s.checkLink(ctx, actor, workspaceID, id); err != nil {
 				var refusal *ToolError
 				if errors.As(err, &refusal) {
-					return fail(i, "%s", refusal.Message)
+					return nil, fail(i, "%s", refusal.Message)
 				}
-				return err
+				return nil, err
 			}
 		}
 	}
-	return nil
+	return drawn, nil
+}
+
+// unknownSlug is true for a catalog slug that is not an entry and is not close to one.
+// Protocols and Groups are never unknown: a Connection needs a real protocol, a Group has
+// no catalog entry.
+func unknownSlug(entries map[string]catalog.Entry, all []catalog.Entry, kind, slug string) bool {
+	if entries == nil || slug == "" || kind == "group" || kind == "protocol" {
+		return false
+	}
+	if _, ok := entries[slug]; ok {
+		return false
+	}
+	return len(nearSlugs(slug, all, kind)) == 0
 }
 
 func (s *ContentService) checkLink(ctx context.Context, actor Actor, workspaceID uuid.UUID, raw string) error {
@@ -281,11 +336,11 @@ func checkSlug(entries map[string]catalog.Entry, all []catalog.Entry, kind, slug
 	case entry.Category == kind:
 		return ""
 	case kind == "protocol":
-		return fmt.Sprintf("%q is a %s kind, not a protocol", slug, title(entry.Category))
+		return fmt.Sprintf("%q is a %s kind, not a protocol; list_architecture_catalog with category protocol shows the protocols", slug, title(entry.Category))
 	case entry.Category == "protocol":
 		return fmt.Sprintf("%q is a protocol, not a %s kind", slug, title(kind))
 	}
-	return fmt.Sprintf("%q is a %s kind, not a %s kind", slug, title(entry.Category), title(kind))
+	return fmt.Sprintf("%q is a %s kind, not a %s kind; it goes on a %s node", slug, title(entry.Category), title(kind), title(entry.Category))
 }
 
 func orList(items []string) string {
@@ -362,6 +417,10 @@ func (s *ContentService) ArchitectureSummary(ctx context.Context, actor Actor, w
 	}
 	ops, err := parseOperations(raw)
 	if err != nil {
+		return "", err
+	}
+	// A change the server would refuse is refused before the User is asked to approve it.
+	if _, err := s.checkArchitectureOperations(ctx, actor, workspaceID, parseCanvas(live.Text), ops); err != nil {
 		return "", err
 	}
 	d := describer{canvas: parseCanvas(live.Text), names: map[string]string{}, kinds: map[string]string{}}

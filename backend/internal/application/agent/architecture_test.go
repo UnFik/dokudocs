@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -153,14 +154,13 @@ func TestAStaleCanvasVersionMakesNoRevision(t *testing.T) {
 func TestCatalogSlugsAreCheckedAndAWrongOneComesBackWithSuggestions(t *testing.T) {
 	cases := map[string]string{
 		`[{"type":"add_node","kind":"system","name":"X","catalog":"reddis"}]`:                                        `operation 1: there is no catalog entry "reddis"; did you mean redis?`,
-		`[{"type":"add_node","kind":"system","name":"X","catalog":"vps"}]`:                                           `operation 1: "vps" is a Host kind, not a System kind`,
-		`[{"type":"add_node","kind":"host","name":"X","catalog":"redis"}]`:                                           `operation 1: "redis" is a System kind, not a Host kind`,
+		`[{"type":"add_node","kind":"system","name":"X","catalog":"vps"}]`:                                           `operation 1: "vps" is a Host kind, not a System kind; it goes on a Host node`,
+		`[{"type":"add_node","kind":"host","name":"X","catalog":"redis"}]`:                                           `operation 1: "redis" is a System kind, not a Host kind; it goes on a System node`,
 		`[{"type":"add_node","kind":"group","name":"X","catalog":"vps"}]`:                                            `operation 1: a Group has no catalog entry`,
-		`[{"type":"update_node","id":"api","catalog":"nope-at-all"}]`:                                                `operation 1: there is no catalog entry "nope-at-all"; see list_architecture_catalog`,
 		`[{"type":"add_connection","source":"api","target":"pg","protocol":"rst"}]`:                                  `operation 1: there is no protocol "rst"; did you mean rest?`,
-		`[{"type":"update_connection","id":"c1","protocol":"redis"}]`:                                                `operation 1: "redis" is a System kind, not a protocol`,
-		`[{"type":"update_node","id":"vps","catalog":"golang"}]`:                                                     `operation 1: "golang" is a System kind, not a Host kind`,
-		`[{"type":"add_node","ref":"a","kind":"host","name":"H"},{"type":"update_node","id":"a","catalog":"redis"}]`: `operation 2: "redis" is a System kind, not a Host kind`,
+		`[{"type":"update_connection","id":"c1","protocol":"redis"}]`:                                                `operation 1: "redis" is a System kind, not a protocol; list_architecture_catalog with category protocol shows the protocols`,
+		`[{"type":"update_node","id":"vps","catalog":"golang"}]`:                                                     `operation 1: "golang" is a System kind, not a Host kind; it goes on a System node`,
+		`[{"type":"add_node","ref":"a","kind":"host","name":"H"},{"type":"update_node","id":"a","catalog":"redis"}]`: `operation 2: "redis" is a System kind, not a Host kind; it goes on a System node`,
 	}
 	for ops, want := range cases {
 		e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
@@ -266,5 +266,29 @@ func TestAnOperationWithoutAKnownTypeIsRefusedBeforeTheUserApprovesOrAVersionIsM
 	}
 	if len(e.revisions.titles) != revisionsBefore {
 		t.Fatalf("a version was made for an edit that could not run: %v", e.revisions.titles)
+	}
+}
+
+func TestAComponentTheCatalogLacksIsDrawnBareAndReportedBack(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	ops := `[{"type":"add_node","ref":"t","kind":"system","name":"Traefik","catalog":"traefik-proxy-x","parent":"vps"},{"type":"update_node","id":"api","catalog":"zzzzzzzzzz"}]`
+	got, err := edit(e, chat(e), ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(e.rooms.edits) != 1 || strings.Contains(string(e.rooms.edits[0].Operations), "catalog") {
+		t.Fatalf("operations sent = %s", e.rooms.edits[0].Operations)
+	}
+	want := []Uncataloged{{Name: "Traefik", Kind: "system"}, {Name: "API", Kind: "system"}}
+	if !reflect.DeepEqual(got.Uncataloged, want) || !strings.Contains(got.Next, "request_catalog_entry") {
+		t.Fatalf("Uncataloged = %+v, Next = %q", got.Uncataloged, got.Next)
+	}
+}
+
+func TestACatalogRefusalIsRaisedBeforeTheUserApproves(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	_, err := e.svc.ArchitectureSummary(context.Background(), chat(e), e.ws, e.doc, json.RawMessage(`[{"type":"add_node","kind":"host","name":"N","catalog":"redis"}]`))
+	if got := refused(t, err); !strings.Contains(got, `"redis" is a System kind, not a Host kind`) {
+		t.Fatalf("error = %q", got)
 	}
 }

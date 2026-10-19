@@ -66,15 +66,16 @@ func newAgentKit(c *container.Container, cfg config.Config) *agentKit {
 	kinds := appcatalog.NewService(catalogrepo.NewStore(c.DB))
 	content := agent.NewContentService(documents, rooms, revisions, store).WithCatalog(kinds)
 	tools := agent.DokudocsTools(agent.ToolDeps{
-		Workspaces:  appws.NewUseCase(c.DB),
-		Documents:   appdoc.NewUseCase(c.DB),
-		Projects:    appproject.NewUseCase(c.DB),
-		Comments:    appdoc.NewCommentUseCase(documents).WithDeliverer(notification.NewMentionDeliverer(c.Mailer, c.Push, cfg.PublicAppURL)),
-		Suggestions: appdoc.NewSuggestionUseCase(documents),
-		Revisions:   revisions,
-		Search:      documents,
-		Content:     content,
-		Catalog:     kinds,
+		Workspaces:      appws.NewUseCase(c.DB),
+		Documents:       appdoc.NewUseCase(c.DB),
+		Projects:        appproject.NewUseCase(c.DB),
+		Comments:        appdoc.NewCommentUseCase(documents).WithDeliverer(notification.NewMentionDeliverer(c.Mailer, c.Push, cfg.PublicAppURL)),
+		Suggestions:     appdoc.NewSuggestionUseCase(documents),
+		Revisions:       revisions,
+		Search:          documents,
+		Content:         content,
+		Catalog:         kinds,
+		CatalogRequests: kinds,
 	})
 	executor := agent.NewExecutor(permissions, tools, mcpService.MaxResultBytes)
 	traceStore := aitracerepo.NewStore(c.DB)

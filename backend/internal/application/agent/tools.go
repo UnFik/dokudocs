@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	appcatalog "backend/internal/application/catalog"
 	"backend/internal/application/document/dto"
 	appdoc "backend/internal/application/document/usecase"
 	projectdto "backend/internal/application/project/dto"
@@ -45,6 +46,10 @@ type ToolDeps struct {
 	}
 	Content *ContentService
 	Catalog ArchitectureCatalog
+	// CatalogRequests asks for a catalog entry the catalog does not have.
+	CatalogRequests interface {
+		Request(ctx context.Context, input appcatalog.RequestInput) (appcatalog.RequestResult, error)
+	}
 }
 
 // schema helpers
@@ -632,7 +637,7 @@ func DokudocsTools(d ToolDeps) []Tool {
 				"move_node {id, parent (an id, or null for the top level), x, y, w, h}; remove_node {id, cascade (required to remove a Host or Group that holds elements)}; " +
 				"add_connection {source, target, protocol, ref, label, port} between two Systems; update_connection {id, protocol, label, port}; remove_connection {id}; " +
 				"link_document {id, document_id} and unlink_document {id, document_id} on a node or Connection. " +
-				"catalog and protocol are slugs from list_architecture_catalog. Leave x and y out and the element is placed in a free spot. " +
+				"catalog and protocol are slugs from list_architecture_catalog: call it before you write one, because the catalog decides whether a slug is a Host kind or a System kind (Nginx, React and Redis are Systems), not the name. If the catalog has nothing for a component, add the node without catalog: it is drawn with a plain icon and the answer lists it under uncataloged. Leave x and y out and the element is placed in a free spot. " +
 				"From a Dokudocs chat the User approves the change first.",
 			Parameters: object([]string{"workspace_id", "document_id", "version", "operations"}, map[string]any{
 				"workspace_id": pWorkspace, "document_id": pDocument, "version": pText("The version read_document returned."),
@@ -700,6 +705,54 @@ func DokudocsTools(d ToolDeps) []Tool {
 					return nil, err
 				}
 				return d.Content.EditArchitecture(ctx, actor, ws, doc, a.Version, a.Operations)
+			},
+		},
+		{
+			Name: "request_catalog_entry", Capability: CapContent, Write: true, DocumentTool: true,
+			Description: "Ask for a Host, System or protocol the catalog does not have. Use it only after the User agrees, for a component list_architecture_catalog does not know. " +
+				"If the catalog already has it, the answer gives its slug.",
+			Parameters: object([]string{"workspace_id", "name", "category"}, map[string]any{
+				"workspace_id": pWorkspace, "document_id": pDocument,
+				"name":     pText("The component's name, for example Traefik."),
+				"category": map[string]any{"type": "string", "enum": []string{"host", "system", "protocol"}, "description": "What kind of entry it is."},
+				"website":  pText("Its website, if you know it."),
+				"note":     pText("Why the User needs it."),
+			}),
+			NeedsApproval: always(func(args json.RawMessage) string {
+				return fmt.Sprintf("Ask for a catalog entry: %s (%s)", truncate(field(args, "name"), 100), title(field(args, "category")))
+			}),
+			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
+				a, err := parse[struct {
+					wsDoc
+					Name     string `json:"name"`
+					Category string `json:"category"`
+					Website  string `json:"website"`
+					Note     string `json:"note"`
+				}](args)
+				if err != nil {
+					return nil, err
+				}
+				ws, _, err := a.ids()
+				if err != nil && ws == uuid.Nil {
+					return nil, err
+				}
+				if d.CatalogRequests == nil {
+					return nil, ErrUnknownTool
+				}
+				note := strings.TrimSpace("Asked through the AI agent. " + a.Note)
+				result, err := d.CatalogRequests.Request(ctx, appcatalog.RequestInput{
+					UserID: actor.UserID, WorkspaceID: ws, Name: a.Name, Category: a.Category, Website: a.Website, Note: truncate(note, 1000),
+				})
+				var inCatalog appcatalog.InCatalogError
+				switch {
+				case errors.As(err, &inCatalog):
+					return map[string]any{"status": "in_catalog", "slug": inCatalog.Slug, "next": "The catalog has it. Use this slug with update_node."}, nil
+				case errors.Is(err, appcatalog.ErrInvalidRequest), errors.Is(err, appcatalog.ErrTooManyRequests), errors.Is(err, appcatalog.ErrNotMember):
+					return nil, &ToolError{Message: err.Error()}
+				case err != nil:
+					return nil, err
+				}
+				return map[string]any{"status": "requested", "name": result.Name, "votes": result.Votes, "alreadyRequested": result.AlreadyRequested}, nil
 			},
 		},
 		{
