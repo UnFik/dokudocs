@@ -78,26 +78,81 @@ const node = (type: string, id: string, attributes: Record<string, unknown>, con
   content,
 })
 
-function paragraphsOf(text: string): string[] {
-  return text
-    .replace(/\r\n?/g, '\n')
-    .split(/\n\s*\n/)
-    .map((part) => part.replace(/\n/g, ' ').trim())
-    .filter(Boolean)
+export type TextBlock = { type: 'paragraph'; text: string } | { type: 'code_block'; lang: string; text: string }
+
+type Fence = { char: string; length: number; indent: number; lang: string }
+
+const indentOf = (line: string) => /^ */.exec(line)![0].length
+
+/** Three or more backticks or tildes, up to three spaces in; the language is the first word after them. */
+function openingFence(line: string): Fence | null {
+  const indent = indentOf(line)
+  const rest = line.slice(indent)
+  if (indent > 3 || rest.length < 3 || (rest[0] !== '`' && rest[0] !== '~')) return null
+  let length = 0
+  while (rest[length] === rest[0]) length++
+  if (length < 3) return null
+  const info = rest.slice(length).trim()
+  // A backtick fence whose info string holds a backtick is inline code, not a fence.
+  if (rest[0] === '`' && info.includes('`')) return null
+  return { char: rest[0]!, length, indent, lang: info.split(/\s+/)[0] ?? '' }
 }
 
+/** The same character, at least as long, and nothing after it. */
+function closesFence(fence: Fence, line: string): boolean {
+  const indent = indentOf(line)
+  const rest = line.slice(indent).replace(/[ \t]+$/, '')
+  return indent <= 3 && rest.length >= fence.length && [...rest].every((char) => char === fence.char)
+}
+
+/**
+ * Splits the text an Agent writes into paragraphs and fenced code. Code is kept exactly as
+ * written, blank lines and indentation included; other lines are paragraphs that end at a
+ * blank line. The same rules, and the same cases (backend/internal/application/agent/testdata),
+ * as create_document in the backend, so both ways of writing read the same.
+ */
+export function blocksOf(text: string): TextBlock[] {
+  const blocks: TextBlock[] = []
+  let paragraph: string[] = []
+  const flush = () => {
+    if (paragraph.length) blocks.push({ type: 'paragraph', text: paragraph.join(' ') })
+    paragraph = []
+  }
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const fence = openingFence(lines[i]!)
+    if (fence) {
+      flush()
+      const code: string[] = []
+      for (i++; i < lines.length && !closesFence(fence, lines[i]!); i++) code.push(lines[i]!.slice(Math.min(indentOf(lines[i]!), fence.indent)))
+      blocks.push({ type: 'code_block', lang: fence.lang, text: code.join('\n') })
+      continue
+    }
+    const line = lines[i]!.trim()
+    if (line === '') flush()
+    else paragraph.push(line)
+  }
+  flush()
+  return blocks
+}
+
+const textNode = (value: string): JSONNode[] => (value ? [{ type: 'text', text: value }] : [])
+
+type NewBlock = { type: 'atx_heading'; text: string; level?: number } | TextBlock
+
 /** New blocks; in suggest mode each is a proposed block insertion in the author's name. */
-function newBlocks(items: { type: 'paragraph' | 'atx_heading'; text: string; level?: number }[], options: EditOptions, ids: string[]) {
+function newBlocks(items: NewBlock[], options: EditOptions, ids: string[]) {
   return items.map((item) => {
-    const attributes: Record<string, unknown> = item.type === 'atx_heading' ? { level: item.level ?? 2 } : {}
+    const attributes: Record<string, unknown> =
+      item.type === 'atx_heading' ? { level: item.level ?? 2 } : item.type === 'code_block' ? { type: 'fenced', lang: item.lang } : {}
     if (options.mode === 'suggest') {
       const id = options.newID()
       ids.push(id)
       attributes.suggestion = { kind: 'insert', id, author: options.author }
     }
-    return node(item.type, options.newID(), attributes, [
-      node('run', options.newID(), {}, item.text ? [{ type: 'text', text: item.text }] : []),
-    ])
+    // The editor keeps code as text directly in the block; every other block holds a run.
+    if (item.type === 'code_block') return node('code_block', options.newID(), attributes, textNode(item.text))
+    return node(item.type, options.newID(), attributes, [node('run', options.newID(), {}, textNode(item.text))])
   })
 }
 
@@ -114,16 +169,22 @@ const squash = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase(
 
 function replaceText(blocks: JSONNode[], operation: { find: string; replace: string }, options: EditOptions, ids: string[]) {
   if (!operation.find) throw new AgentEditError('replace_text needs the text to find, copied exactly from read_document')
-  const matches: { run: JSONNode; index: number; section: string }[] = []
+  // A code block holds its text directly, not in runs, so it is searched as a whole.
+  const matches: { run: JSONNode; index: number; section: string; codeAt?: number }[] = []
   let section = 'the start of the document'
-  for (const block of blocks) {
+  blocks.forEach((block, codeAt) => {
     if (headings.has(block.type)) section = `the section "${plain(block).trim()}"`
+    if (block.type === 'code_block') {
+      const codeText = canonical(block)
+      for (let at = codeText.indexOf(operation.find); at !== -1; at = codeText.indexOf(operation.find, at + 1)) matches.push({ run: block, index: at, section, codeAt })
+      return
+    }
     walkRuns([block], (run) => {
       const runText = canonical(run)
       for (let at = runText.indexOf(operation.find); at !== -1; at = runText.indexOf(operation.find, at + 1))
         matches.push({ run, index: at, section })
     })
-  }
+  })
   if (matches.length === 0) {
     const crossing = blocks.some((block) => canonical(block).includes(operation.find))
     const similar = blocks.find((block) => squash(canonical(block)).includes(squash(operation.find)))
@@ -139,8 +200,32 @@ function replaceText(blocks: JSONNode[], operation: { find: string; replace: str
     const where = [...new Set(matches.map((match) => match.section))].slice(0, 4).join(', ')
     throw new AgentEditError(`"${operation.find}" appears ${matches.length} times (in ${where}); include more surrounding text so it appears once`)
   }
-  const { run, index } = matches[0]!
-  run.content = spliceRun(run.content ?? [], index, operation.find.length, operation.replace, options, ids)
+  const { run, index, codeAt } = matches[0]!
+  if (codeAt !== undefined) replaceInCode(blocks, codeAt, index, operation, options, ids)
+  else run.content = spliceRun(run.content ?? [], index, operation.find.length, operation.replace, options, ids)
+}
+
+/**
+ * Code takes no marks, so a suggested change to it is the old block proposed for deletion and
+ * the changed one proposed right after it; a direct change rewrites the text.
+ */
+function replaceInCode(blocks: JSONNode[], at: number, index: number, operation: { find: string; replace: string }, options: EditOptions, ids: string[]) {
+  const block = blocks[at]!
+  const value = canonical(block)
+  const next = value.slice(0, index) + operation.replace + value.slice(index + operation.find.length)
+  if (options.mode === 'direct') {
+    block.content = textNode(next)
+    return
+  }
+  let attributes: { lang?: unknown; suggestion?: { kind?: string } } = {}
+  try {
+    attributes = JSON.parse(String(block.attrs?.bodyAttributes ?? '{}'))
+  } catch {
+    throw new AgentEditError('a block of the document has an unexpected shape')
+  }
+  if (attributes.suggestion?.kind === 'insert') throw new AgentEditError('this code block is itself a pending suggestion; accept or reject it before changing it')
+  removeBlocks(blocks, at, at + 1, options, ids)
+  blocks.splice(at + 1, 0, ...newBlocks([{ type: 'code_block', lang: String(attributes.lang ?? ''), text: next }], options, ids))
 }
 
 /**
@@ -223,9 +308,9 @@ function removeBlocks(blocks: JSONNode[], from: number, to: number, options: Edi
 }
 
 const textBlocksOf = (text: string | undefined, name: string) => {
-  const paragraphs = paragraphsOf(text ?? '')
-  if (paragraphs.length === 0) throw new AgentEditError(`${name} needs text`)
-  return paragraphs.map((value) => ({ type: 'paragraph' as const, text: value }))
+  const blocks = blocksOf(text ?? '')
+  if (blocks.length === 0) throw new AgentEditError(`${name} needs text`)
+  return blocks
 }
 
 /** Applies the operations in order to a copy of the document. */
@@ -241,10 +326,9 @@ export function applyMarkdownOperations(json: unknown, operations: MarkdownOpera
         replaceText(blocks, operation, options, suggestionIDs)
         break
       case 'insert_after_heading': {
-        const paragraphs = paragraphsOf(operation.text ?? '')
-        if (paragraphs.length === 0) throw new AgentEditError('insert_after_heading needs text')
+        const fresh = textBlocksOf(operation.text, 'insert_after_heading')
         const at = findHeading(blocks, operation.heading ?? '')
-        blocks.splice(at + 1, 0, ...newBlocks(paragraphs.map((text) => ({ type: 'paragraph' as const, text })), options, suggestionIDs))
+        blocks.splice(at + 1, 0, ...newBlocks(fresh, options, suggestionIDs))
         break
       }
       case 'append_section': {
@@ -253,7 +337,7 @@ export function applyMarkdownOperations(json: unknown, operations: MarkdownOpera
         const level = Math.min(6, Math.max(1, Math.trunc(Number(operation.level ?? 2)) || 2))
         blocks.push(
           ...newBlocks(
-            [{ type: 'atx_heading', text: title, level }, ...paragraphsOf(operation.text ?? '').map((text) => ({ type: 'paragraph' as const, text }))],
+            [{ type: 'atx_heading', text: title, level }, ...blocksOf(operation.text ?? '')],
             options,
             suggestionIDs
           )
