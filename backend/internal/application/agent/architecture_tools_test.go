@@ -2,6 +2,7 @@ package agent
 
 import (
 	appcatalog "backend/internal/application/catalog"
+	appdoc "backend/internal/application/document/usecase"
 	"context"
 	"encoding/json"
 	"errors"
@@ -215,5 +216,64 @@ func TestARequestForWhatTheCatalogHasAnswersWithItsSlug(t *testing.T) {
 	out, err := exec.Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws, DocumentID: e.doc, Approved: true}, "request_catalog_entry", args)
 	if err != nil || !strings.Contains(out.Text, `"in_catalog"`) || !strings.Contains(out.Text, `"redis"`) {
 		t.Fatalf("Call() = %+v, %v", out, err)
+	}
+}
+
+type fakeComments struct {
+	got appdoc.CommentInput
+	err error
+}
+
+func (f *fakeComments) List(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) ([]model.CommentThread, error) {
+	return nil, nil
+}
+func (f *fakeComments) Create(_ context.Context, in appdoc.CommentInput) error {
+	f.got = in
+	return f.err
+}
+func (f *fakeComments) Reply(context.Context, appdoc.CommentReplyInput) error { return nil }
+func (f *fakeComments) Resolve(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID, bool) error {
+	return nil
+}
+
+func commentExecutor(e *contentEnv, comments *fakeComments) *Executor {
+	tools := DokudocsTools(ToolDeps{Content: e.svc, Comments: comments})
+	return NewExecutor(NewPermissionService(memPermissions{e.user: {CapRead, CapComments}}), tools, func(context.Context) int { return 1 << 20 })
+}
+
+func commentCall(e *contentEnv, exec *Executor, extra string) (Outcome, error) {
+	args := json.RawMessage(`{"workspace_id":"` + e.ws.String() + `","text":"Use Postgres here"` + extra + `}`)
+	return exec.Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws, DocumentID: e.doc, Approved: true}, "add_comment", args)
+}
+
+func TestACommentOnACanvasElementCarriesAnElementAnchor(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	comments := &fakeComments{}
+	if _, err := commentCall(e, commentExecutor(e, comments), `,"element_id":"pg"`); err != nil {
+		t.Fatal(err)
+	}
+	if string(comments.got.Anchor) != `{"elementId":"pg","kind":"element"}` {
+		t.Fatalf("anchor = %s", comments.got.Anchor)
+	}
+}
+
+func TestACommentOnAMissingElementListsTheIdsThatExist(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	comments := &fakeComments{}
+	_, err := commentCall(e, commentExecutor(e, comments), `,"element_id":"ghost"`)
+	if err == nil || !strings.Contains(errorText(err), `there is no element "ghost"; the ids are vps (VPS-1)`) || comments.got.Content != "" {
+		t.Fatalf("error = %v, comment %+v", err, comments.got)
+	}
+	_, err = commentCall(e, commentExecutor(e, comments), `,"element_id":"PostgreSQL"`)
+	if err == nil || !strings.Contains(errorText(err), `use pg for "PostgreSQL"`) {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestACommentTheDocumentRefusesSaysHowToWriteOne(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	_, err := commentCall(e, commentExecutor(e, &fakeComments{err: appdoc.ErrInvalidComment}), ``)
+	if err == nil || !strings.Contains(errorText(err), "an Architecture document needs element_id") {
+		t.Fatalf("error = %v", err)
 	}
 }
