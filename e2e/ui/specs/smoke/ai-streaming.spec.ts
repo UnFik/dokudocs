@@ -253,7 +253,7 @@ test('@smoke: a long chat opens at its newest message and loads earlier ones on 
   await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0)
 })
 
-test('@smoke: on every kind of document the theme switch sits above Ask AI, which is at the bottom right', async ({ page }) => {
+test('@smoke: on every kind of document Ask AI opens a right column beside the page, not a drawer over it', async ({ page }) => {
   test.setTimeout(120_000)
   await signIn(page)
   const make = async (data: Record<string, unknown>) => {
@@ -273,17 +273,33 @@ test('@smoke: on every kind of document the theme switch sits above Ask AI, whic
   for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 800 }]) {
     await page.setViewportSize(viewport)
     for (const [kind, id] of Object.entries(documents)) {
+      const where = `${kind} at ${viewport.width}px`
       await page.goto(`/docs/${id}`)
       const ask = page.getByRole('button', { name: 'Ask AI' })
-      await expect(ask, `${kind} at ${viewport.width}px`).toBeVisible({ timeout: 20_000 })
-      // One switch only, whatever the editor brings.
+      await expect(ask, where).toBeVisible({ timeout: 20_000 })
+      // One switch only, whatever the editor brings, 16px from the bottom right.
       const theme = page.getByRole('button', { name: 'Toggle theme' })
-      await expect(theme, `${kind} at ${viewport.width}px`).toHaveCount(1)
-      const askBox = (await ask.boundingBox())!
-      const themeBox = (await theme.boundingBox())!
-      expect(themeBox.y + themeBox.height, `${kind}: theme above Ask AI`).toBeLessThanOrEqual(askBox.y + 1)
-      expect(Math.round(viewport.height - (askBox.y + askBox.height)), `${kind}: Ask AI 16px from the bottom`).toBe(16)
-      expect(Math.round(viewport.width - (askBox.x + askBox.width)), `${kind}: Ask AI 16px from the right`).toBe(16)
+      await expect(theme, where).toHaveCount(1)
+      // The choice to leave the column open is kept across documents.
+      if ((await ask.getAttribute('aria-expanded')) === 'true') await ask.click()
+      const shut = (await theme.boundingBox())!
+      expect(Math.round(viewport.height - (shut.y + shut.height)), `${where}: theme 16px from the bottom`).toBe(16)
+      expect(Math.round(viewport.width - (shut.x + shut.width)), `${where}: theme 16px from the right`).toBe(16)
+      await ask.click()
+      const panel = page.getByRole('complementary', { name: /^AI chat about / })
+      await expect(panel, where).toBeVisible()
+      const box = (await panel.boundingBox())!
+      expect(Math.round(viewport.width - (box.x + box.width)), `${where}: column flush right`).toBe(0)
+      if (viewport.width >= 640) {
+        // A column in the layout: the page gives it room and the theme switch steps aside.
+        expect(await panel.evaluate((el) => getComputedStyle(el).position), where).not.toBe('fixed')
+        expect(box.width, where).toBe(384)
+        expect((await theme.boundingBox())!.x + shut.width, `${where}: theme left of the column`).toBeLessThanOrEqual(box.x)
+      } else {
+        expect(Math.round(box.width), `${where}: covers the page on a phone`).toBe(viewport.width)
+      }
+      await page.getByRole('button', { name: 'Close' }).click()
+      await expect(panel, where).toHaveCount(0)
     }
   }
 })
@@ -309,7 +325,8 @@ test('@smoke: on every kind of document the AI panel has the one-row header and 
     for (const [kind, id] of Object.entries(documents)) {
       const where = `${kind} at ${viewport.width}px`
       await page.goto(`/docs/${id}`)
-      await page.getByRole('button', { name: 'Ask AI' }).click()
+      const ask = page.getByRole('button', { name: 'Ask AI' })
+      if ((await ask.getAttribute('aria-expanded')) !== 'true') await ask.click()
       // The header is one row: no "Ask about this document" title, the controls are there.
       await expect(page.getByRole('heading', { name: 'Ask about this document' }), where).toHaveCount(0)
       const options = page.getByRole('button', { name: 'Chat options' })

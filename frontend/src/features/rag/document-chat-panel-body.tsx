@@ -14,7 +14,6 @@ import {
   type RAGConversation,
 } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
-import { SheetClose } from '@/components/ui/sheet'
 import { announceAnswer } from './chat-notify'
 import { ChatPanelHeader } from './chat-panel-header'
 import { ChatScroller } from './chat-scroller'
@@ -32,6 +31,7 @@ export default function PanelBody({
   conversations,
   listKey,
   onRunning,
+  onClose,
 }: {
   documentID: string
   workspaceID: string
@@ -39,6 +39,7 @@ export default function PanelBody({
   listKey: unknown[]
   /** Reports the chat being answered, or nothing once the answer is in. */
   onRunning: (conversationID: string | undefined) => void
+  onClose: () => void
 }) {
   const queryClient = useQueryClient()
   const userID = useAuthStore((state) => state.auth.user?.id ?? '')
@@ -135,16 +136,15 @@ export default function PanelBody({
           }}
           {...options}
           close={
-            <SheetClose asChild>
-              <Button
-                variant='ghost'
-                size='icon'
-                aria-label='Close'
-                className='max-sm:size-11'
-              >
-                <X />
-              </Button>
-            </SheetClose>
+            <Button
+              variant='ghost'
+              size='icon'
+              aria-label='Close'
+              className='max-sm:size-11'
+              onClick={onClose}
+            >
+              <X />
+            </Button>
           }
         />
         {view === 'history' ? (
