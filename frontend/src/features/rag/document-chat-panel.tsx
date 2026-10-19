@@ -1,40 +1,59 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { MessageSquareText } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { listDocumentRAGConversations } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { announceAnswer } from './chat-notify'
+import { ChatPanelContext, useDocumentChatPanel } from './chat-panel-context'
 import { readChatPreferences } from './chat-preferences'
 
 // The chat itself (Markdown, previews, history) loads when the panel opens, so a
 // document page only carries the button.
 const PanelBody = lazy(() => import('./document-chat-panel-body'))
 
+const OPEN_KEY = 'dokudocs.askAIPanelOpen'
+
+function readOpen(userID: string): boolean {
+  try {
+    return localStorage.getItem(`${OPEN_KEY}:${userID}`) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeOpen(userID: string, open: boolean) {
+  try {
+    localStorage.setItem(`${OPEN_KEY}:${userID}`, open ? '1' : '0')
+  } catch {
+    // Private windows and blocked storage: the panel just starts shut next time.
+  }
+}
+
 /**
- * A Conversation about one document, for every document type. Each User keeps
- * their own chats; a chat here draws on this document alone. The button is
- * placed by DocumentFloatingControls.
+ * Holds one document's chat for the page: whether the column is open (kept per
+ * User across documents), the chat list and the unread count. The button and the
+ * column read it, so they can sit in different parts of the page.
  */
-export function DocumentChatPanel({
+export function DocumentChatProvider({
   documentID,
   workspaceID,
   title,
+  children,
 }: {
   documentID: string
   workspaceID: string
   title: string
+  children: ReactNode
 }) {
-  const [open, setOpen] = useState(false)
+  const userID = useAuthStore((state) => state.auth.user?.id ?? '')
+  const [open, setOpenState] = useState(() => readOpen(userID))
+  const setOpen = (next: boolean) => {
+    setOpenState(next)
+    writeOpen(userID, next)
+  }
   // The chat whose answer was still being written when the panel was shut.
   const [awaiting, setAwaiting] = useState<string>()
-  const userID = useAuthStore((state) => state.auth.user?.id ?? '')
   const listKey = ['rag-document-conversations', userID, documentID]
   const watching = Boolean(awaiting) && !open
   const conversations = useQuery({
@@ -63,52 +82,96 @@ export function DocumentChatPanel({
     conversations.data?.filter((chat) => chat.unread && !chat.archivedAt)
       .length ?? 0
   return (
-    <>
-      <Button
-        variant='outline'
-        size='sm'
-        className='bg-background'
-        aria-label={unread > 0 ? `Ask AI, ${unread} unread` : 'Ask AI'}
-        onClick={() => setOpen(true)}
+    <ChatPanelContext.Provider
+      value={{
+        documentID,
+        workspaceID,
+        title,
+        open,
+        setOpen,
+        unread,
+        conversations,
+        listKey,
+        onRunning: setAwaiting,
+      }}
+    >
+      {children}
+    </ChatPanelContext.Provider>
+  )
+}
+
+/** The toggle for the chat column, placed in the editor header. */
+export function AskAIButton() {
+  const chat = useDocumentChatPanel()
+  if (!chat) return null
+  const { open, setOpen, unread } = chat
+  return (
+    <Button
+      variant={open ? 'secondary' : 'outline'}
+      size='sm'
+      className='h-8 gap-1.5 text-xs'
+      aria-label={unread > 0 ? `Ask AI, ${unread} unread` : 'Ask AI'}
+      aria-expanded={open}
+      aria-controls='ask-ai-panel'
+      onClick={() => setOpen(!open)}
+    >
+      <MessageSquareText className='size-3.5' />
+      <span className='hidden md:inline'>Ask AI</span>
+      {unread > 0 ? (
+        <span
+          className='size-1.5 rounded-[1px] bg-foreground'
+          aria-hidden='true'
+        />
+      ) : null}
+    </Button>
+  )
+}
+
+/**
+ * The chat as the right column of a document, the same for every document type.
+ * It sits beside the page and takes its width from it; below `sm` it covers the
+ * page instead.
+ */
+export function DocumentChatColumn() {
+  const chat = useDocumentChatPanel()
+  if (!chat?.open) return null
+  return (
+    <aside
+      id='ask-ai-panel'
+      aria-label={`AI chat about ${chat.title}`}
+      className='fixed inset-0 z-50 flex flex-col bg-background sm:static sm:z-auto sm:w-96 sm:shrink-0 sm:border-l sm:border-border'
+    >
+      <Suspense
+        fallback={
+          <p role='status' className='p-4 text-sm text-muted-foreground'>
+            Loading chat…
+          </p>
+        }
       >
-        <MessageSquareText />
-        <span className='max-sm:sr-only'>Ask AI</span>
-        {unread > 0 ? (
-          <span
-            className='size-1.5 rounded-[1px] bg-foreground'
-            aria-hidden='true'
-          />
-        ) : null}
-      </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent
-          showClose={false}
-          className='flex w-full flex-col gap-0 p-0 sm:max-w-lg'
-        >
-          <SheetTitle className='sr-only'>AI chat about {title}</SheetTitle>
-          <SheetDescription className='sr-only'>
-            Ask questions about this document and manage your chats.
-          </SheetDescription>
-          {open ? (
-            <Suspense
-              fallback={
-                <p role='status' className='p-4 text-sm text-muted-foreground'>
-                  Loading chat…
-                </p>
-              }
-            >
-              <PanelBody
-                documentID={documentID}
-                workspaceID={workspaceID}
-                conversations={conversations}
-                listKey={listKey}
-                onRunning={setAwaiting}
-              />
-            </Suspense>
-          ) : null}
-        </SheetContent>
-      </Sheet>
-    </>
+        <PanelBody
+          documentID={chat.documentID}
+          workspaceID={chat.workspaceID}
+          conversations={chat.conversations}
+          listKey={chat.listKey}
+          onRunning={chat.onRunning}
+          onClose={() => chat.setOpen(false)}
+        />
+      </Suspense>
+    </aside>
+  )
+}
+
+/** The button and the column together, for a page that needs no layout of its own. */
+export function DocumentChatPanel(props: {
+  documentID: string
+  workspaceID: string
+  title: string
+}) {
+  return (
+    <DocumentChatProvider {...props}>
+      <AskAIButton />
+      <DocumentChatColumn />
+    </DocumentChatProvider>
   )
 }
 

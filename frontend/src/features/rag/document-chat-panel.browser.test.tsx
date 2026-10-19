@@ -24,6 +24,7 @@ const key = (url: string, init: RequestInit = {}) =>
   `${init.method ?? 'GET'} ${new URL(url).pathname}`
 
 afterEach(() => {
+  localStorage.clear()
   vi.unstubAllGlobals()
   useAuthStore.getState().auth.reset()
 })

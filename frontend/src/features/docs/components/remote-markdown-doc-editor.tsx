@@ -23,6 +23,7 @@ import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
 import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
 import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
+import { useChatPanelSibling } from '@/features/rag/chat-panel-context'
 import { assetObjectURL, uploadDocumentAsset } from '../lib/assets'
 import { decodeBase64, encodeBase64 } from '../lib/collab-encoding'
 import {
@@ -454,6 +455,7 @@ function CollaborativeMarkdownBody({
   // An offline copy opens from this device and a failed start is reported, so neither waits behind the skeleton.
   const awaitingSync = status === 'connecting' && !offline && !error
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false)
+  useChatPanelSibling(isSuggestionsOpen, () => setIsSuggestionsOpen(false))
   const [cards, setCards] = useState<SuggestionCard[]>([])
   const [focusedSuggestionID, setFocusedSuggestionID] = useState<string | null>(
     null
