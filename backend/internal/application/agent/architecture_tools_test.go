@@ -1,6 +1,7 @@
 package agent
 
 import (
+	appcatalog "backend/internal/application/catalog"
 	"context"
 	"encoding/json"
 	"errors"
@@ -172,5 +173,47 @@ func TestAnEditOperationWithoutATypeIsRefusedBeforeApprovalAndBeforeAVersion(t *
 	}
 	if len(source.revisions.titles) != 0 || len(source.rooms.edits) != 0 {
 		t.Fatalf("revisions %v, edits %v", source.revisions.titles, source.rooms.edits)
+	}
+}
+
+type fakeRequests struct {
+	got appcatalog.RequestInput
+	err error
+}
+
+func (f *fakeRequests) Request(_ context.Context, in appcatalog.RequestInput) (appcatalog.RequestResult, error) {
+	f.got = in
+	return appcatalog.RequestResult{Name: in.Name, Votes: 1}, f.err
+}
+
+func requestExecutor(e *contentEnv, requests *fakeRequests) *Executor {
+	tools := DokudocsTools(ToolDeps{Content: e.svc, Catalog: testCatalog, CatalogRequests: requests})
+	return NewExecutor(NewPermissionService(memPermissions{e.user: {CapRead, CapContent}}), tools, func(context.Context) int { return 1 << 20 })
+}
+
+func TestRequestingACatalogEntryWaitsForApprovalThenFilesTheRequest(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	requests := &fakeRequests{}
+	exec := requestExecutor(e, requests)
+	args := json.RawMessage(`{"workspace_id":"` + e.ws.String() + `","name":"Traefik","category":"system"}`)
+	actor := Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws, DocumentID: e.doc}
+	out, err := exec.Call(context.Background(), actor, "request_catalog_entry", args)
+	if err != nil || out.Pending == nil || out.Pending.Summary != "Ask for a catalog entry: Traefik (System)" || requests.got.Name != "" {
+		t.Fatalf("Call() = %+v, %v, filed %+v", out, err, requests.got)
+	}
+	actor.Approved = true
+	out, err = exec.Call(context.Background(), actor, "request_catalog_entry", args)
+	if err != nil || !strings.Contains(out.Text, `"requested"`) || requests.got.UserID != e.user || requests.got.WorkspaceID != e.ws || requests.got.Category != "system" {
+		t.Fatalf("Call() = %+v, %v, filed %+v", out, err, requests.got)
+	}
+}
+
+func TestARequestForWhatTheCatalogHasAnswersWithItsSlug(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	exec := requestExecutor(e, &fakeRequests{err: appcatalog.InCatalogError{Slug: "redis"}})
+	args := json.RawMessage(`{"workspace_id":"` + e.ws.String() + `","name":"Redis","category":"system"}`)
+	out, err := exec.Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws, DocumentID: e.doc, Approved: true}, "request_catalog_entry", args)
+	if err != nil || !strings.Contains(out.Text, `"in_catalog"`) || !strings.Contains(out.Text, `"redis"`) {
+		t.Fatalf("Call() = %+v, %v", out, err)
 	}
 }
