@@ -86,7 +86,8 @@ export function ChatScroller({
       aria-label='Messages'
       tabIndex={0}
       onScroll={onScroll}
-      className={`min-h-0 flex-1 space-y-5 overflow-y-auto p-4 ${className}`}
+      // `relative` makes this the containing block of the screen-reader-only (absolute) labels in it, so they scroll and clip with it.
+      className={`relative min-h-0 flex-1 space-y-5 overflow-y-auto p-4 ${className}`}
     >
       {hasOlder ? (
         <div className='flex justify-center'>
