@@ -28,11 +28,49 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { AskAIButton } from '@/features/rag/document-chat-panel'
 import type { PresenceUser } from '../lib/collab-session'
 import { DocTypeBadge } from './doc-type-badge'
 import { PresenceAvatars } from './presence-avatars'
 import { ProjectDocsHoverCard } from './project-docs-hover-card'
+
+interface EditorHeaderSkeletonProps {
+  // Shown as-is when already known, for example from the cached document.
+  type?: DocType
+  title?: string
+}
+
+// Same bar as EditorHeader, so the page does not shift when the document arrives.
+export function EditorHeaderSkeleton({
+  type,
+  title,
+}: EditorHeaderSkeletonProps) {
+  return (
+    <header className='sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-border/80 bg-background/95 px-4'>
+      <div className='flex min-w-0 flex-1 items-center gap-3'>
+        <Skeleton aria-hidden='true' className='size-8 shrink-0' />
+        {type ? (
+          <DocTypeBadge type={type} className='shrink-0' />
+        ) : (
+          <Skeleton aria-hidden='true' className='h-5 w-16 shrink-0' />
+        )}
+        {title ? (
+          <h1 className='truncate text-sm font-semibold tracking-tight text-foreground'>
+            {title}
+          </h1>
+        ) : (
+          <Skeleton aria-hidden='true' className='h-4 w-48 max-w-full' />
+        )}
+      </div>
+      <div aria-hidden='true' className='flex items-center gap-2'>
+        <Skeleton className='size-8' />
+        <Skeleton className='size-8' />
+        <Skeleton className='h-8 w-20' />
+      </div>
+    </header>
+  )
+}
 
 interface EditorHeaderProps {
   docId: string
