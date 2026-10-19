@@ -92,6 +92,22 @@ func (o operation) text(key string) string {
 	return s
 }
 
+// received says what an operation without a known type did carry, for the Agent and the log.
+func (o operation) received() string {
+	keys := make([]string, 0, len(o))
+	for key := range o {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	if t, ok := o["type"]; ok {
+		return fmt.Sprintf("it has type %v and the fields %s", t, strings.Join(keys, ", "))
+	}
+	if len(keys) == 0 {
+		return `it is empty; each operation needs a "type"`
+	}
+	return fmt.Sprintf(`it has no "type" field, only %s`, strings.Join(keys, ", "))
+}
+
 func parseOperations(raw json.RawMessage) ([]operation, error) {
 	var ops []operation
 	if err := json.Unmarshal(raw, &ops); err != nil {
@@ -99,7 +115,7 @@ func parseOperations(raw json.RawMessage) ([]operation, error) {
 	}
 	for i, op := range ops {
 		if !architectureOperations[op.text("type")] {
-			return nil, &ToolError{Message: fmt.Sprintf("operation %d: type must be one of %s", i+1, architectureOperationList)}
+			return nil, &ToolError{Message: fmt.Sprintf("operation %d: type must be one of %s; %s", i+1, architectureOperationList, op.received())}
 		}
 	}
 	return ops, nil
@@ -148,11 +164,11 @@ func (s *ContentService) EditArchitecture(ctx context.Context, actor Actor, work
 	if err != nil {
 		return EditResult{}, err
 	}
-	bare, err := s.checkArchitectureOperations(ctx, actor, workspaceID, parseCanvas(live.Text), ops)
+	found, err := s.checkArchitectureOperations(ctx, actor, workspaceID, parseCanvas(live.Text), ops)
 	if err != nil {
 		return EditResult{}, err
 	}
-	if len(bare) > 0 {
+	if len(found.bare) > 0 || len(found.resolved) > 0 {
 		if raw, err = json.Marshal(ops); err != nil {
 			return EditResult{}, err
 		}
@@ -178,8 +194,25 @@ func (s *ContentService) EditArchitecture(ctx context.Context, actor Actor, work
 	return EditResult{
 		Mode: "direct", Version: edited.Version, RevisionID: revision.ID,
 		Created: edited.Created, RemovedNodes: edited.RemovedNodes, RemovedConnections: edited.RemovedConnections,
-		Uncataloged: bare, Next: uncatalogedNext(bare),
+		Uncataloged: found.bare, Resolved: found.resolved, Next: uncatalogedNext(found.bare),
 	}, nil
+}
+
+// checkElement refuses an element id the Architecture document does not have, and says
+// which ids it has. A document that is not a canvas is left to the comment's own checks.
+func (s *ContentService) checkElement(ctx context.Context, actor Actor, workspaceID, documentID uuid.UUID, id string) error {
+	read, err := s.Read(ctx, actor, workspaceID, documentID)
+	if err != nil || read.Type != "architecture" {
+		return err
+	}
+	r := newRefs(parseCanvas(read.Text))
+	if !r.parsed || r.known[id] {
+		return nil
+	}
+	if node, ok := r.byName(id); ok {
+		return &ToolError{Message: fmt.Sprintf("element_id must be an id, not a name: use %s for %q", node.ID, node.Name)}
+	}
+	return &ToolError{Message: fmt.Sprintf("there is no element %q; the ids are %s", id, r.listing())}
 }
 
 // Uncataloged is a node drawn without a catalog entry because the catalog has none for it.
@@ -204,13 +237,13 @@ var errStale = &ToolError{Message: "the version is not the document's current on
 // A catalog slug the catalog does not have and has nothing close to is not refused: the
 // node is drawn without a catalog entry and reported back, so the Agent can offer the User
 // to request the entry. A slug close to a real one is still refused, as a likely typo.
-func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor Actor, workspaceID uuid.UUID, c canvas, ops []operation) ([]Uncataloged, error) {
+func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor Actor, workspaceID uuid.UUID, c canvas, ops []operation) (checked, error) {
 	var entries map[string]catalog.Entry
 	var slugs []catalog.Entry
 	if s.catalog != nil {
 		list, err := s.catalog.List(ctx)
 		if err != nil {
-			return nil, err
+			return checked{}, err
 		}
 		slugs = list
 		entries = make(map[string]catalog.Entry, len(list))
@@ -236,7 +269,11 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 		delete(op, "catalog")
 		drawn = append(drawn, Uncataloged{Name: name, Kind: kind})
 	}
+	refs := newRefs(c)
 	for i, op := range ops {
+		if err := refs.resolve(op); err != nil {
+			return checked{}, fail(i, "%s", err.Error())
+		}
 		switch op.text("type") {
 		case "add_node":
 			if ref := op.text("ref"); ref != "" {
@@ -244,7 +281,7 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 			}
 			without(op, op.text("kind"), op.text("name"))
 			if msg := checkSlug(entries, slugs, op.text("kind"), op.text("catalog")); msg != "" {
-				return nil, fail(i, "%s", msg)
+				return checked{}, fail(i, "%s", msg)
 			}
 		case "update_node":
 			kind, known := kinds[op.text("id")]
@@ -255,27 +292,131 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 			without(op, kind, name)
 			if known {
 				if msg := checkSlug(entries, slugs, kind, op.text("catalog")); msg != "" {
-					return nil, fail(i, "%s", msg)
+					return checked{}, fail(i, "%s", msg)
 				}
 			} else if msg := checkSlug(entries, slugs, "", op.text("catalog")); msg != "" {
-				return nil, fail(i, "%s", msg)
+				return checked{}, fail(i, "%s", msg)
 			}
 		case "add_connection", "update_connection":
 			if msg := checkSlug(entries, slugs, "protocol", op.text("protocol")); msg != "" {
-				return nil, fail(i, "%s", msg)
+				return checked{}, fail(i, "%s", msg)
 			}
 		case "link_document":
 			id := op.text("document_id")
 			if err := s.checkLink(ctx, actor, workspaceID, id); err != nil {
 				var refusal *ToolError
 				if errors.As(err, &refusal) {
-					return nil, fail(i, "%s", refusal.Message)
+					return checked{}, fail(i, "%s", refusal.Message)
 				}
-				return nil, err
+				return checked{}, err
 			}
 		}
 	}
-	return drawn, nil
+	return checked{bare: drawn, resolved: refs.resolved}, nil
+}
+
+// checked is what checking the operations found: nodes to draw bare, and names the
+// Agent wrote where an id belongs, which were turned into the ids.
+type checked struct {
+	bare     []Uncataloged
+	resolved []Resolved
+}
+
+// Resolved is a name the Agent wrote where an element id belongs, and the element it meant.
+type Resolved struct {
+	Asked string `json:"asked"`
+	Name  string `json:"name"`
+	ID    string `json:"id"`
+}
+
+// refs knows every element an operation may name: what is on the canvas and what earlier
+// operations of the same call add under a ref.
+type refs struct {
+	canvas   canvas
+	parsed   bool
+	known    map[string]bool
+	resolved []Resolved
+}
+
+func newRefs(c canvas) *refs {
+	r := &refs{canvas: c, parsed: c.Nodes != nil, known: map[string]bool{}}
+	for _, n := range c.Nodes {
+		r.known[n.ID] = true
+	}
+	for _, k := range c.Connections {
+		r.known[k.ID] = true
+	}
+	return r
+}
+
+// elementKeys are the fields of an operation that name an element already there.
+var elementKeys = map[string][]string{
+	"add_node":          {"parent"},
+	"update_node":       {"id"},
+	"move_node":         {"id", "parent"},
+	"remove_node":       {"id"},
+	"add_connection":    {"source", "target"},
+	"update_connection": {"id"},
+	"remove_connection": {"id"},
+	"link_document":     {"id"},
+	"unlink_document":   {"id"},
+}
+
+// resolve checks the elements an operation names. A name that is not an id but is the
+// name of exactly one node is replaced by that node's id; anything else is refused with the
+// ids that exist, so the Agent can correct itself.
+func (r *refs) resolve(op operation) error {
+	if r.parsed {
+		for _, key := range elementKeys[op.text("type")] {
+			value := op.text(key)
+			if value == "" || r.known[value] {
+				continue
+			}
+			node, ok := r.byName(value)
+			if !ok {
+				return fmt.Errorf("there is no element %q; the ids are %s", value, r.listing())
+			}
+			op[key] = node.ID
+			r.resolved = append(r.resolved, Resolved{Asked: value, Name: node.Name, ID: node.ID})
+		}
+	}
+	if ref := op.text("ref"); ref != "" {
+		r.known[ref] = true
+	}
+	return nil
+}
+
+func (r *refs) byName(name string) (canvasNode, bool) {
+	var found []canvasNode
+	for _, n := range r.canvas.Nodes {
+		if strings.EqualFold(strings.TrimSpace(n.Name), strings.TrimSpace(name)) {
+			found = append(found, n)
+		}
+	}
+	if len(found) != 1 {
+		return canvasNode{}, false
+	}
+	return found[0], true
+}
+
+func (r *refs) listing() string {
+	const most = 25
+	var parts []string
+	for _, n := range r.canvas.Nodes {
+		parts = append(parts, fmt.Sprintf("%s (%s)", n.ID, n.Name))
+	}
+	for _, k := range r.canvas.Connections {
+		parts = append(parts, fmt.Sprintf("%s (Connection %s to %s)", k.ID, k.Source, k.Target))
+	}
+	if len(parts) == 0 {
+		return "none yet: the canvas is empty"
+	}
+	more := ""
+	if len(parts) > most {
+		more = fmt.Sprintf(", and %d more", len(parts)-most)
+		parts = parts[:most]
+	}
+	return strings.Join(parts, ", ") + more + "; read_document gives them all"
 }
 
 // unknownSlug is true for a catalog slug that is not an entry and is not close to one.

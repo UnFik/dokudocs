@@ -101,7 +101,9 @@ type EditResult struct {
 	RemovedConnections int               `json:"removedConnections,omitempty"`
 	// Uncataloged lists nodes drawn without a catalog entry; Next says what to do about them.
 	Uncataloged []Uncataloged `json:"uncataloged,omitempty"`
-	Next        string        `json:"next,omitempty"`
+	// Resolved lists names the call gave where an id belongs, with the element they became.
+	Resolved []Resolved `json:"resolved,omitempty"`
+	Next     string     `json:"next,omitempty"`
 }
 
 func isSource(docType string) bool { return docType == "dbdiagram" || docType == "mermaid" }
