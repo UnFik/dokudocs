@@ -244,11 +244,56 @@ func TestALongSummaryStopsAfterEightChanges(t *testing.T) {
 	}
 }
 
-func TestTheSummaryNamesAnIdItDoesNotKnowInsteadOfFailing(t *testing.T) {
+func TestAnIdTheCanvasLacksIsRefusedBeforeApprovalWithTheIdsThatExist(t *testing.T) {
 	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
-	got, err := e.svc.ArchitectureSummary(context.Background(), chat(e), e.ws, e.doc, json.RawMessage(`[{"type":"remove_node","id":"ghost"}]`))
-	if err != nil || !strings.Contains(got, `Remove "ghost"`) {
-		t.Fatalf("summary = %q, %v", got, err)
+	_, err := e.svc.ArchitectureSummary(context.Background(), chat(e), e.ws, e.doc, json.RawMessage(`[{"type":"remove_node","id":"ghost"}]`))
+	got := refused(t, err)
+	if !strings.Contains(got, `operation 1: there is no element "ghost"; the ids are vps (VPS-1), api (API), pg (PostgreSQL)`) {
+		t.Fatalf("error = %q", got)
+	}
+}
+
+func TestANodeNamedWhereAnIdBelongsIsResolvedAndReported(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	ops := `[{"type":"add_node","ref":"web","kind":"system","name":"React","parent":"vps-1"},{"type":"add_connection","source":"web","target":"postgresql","protocol":"rest"}]`
+	summary, err := e.svc.ArchitectureSummary(context.Background(), chat(e), e.ws, e.doc, json.RawMessage(ops))
+	if err != nil || !strings.Contains(summary, `Connect "React" to "PostgreSQL" over rest`) || !strings.Contains(summary, `inside Host "VPS-1"`) {
+		t.Fatalf("summary = %q, %v", summary, err)
+	}
+	got, err := edit(e, chat(e), ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := string(e.rooms.edits[0].Operations)
+	if !strings.Contains(sent, `"parent":"vps"`) || !strings.Contains(sent, `"target":"pg"`) || !strings.Contains(sent, `"source":"web"`) {
+		t.Fatalf("operations sent = %s", sent)
+	}
+	want := []Resolved{{Asked: "vps-1", Name: "VPS-1", ID: "vps"}, {Asked: "postgresql", Name: "PostgreSQL", ID: "pg"}}
+	if !reflect.DeepEqual(got.Resolved, want) {
+		t.Fatalf("Resolved = %+v", got.Resolved)
+	}
+}
+
+func TestANameTwoNodesShareIsNotGuessed(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	e.rooms.text = strings.Replace(canvasJSON, `"name":"PostgreSQL"`, `"name":"API"`, 1)
+	_, err := edit(e, chat(e), `[{"type":"update_node","id":"API","name":"X"}]`)
+	if got := refused(t, err); !strings.Contains(got, `there is no element "API"; the ids are`) || len(e.rooms.edits) != 0 {
+		t.Fatalf("error = %q, edits %d", got, len(e.rooms.edits))
+	}
+}
+
+func TestAnOperationWithTheWrongTypeSaysWhatItCarried(t *testing.T) {
+	cases := map[string]string{
+		`[{"op":"add_node","name":"X"}]`: `it has no "type" field, only name, op`,
+		`[{"type":"add","name":"X"}]`:    `it has type add and the fields name, type`,
+		`[{}]`:                           `it is empty`,
+	}
+	for ops, want := range cases {
+		_, err := parseOperations(json.RawMessage(ops))
+		if got := refused(t, err); !strings.Contains(got, want) {
+			t.Errorf("%s: %q does not contain %q", ops, got, want)
+		}
 	}
 }
 
