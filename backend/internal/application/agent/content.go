@@ -99,6 +99,9 @@ type EditResult struct {
 	Created            map[string]string `json:"created,omitempty"`
 	RemovedNodes       int               `json:"removedNodes,omitempty"`
 	RemovedConnections int               `json:"removedConnections,omitempty"`
+	// Uncataloged lists nodes drawn without a catalog entry; Next says what to do about them.
+	Uncataloged []Uncataloged `json:"uncataloged,omitempty"`
+	Next        string        `json:"next,omitempty"`
 }
 
 func isSource(docType string) bool { return docType == "dbdiagram" || docType == "mermaid" }
