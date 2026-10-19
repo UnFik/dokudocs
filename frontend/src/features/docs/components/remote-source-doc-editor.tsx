@@ -454,7 +454,11 @@ function SourceEditor({
       <div className='flex flex-1 overflow-hidden'>
         <div className='min-w-0 flex-1 overflow-hidden'>
           {!collab ? (
-            <DocBodySkeleton label='Loading diagram' className='p-6' />
+            <DocBodySkeleton
+              label='Loading diagram'
+              className='p-6'
+              type={doc.type}
+            />
           ) : doc.type === 'dbdiagram' ? (
             <DbmlEditor
               docId={doc.id}
