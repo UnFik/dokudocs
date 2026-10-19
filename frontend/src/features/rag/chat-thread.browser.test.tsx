@@ -603,3 +603,83 @@ it('tells project, type and the first two categories of each document', async ()
   const second = screen.getByRole('button', { name: /Scratch diagram/ })
   await expect.element(second.getByText('No project · DBML')).toBeVisible()
 })
+
+const earlierActions: AgentAction[] = [
+  {
+    ...action,
+    id: 'e1',
+    status: 'failed',
+    result: 'no catalog entry',
+    summary: 'Add System "Elysia"',
+  },
+  {
+    ...action,
+    id: 'e2',
+    status: 'approved',
+    result: '{}',
+    summary: 'Remove System "PostgreSQL"',
+  },
+]
+const earlierTurn: RAGMessage = {
+  ...answer,
+  id: 'e0e0e0e0-3eea-4ced-b4fa-e7f6b1c81ed4',
+  content: 'Earlier answer.',
+  meta: { agent: true, actions: ['e1', 'e2'] },
+  createdAt: '2026-10-01T00:00:00.000Z',
+}
+
+it('folds the decided changes of earlier turns into one line that opens on request', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(jsonResponse({})))
+  )
+  const screen = await mount(
+    <ChatMessages
+      messages={[earlierTurn, answer]}
+      actions={[...earlierActions, action]}
+      workspaceID={workspaceID}
+      conversationID={conversationID}
+      queryKey={['rag-conversation']}
+    />
+  )
+  await expect.element(screen.getByText('2 earlier changes')).toBeVisible()
+  await expect.element(screen.getByText('1 failed')).toBeVisible()
+  expect(screen.getByText('Add System "Elysia"').elements()).toHaveLength(0)
+  await expect
+    .element(screen.getByText('Move the document to the trash'))
+    .toBeVisible()
+  const toggle = screen.getByRole('button', { name: /2 earlier changes/ })
+  await expect.element(toggle).toHaveAttribute('aria-expanded', 'false')
+  await userEvent.click(toggle)
+  await expect.element(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect.element(screen.getByText('Add System "Elysia"')).toBeVisible()
+  await expect
+    .element(screen.getByText('Approved, but it failed: no catalog entry'))
+    .toBeVisible()
+})
+
+it('keeps an earlier change that still waits for the User, and the newest turn, open', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(jsonResponse({})))
+  )
+  const waiting: AgentAction = { ...action, id: 'e3', summary: 'Rename "API"' }
+  const screen = await mount(
+    <ChatMessages
+      messages={[
+        { ...earlierTurn, meta: { agent: true, actions: ['e2', 'e3'] } },
+        { ...answer, meta: { agent: true, actions: ['e1'] } },
+      ]}
+      actions={[...earlierActions, waiting]}
+      workspaceID={workspaceID}
+      conversationID={conversationID}
+      queryKey={['rag-conversation']}
+    />
+  )
+  await expect.element(screen.getByText('1 earlier change')).toBeVisible()
+  await expect.element(screen.getByText('Rename "API"')).toBeVisible()
+  await expect.element(screen.getByText('Add System "Elysia"')).toBeVisible()
+  expect(
+    screen.getByText('Remove System "PostgreSQL"').elements()
+  ).toHaveLength(0)
+})
