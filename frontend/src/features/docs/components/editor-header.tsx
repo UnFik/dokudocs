@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { AskAIButton } from '@/features/rag/document-chat-panel'
 import type { PresenceUser } from '../lib/collab-session'
 import { DocTypeBadge } from './doc-type-badge'
 import { PresenceAvatars } from './presence-avatars'
@@ -314,6 +315,8 @@ export function EditorHeader({
             />
           </Button>
         )}
+
+        <AskAIButton />
 
         {onToggleHistory && (
           <Button

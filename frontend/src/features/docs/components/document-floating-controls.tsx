@@ -1,20 +1,21 @@
 import { ThemeToggleButton } from '@/components/theme-toggle-button'
-import { DocumentChatPanel } from '@/features/rag/document-chat-panel'
+import {
+  CHAT_COLUMN_OFFSET,
+  useDocumentChatPanel,
+} from '@/features/rag/chat-panel-context'
 
 /**
- * The buttons that float at the bottom right of every document, whatever its
- * type: the theme switch on top and Ask AI at the very bottom. A document
- * without a chat (offline) shows the theme switch alone.
+ * The theme switch, fixed at the bottom right of every document, whatever its
+ * type. Ask AI lives in the editor header. It steps left of the chat column
+ * while that is open, so it never covers the question box.
  */
-export function DocumentFloatingControls({
-  chat,
-}: {
-  chat?: { documentID: string; workspaceID: string; title: string }
-}) {
+export function DocumentFloatingControls() {
+  const chat = useDocumentChatPanel()
   return (
-    <div className='fixed right-4 bottom-4 z-40 flex flex-col items-end gap-2'>
+    <div
+      className={`fixed right-4 bottom-4 z-40 flex flex-col items-end gap-2 ${chat?.open ? CHAT_COLUMN_OFFSET : ''}`}
+    >
       <ThemeToggleButton className='bg-background' />
-      {chat ? <DocumentChatPanel {...chat} /> : null}
     </div>
   )
 }
