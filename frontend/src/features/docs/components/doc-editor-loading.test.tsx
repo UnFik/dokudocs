@@ -56,7 +56,13 @@ function expectBusySkeleton(container: Element) {
   const busy = container.querySelector('[aria-busy="true"]')
   expect(busy).not.toBeNull()
   // No type is known yet, so it is a title bar and one neutral block, never text lines.
-  expect(busy!.querySelectorAll('[data-slot="skeleton"]').length).toBe(2)
+  expect(
+    busy!.querySelectorAll(
+      '[data-slot="doc-skeleton-body"] [data-slot="skeleton"]'
+    ).length
+  ).toBe(1)
+  // The header has a skeleton of its own.
+  expect(busy!.querySelector('header')).not.toBeNull()
   // The toolbar's "Synced" is the only status region; specs find it by role.
   expect(container.querySelector('[role="status"]')).toBeNull()
 }
