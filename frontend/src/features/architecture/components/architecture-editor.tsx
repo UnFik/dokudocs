@@ -30,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
 import { PublicShareDialog } from '@/features/docs/components/dialogs/public-share-dialog'
+import { DocBodySkeleton } from '@/features/docs/components/document-skeleton'
 import { EditorHeader } from '@/features/docs/components/editor-header'
 import { VersionHistorySidebar } from '@/features/docs/components/version-history-sidebar'
 import { clearLocalCopy } from '@/features/docs/lib/collab-session'
@@ -127,8 +128,11 @@ function Editor({
   // Comment pins: a thread being started, the one whose pin is open, and resolved ones shown or not.
   const [draftPin, setDraftPin] = useState<PinAnchor | null>(null)
   const [activeThread, setActiveThread] = useState<string | null>(null)
-  // A notification opens the thread it is about, once the threads are loaded.
+  // A canvas with no saved content has nothing to draw until the room answers.
+  const awaitingSync =
+    !session.synced && !doc.contentJSON && session.status !== 'offline'
   const threads = useCanvasComments(workspaceID, doc.id)
+  // A notification opens the thread it is about, once the threads are loaded.
   const [openedThread, setOpenedThread] = useState<string | null>(null)
   const wanted =
     focusThreadID && openedThread !== focusThreadID
@@ -554,6 +558,13 @@ function Editor({
           )}
         </aside>
         <main className='relative min-h-[420px]'>
+          {awaitingSync ? (
+            <DocBodySkeleton
+              label='Loading canvas'
+              type='architecture'
+              className='absolute inset-0 z-10 bg-background p-6'
+            />
+          ) : null}
           <ArchitectureCanvas
             doc={session.doc}
             canvas={session.canvas}
