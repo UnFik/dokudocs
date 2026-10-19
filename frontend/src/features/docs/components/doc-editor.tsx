@@ -13,6 +13,10 @@ import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
 import { ArchitectureDocEditor } from '@/features/architecture/components/architecture-editor'
 import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
+import {
+  DocumentChatColumn,
+  DocumentChatProvider,
+} from '@/features/rag/document-chat-panel'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { useDocEditor } from '../hooks/use-doc-editor'
 import { useToggleDocumentStar } from '../hooks/use-toggle-document-star'
@@ -193,16 +197,17 @@ export function DocEditor() {
   const remoteEditor = remoteDocumentEditor()
   if (remoteEditor)
     return (
-      <>
-        {remoteEditor}
-        <DocumentFloatingControls
-          chat={{
-            documentID: docId,
-            workspaceID,
-            title: documentQuery.data.title,
-          }}
-        />
-      </>
+      <DocumentChatProvider
+        documentID={docId}
+        workspaceID={workspaceID}
+        title={documentQuery.data.title}
+      >
+        <div className='flex h-screen w-full'>
+          <div className='min-w-0 flex-1'>{remoteEditor}</div>
+          <DocumentChatColumn />
+        </div>
+        <DocumentFloatingControls />
+      </DocumentChatProvider>
     )
 
   return (

@@ -17,6 +17,7 @@ import { useTheme } from '@/context/theme-provider'
 import { Button } from '@/components/ui/button'
 import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
 import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
+import { useChatPanelSibling } from '@/features/rag/chat-panel-context'
 import { useSourceSession } from '../hooks/use-source-session'
 import {
   copyDiagramSvg,
@@ -135,6 +136,7 @@ function SourceEditor({
   // The preview follows the shared text; it never writes it.
   const [, setPreviewSource] = useState('')
   const [isCommentsOpen, setIsCommentsOpen] = useState(false)
+  useChatPanelSibling(isCommentsOpen, () => setIsCommentsOpen(false))
   const [editor, setEditor] =
     useState<monaco.editor.IStandaloneCodeEditor | null>(null)
   const [ranges, setRanges] = useState<SourceRanges>(new Map())

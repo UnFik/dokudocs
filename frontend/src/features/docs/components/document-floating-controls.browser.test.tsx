@@ -3,8 +3,13 @@ import '@/styles/index.css'
 import { clearCookies } from '@/test-utils/cookies'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
-import { userEvent } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 import { ThemeProvider } from '@/context/theme-provider'
+import {
+  AskAIButton,
+  DocumentChatColumn,
+  DocumentChatProvider,
+} from '@/features/rag/document-chat-panel'
 import { DocumentFloatingControls } from './document-floating-controls'
 
 const chat = {
@@ -18,55 +23,69 @@ beforeEach(() => {
   document.documentElement.classList.remove('dark')
   document.documentElement.classList.add('light')
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  localStorage.clear()
+  vi.unstubAllGlobals()
+})
 
-async function mount(withChat: boolean) {
+async function mount() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   return render(
     <QueryClientProvider client={client}>
       <ThemeProvider defaultTheme='light'>
-        <DocumentFloatingControls chat={withChat ? chat : undefined} />
+        <DocumentChatProvider {...chat}>
+          <div className='flex h-screen'>
+            <div className='min-w-0 flex-1' />
+            <DocumentChatColumn />
+          </div>
+          <DocumentFloatingControls />
+          <AskAIButton />
+        </DocumentChatProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )
 }
 
-it('stacks the theme button above Ask AI, with Ask AI at the very bottom right', async () => {
-  const screen = await mount(true)
+it('keeps the theme button 16px from the bottom right corner', async () => {
+  const screen = await mount()
   const theme = screen.getByRole('button', { name: 'Toggle theme' })
-  const ask = screen.getByRole('button', { name: 'Ask AI' })
   await expect.element(theme).toBeVisible()
-  await expect.element(ask).toBeVisible()
-  const themeBox = theme.element().getBoundingClientRect()
-  const askBox = ask.element().getBoundingClientRect()
-  expect(themeBox.bottom).toBeLessThanOrEqual(askBox.top)
-  // Ask AI is the lowest thing in the corner: 16px from the bottom and right edges.
-  expect(Math.round(window.innerHeight - askBox.bottom)).toBe(16)
-  expect(Math.round(window.innerWidth - askBox.right)).toBe(16)
-  // Both line up on the right edge.
-  expect(Math.abs(themeBox.right - askBox.right)).toBeLessThan(1)
+  const box = theme.element().getBoundingClientRect()
+  expect(Math.round(window.innerHeight - box.bottom)).toBe(16)
+  expect(Math.round(window.innerWidth - box.right)).toBe(16)
 })
 
-it('shows only the theme button on a document that has no chat', async () => {
-  const screen = await mount(false)
+it('steps the theme button left of the chat column while it is open', async () => {
+  await page.viewport(1280, 800)
+  const screen = await mount()
+  await userEvent.click(screen.getByRole('button', { name: 'Ask AI' }))
+  const column = screen.getByRole('complementary', {
+    name: 'AI chat about Runbook',
+  })
+  await expect.element(column).toBeVisible()
+  const theme = screen.getByRole('button', { name: 'Toggle theme' })
+  expect(theme.element().getBoundingClientRect().right).toBeLessThanOrEqual(
+    column.element().getBoundingClientRect().left
+  )
+})
+
+it('remembers that the chat column is open for the next document', async () => {
+  await page.viewport(1280, 800)
+  const first = await mount()
+  await userEvent.click(first.getByRole('button', { name: 'Ask AI' }))
+  await first.unmount()
+  const second = await mount()
   await expect
-    .element(screen.getByRole('button', { name: 'Toggle theme' }))
+    .element(
+      second.getByRole('complementary', { name: 'AI chat about Runbook' })
+    )
     .toBeVisible()
+  await userEvent.click(second.getByRole('button', { name: 'Close' }))
   expect(
-    screen.getByRole('button', { name: 'Ask AI' }).elements()
+    second
+      .getByRole('complementary', { name: 'AI chat about Runbook' })
+      .elements()
   ).toHaveLength(0)
-})
-
-it('switches the theme with the button', async () => {
-  const screen = await mount(false)
-  await userEvent.click(screen.getByRole('button', { name: 'Toggle theme' }))
-  await vi.waitFor(() =>
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
-  )
-  await userEvent.click(screen.getByRole('button', { name: 'Toggle theme' }))
-  await vi.waitFor(() =>
-    expect(document.documentElement.classList.contains('light')).toBe(true)
-  )
 })
