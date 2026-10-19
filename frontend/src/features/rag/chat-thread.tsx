@@ -1,11 +1,25 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import {
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import {
   keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { ArrowUp, Check, Link2, Square, X } from 'lucide-react'
+import {
+  ArrowUp,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Link2,
+  Square,
+  X,
+} from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import {
   MAX_DOCUMENT_MENTIONS,
@@ -126,6 +140,64 @@ export function AgentActionCard({
   )
 }
 
+/**
+ * The changes of earlier turns that were already decided, folded to one line so a long
+ * chat does not keep showing old failures. Opening the line shows every card again.
+ */
+function EarlierActions({
+  actions,
+  conversationID,
+  queryKey,
+}: {
+  actions: AgentAction[]
+  conversationID: string
+  queryKey: readonly unknown[]
+}) {
+  const [open, setOpen] = useState(false)
+  const listID = useId()
+  const failed = actions.filter((action) => action.status === 'failed').length
+  const Chevron = open ? ChevronDown : ChevronRight
+  return (
+    <div className='space-y-3'>
+      <Button
+        type='button'
+        variant='ghost'
+        size='sm'
+        className='text-muted-foreground'
+        aria-expanded={open}
+        aria-controls={listID}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Chevron />
+        {actions.length === 1
+          ? '1 earlier change'
+          : `${actions.length} earlier changes`}
+        {failed > 0 ? (
+          <span className='flex items-center gap-1.5 text-destructive'>
+            <span
+              aria-hidden
+              className='size-1.5 rounded-[1px] bg-destructive'
+            />
+            {failed} failed
+          </span>
+        ) : null}
+      </Button>
+      <div id={listID} hidden={!open} className='space-y-3'>
+        {open
+          ? actions.map((action) => (
+              <AgentActionCard
+                key={action.id}
+                action={action}
+                conversationID={conversationID}
+                queryKey={queryKey}
+              />
+            ))
+          : null}
+      </div>
+    </div>
+  )
+}
+
 export function ChatMessages({
   messages,
   actions = [],
@@ -142,15 +214,28 @@ export function ChatMessages({
   const placed = new Set<string>()
   return (
     <>
-      {messages.map((message) => {
+      {messages.map((message, index) => {
         const own = (message.meta?.actions ?? [])
           .map((id) => actions.find((action) => action.id === id))
           .filter((action): action is AgentAction => Boolean(action))
         own.forEach((action) => placed.add(action.id))
+        // The newest turn and anything still waiting for the User stay open.
+        const past = index < messages.length - 1
+        const settled = past
+          ? own.filter((action) => action.status !== 'pending')
+          : []
+        const shown = own.filter((action) => !settled.includes(action))
         return (
           <div key={message.id} className='space-y-3'>
             <ChatMessage message={message} workspaceID={workspaceID} />
-            {own.map((action) => (
+            {settled.length > 0 ? (
+              <EarlierActions
+                actions={settled}
+                conversationID={conversationID}
+                queryKey={queryKey}
+              />
+            ) : null}
+            {shown.map((action) => (
               <AgentActionCard
                 key={action.id}
                 action={action}
