@@ -632,7 +632,7 @@ func DokudocsTools(d ToolDeps) []Tool {
 		{
 			Name: "edit_architecture", Capability: CapContent, Write: true, DocumentTool: true,
 			Description: "Change an Architecture document (a canvas of Hosts, Systems, Groups and Connections) with operations, using the version from read_document. " +
-				"Operations run all together or not at all, at most 50 per call. Name an existing element by its id; name one you add in the same call by the ref you gave it. " +
+				"Operations run all together or not at all, at most 50 per call. Name an existing element by its id from read_document, never by its name; name one you add in the same call by the ref you gave it. " +
 				"add_node {kind host|system|group, name, catalog, parent, ref, description, tags, repoUrl, x, y, w, h}; update_node {id, name, catalog, description, tags, repoUrl}; " +
 				"move_node {id, parent (an id, or null for the top level), x, y, w, h}; remove_node {id, cascade (required to remove a Host or Group that holds elements)}; " +
 				"add_connection {source, target, protocol, ref, label, port} between two Systems; update_connection {id, protocol, label, port}; remove_connection {id}; " +
@@ -781,16 +781,21 @@ func DokudocsTools(d ToolDeps) []Tool {
 		// Comments
 		{
 			Name: "add_comment", Capability: CapComments, Write: true, DocumentTool: true,
-			Description: "Write a comment on a Markdown document as a whole. quote names the text it is about.",
-			Parameters:  object([]string{"workspace_id", "document_id", "text"}, map[string]any{"workspace_id": pWorkspace, "document_id": pDocument, "text": pText("The comment."), "quote": pText("The text it is about.")}),
+			Description: "Write a comment on a document. On a Markdown document it is about the whole document; quote names the text it is about. " +
+				"On an Architecture document it must be about one element: pass element_id, the id of a node or Connection from read_document.",
+			Parameters: object([]string{"workspace_id", "document_id", "text"}, map[string]any{
+				"workspace_id": pWorkspace, "document_id": pDocument, "text": pText("The comment."), "quote": pText("The text it is about."),
+				"element_id": pText("Architecture only: the id of the node or Connection the comment is about."),
+			}),
 			NeedsApproval: always(func(args json.RawMessage) string {
 				return fmt.Sprintf("Comment: “%s”", truncate(field(args, "text"), 120))
 			}),
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
 				a, err := parse[struct {
 					wsDoc
-					Text  string `json:"text"`
-					Quote string `json:"quote"`
+					Text      string `json:"text"`
+					Quote     string `json:"quote"`
+					ElementID string `json:"element_id"`
 				}](args)
 				if err != nil {
 					return nil, err
@@ -799,8 +804,18 @@ func DokudocsTools(d ToolDeps) []Tool {
 				if err != nil {
 					return nil, err
 				}
+				var anchor json.RawMessage
+				if element := strings.TrimSpace(a.ElementID); element != "" {
+					if err := d.Content.checkElement(ctx, actor, ws, doc, element); err != nil {
+						return nil, err
+					}
+					anchor, _ = json.Marshal(map[string]string{"kind": "element", "elementId": element})
+				}
 				thread := uuid.New()
-				err = d.Comments.Create(ctx, appdoc.CommentInput{WorkspaceID: ws, DocumentID: doc, ThreadID: thread, AuthorID: actor.UserID, SelectedText: a.Quote, Content: a.Text})
+				err = d.Comments.Create(ctx, appdoc.CommentInput{WorkspaceID: ws, DocumentID: doc, ThreadID: thread, AuthorID: actor.UserID, SelectedText: a.Quote, Content: a.Text, Anchor: anchor})
+				if errors.Is(err, appdoc.ErrInvalidComment) {
+					return nil, &ToolError{Message: "the comment was refused: a Markdown document takes a comment with no element_id; an Architecture document needs element_id, the id of a node or Connection from read_document; a DBML or Mermaid document cannot be commented on from here"}
+				}
 				if err != nil {
 					return nil, err
 				}
