@@ -74,7 +74,7 @@ export function ConversationHistory({
   )
 
   return (
-    <div className='min-h-0 flex-1 overflow-y-auto'>
+    <div className='relative min-h-0 flex-1 overflow-y-auto'>
       {loading ? (
         <p role='status' className='p-4 text-sm text-muted-foreground'>
           Loading chats…
