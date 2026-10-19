@@ -1,0 +1,244 @@
+[
+  {
+    "name": "simple json keeps indentation and blank lines",
+    "input": "Intro line\n\n```json\n{\n  \"a\": 1,\n\n  \"b\": [1, 2]\n}\n```\n\nAfter.",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "Intro line"
+      },
+      {
+        "type": "code_block",
+        "lang": "json",
+        "text": "{\n  \"a\": 1,\n\n  \"b\": [1, 2]\n}"
+      },
+      {
+        "type": "paragraph",
+        "text": "After."
+      }
+    ]
+  },
+  {
+    "name": "no language",
+    "input": "```\nplain\n```",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "",
+        "text": "plain"
+      }
+    ]
+  },
+  {
+    "name": "tilde fence",
+    "input": "~~~yaml\nkey: value\n~~~",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "yaml",
+        "text": "key: value"
+      }
+    ]
+  },
+  {
+    "name": "only the first word of the info string is the language",
+    "input": "```json title=\"x\"\n{}\n```",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "json",
+        "text": "{}"
+      }
+    ]
+  },
+  {
+    "name": "a fence interrupts a paragraph",
+    "input": "Before\n```sh\nls\n```\nAfter",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "Before"
+      },
+      {
+        "type": "code_block",
+        "lang": "sh",
+        "text": "ls"
+      },
+      {
+        "type": "paragraph",
+        "text": "After"
+      }
+    ]
+  },
+  {
+    "name": "a longer closing fence closes",
+    "input": "```\na\n`````\nb",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "",
+        "text": "a"
+      },
+      {
+        "type": "paragraph",
+        "text": "b"
+      }
+    ]
+  },
+  {
+    "name": "a shorter closing fence does not close",
+    "input": "````md\n```\ninner\n```\n````",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "md",
+        "text": "```\ninner\n```"
+      }
+    ]
+  },
+  {
+    "name": "an unterminated fence runs to the end",
+    "input": "Text\n\n```py\nprint(1)\nprint(2)",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "Text"
+      },
+      {
+        "type": "code_block",
+        "lang": "py",
+        "text": "print(1)\nprint(2)"
+      }
+    ]
+  },
+  {
+    "name": "an empty fence is an empty code block",
+    "input": "```json\n```",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "json",
+        "text": ""
+      }
+    ]
+  },
+  {
+    "name": "fence indentation is removed from the code lines",
+    "input": "  ```\n  a\n    b\n x\n  ```",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "",
+        "text": "a\n  b\nx"
+      }
+    ]
+  },
+  {
+    "name": "four spaces of indentation is not a fence",
+    "input": "    ```\ncode",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "``` code"
+      }
+    ]
+  },
+  {
+    "name": "three backticks inside one line are text",
+    "input": "```inline``` text",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "```inline``` text"
+      }
+    ]
+  },
+  {
+    "name": "a heading-like line inside a fence stays code",
+    "input": "```md\n# Title\n```",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "md",
+        "text": "# Title"
+      }
+    ]
+  },
+  {
+    "name": "CRLF line endings",
+    "input": "a\r\n\r\n```js\r\nx\r\n```",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "a"
+      },
+      {
+        "type": "code_block",
+        "lang": "js",
+        "text": "x"
+      }
+    ]
+  },
+  {
+    "name": "empty text has no blocks",
+    "input": "",
+    "blocks": []
+  },
+  {
+    "name": "blank text has no blocks",
+    "input": "   \n\n",
+    "blocks": []
+  },
+  {
+    "name": "two code blocks back to back",
+    "input": "```a\n1\n```\n```b\n2\n```",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "a",
+        "text": "1"
+      },
+      {
+        "type": "code_block",
+        "lang": "b",
+        "text": "2"
+      }
+    ]
+  },
+  {
+    "name": "paragraph lines still join with a space",
+    "input": "one\ntwo\n\nthree",
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "one two"
+      },
+      {
+        "type": "paragraph",
+        "text": "three"
+      }
+    ]
+  },
+  {
+    "name": "a closing fence may be followed by spaces",
+    "input": "```\nx\n```   ",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "",
+        "text": "x"
+      }
+    ]
+  },
+  {
+    "name": "a fence with an info string does not close",
+    "input": "```\nx\n```js\ny\n```",
+    "blocks": [
+      {
+        "type": "code_block",
+        "lang": "",
+        "text": "x\n```js\ny"
+      }
+    ]
+  }
+]
