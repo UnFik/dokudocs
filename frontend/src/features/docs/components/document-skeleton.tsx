@@ -1,6 +1,7 @@
 import type { DocType } from '@/lib/document-types'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EditorHeaderSkeleton } from './editor-header'
 
 const LINE_WIDTHS = ['w-3/4', 'w-full', 'w-11/12', 'w-2/3', 'w-5/6']
 const CODE_WIDTHS = ['w-1/3', 'w-2/3', 'w-1/2', 'w-3/4', 'w-2/5', 'w-1/2']
@@ -71,6 +72,8 @@ interface DocSkeletonProps {
   className?: string
   // Omit while the type is not known yet; the skeleton then stays neutral.
   type?: DocType
+  // Only used by the full-page skeleton, for the header.
+  title?: string
 }
 
 // Neither skeleton uses role='status': the editor toolbar owns the only status region ("Synced"), and smoke specs find it by role.
@@ -83,19 +86,29 @@ export function DocBodySkeleton({ label, className, type }: DocSkeletonProps) {
   )
 }
 
+// The whole page: the header and the body each load on their own, as in the real editors.
 export function DocEditorSkeleton({
   label,
   className,
   type,
+  title,
 }: DocSkeletonProps) {
   return (
     <div
       aria-busy='true'
-      className={cn('mx-auto w-full max-w-4xl space-y-6 p-6', className)}
+      className={cn(
+        'flex h-screen w-full flex-col overflow-hidden bg-background',
+        className
+      )}
     >
       <span className='sr-only'>{label}</span>
-      <Skeleton aria-hidden='true' className='h-8 w-1/2' />
-      <SkeletonBody type={type} unknown={!type} />
+      <EditorHeaderSkeleton type={type} title={title} />
+      <div
+        data-slot='doc-skeleton-body'
+        className='mx-auto w-full max-w-4xl flex-1 overflow-hidden p-6'
+      >
+        <SkeletonBody type={type} unknown={!type} />
+      </div>
     </div>
   )
 }

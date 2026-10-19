@@ -142,7 +142,11 @@ export function DocEditor() {
 
   if (workspacesLoading)
     return (
-      <DocEditorSkeleton label='Loading document' type={cachedDocument?.type} />
+      <DocEditorSkeleton
+        label='Loading document'
+        type={cachedDocument?.type}
+        title={cachedDocument?.title}
+      />
     )
   if (!workspaceID)
     return (
@@ -150,7 +154,11 @@ export function DocEditor() {
     )
   if (documentQuery.isPending)
     return (
-      <DocEditorSkeleton label='Loading document' type={cachedDocument?.type} />
+      <DocEditorSkeleton
+        label='Loading document'
+        type={cachedDocument?.type}
+        title={cachedDocument?.title}
+      />
     )
   if (documentQuery.error || !documentQuery.data)
     return (
@@ -245,7 +253,11 @@ function HydrateLegacyDocument({
   return hydrated ? (
     <ScopedDocEditor key={`${generation}:${docId}`} docId={docId} />
   ) : (
-    <DocEditorSkeleton label='Loading document' type={document.type} />
+    <DocEditorSkeleton
+      label='Loading document'
+      type={document.type}
+      title={document.title}
+    />
   )
 }
 
