@@ -323,7 +323,7 @@ type CreateDocumentFields = {
 
 export type CreateDocumentInput =
   | (CreateDocumentFields & {
-      type: Exclude<DocType, 'markdown' | 'architecture'>
+      type: Exclude<DocType, 'markdown' | 'architecture' | 'html'>
       content?: string
     })
   | (CreateDocumentFields & {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { DocType } from '@/types/dokudocs'
 import { Upload } from 'lucide-react'
+import type { CreatableDocType } from '@/lib/document-types'
 import { Button } from '@/components/ui/button'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -20,11 +20,11 @@ export function Dashboard() {
   const { activeOrg, isLoading, error, refetch } = useDokudocs()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
-  const [selectedType, setSelectedType] = useState<DocType>('markdown')
+  const [selectedType, setSelectedType] = useState<CreatableDocType>('markdown')
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
 
   const handleOpenCreate = (
-    type: DocType = 'markdown',
+    type: CreatableDocType = 'markdown',
     projectId: string | null = null
   ) => {
     setSelectedType(type)

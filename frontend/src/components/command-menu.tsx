@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import type { DocType } from '@/types/dokudocs'
 import {
   Clock,
   FileEdit,
@@ -17,6 +16,7 @@ import {
   DOCUMENT_TYPES,
   DOCUMENT_IMPORT_EXTENSIONS,
   getDocumentType,
+  type CreatableDocType,
 } from '@/lib/document-types'
 import { listProjects } from '@/lib/domain-api'
 import { useSearch } from '@/context/search-provider'
@@ -217,7 +217,8 @@ export function CommandMenu() {
   const [search, setSearch] = useState('')
   const [createDocOpen, setCreateDocOpen] = useState(false)
   const [importDocOpen, setImportDocOpen] = useState(false)
-  const [createDocType, setCreateDocType] = useState<DocType>('markdown')
+  const [createDocType, setCreateDocType] =
+    useState<CreatableDocType>('markdown')
   const [createProjectOpen, setCreateProjectOpen] = useState(false)
 
   const [wasOpen, setWasOpen] = useState(open)
@@ -234,7 +235,7 @@ export function CommandMenu() {
     [setOpen]
   )
 
-  const handleCreateDocAction = (type: DocType) => {
+  const handleCreateDocAction = (type: CreatableDocType) => {
     setOpen(false)
     setCreateDocType(type)
     setCreateDocOpen(true)
