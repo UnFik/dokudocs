@@ -927,6 +927,31 @@ export async function listMentionable(
     )
 }
 
+const pageTicketSchema = z.object({
+  url: z.string(),
+  expiresAt: z.string(),
+  capabilities: z.array(z.string()),
+  canEdit: z.boolean(),
+  canComment: z.boolean(),
+})
+
+export type PageTicket = z.infer<typeof pageTicketSchema>
+
+/** Asks for the address of the sandboxed frame that shows an HTML document. */
+export async function getHtmlPageTicket(
+  workspaceId: string,
+  documentId: string,
+  signal?: AbortSignal
+): Promise<PageTicket> {
+  return pageTicketSchema.parse(
+    await apiFetch<unknown>(`/api/v1/documents/${documentId}/page`, {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceId),
+      signal,
+    })
+  )
+}
+
 export const maxCommentLength = 2000
 export const maxCommentSelection = 500
 

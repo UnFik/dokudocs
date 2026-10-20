@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"backend/constant"
+	"backend/internal/application/collaboration"
 	"backend/internal/domain/model"
 
 	"github.com/google/uuid"
@@ -28,8 +29,14 @@ func (f *fakeSource) GetDocument(_ context.Context, _, _, userID uuid.UUID) (mod
 
 const examplePage = `<!doctype html><html><head><meta name="dokudocs-capabilities" content="theme, download"><title>T</title></head><body><p>hi</p></body></html>`
 
+type fakeAccess struct{ access collaboration.RoomAccess }
+
+func (f fakeAccess) ReadPageAccess(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (collaboration.RoomAccess, error) {
+	return f.access, nil
+}
+
 func newService(src Source) *Service {
-	return NewService(src, NewSigner("secret", time.Minute), "https://usercontent.example.com", "https://app.example.com/")
+	return NewService(src, fakeAccess{collaboration.RoomAccess{CanRead: true, CanEdit: true}}, NewSigner("secret", time.Minute), "https://usercontent.example.com", "https://app.example.com/")
 }
 
 func TestATokenNamesOneViewerAndOnePageAndExpires(t *testing.T) {
@@ -75,7 +82,7 @@ func TestIssueNeedsTheViewerToReadAnHTMLPageAndListsItsCapabilities(t *testing.T
 	if err != nil || src.lastUse != user {
 		t.Fatalf("Issue = (%+v, %v), want a ticket read as the viewer", ticket, err)
 	}
-	if !strings.HasPrefix(ticket.URL, "https://usercontent.example.com/content/p/") || len(ticket.Capabilities) != 2 {
+	if !strings.HasPrefix(ticket.URL, "https://usercontent.example.com/content/p/") || len(ticket.Capabilities) != 2 || !ticket.CanEdit || !ticket.CanComment {
 		t.Fatalf("ticket = %+v", ticket)
 	}
 
@@ -120,7 +127,7 @@ func TestRenderChecksTheViewersAccessAgainWhenTheFrameLoads(t *testing.T) {
 func TestThePageIsClosedWithoutASeparateContentOrigin(t *testing.T) {
 	src := &fakeSource{doc: model.Document{Type: "html", Content: examplePage}}
 	for name, origin := range map[string]string{"none": "", "the application's own": "https://app.example.com"} {
-		svc := NewService(src, NewSigner("secret", time.Minute), origin, "https://app.example.com")
+		svc := NewService(src, fakeAccess{}, NewSigner("secret", time.Minute), origin, "https://app.example.com")
 		if svc.Enabled() {
 			t.Errorf("%s: enabled", name)
 		}

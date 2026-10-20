@@ -31,7 +31,7 @@ import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
 import { DocumentFloatingControls } from './document-floating-controls'
 import { DocEditorSkeleton } from './document-skeleton'
 import { EditorHeader } from './editor-header'
-import { HtmlDocumentPending } from './html-document-pending'
+import { HtmlDocumentViewer } from './html-document-viewer'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
 import { RemoteMarkdownDocEditor } from './remote-markdown-doc-editor'
@@ -182,7 +182,15 @@ export function DocEditor() {
         />
       )
 
-    if (data.type === 'html') return <HtmlDocumentPending title={data.title} />
+    if (data.type === 'html')
+      return (
+        <HtmlDocumentViewer
+          key={`${scope.generation}:${docId}`}
+          document={data}
+          workspaceID={workspaceID}
+          userID={scope.userId ?? auth.user?.id ?? ''}
+        />
+      )
 
     if (data.type === 'architecture')
       return (

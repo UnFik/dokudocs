@@ -6,6 +6,7 @@ import (
 	"backend/internal/application/document/usecase"
 	"backend/internal/application/htmlpage"
 	"backend/internal/config"
+	docrepo "backend/internal/infrastructure/repository/document"
 	"backend/internal/infrastructure/runtime/container"
 )
 
@@ -14,5 +15,5 @@ import (
 const pageTicketTTL = 5 * time.Minute
 
 func newPageService(c *container.Container, cfg config.Config) *htmlpage.Service {
-	return htmlpage.NewService(usecase.NewUseCase(c.DB), htmlpage.NewSigner(cfg.JWTSecret, pageTicketTTL), cfg.ContentOrigin, cfg.PublicAppURL)
+	return htmlpage.NewService(usecase.NewUseCase(c.DB), docrepo.NewRepository(c.DB), htmlpage.NewSigner(cfg.JWTSecret, pageTicketTTL), cfg.ContentOrigin, cfg.PublicAppURL)
 }
