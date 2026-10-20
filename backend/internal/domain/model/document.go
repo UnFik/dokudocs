@@ -1,11 +1,20 @@
 package model
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// PageVersion names the exact text of an HTML document. A write that names a
+// version is refused when the page is no longer that text.
+func PageVersion(content string) string {
+	sum := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(sum[:8])
+}
 
 type UserAuthor struct {
 	ID     uuid.UUID `json:"id"`
