@@ -34,8 +34,11 @@ func TestHTMLDocumentsAreCreatedOnlyFromMCP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create from MCP: %v", err)
 	}
-	if repo.created.Type != "html" || repo.created.Content != page || len(repo.created.ContentJSON) != 0 {
-		t.Fatalf("created = %+v, want the page as text body and no Yjs-derived JSON", repo.created)
+	if repo.created.Type != "html" || repo.created.Content != page {
+		t.Fatalf("created = %+v, want the page as text body", repo.created)
+	}
+	if want := `{"text":"x\n\nhi"}`; string(repo.created.ContentJSON) != want {
+		t.Fatalf("content_json = %s, want the extracted text %s for the RAG index", repo.created.ContentJSON, want)
 	}
 }
 

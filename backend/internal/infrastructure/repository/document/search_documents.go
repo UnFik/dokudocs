@@ -76,7 +76,7 @@ func (r *Repository) Search(ctx context.Context, workspaceID, actorID uuid.UUID,
 			FROM matched m
 			JOIN visible v ON v.id = m.document_id
 			JOIN rag_document_indexes ri ON ri.document_id = v.id
-			WHERE v.type IN ('markdown', 'architecture')
+			WHERE v.type IN ('markdown', 'architecture', 'html')
 			  AND ri.indexed_body_version = v.body_version
 			  AND ri.source_fingerprint = m.source_fingerprint AND ri.indexed_title = v.title
 			  AND ri.indexed_project_id IS NOT DISTINCT FROM v.project_id

@@ -65,6 +65,17 @@ func (r *Repository) UpdateAuthorized(ctx context.Context, doc model.Document, c
 			return constant.ErrDocumentNotFound
 		}
 
+		if currentType == "html" && doc.Content != currentContent && len(doc.ContentJSON) > 0 {
+			// The page changed: keep the text the RAG index reads, and move the body version
+			// on so the index sees the page is stale.
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE documents SET content_json = $2::jsonb, body_version = body_version + 1
+				WHERE id = $1 AND workspace_id = $3
+			`, doc.ID, string(doc.ContentJSON), doc.WorkspaceID); err != nil {
+				return err
+			}
+		}
+
 		projectChanged := !sameProject(current.ProjectID, doc.ProjectID)
 		if categoryNames != nil || projectChanged {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM document_category_mappings WHERE document_id = $1`, doc.ID); err != nil {
