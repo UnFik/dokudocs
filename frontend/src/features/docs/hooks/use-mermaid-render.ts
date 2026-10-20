@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import DOMPurify from 'dompurify'
 import mermaid from 'mermaid'
 import { AsyncRenderPipeline } from '../lib/live-render-pipeline'
+import { getAppMermaidConfig, MERMAID_FONT_FAMILY } from '../lib/mermaid-theme'
 
 export interface MermaidRenderResult {
   svg: string
@@ -137,8 +138,7 @@ export function getMermaidConfig(
       startOnLoad: false,
       theme: 'neutral' as const,
       securityLevel: 'loose' as const,
-      fontFamily:
-        'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily: MERMAID_FONT_FAMILY,
       suppressErrorRendering: true,
       logLevel: 'fatal' as const,
     }
@@ -149,79 +149,13 @@ export function getMermaidConfig(
       startOnLoad: false,
       theme: 'forest' as const,
       securityLevel: 'loose' as const,
-      fontFamily:
-        'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily: MERMAID_FONT_FAMILY,
       suppressErrorRendering: true,
       logLevel: 'fatal' as const,
     }
   }
 
-  if (!isDark) {
-    return {
-      startOnLoad: false,
-      theme: 'default' as const,
-      securityLevel: 'loose' as const,
-      fontFamily:
-        'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      suppressErrorRendering: true,
-      logLevel: 'fatal' as const,
-    }
-  }
-
-  return {
-    startOnLoad: false,
-    theme: 'dark' as const,
-    securityLevel: 'loose' as const,
-    fontFamily:
-      'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    suppressErrorRendering: true,
-    logLevel: 'fatal' as const,
-    themeVariables: {
-      darkMode: true,
-      background: 'transparent',
-      primaryColor: '#1e1b4b',
-      primaryTextColor: '#f8fafc',
-      primaryBorderColor: '#818cf8',
-      lineColor: '#cbd5e1',
-      secondaryColor: '#831843',
-      secondaryTextColor: '#fdf2f8',
-      secondaryBorderColor: '#f472b6',
-      tertiaryColor: '#064e3b',
-      tertiaryTextColor: '#ecfdf5',
-      tertiaryBorderColor: '#34d399',
-      mainBkg: '#18181b',
-      nodeBorder: '#818cf8',
-      clusterBkg: '#09090b',
-      clusterBorder: '#3f3f46',
-      defaultLinkColor: '#cbd5e1',
-      titleColor: '#f8fafc',
-      edgeLabelBackground: '#18181b',
-      actorBkg: '#1e1b4b',
-      actorBorder: '#818cf8',
-      actorTextColor: '#f8fafc',
-      actorLineColor: '#818cf8',
-      signalColor: '#f8fafc',
-      signalTextColor: '#ffffff',
-      labelBoxBkgColor: '#18181b',
-      labelBoxBorderColor: '#6366f1',
-      labelTextColor: '#f8fafc',
-      loopTextColor: '#f8fafc',
-      noteBkgColor: '#36300a',
-      noteBorderColor: '#854d0e',
-      noteTextColor: '#fef08a',
-      activationBkgColor: '#312e81',
-      activationBorderColor: '#a5b4fc',
-      sequenceNumberColor: '#ffffff',
-      cScale0: '#8b5cf6',
-      cScale1: '#10b981',
-      cScale2: '#f97316',
-      cScale3: '#06b6d4',
-      cScale4: '#ec4899',
-      cScale5: '#eab308',
-      cScale6: '#14b8a6',
-      cScale7: '#6366f1',
-    },
-  }
+  return { ...getAppMermaidConfig(isDark), securityLevel: 'loose' as const }
 }
 
 export async function renderMermaidSvgDirect(

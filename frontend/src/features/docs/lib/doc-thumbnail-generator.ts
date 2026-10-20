@@ -1,5 +1,6 @@
 import { DocType } from '@/types/dokudocs'
 import mermaid from 'mermaid'
+import { getAppMermaidConfig } from './mermaid-theme'
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -1041,11 +1042,8 @@ export async function generateMermaidThumbnailAsync(
   if (typeof window !== 'undefined') {
     try {
       mermaid.initialize({
-        startOnLoad: false,
-        theme: isDark ? 'dark' : 'default',
+        ...getAppMermaidConfig(isDark),
         securityLevel: 'loose',
-        suppressErrorRendering: true,
-        fontFamily: 'system-ui, -apple-system, sans-serif',
       })
       const id = `mm_thumb_${Math.random().toString(36).substring(2, 9)}`
       const { svg } = await mermaid.render(id, trimmed)
