@@ -1,3 +1,5 @@
+import { MERMAID_DIAGRAM_TYPES } from './mermaid-diagram-types'
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -50,6 +52,7 @@ const DIAGRAM_TYPES = new Set([
   'xychart-beta',
   'kanban',
   'architecture-beta',
+  ...MERMAID_DIAGRAM_TYPES.map((type) => type.keyword),
 ])
 
 const DIRECTIONS = new Set(['TD', 'TB', 'BT', 'RL', 'LR'])
@@ -286,6 +289,21 @@ export function highlightMermaidCode(
           start: baseOffset + start,
           end: baseOffset + i,
         })
+        continue
+      }
+
+      // Types like `radar-beta` hold a hyphen the word rule below would split on.
+      const hyphenated = str
+        .slice(i)
+        .match(/^[a-zA-Z][a-zA-Z0-9_]*(?:-[a-zA-Z0-9_]+)+/)?.[0]
+      if (hyphenated && DIAGRAM_TYPES.has(hyphenated)) {
+        tokens.push({
+          type: 'diagram',
+          value: hyphenated,
+          start: baseOffset + i,
+          end: baseOffset + i + hyphenated.length,
+        })
+        i += hyphenated.length
         continue
       }
 

@@ -1,4 +1,5 @@
 import * as monaco from 'monaco-editor'
+import { MERMAID_DIAGRAM_TYPES } from './mermaid-diagram-types'
 import EditorWorker from './workers/editor.worker?worker'
 import JsonWorker from './workers/json.worker?worker'
 
@@ -165,6 +166,7 @@ export function setupMonaco(): typeof monaco {
         'packet-beta',
         'kanban',
         'architecture-beta',
+        ...MERMAID_DIAGRAM_TYPES.map((type) => type.keyword),
         'subgraph',
         'end',
         'participant',
