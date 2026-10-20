@@ -219,6 +219,46 @@ func (s *ContentService) CheckVersion(ctx context.Context, actor Actor, workspac
 	return nil
 }
 
+// CheckSourceEdit refuses, before the User is asked, a DBML or Mermaid edit that cannot
+// run: a stale version, or text to replace that the source does not have exactly once.
+// The refusal carries the live source, so the Agent can copy from it and try again.
+func (s *ContentService) CheckSourceEdit(ctx context.Context, actor Actor, workspaceID, documentID uuid.UUID, version string, raw json.RawMessage) error {
+	head, _, err := s.head(ctx, actor, workspaceID, documentID)
+	if err != nil {
+		return err
+	}
+	live, err := s.rooms.Read(ctx, roomName(workspaceID, documentID, head), head.DocumentType)
+	if err != nil {
+		return err
+	}
+	if version != "" && live.Version != version {
+		return errStale
+	}
+	var ops []operation
+	if err := json.Unmarshal(raw, &ops); err != nil {
+		return nil
+	}
+	text := live.Text
+	for i, op := range ops {
+		switch op.text("type") {
+		case "replace_all":
+			text = op.text("text")
+		case "append":
+			text += op.text("text")
+		case "replace_text":
+			find := op.text("find")
+			switch n := strings.Count(text, find); {
+			case n == 0:
+				return &ToolError{Message: fmt.Sprintf("operation %d: %q is not in the document. Copy the text exactly from the document as it is now, or use replace_all to write the whole source. The document now reads:\n%s", i+1, find, text)}
+			case n > 1:
+				return &ToolError{Message: fmt.Sprintf("operation %d: %q appears %d times; include more surrounding text so it appears once", i+1, find, n)}
+			}
+			text = strings.Replace(text, find, op.text("replace"), 1)
+		}
+	}
+	return nil
+}
+
 func (s *ContentService) DocumentType(ctx context.Context, actor Actor, workspaceID, documentID uuid.UUID) (string, error) {
 	head, _, err := s.head(ctx, actor, workspaceID, documentID)
 	return head.DocumentType, err
