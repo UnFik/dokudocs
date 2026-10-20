@@ -214,7 +214,7 @@ func TestAssetsHTTPUploadReadSharingAndSweep(t *testing.T) {
 	}
 	var left int
 	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM document_assets WHERE document_id = $1`, documentID).Scan(&left)
-	if removed != 1 || left != 1 {
-		t.Fatalf("sweep removed %d and left %d, want it to remove the unreferenced html file and keep the image", removed, left)
+	if removed != 3 || left != 1 {
+		t.Fatalf("sweep removed %d and left %d, want it to remove the three unreferenced files (svg, html, html named .svg) and keep the image", removed, left)
 	}
 }
