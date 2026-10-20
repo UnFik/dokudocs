@@ -31,6 +31,7 @@ import { MermaidExportDialog } from './dialogs/mermaid-export-dialog'
 import { DocumentFloatingControls } from './document-floating-controls'
 import { DocEditorSkeleton } from './document-skeleton'
 import { EditorHeader } from './editor-header'
+import { HtmlDocumentPending } from './html-document-pending'
 import { MarkdownEditor } from './markdown-editor'
 import { MermaidEditor } from './mermaid-editor'
 import { RemoteMarkdownDocEditor } from './remote-markdown-doc-editor'
@@ -180,6 +181,8 @@ export function DocEditor() {
           focusThreadID={focusThreadID}
         />
       )
+
+    if (data.type === 'html') return <HtmlDocumentPending title={data.title} />
 
     if (data.type === 'architecture')
       return (

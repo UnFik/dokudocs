@@ -12,6 +12,16 @@ import (
 
 // ErrInvalidContentJSON means contentJSON does not fit the document: not a JSON object for
 // Markdown, not a canvas for Architecture, or given for a type that has none.
+// ErrHTMLNotWritable means an HTML document was created or its body changed
+// from somewhere other than an MCP client (ADR 0052).
+var ErrHTMLNotWritable = errors.New("html documents are written through MCP only")
+
+// ErrHTMLTooLarge means the page is over MaxHTMLBytes.
+var ErrHTMLTooLarge = errors.New("an html document can be at most 1 MiB")
+
+// MaxHTMLBytes is the most an HTML document body may hold, embedded images included.
+const MaxHTMLBytes = 1 << 20
+
 var ErrInvalidContentJSON = errors.New("contentJSON must be a JSON object on a Markdown document or a canvas on an Architecture document")
 
 // emptyCanvas is the content of a new Architecture document.
@@ -73,6 +83,17 @@ func (u *useCase) CreateDocument(ctx context.Context, input dto.CreateDocumentIn
 	}
 
 	switch {
+	case docType == "html":
+		if !input.FromMCP {
+			return data, ErrHTMLNotWritable
+		}
+		if len(input.ContentJSON) > 0 {
+			return data, ErrInvalidContentJSON
+		}
+		if len(input.Content) > MaxHTMLBytes {
+			return data, ErrHTMLTooLarge
+		}
+		// The page is the body, kept as text and never as a collaborative state.
 	case docType == "architecture":
 		// The text in content is derived from the canvas by the collaboration service.
 		doc.Content = ""
