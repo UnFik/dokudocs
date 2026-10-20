@@ -30,6 +30,9 @@ func (u *useCase) UpdateDocument(ctx context.Context, input dto.UpdateDocumentIn
 			if len(input.Content) > MaxHTMLBytes {
 				return data, ErrHTMLTooLarge
 			}
+			if input.ExpectedPageVersion != "" && model.PageVersion(doc.Content) != input.ExpectedPageVersion {
+				return data, constant.ErrDocumentConflict
+			}
 		}
 		doc.Content = input.Content
 	}
