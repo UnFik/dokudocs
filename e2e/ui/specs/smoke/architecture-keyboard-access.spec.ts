@@ -72,7 +72,8 @@ test("@live @smoke: keyboard editing, undo, and a commenter's read-only canvas",
   const theirRedis = commenter.locator(".react-flow__node-system").filter({ hasText: "Redis" });
   await theirRedis.click();
   await expect(commenter.getByLabel("name").first()).toBeDisabled();
-  const theirProperties = commenter.locator("#architecture-properties");
+  await commenter.getByRole("tab", { name: /^Comments/ }).click();
+  const theirProperties = commenter.locator("#architecture-comments");
   await theirProperties.getByLabel("New comment on Redis").fill("Is this the session store?");
   await theirProperties.getByRole("button", { name: "Comment", exact: true }).click();
   // The editor sees the new thread as a pin on Redis.

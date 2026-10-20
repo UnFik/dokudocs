@@ -465,6 +465,41 @@ describe('Comment', () => {
   })
 })
 
+describe('the floating toolbar on a selected container', () => {
+  it('offers Fit to contents to a Host that holds something and does not fit it', async () => {
+    const { doc, vps } = sample()
+    await show({ doc })
+    const fit = page.getByRole('button', { name: 'Fit to contents' })
+    await expect.element(fit).not.toBeInTheDocument()
+    await userEvent.click(page.getByText('VPS-1'))
+    await expect.element(fit).toBeVisible()
+    const before = readCanvas(doc).nodes.find((n) => n.id === vps)!
+    await userEvent.click(fit)
+    const after = readCanvas(doc).nodes.find((n) => n.id === vps)!
+    expect([after.w, after.h]).not.toEqual([before.w, before.h])
+    // Once it fits there is nothing left to offer.
+    await expect.element(fit).not.toBeInTheDocument()
+  })
+
+  it('stays away from an element that holds nothing, and from a viewer', async () => {
+    const { doc } = sample()
+    await show({ doc })
+    await userEvent.click(page.getByText('DB', { exact: true }))
+    await expect
+      .element(page.getByRole('button', { name: 'Fit to contents' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('is not shown to someone who may only look', async () => {
+    const { doc } = sample()
+    await show({ doc, canEdit: false })
+    await userEvent.click(page.getByText('VPS-1'))
+    await expect
+      .element(page.getByRole('button', { name: 'Fit to contents' }))
+      .not.toBeInTheDocument()
+  })
+})
+
 describe('selecting several elements', () => {
   it('takes what lies wholly inside the box, a Host without its contents', async () => {
     const { doc, vps, cache } = sample()
