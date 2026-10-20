@@ -10,6 +10,8 @@ import (
 
 	"backend/constant"
 	"backend/internal/application/collaboration"
+	"backend/internal/application/document/dto"
+	appdoc "backend/internal/application/document/usecase"
 	"backend/internal/domain/model"
 
 	"github.com/google/uuid"
@@ -68,6 +70,17 @@ type AIAssistedMarker interface {
 	MarkAIAssisted(ctx context.Context, documentID uuid.UUID, suggestionIDs []uuid.UUID, userID uuid.UUID, channel string) error
 }
 
+// HTMLPages rewrites the body of an HTML document, which has no room: it is plain
+// text in the document, written by the document use case under the User's edit rights.
+type HTMLPages interface {
+	UpdateDocument(ctx context.Context, input dto.UpdateDocumentInput) (model.Document, error)
+}
+
+// PageAccess says what a User may do with an HTML document.
+type PageAccess interface {
+	ReadPageAccess(ctx context.Context, workspaceID, documentID, userID uuid.UUID) (collaboration.RoomAccess, error)
+}
+
 // ContentService reads and edits what a document says for the Agent, under the
 // User's own rights (ADR 0043).
 type ContentService struct {
@@ -76,6 +89,8 @@ type ContentService struct {
 	revisions RevisionMaker
 	marks     AIAssistedMarker
 	catalog   ArchitectureCatalog
+	pages     HTMLPages
+	access    PageAccess
 }
 
 func NewContentService(heads RoomHeads, rooms LiveRooms, revisions RevisionMaker, marks AIAssistedMarker) *ContentService {
@@ -183,7 +198,7 @@ func checkContentOperations(docType string, raw json.RawMessage) error {
 		return &ToolError{Message: "operations must be a non-empty list of objects"}
 	}
 	allowed := markdownOperations
-	if isSource(docType) {
+	if isSource(docType) || docType == "html" {
 		allowed = sourceOperations
 	}
 	for i, op := range ops {
@@ -348,4 +363,104 @@ func truncate(s string, max int) string {
 		return string(r[:max])
 	}
 	return s
+}
+
+// WithPages lets the Agent read and rewrite HTML documents (ADR 0052).
+func (s *ContentService) WithPages(pages HTMLPages, access PageAccess) *ContentService {
+	s.pages, s.access = pages, access
+	return s
+}
+
+var errPageNotForChat = &ToolError{Message: "an html document is written through MCP only; ask the User to do it from their MCP client"}
+
+// ReadPage returns the text of an HTML document the caller has already loaded, and
+// the version to edit it with. Reading is open to chat and MCP alike.
+func (s *ContentService) ReadPage(ctx context.Context, actor Actor, doc model.Document) (ReadResult, error) {
+	if s.access == nil {
+		return ReadResult{}, &ToolError{Message: "html documents are not available here"}
+	}
+	access, err := s.access.ReadPageAccess(ctx, doc.WorkspaceID, doc.ID, actor.UserID)
+	if err != nil {
+		return ReadResult{}, err
+	}
+	if !access.CanRead {
+		return ReadResult{}, constant.ErrForbidden
+	}
+	return ReadResult{Type: "html", Text: doc.Content, Version: model.PageVersion(doc.Content), CanEdit: access.CanEdit}, nil
+}
+
+// applyTextOperations runs replace_text, replace_all and append over a text, and
+// says which operation could not run.
+func applyTextOperations(text string, ops []operation) (string, error) {
+	for i, op := range ops {
+		switch op.text("type") {
+		case "replace_all":
+			text = op.text("text")
+		case "append":
+			text += op.text("text")
+		case "replace_text":
+			find := op.text("find")
+			switch n := strings.Count(text, find); {
+			case n == 0:
+				return "", &ToolError{Message: fmt.Sprintf("operation %d: %q is not in the page. Copy the text exactly from the page as it is now, or use replace_all to write the whole page", i+1, find)}
+			case n > 1:
+				return "", &ToolError{Message: fmt.Sprintf("operation %d: %q appears %d times; include more surrounding text so it appears once", i+1, find, n)}
+			}
+			text = strings.Replace(text, find, op.text("replace"), 1)
+		}
+	}
+	return text, nil
+}
+
+// EditPage rewrites an HTML document from an MCP client. Chat does not write HTML.
+// A named revision is made first, so one restore undoes the change; the write is
+// refused when the page is no longer the version the client read.
+func (s *ContentService) EditPage(ctx context.Context, actor Actor, doc model.Document, version string, operations json.RawMessage) (EditResult, error) {
+	if actor.Channel != ChannelMCP {
+		return EditResult{}, errPageNotForChat
+	}
+	if s.pages == nil || s.access == nil {
+		return EditResult{}, &ToolError{Message: "html documents are not available here"}
+	}
+	if err := checkContentOperations("html", operations); err != nil {
+		return EditResult{}, err
+	}
+	access, err := s.access.ReadPageAccess(ctx, doc.WorkspaceID, doc.ID, actor.UserID)
+	if err != nil {
+		return EditResult{}, err
+	}
+	if !access.CanEdit {
+		return EditResult{}, constant.ErrForbidden
+	}
+	if version == "" || model.PageVersion(doc.Content) != version {
+		return EditResult{}, errStale
+	}
+	var ops []operation
+	if err := json.Unmarshal(operations, &ops); err != nil {
+		return EditResult{}, &ToolError{Message: "operations must be a non-empty list of objects"}
+	}
+	updated, err := applyTextOperations(doc.Content, ops)
+	if err != nil {
+		return EditResult{}, err
+	}
+	if strings.TrimSpace(updated) == "" {
+		return EditResult{}, &ToolError{Message: "the page would be empty; write the whole page with replace_all"}
+	}
+	revision, err := s.revisions.CreateNamed(ctx, doc.ID, doc.WorkspaceID, actor.UserID, truncate(fmt.Sprintf("Before AI edit, key %s", actor.KeyName), 120))
+	if err != nil {
+		return EditResult{}, err
+	}
+	if _, err := s.pages.UpdateDocument(ctx, dto.UpdateDocumentInput{
+		ID: doc.ID, WorkspaceID: doc.WorkspaceID, UserID: actor.UserID,
+		Content: updated, FromMCP: true, ExpectedPageVersion: version,
+	}); err != nil {
+		if errors.Is(err, constant.ErrDocumentConflict) {
+			return EditResult{}, errStale
+		}
+		if errors.Is(err, appdoc.ErrHTMLTooLarge) {
+			return EditResult{}, &ToolError{Message: "the page is over 1 MiB"}
+		}
+		return EditResult{}, err
+	}
+	return EditResult{Mode: "direct", Version: model.PageVersion(updated), RevisionID: revision.ID}, nil
 }

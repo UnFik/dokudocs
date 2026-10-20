@@ -15,4 +15,7 @@ type UpdateDocumentInput struct {
 	ProjectID   *uuid.UUID
 	// FromMCP is set only by the MCP tools; only they may change the body of an HTML document.
 	FromMCP bool
+	// ExpectedPageVersion, when set, makes the write of an HTML body fail with a conflict
+	// unless the page still has that version (model.PageVersion).
+	ExpectedPageVersion string
 }

@@ -64,7 +64,8 @@ func newAgentKit(c *container.Container, cfg config.Config) *agentKit {
 	permissions := agent.NewPermissionService(store)
 	revisions := appdoc.NewDocumentRevisionUseCase(documents).WithRoomReloader(collab)
 	kinds := appcatalog.NewService(catalogrepo.NewStore(c.DB))
-	content := agent.NewContentService(documents, rooms, revisions, store).WithCatalog(kinds)
+	pages := appdoc.NewUseCase(c.DB)
+	content := agent.NewContentService(documents, rooms, revisions, store).WithCatalog(kinds).WithPages(pages, documents)
 	tools := agent.DokudocsTools(agent.ToolDeps{
 		Workspaces:      appws.NewUseCase(c.DB),
 		Documents:       appdoc.NewUseCase(c.DB),

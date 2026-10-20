@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"backend/constant"
 	"backend/internal/application/document/dto"
 	"backend/internal/domain/model"
 
@@ -77,5 +78,24 @@ func TestOnlyMCPChangesTheBodyOfAnHTMLDocument(t *testing.T) {
 	}
 	if _, err := update(dto.UpdateDocumentInput{Content: strings.Repeat("a", MaxHTMLBytes+1), FromMCP: true}); !errors.Is(err, ErrHTMLTooLarge) {
 		t.Fatalf("oversize body from MCP = %v, want ErrHTMLTooLarge", err)
+	}
+}
+
+func TestAnHTMLWriteThatNamesAVersionFailsWhenThePageMovedOn(t *testing.T) {
+	userID, workspaceID := uuid.New(), uuid.New()
+	doc := model.Document{ID: uuid.New(), WorkspaceID: workspaceID, AuthorID: userID, Type: "html", Content: "<p>old</p>", Visibility: "private"}
+	write := func(version string) (*documentUpdateRepoStub, error) {
+		repo := &documentUpdateRepoStub{getDocumentRepoStub: getDocumentRepoStub{doc: doc, accessLevel: "owner"}}
+		uc := NewUseCaseWithRepos(repo, getDocumentWorkspaceRepoStub{role: "member"}, nil, nil)
+		_, err := uc.UpdateDocument(context.Background(), dto.UpdateDocumentInput{
+			ID: doc.ID, WorkspaceID: workspaceID, UserID: userID, Content: "<p>new</p>", FromMCP: true, ExpectedPageVersion: version,
+		})
+		return repo, err
+	}
+	if repo, err := write(model.PageVersion("<p>old</p>")); err != nil || !repo.updateCalled {
+		t.Fatalf("write at the current version = %v (written=%v), want it to go through", err, repo.updateCalled)
+	}
+	if repo, err := write(model.PageVersion("<p>something else</p>")); !errors.Is(err, constant.ErrDocumentConflict) || repo.updateCalled {
+		t.Fatalf("write at an old version = %v (written=%v), want a conflict and no write", err, repo.updateCalled)
 	}
 }
