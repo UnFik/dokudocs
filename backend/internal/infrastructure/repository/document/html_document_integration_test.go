@@ -69,3 +69,50 @@ func TestHTMLDocumentRestoreBringsBackThePageAndKeepsTheReplacedOne(t *testing.T
 		t.Fatalf("restore replay = (%+v, %v), want %+v", again, err, result)
 	}
 }
+
+// An HTML document has no room, so ReadRoomHead gives nobody access to it; the
+// Agent asks ReadPageAccess instead.
+func TestReadPageAccessAnswersForADocumentWithoutARoom(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("pgx", integrationDatabaseURL(t))
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer db.Close()
+	ownerID, strangerID := insertAccessTestUser(t, ctx, db), insertAccessTestUser(t, ctx, db)
+	workspaceID, documentID := uuid.New(), uuid.New()
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(ctx, `DELETE FROM workspaces WHERE id = $1`, workspaceID)
+		for _, id := range []uuid.UUID{ownerID, strangerID} {
+			_, _ = db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
+		}
+	})
+	mustExec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := db.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	mustExec(`INSERT INTO workspaces (id, name, slug, created_by) VALUES ($1, 'Html access', $2, $3)`, workspaceID, "html-access-"+workspaceID.String(), ownerID)
+	mustExec(`INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, workspaceID, ownerID)
+	mustExec(`INSERT INTO documents (id, workspace_id, title, type, content, author_id, visibility) VALUES ($1, $2, 'A page', 'html', '<p>x</p>', $3, 'private')`, documentID, workspaceID, ownerID)
+	mustExec(`INSERT INTO document_accesses (document_id, user_id, access_level) VALUES ($1, $2, 'owner')`, documentID, ownerID)
+	repo := NewRepository(database.NewSQLDB(db))
+
+	head, err := repo.ReadRoomHead(ctx, workspaceID, documentID, []uuid.UUID{ownerID})
+	if err != nil || head.DocumentType != "" || len(head.Access) != 0 {
+		t.Fatalf("ReadRoomHead = (%+v, %v), want no room and no access for an html document", head, err)
+	}
+	owner, err := repo.ReadPageAccess(ctx, workspaceID, documentID, ownerID)
+	if err != nil || !owner.CanRead || !owner.CanEdit {
+		t.Fatalf("owner access = (%+v, %v), want read and edit", owner, err)
+	}
+	stranger, err := repo.ReadPageAccess(ctx, workspaceID, documentID, strangerID)
+	if err != nil || stranger.CanRead || stranger.CanEdit {
+		t.Fatalf("outsider access = (%+v, %v), want none", stranger, err)
+	}
+	mustExec(`UPDATE documents SET deleted_at = NOW() WHERE id = $1`, documentID)
+	if _, err := repo.ReadPageAccess(ctx, workspaceID, documentID, ownerID); err == nil {
+		t.Fatal("a trashed page still answered with access")
+	}
+}

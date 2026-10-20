@@ -163,7 +163,7 @@ func summarize(doc model.Document) documentSummary {
 // Deleting a project, permanent deletion, emptying the trash, public links, grants,
 // workspace actions, the account and Platform settings have no tool on purpose.
 func DokudocsTools(d ToolDeps) []Tool {
-	docTypes := map[string]any{"type": "string", "enum": []string{"markdown", "dbdiagram", "mermaid", "architecture"}}
+	docTypes := map[string]any{"type": "string", "enum": []string{"markdown", "dbdiagram", "mermaid", "architecture", "html"}}
 	return []Tool{
 		// Read
 		{
@@ -294,7 +294,12 @@ func DokudocsTools(d ToolDeps) []Tool {
 				if err != nil {
 					return nil, err
 				}
-				live, err := d.Content.Read(ctx, actor, ws, doc)
+				var live ReadResult
+				if meta.Type == "html" {
+					live, err = d.Content.ReadPage(ctx, actor, meta)
+				} else {
+					live, err = d.Content.Read(ctx, actor, ws, doc)
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -375,14 +380,18 @@ func DokudocsTools(d ToolDeps) []Tool {
 		// Documents
 		{
 			Name: "create_document", Capability: CapDocuments, Write: true,
-			Description: "Create a document. For Markdown, text may hold headings (lines starting with #), fenced code blocks (``` or ~~~ with the language after the fence, kept exactly as written, indentation and blank lines included) and paragraphs separated by blank lines; lists and tables stay as plain paragraph text. For DBML or Mermaid it is the source. " +
+			Description: "Create a document. For Markdown, text may hold headings (lines starting with #), fenced code blocks (``` or ~~~ with the language after the fence, kept exactly as written, indentation and blank lines included) and paragraphs separated by blank lines; lists and tables stay as plain paragraph text. For DBML or Mermaid it is the source. For html it is the whole page, one self-contained file, at most 1 MiB; html documents can be created from MCP only. " +
 				"For a long Markdown document put the first sections in text (up to about 1500 words) and add the rest with edit_document_content (append_section), about 300 to 400 words per call, after read_document gives the version.",
 			Parameters: object([]string{"workspace_id", "title", "type"}, map[string]any{
 				"workspace_id": pWorkspace, "title": pText("Title."), "type": docTypes, "project_id": pProject, "text": pText("Initial content."),
 			}),
-			NeedsApproval: always(func(args json.RawMessage) string {
-				return fmt.Sprintf("Create the %s document “%s”", field(args, "type"), field(args, "title"))
-			}),
+			NeedsApproval: func(_ context.Context, actor Actor, args json.RawMessage) (bool, string, error) {
+				// Chat cannot write a page, so the User is never asked to approve one.
+				if field(args, "type") == "html" && actor.Channel != ChannelMCP {
+					return false, "", errPageNotForChat
+				}
+				return true, fmt.Sprintf("Create the %s document “%s”", field(args, "type"), field(args, "title")), nil
+			},
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
 				a, err := parse[struct {
 					WorkspaceID string `json:"workspace_id"`
@@ -412,6 +421,12 @@ func DokudocsTools(d ToolDeps) []Tool {
 					input.Content = a.Text
 				case "dbdiagram", "mermaid":
 					input.Content = a.Text
+				case "html":
+					if actor.Channel != ChannelMCP {
+						return nil, errPageNotForChat
+					}
+					input.Content = a.Text
+					input.FromMCP = true
 				}
 				doc, err := d.Documents.CreateDocument(ctx, input)
 				if err != nil {
@@ -555,7 +570,7 @@ func DokudocsTools(d ToolDeps) []Tool {
 				"insert_after_heading {heading, text}, insert_before_heading {heading, text}, append_section {heading, level, text}, append {text} (paragraphs and code blocks at the end), " +
 				"replace_section {heading, text} (replaces the body under a heading, up to the next heading of the same or higher level, and keeps the heading), delete_section {heading}. " +
 				"Separate paragraphs in text with a blank line. Put code in a fenced block (```json, then the code, then ```): its lines are kept exactly, and replace_text can change text inside a code block. Lists and tables stay as plain paragraph text. Prefer one operation per section and about 300 to 400 words of text per call; send long text in several calls, each with the version the previous one returned. " +
-				"DBML and Mermaid operations: replace_text {find, replace}, replace_all {text}, append {text}. " +
+				"DBML, Mermaid and html operations: replace_text {find, replace}, replace_all {text}, append {text}. An html document is changed from MCP only; the page is rewritten after a named version is saved. " +
 				"From a Dokudocs chat, Markdown changes become suggestions for the User to review. The result gives the new version to use for the next call.",
 			Parameters: object([]string{"workspace_id", "document_id", "version", "operations"}, map[string]any{
 				"workspace_id": pWorkspace, "document_id": pDocument, "version": pText("The version read_document returned."),
@@ -586,6 +601,14 @@ func DokudocsTools(d ToolDeps) []Tool {
 				if err != nil {
 					return false, "", err
 				}
+				meta, err := d.Documents.GetDocument(ctx, doc, ws, actor.UserID)
+				if err != nil {
+					return false, "", err
+				}
+				if meta.Type == "html" {
+					// Chat cannot write a page, so the User is never asked to approve it.
+					return false, "", errPageNotForChat
+				}
 				docType, err := d.Content.DocumentType(ctx, actor, ws, doc)
 				if err != nil {
 					return false, "", err
@@ -610,6 +633,13 @@ func DokudocsTools(d ToolDeps) []Tool {
 				ws, doc, err := a.ids()
 				if err != nil {
 					return nil, err
+				}
+				meta, err := d.Documents.GetDocument(ctx, doc, ws, actor.UserID)
+				if err != nil {
+					return nil, err
+				}
+				if meta.Type == "html" {
+					return d.Content.EditPage(ctx, actor, meta, a.Version, a.Operations)
 				}
 				return d.Content.Edit(ctx, actor, ws, doc, a.Version, a.Operations)
 			},
