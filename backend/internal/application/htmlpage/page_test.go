@@ -3,6 +3,7 @@ package htmlpage
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -199,5 +200,25 @@ func TestOnlyDeclaredKnownCapabilitiesAreOn(t *testing.T) {
 		if strings.Join(got, ",") != strings.Join(want, ",") {
 			t.Errorf("%q = %v, want %v", page, got, want)
 		}
+	}
+}
+
+// The browser tests in the frontend (page-sandbox.browser.test.ts) run hostile pages under
+// this exact policy, read from testdata/content-csp.txt. A change to the policy must be a
+// change to that file, so the tests below it follow. Regenerate it with UPDATE_GOLDEN=1.
+func TestThePolicyTheBrowserTestsRunUnderIsTheOneServed(t *testing.T) {
+	const path = "testdata/content-csp.txt"
+	got := ContentHeaders("https://app.example.com")["Content-Security-Policy"] + "\n"
+	if os.Getenv("UPDATE_GOLDEN") != "" {
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(want) != got {
+		t.Fatalf("the served policy differs from %s; run the tests with UPDATE_GOLDEN=1 and rerun the frontend sandbox tests\n got: %s\nwant: %s", path, got, want)
 	}
 }
