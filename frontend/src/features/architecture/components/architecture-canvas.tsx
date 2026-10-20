@@ -16,6 +16,7 @@ import {
   MarkerType,
   Panel,
   ReactFlow,
+  PanOnScrollMode,
   SelectionMode,
   useReactFlow,
   useStoreApi,
@@ -27,7 +28,6 @@ import {
   type ResizeParams,
 } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import './architecture-canvas.css'
 import type * as Y from 'yjs'
 import type { Peer } from '../hooks/use-architecture-session'
 import {
@@ -56,6 +56,7 @@ import {
 import { familyOf, suggestedProtocols, type CatalogEntry } from '../lib/catalog'
 import { anchorAt, type PinAnchor } from '../lib/comment-pins'
 import { LABEL, minSize, PAD, type Point, type Rect } from '../lib/layout'
+import './architecture-canvas.css'
 import {
   CanvasContext,
   ConnectionEdge,
@@ -416,7 +417,9 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       const inside = canvas.nodes.find((n) => n.id === node.id)?.parentId
       return {
         id: node.id,
-        x: Math.round(inside ? Math.max(PAD, node.position.x) : node.position.x),
+        x: Math.round(
+          inside ? Math.max(PAD, node.position.x) : node.position.x
+        ),
         y: Math.round(
           inside ? Math.max(LABEL, node.position.y) : node.position.y
         ),
@@ -499,7 +502,10 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   const followBox = (event: { clientX: number; clientY: number }) => {
     const { userSelectionRect, userSelectionActive } = store.getState()
     if (!userSelectionRect || !userSelectionActive) return
-    const end = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    const end = flow.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    })
     const next = elementsInBox(canvas, {
       x: userSelectionRect.startX,
       y: userSelectionRect.startY,
@@ -586,8 +592,9 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     const mod = event.metaKey || event.ctrlKey
     const key = event.key.toLowerCase()
     if (event.code === 'Space' && !mod) {
-      // Space on a focused button presses it; elsewhere it holds Hand.
-      if (target?.closest?.('button, a')) return
+      // Space always holds Hand, also with a tool bar button focused (it would
+      // otherwise press the button and leave the canvas without Hand).
+      if (target?.closest?.('a')) return
       event.preventDefault()
       if (!event.repeat) setSpaceHeld(true)
     } else if (isLocked) {
@@ -619,7 +626,12 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     }
   }
   const onKeyUp = (event: globalThis.KeyboardEvent) => {
-    if (event.code === 'Space') setSpaceHeld(false)
+    if (event.code === 'Space') {
+      // A focused button would click on key up.
+      if ((event.target as HTMLElement | null)?.closest?.('button'))
+        event.preventDefault()
+      setSpaceHeld(false)
+    }
   }
 
   const keyHandlers = useRef({ down: onKeyDown, up: onKeyUp })
@@ -629,7 +641,8 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   useEffect(() => {
     const down = (event: globalThis.KeyboardEvent) =>
       keyHandlers.current.down(event)
-    const up = (event: globalThis.KeyboardEvent) => keyHandlers.current.up(event)
+    const up = (event: globalThis.KeyboardEvent) =>
+      keyHandlers.current.up(event)
     // Space let go in another window must not leave Hand stuck on.
     const blur = () => setSpaceHeld(false)
     document.addEventListener('keydown', down)
@@ -641,6 +654,38 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       window.removeEventListener('blur', blur)
     }
   }, [])
+
+  // Zoom on Ctrl/Cmd + wheel and trackpad pinch. React Flow's own step is too
+  // small for a pinch, so it is done here: a pinch zooms in proportion to how
+  // far the fingers moved, a mouse wheel notch is one fixed step.
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = root.current
+    if (!el) return
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return
+      if ((event.target as HTMLElement).closest('.nowheel')) return
+      event.preventDefault()
+      event.stopPropagation()
+      const notch = event.deltaMode !== 0 || Math.abs(event.deltaY) >= 50
+      const step = notch
+        ? Math.sign(event.deltaY) * 0.1
+        : Math.max(-30, Math.min(30, event.deltaY)) * 0.025
+      const { zoom, x, y } = flow.getViewport()
+      const next = Math.min(2, Math.max(0.05, zoom * Math.exp(-step)))
+      const rect = el.getBoundingClientRect()
+      const px = event.clientX - rect.left
+      const py = event.clientY - rect.top
+      const k = next / zoom
+      void flow.setViewport({
+        x: px - (px - x) * k,
+        y: py - (py - y) * k,
+        zoom: next,
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false, capture: true })
+    return () => el.removeEventListener('wheel', onWheel, { capture: true })
+  }, [flow])
 
   // Jump to an element named in the link ("Used in" on a document page).
   const focused = useRef(false)
@@ -664,6 +709,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   return (
     <CanvasContext.Provider value={context}>
       <div
+        ref={root}
         className='architecture-canvas relative h-full w-full'
         data-tool={active}
         onDragOver={onDragOver}
@@ -732,11 +778,16 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
           panOnDrag={active === 'cursor' && !coarse ? [1] : true}
           selectionMode={SelectionMode.Full}
           panActivationKeyCode={null}
+          // Like Figma: the wheel and a trackpad scroll pan in both directions;
+          // Ctrl/Cmd with the wheel, or a pinch, zooms.
+          panOnScroll
+          panOnScrollMode={PanOnScrollMode.Free}
+          zoomOnScroll={false}
           deleteKeyCode={null}
           selectionKeyCode={null}
           multiSelectionKeyCode={null}
           fitView
-          minZoom={0.2}
+          minZoom={0.05}
           maxZoom={2}
           proOptions={{ hideAttribution: true }}
           aria-label='Architecture canvas'
