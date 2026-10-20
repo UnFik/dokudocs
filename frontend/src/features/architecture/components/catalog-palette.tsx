@@ -22,6 +22,9 @@ const OPEN_AT_START = new Set([
   'system:broker',
 ])
 
+/** Two tiles to a row at the default width, one when the panel is dragged narrow. */
+const tileGrid = 'grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-1.5'
+
 export type PaletteProps = {
   workspaceID: string
   catalog: CatalogEntry[] | undefined
@@ -68,7 +71,7 @@ function PaletteRow({
           ? undefined
           : `Drag onto the canvas, or press Enter to add ${label}`
       }
-      className='flex min-h-8 w-full cursor-grab items-center gap-2 rounded-[4px] px-1.5 text-left text-[12.5px] hover:bg-accent focus-visible:outline-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50'
+      className='flex min-h-10 min-w-0 cursor-grab items-center gap-1.5 rounded-[6px] border border-border bg-card px-2 text-left text-[12.5px] transition-colors hover:border-input hover:bg-accent focus-visible:outline-2 focus-visible:outline-signal disabled:cursor-not-allowed disabled:opacity-50'
     >
       <CatalogIcon slug={slug} subkind={subkind} size={20} />
       <span className='truncate'>{label}</span>
@@ -159,22 +162,25 @@ export function CatalogPalette(props: PaletteProps) {
                   </span>
                   <span className='tabular-nums'>{section.entries.length}</span>
                 </button>
-                {expanded &&
-                  section.entries.map((entry) => (
-                    <PaletteRow
-                      key={entry.slug}
-                      item={{
-                        kind: entry.category === 'host' ? 'host' : 'system',
-                        catalog: entry.slug,
-                        name: entry.name,
-                      }}
-                      label={entry.name}
-                      slug={entry.slug}
-                      subkind={entry.subkind}
-                      disabled={disabled}
-                      onAdd={props.onAdd}
-                    />
-                  ))}
+                {expanded && (
+                  <div className={tileGrid}>
+                    {section.entries.map((entry) => (
+                      <PaletteRow
+                        key={entry.slug}
+                        item={{
+                          kind: entry.category === 'host' ? 'host' : 'system',
+                          catalog: entry.slug,
+                          name: entry.name,
+                        }}
+                        label={entry.name}
+                        slug={entry.slug}
+                        subkind={entry.subkind}
+                        disabled={disabled}
+                        onAdd={props.onAdd}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -183,13 +189,15 @@ export function CatalogPalette(props: PaletteProps) {
             <p className='px-1 py-1 font-mono text-[11px] text-muted-foreground'>
               group
             </p>
-            <PaletteRow
-              item={{ kind: 'group', catalog: null, name: 'Group' }}
-              label='Group'
-              slug='lucide-square-dashed'
-              disabled={disabled}
-              onAdd={props.onAdd}
-            />
+            <div className={tileGrid}>
+              <PaletteRow
+                item={{ kind: 'group', catalog: null, name: 'Group' }}
+                label='Group'
+                slug='lucide-square-dashed'
+                disabled={disabled}
+                onAdd={props.onAdd}
+              />
+            </div>
           </div>
         )}
         {!props.loading &&
@@ -252,7 +260,7 @@ function MissingEntry({
         to it. Use a generic Service now and change its type later from the
         properties panel.
       </p>
-      <div className='rounded-[4px] border border-dashed border-input'>
+      <div>
         <PaletteRow
           item={{ kind: 'system', catalog: 'service', name: query }}
           label={`Add “${query}” as a Service`}

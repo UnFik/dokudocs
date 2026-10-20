@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { useAuthStore } from '@/stores/auth-store'
 import type { CatalogEntry } from '../lib/catalog'
+import '@/styles/index.css'
 import { CatalogPalette } from './catalog-palette'
 
 const workspaceID = '149a8d07-8490-43ed-98fa-ebaa91b05e90'
@@ -33,24 +34,51 @@ afterEach(() => {
   useAuthStore.getState().auth.reset()
 })
 
-function mount(onAdd = vi.fn(), blocked: string | null = null) {
+function mount(
+  onAdd = vi.fn(),
+  blocked: string | null = null,
+  entries: CatalogEntry[] = catalog
+) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <CatalogPalette
-        workspaceID={workspaceID}
-        catalog={catalog}
-        loading={false}
-        error={false}
-        onRetry={vi.fn()}
-        onAdd={onAdd}
-        blocked={blocked}
-        warning={null}
-      />
+      <div style={{ width: 232 }}>
+        <CatalogPalette
+          workspaceID={workspaceID}
+          catalog={entries}
+          loading={false}
+          error={false}
+          onRetry={vi.fn()}
+          onAdd={onAdd}
+          blocked={blocked}
+          warning={null}
+        />
+      </div>
     </QueryClientProvider>
   )
 }
 
 describe('the catalog palette', () => {
+  it('lays the entries of a group out two to a row, each as its own tile', async () => {
+    const screen = await mount(vi.fn(), null, [
+      entry('golang', 'system', 'backend', 'Go'),
+      entry('rust', 'system', 'backend', 'Rust'),
+      entry('nodejs', 'system', 'backend', 'Node.js'),
+    ])
+    const box = (name: string) =>
+      screen
+        .getByRole('button', { name, exact: true })
+        .element()
+        .getBoundingClientRect()
+    const [go, rust, node] = [box('Go'), box('Rust'), box('Node.js')]
+    expect(rust.top).toBe(go.top)
+    expect(rust.left).toBeGreaterThan(go.right - 1)
+    expect(node.top).toBeGreaterThan(go.bottom - 1)
+    const style = getComputedStyle(
+      screen.getByRole('button', { name: 'Go', exact: true }).element()
+    )
+    expect(style.borderTopWidth).toBe('1px')
+  })
+
   it('finds an entry by name and adds it with Enter', async () => {
     const onAdd = vi.fn()
     const screen = await mount(onAdd)

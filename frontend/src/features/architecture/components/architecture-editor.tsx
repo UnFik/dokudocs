@@ -55,7 +55,12 @@ import { ArchitectureVersions } from './architecture-versions'
 import { CatalogPalette } from './catalog-palette'
 import { CatalogRequests } from './catalog-requests'
 import { CommentPins } from './comment-pins'
-import { commentsKey, useCanvasComments } from './element-comments'
+import {
+  CommentsPanel,
+  CommentsTabLabel,
+  commentsKey,
+  useCanvasComments,
+} from './element-comments'
 import { PanelResizer } from './panel-resizer'
 import { PropertiesPanel } from './properties-panel'
 
@@ -150,6 +155,9 @@ function Editor({
     }
   }
   const [showResolved, setShowResolved] = useState(false)
+  const [inspectorTab, setInspectorTab] = useState<'properties' | 'comments'>(
+    'properties'
+  )
   const [protocolFor, setProtocolFor] = useState<{
     id: string
     x: number
@@ -691,7 +699,7 @@ function Editor({
           )}
         </main>
         <aside
-          aria-label='Properties'
+          aria-label='Inspector'
           className='relative flex flex-col gap-2 border-t border-border bg-background p-3 md:min-h-0 md:overflow-y-auto md:border-t-0 md:border-l'
         >
           {propsOpen && (
@@ -703,11 +711,11 @@ function Editor({
               className='absolute inset-y-0 -left-1 hidden md:block'
             />
           )}
-          <div className='flex items-center justify-between'>
+          <div className='flex items-center justify-between gap-2'>
             <Button
               size='icon'
               variant='ghost'
-              className='size-8'
+              className='size-8 shrink-0'
               aria-expanded={propsOpen}
               aria-controls='architecture-properties'
               aria-label={
@@ -720,32 +728,103 @@ function Editor({
               <PanelRight className='size-4' strokeWidth={1.5} />
             </Button>
             {propsOpen && (
-              <span className='font-mono text-[11px] text-muted-foreground'>
-                properties
-              </span>
+              <div
+                role='tablist'
+                aria-label='Inspector'
+                className='flex min-w-0 flex-1 justify-end gap-1'
+                onKeyDown={(event) => {
+                  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
+                    return
+                  event.preventDefault()
+                  const next =
+                    inspectorTab === 'properties' ? 'comments' : 'properties'
+                  setInspectorTab(next)
+                  window.document
+                    .getElementById(`inspector-tab-${next}`)
+                    ?.focus()
+                }}
+              >
+                {(['properties', 'comments'] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    id={`inspector-tab-${tab}`}
+                    type='button'
+                    role='tab'
+                    aria-selected={inspectorTab === tab}
+                    aria-controls={`architecture-${tab}`}
+                    tabIndex={inspectorTab === tab ? 0 : -1}
+                    onClick={() => setInspectorTab(tab)}
+                    className={cn(
+                      'inline-flex h-7 items-center gap-1.5 rounded-[4px] px-2 text-xs focus-visible:outline-2 focus-visible:outline-signal',
+                      inspectorTab === tab
+                        ? 'bg-accent font-medium'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {tab === 'properties' ? (
+                      'Properties'
+                    ) : (
+                      <CommentsTabLabel
+                        workspaceID={workspaceID}
+                        documentID={doc.id}
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
           {propsOpen ? (
-            <div id='architecture-properties'>
-              <PropertiesPanel
-                doc={session.doc}
-                canvas={session.canvas}
-                catalog={catalog.data ?? []}
-                selection={selection}
-                canEdit={canEdit}
-                workspaceID={workspaceID}
-                projectID={doc.projectId ?? null}
-                onDelete={remove}
-                onGesture={gesture}
-                documentID={doc.id}
-                canComment={canComment}
-                onCommentsChanged={() => session.signalComments()}
-                userID={userID}
-                onOpenThread={setActiveThread}
-                showResolved={showResolved}
-                onShowResolved={setShowResolved}
-              />
-            </div>
+            inspectorTab === 'properties' ? (
+              <div
+                id='architecture-properties'
+                role='tabpanel'
+                aria-labelledby='inspector-tab-properties'
+              >
+                <PropertiesPanel
+                  doc={session.doc}
+                  canvas={session.canvas}
+                  catalog={catalog.data ?? []}
+                  selection={selection}
+                  canEdit={canEdit}
+                  workspaceID={workspaceID}
+                  projectID={doc.projectId ?? null}
+                  onDelete={remove}
+                  onGesture={gesture}
+                />
+              </div>
+            ) : (
+              <div
+                id='architecture-comments'
+                role='tabpanel'
+                aria-labelledby='inspector-tab-comments'
+              >
+                <CommentsPanel
+                  workspaceID={workspaceID}
+                  documentID={doc.id}
+                  canvas={session.canvas}
+                  selection={selection}
+                  canComment={canComment}
+                  userID={userID}
+                  onChanged={() => session.signalComments()}
+                  onSelectElement={(id) =>
+                    select([
+                      {
+                        kind: session.canvas.connections.some(
+                          (c) => c.id === id
+                        )
+                          ? 'edge'
+                          : 'node',
+                        id,
+                      },
+                    ])
+                  }
+                  onOpenThread={setActiveThread}
+                  showResolved={showResolved}
+                  onShowResolved={setShowResolved}
+                />
+              </div>
+            )
           ) : (
             <button
               type='button'

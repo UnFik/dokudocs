@@ -14,7 +14,7 @@ import {
   type NodeProps,
   type ResizeParams,
 } from '@xyflow/react'
-import { FileText, LogOut } from 'lucide-react'
+import { FileText, LogOut, Maximize2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type {
   ArchitectureConnection,
@@ -37,6 +37,9 @@ export type CanvasContextValue = {
   onResize: (id: string, params: ResizeParams) => void
   onResizeEnd: (id: string, params: ResizeParams) => void
   takeOut: (id: string) => void
+  /** Whether the container holds something and is not already as small as it can be around it. */
+  canFit: (id: string) => boolean
+  fit: (id: string) => void
   familyOf: (protocol: string) => string
 }
 
@@ -97,7 +100,11 @@ function EraseMark({ id }: { id: string }) {
   )
 }
 
-function TakeOutToolbar({
+const toolbarButton =
+  'nodrag inline-flex h-7 items-center gap-1.5 rounded-[4px] border border-input bg-card px-2 text-xs font-medium shadow-sm hover:border-signal hover:text-signal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal'
+
+/** Floats above the selected element: Fit to contents for a container, Take out when it sits inside one. */
+function ElementToolbar({
   id,
   element,
   selected,
@@ -106,26 +113,36 @@ function TakeOutToolbar({
   element: ArchitectureNode
   selected: boolean
 }) {
-  const { readOnly, containers, takeOut } = useCanvas()
+  const { readOnly, containers, takeOut, canFit, fit } = useCanvas()
   const parent = element.parentId ? containers.get(element.parentId) : undefined
-  if (readOnly || !parent) return null
+  const fitting = selected && element.kind !== 'system' && canFit(id)
+  if (readOnly || (!parent && !fitting)) return null
   return (
     <NodeToolbar
       isVisible={selected}
       position={Position.Top}
       align='end'
       offset={8}
+      className='flex gap-1.5'
     >
-      <button
-        type='button'
-        className='nodrag inline-flex h-7 items-center gap-1.5 rounded-[4px] border border-input bg-card px-2 text-xs font-medium shadow-sm hover:border-signal hover:text-signal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal'
-        title={`Take out of ${parent.name || 'this container'}`}
-        aria-label={`Take ${element.name || 'this element'} out of ${parent.name || 'its container'}`}
-        onClick={() => takeOut(id)}
-      >
-        <LogOut className='size-3.5' strokeWidth={1.5} aria-hidden />
-        Take out
-      </button>
+      {fitting && (
+        <button type='button' className={toolbarButton} onClick={() => fit(id)}>
+          <Maximize2 className='size-3.5' strokeWidth={1.5} aria-hidden />
+          Fit to contents
+        </button>
+      )}
+      {parent && (
+        <button
+          type='button'
+          className={toolbarButton}
+          title={`Take out of ${parent.name || 'this container'}`}
+          aria-label={`Take ${element.name || 'this element'} out of ${parent.name || 'its container'}`}
+          onClick={() => takeOut(id)}
+        >
+          <LogOut className='size-3.5' strokeWidth={1.5} aria-hidden />
+          Take out
+        </button>
+      )}
     </NodeToolbar>
   )
 }
@@ -146,7 +163,7 @@ export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
     >
       <PeerOutline id={id} />
       <EraseMark id={id} />
-      <TakeOutToolbar id={id} element={element} selected={Boolean(selected)} />
+      <ElementToolbar id={id} element={element} selected={Boolean(selected)} />
       <CatalogIcon
         slug={element.catalog}
         subkind={entry?.subkind ?? 'job'}
@@ -209,7 +226,7 @@ function ContainerNode({
     >
       <PeerOutline id={id} />
       <EraseMark id={id} />
-      <TakeOutToolbar id={id} element={element} selected={Boolean(selected)} />
+      <ElementToolbar id={id} element={element} selected={Boolean(selected)} />
       {!readOnly && (
         <NodeResizer
           isVisible={Boolean(selected)}

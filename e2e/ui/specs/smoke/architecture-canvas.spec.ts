@@ -77,7 +77,8 @@ test("@live @smoke: an Architecture canvas is built from the palette and shared"
 
   // A comment on a System from the panel; its pin shows on the canvas.
   await pgNode.click();
-  const properties = page.locator("#architecture-properties");
+  await page.getByRole("tab", { name: /^Comments/ }).click();
+  const properties = page.locator("#architecture-comments");
   await properties.getByLabel("New comment on PostgreSQL").fill("Which version runs here?");
   await properties.getByRole("button", { name: "Comment", exact: true }).click();
   await expect(properties.getByText("Which version runs here?")).toBeVisible();
@@ -93,7 +94,8 @@ test("@live @smoke: an Architecture canvas is built from the palette and shared"
   const secondPg = secondPage.locator(".react-flow__node-system").filter({ hasText: "PostgreSQL" });
   await expect(secondPage.getByRole("button", { name: /^Comment by .* on PostgreSQL$/ })).toBeVisible();
   await secondPg.click();
-  await expect(secondPage.locator("#architecture-properties").getByText("Which version runs here?")).toBeVisible();
+  await secondPage.getByRole("tab", { name: /^Comments/ }).click();
+  await expect(secondPage.locator("#architecture-comments").getByText("Which version runs here?")).toBeVisible();
   await second.close();
 
   await page.waitForTimeout(1500);

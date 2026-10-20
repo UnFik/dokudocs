@@ -1,16 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type * as Y from 'yjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  fitElement,
-  resizeElement,
-  takeOutElement,
-  toLayoutNodes,
-} from '../lib/canvas-actions'
+import { resizeElement, toLayoutNodes } from '../lib/canvas-actions'
 import { updateConnection, updateNode } from '../lib/canvas-doc'
 import type { ArchitectureJSON, ArchitectureNode } from '../lib/canvas-model'
 import type { Selected } from '../lib/canvas-selection'
@@ -20,11 +13,10 @@ import {
   SYSTEM_SUBKINDS,
   type CatalogEntry,
 } from '../lib/catalog'
-import { fitsContents, minSize } from '../lib/layout'
+import { minSize } from '../lib/layout'
 import type { Selection } from './architecture-canvas'
 import { CatalogIcon } from './catalog-icon'
 import { DocumentLinks } from './document-links'
-import { ElementComments, OrphanedComments } from './element-comments'
 
 const fieldLabel = 'font-mono text-[11px] text-muted-foreground'
 const selectClass =
@@ -108,17 +100,6 @@ export type PropertiesPanelProps = {
   projectID: string | null
   onDelete: (elements: Selected[]) => void
   onGesture: () => void
-  documentID: string
-  /** May start and answer comments: editors and commenters. */
-  canComment: boolean
-  onCommentsChanged: () => void
-  /** The person reading, whose own comments they may edit or delete. */
-  userID?: string
-  /** Opens a thread's pin on the canvas. */
-  onOpenThread?: (threadID: string) => void
-  /** Pins of resolved threads are shown on the canvas. */
-  showResolved?: boolean
-  onShowResolved?: (show: boolean) => void
 }
 
 export function PropertiesPanel(props: PropertiesPanelProps) {
@@ -129,44 +110,16 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
   )
   if (!selection.length) {
     return (
-      <div className='flex flex-col gap-3'>
-        <p className='text-xs text-muted-foreground'>
-          Select a Host, System or Connection to see and change its properties.
-        </p>
-        {props.onShowResolved && (
-          <div className='flex items-center justify-between gap-2'>
-            <Label htmlFor='architecture-show-resolved' className='text-xs'>
-              Show resolved comments on the canvas
-            </Label>
-            <Switch
-              id='architecture-show-resolved'
-              checked={Boolean(props.showResolved)}
-              onCheckedChange={props.onShowResolved}
-            />
-          </div>
-        )}
-        <OrphanedComments
-          workspaceID={props.workspaceID}
-          documentID={props.documentID}
-          elementIDs={
-            new Set([
-              ...canvas.nodes.map((n) => n.id),
-              ...canvas.connections.map((c) => c.id),
-            ])
-          }
-        />
-      </div>
+      <p className='text-xs text-muted-foreground'>
+        Select a Host, System or Connection.
+      </p>
     )
   }
   if (selection.length > 1) {
     const count = `${selection.length} elements`
     return (
-      <div className='flex flex-col gap-3'>
+      <div className='flex flex-col gap-2.5'>
         <p className='text-[13px] font-medium'>{count} selected</p>
-        <p className='text-xs text-muted-foreground'>
-          Move them together on the canvas, or delete them. Select one to change
-          its properties.
-        </p>
         {props.canEdit && (
           <Button
             size='sm'
@@ -228,7 +181,7 @@ function SystemProperties({
   const set = (fields: Parameters<typeof updateNode>[2]) =>
     doc && updateNode(doc, node.id, fields)
   return (
-    <div className='flex flex-col gap-3'>
+    <div className='flex flex-col gap-2.5'>
       <div className='flex items-center gap-2'>
         <CatalogIcon
           slug={node.catalog}
@@ -299,16 +252,14 @@ function SystemProperties({
           />
         )}
       </Field>
-      <div className='flex flex-col gap-1'>
+      <div className='flex items-baseline justify-between gap-2 text-[12.5px]'>
         <span className={fieldLabel}>runs on</span>
-        <span className='text-[12.5px]'>
-          {host ? host.name : 'No Host (external, or not placed yet)'}
+        <span className='truncate'>
+          {host ? host.name : 'none'}
+          {group && (
+            <span className='text-muted-foreground'> · {group.name}</span>
+          )}
         </span>
-        {group && (
-          <span className='text-xs text-muted-foreground'>
-            in group {group.name}
-          </span>
-        )}
       </div>
       <Field id='architecture-description' label='description'>
         <Textarea
@@ -337,19 +288,7 @@ function SystemProperties({
         canEdit={canEdit}
         onChange={(links) => set({ links })}
       />
-      <ElementComments
-        workspaceID={props.workspaceID}
-        documentID={props.documentID}
-        elementID={node.id}
-        elementName={node.name || 'this System'}
-        canComment={props.canComment}
-        userID={props.userID}
-        onChanged={props.onCommentsChanged}
-        onOpenThread={props.onOpenThread}
-      />
-      {canEdit && (
-        <DeleteButton {...props} node={node} linkCount={node.links.length} />
-      )}
+      {canEdit && <DeleteButton {...props} node={node} />}
     </div>
   )
 }
@@ -364,7 +303,7 @@ function ConnectionProperties({
   const set = (fields: Parameters<typeof updateConnection>[2]) =>
     doc && updateConnection(doc, connection.id, fields)
   return (
-    <div className='flex flex-col gap-3'>
+    <div className='flex flex-col gap-2.5'>
       <div>
         <p className='font-mono text-[11px] text-muted-foreground'>
           connection
@@ -418,36 +357,15 @@ function ConnectionProperties({
         canEdit={canEdit}
         onChange={(links) => set({ links })}
       />
-      <ElementComments
-        workspaceID={props.workspaceID}
-        documentID={props.documentID}
-        elementID={connection.id}
-        elementName={`${names[0] || 'Untitled'} → ${names[1] || 'Untitled'}`}
-        canComment={props.canComment}
-        userID={props.userID}
-        onChanged={props.onCommentsChanged}
-        onOpenThread={props.onOpenThread}
-      />
       {canEdit && (
-        <div className='flex flex-col gap-1'>
-          <Button
-            size='sm'
-            variant='outline'
-            className='self-start text-destructive hover:border-destructive'
-            onClick={() =>
-              props.onDelete([{ kind: 'edge', id: connection.id }])
-            }
-          >
-            Delete connection
-          </Button>
-          {connection.links.length > 0 && (
-            <p className='text-xs text-muted-foreground'>
-              Only the {connection.links.length} link
-              {connection.links.length === 1 ? '' : 's'} go; the documents stay
-              in the project.
-            </p>
-          )}
-        </div>
+        <Button
+          size='sm'
+          variant='outline'
+          className='self-start text-destructive hover:border-destructive'
+          onClick={() => props.onDelete([{ kind: 'edge', id: connection.id }])}
+        >
+          Delete connection
+        </Button>
       )}
     </div>
   )
@@ -460,24 +378,21 @@ function ContainerProperties({
   const { doc, canEdit, canvas, catalog } = props
   const layout = toLayoutNodes(canvas)
   const min = minSize(layout, node.id)
-  const children = canvas.nodes.filter((n) => n.parentId === node.id)
-  const fits = fitsContents(layout, node.id)
-  const fitReason = !children.length
-    ? 'Nothing inside to fit to.'
-    : fits
-      ? 'It already fits what is inside.'
-      : ''
   const entry = catalog.find((e) => e.slug === node.catalog)
-  const resize = (w: number, h: number) =>
-    doc &&
-    resizeElement(doc, canvas, node.id, {
-      x: node.x,
-      y: node.y,
-      w: Math.max(min.w, w || 0),
-      h: Math.max(min.h, h || 0),
-    })
+  // The floor is explained only when a typed size was held to it.
+  const [refused, setRefused] = useState(false)
+  const resize = (w: number, h: number) => {
+    setRefused(w < min.w || h < min.h)
+    if (doc)
+      resizeElement(doc, canvas, node.id, {
+        x: node.x,
+        y: node.y,
+        w: Math.max(min.w, w || 0),
+        h: Math.max(min.h, h || 0),
+      })
+  }
   return (
-    <div className='flex flex-col gap-3'>
+    <div className='flex flex-col gap-2.5'>
       <div className='flex items-center gap-2'>
         {node.kind === 'host' && (
           <CatalogIcon
@@ -553,87 +468,29 @@ function ContainerProperties({
             className='h-8 w-20 font-mono text-[12px] tabular-nums'
           />
         </div>
-        <span className='text-xs text-muted-foreground'>
-          Not smaller than {min.w} × {min.h}: what is inside needs that much.
-        </span>
+        {refused && (
+          <span role='status' className='text-xs text-muted-foreground'>
+            Not smaller than {min.w} × {min.h}: what is inside needs that much.
+          </span>
+        )}
       </div>
-      {canEdit && (
-        <div className='flex flex-col gap-1'>
-          <Button
-            size='sm'
-            variant='outline'
-            className='self-start'
-            disabled={Boolean(fitReason)}
-            onClick={() => doc && fitElement(doc, canvas, node.id)}
-          >
-            Fit to contents
-          </Button>
-          {fitReason && (
-            <span className='text-xs text-muted-foreground'>{fitReason}</span>
-          )}
-          {node.parentId && (
-            <Button
-              size='sm'
-              variant='outline'
-              className='self-start'
-              onClick={() => doc && takeOutElement(doc, canvas, node.id)}
-            >
-              Take out of{' '}
-              {canvas.nodes.find((n) => n.id === node.parentId)?.name ||
-                'its container'}
-            </Button>
-          )}
-        </div>
-      )}
-      <p className='text-xs text-muted-foreground'>
-        Holds {children.filter((c) => c.kind === 'system').length} System
-        {children.filter((c) => c.kind === 'system').length === 1 ? '' : 's'}
-        {children.some((c) => c.kind !== 'system')
-          ? ` and ${children.filter((c) => c.kind !== 'system').length} Host or Group`
-          : ''}
-        .{' '}
-        {node.kind === 'group'
-          ? 'A Group only gathers elements; it does not change where they run.'
-          : 'Documents are linked to the Systems inside a Host.'}
-      </p>
-      <ElementComments
-        workspaceID={props.workspaceID}
-        documentID={props.documentID}
-        elementID={node.id}
-        elementName={
-          node.name || (node.kind === 'group' ? 'this Group' : 'this Host')
-        }
-        canComment={props.canComment}
-        userID={props.userID}
-        onChanged={props.onCommentsChanged}
-        onOpenThread={props.onOpenThread}
-      />
-      {canEdit && <DeleteButton {...props} node={node} linkCount={0} />}
+      {canEdit && <DeleteButton {...props} node={node} />}
     </div>
   )
 }
 
 function DeleteButton({
   node,
-  linkCount,
   onDelete,
-}: PropertiesPanelProps & { node: ArchitectureNode; linkCount: number }) {
+}: PropertiesPanelProps & { node: ArchitectureNode }) {
   return (
-    <div className='flex flex-col gap-1'>
-      <Button
-        size='sm'
-        variant='outline'
-        className='self-start text-destructive hover:border-destructive'
-        onClick={() => onDelete([{ kind: 'node', id: node.id }])}
-      >
-        Delete {node.kind}
-      </Button>
-      {linkCount > 0 && (
-        <p className='text-xs text-muted-foreground'>
-          Only the {linkCount} link{linkCount === 1 ? '' : 's'} go; the
-          documents stay in the project.
-        </p>
-      )}
-    </div>
+    <Button
+      size='sm'
+      variant='outline'
+      className='self-start text-destructive hover:border-destructive'
+      onClick={() => onDelete([{ kind: 'node', id: node.id }])}
+    >
+      Delete {node.kind}
+    </Button>
   )
 }
