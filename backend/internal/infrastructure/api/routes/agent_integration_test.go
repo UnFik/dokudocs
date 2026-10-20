@@ -615,3 +615,55 @@ func TestInChatACanvasEditWaitsForApprovalAndThenLands(t *testing.T) {
 		t.Fatalf("approve = %d %s, edits %+v", approve.Code, approve.Body.String(), e.rooms.edits)
 	}
 }
+
+func TestAToolThatTouchesADocumentHandsBackItsAddressInTheApp(t *testing.T) {
+	e := newAgentEnv(t)
+	e.allow(agent.CapRead, agent.CapDocuments, agent.CapContent)
+	session, err := e.connect(e.newKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	want := appURL + "/docs/" + e.doc
+
+	read, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "read_document", Arguments: map[string]any{"workspace_id": e.ws, "document_id": e.doc}})
+	if err != nil || read.IsError || !strings.Contains(text(read), want) {
+		t.Fatalf("read_document = %s, %v; want the address %s", text(read), err, want)
+	}
+	created, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "create_document", Arguments: map[string]any{"workspace_id": e.ws, "title": "Notes", "type": "markdown"}})
+	if err != nil || created.IsError || !strings.Contains(text(created), appURL+"/docs/") {
+		t.Fatalf("create_document = %s, %v; want an address for the new document", text(created), err)
+	}
+	listed, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_workspaces", Arguments: map[string]any{}})
+	if err != nil || listed.IsError || strings.Contains(text(listed), appURL+"/docs/") {
+		t.Fatalf("list_workspaces = %s, %v; it touches no document and must carry no address", text(listed), err)
+	}
+}
+
+func TestWithoutAnAppAddressNoToolResultCarriesOne(t *testing.T) {
+	e := newAgentEnv(t)
+	e.cfg.PublicAppURL = ""
+	e.api = InitRoutes(e.app, e.cfg)
+	session, err := e.connect(e.newKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	read, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "read_document", Arguments: map[string]any{"workspace_id": e.ws, "document_id": e.doc}})
+	if err != nil || read.IsError || strings.Contains(text(read), "/docs/") || strings.Contains(text(read), "Open in Dokudocs") {
+		t.Fatalf("read_document = %s, %v; there is no address to give", text(read), err)
+	}
+}
+
+func TestTheServerTellsAnAgentWithABrowserToOpenWhatItChanged(t *testing.T) {
+	e := newAgentEnv(t)
+	session, err := e.connect(e.newKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	got := session.InitializeResult().Instructions
+	if !strings.Contains(got, "browser") || !strings.Contains(got, "Open in Dokudocs") || !strings.Contains(got, "show") {
+		t.Fatalf("instructions = %q; want a conditional hint to open the address or show it to the User", got)
+	}
+}
