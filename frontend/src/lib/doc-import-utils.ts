@@ -1,6 +1,5 @@
 import { z } from 'zod'
-import type { DocType } from '@/types/dokudocs'
-import { DOCUMENT_TYPES } from './document-types'
+import { DOCUMENT_TYPES, type CreatableDocType } from './document-types'
 
 const ACRONYMS = new Set([
   'FSD',
@@ -69,7 +68,7 @@ export function detectDocTypeAndContent(
   fileName: string,
   rawContent: string
 ): {
-  type: DocType
+  type: CreatableDocType
   content: string
   detectedReason: string
 } {

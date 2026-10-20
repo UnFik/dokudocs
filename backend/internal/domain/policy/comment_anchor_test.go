@@ -25,6 +25,10 @@ func TestValidateCommentAnchor(t *testing.T) {
 		{"markdown with an unrelated object", "markdown", `{"foo":1}`, false},
 		{"markdown with a non-string position", "markdown", `{"nodeID":"n1","start":1,"end":2}`, false},
 
+		{"html page-level comment with no anchor", "html", "", true},
+		{"html with a text anchor", "html", text, false},
+		{"html with a source anchor", "html", source, false},
+
 		{"architecture element", "architecture", element, true},
 		{"architecture element with a point", "architecture", pointed, true},
 		{"architecture needs an anchor", "architecture", "", false},

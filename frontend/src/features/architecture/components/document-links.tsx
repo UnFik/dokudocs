@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import type { DocType, DocumentItem } from '@/types/dokudocs'
+import type { DocumentItem } from '@/types/dokudocs'
 import { Lock, X } from 'lucide-react'
-import { DOCUMENT_TYPES } from '@/lib/document-types'
+import { DOCUMENT_TYPES, type CreatableDocType } from '@/lib/document-types'
 import { createDocument, listDocuments } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
 import {
@@ -251,7 +251,8 @@ function CreateAndLink({
 }) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
-  const [type, setType] = useState<Exclude<DocType, 'architecture'>>('markdown')
+  const [type, setType] =
+    useState<Exclude<CreatableDocType, 'architecture'>>('markdown')
   const queryClient = useQueryClient()
   const create = useMutation({
     mutationFn: () =>

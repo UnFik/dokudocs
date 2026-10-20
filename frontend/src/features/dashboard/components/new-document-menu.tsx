@@ -1,6 +1,5 @@
-import type { DocType } from '@/types/dokudocs'
 import { ChevronDown, Plus } from 'lucide-react'
-import { DOCUMENT_TYPES } from '@/lib/document-types'
+import { DOCUMENT_TYPES, type CreatableDocType } from '@/lib/document-types'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -13,7 +12,7 @@ import {
 export function NewDocumentMenu({
   onCreate,
 }: {
-  onCreate: (type: DocType) => void
+  onCreate: (type: CreatableDocType) => void
 }) {
   return (
     <DropdownMenu>

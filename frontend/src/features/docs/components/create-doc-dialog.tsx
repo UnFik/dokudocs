@@ -4,7 +4,6 @@ import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import type { DocType } from '@/types/dokudocs'
 import { Code2, Plus, Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -12,7 +11,10 @@ import {
   useDokudocsStore,
 } from '@/stores/dokudocs-store'
 import { getCategoryPalette } from '@/lib/category-palette'
-import { documentTypeSchema } from '@/lib/document-types'
+import {
+  creatableDocumentTypeSchema,
+  type CreatableDocType,
+} from '@/lib/document-types'
 import {
   createDocument,
   listProjects,
@@ -49,7 +51,7 @@ import { DocumentTypePicker } from './document-type-picker'
 
 const createDocSchema = z.object({
   title: z.string().min(1, 'Please enter a document title'),
-  type: documentTypeSchema,
+  type: creatableDocumentTypeSchema,
   projectId: z.string(),
   categories: z.array(z.string()),
 })
@@ -60,7 +62,7 @@ type CreateMutationInput = { input: CreateDocumentInput; requestID: string }
 interface CreateDocDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  defaultType?: DocType
+  defaultType?: CreatableDocType
   defaultProjectId?: string | null
   defaultCategory?: string | null
   defaultCategories?: string[]

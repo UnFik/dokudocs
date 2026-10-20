@@ -20,4 +20,6 @@ type CreateDocumentInput struct {
 	Categories  []string
 	IsDraft     bool
 	ProjectID   *uuid.UUID
+	// FromMCP is set only by the MCP tools. HTML documents are written there and nowhere else (ADR 0052).
+	FromMCP bool
 }

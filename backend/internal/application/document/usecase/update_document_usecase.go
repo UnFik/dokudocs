@@ -23,6 +23,14 @@ func (u *useCase) UpdateDocument(ctx context.Context, input dto.UpdateDocumentIn
 		doc.Title = strings.TrimSpace(input.Title)
 	}
 	if input.Content != "" {
+		if doc.Type == "html" {
+			if !input.FromMCP {
+				return data, ErrHTMLNotWritable
+			}
+			if len(input.Content) > MaxHTMLBytes {
+				return data, ErrHTMLTooLarge
+			}
+		}
 		doc.Content = input.Content
 	}
 	if input.Visibility != "" {

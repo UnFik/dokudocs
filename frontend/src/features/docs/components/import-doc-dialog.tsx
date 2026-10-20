@@ -24,7 +24,7 @@ import {
   parseArchitectureImport,
 } from '@/lib/doc-import-utils'
 import {
-  documentTypeSchema,
+  creatableDocumentTypeSchema,
   DOCUMENT_IMPORT_EXTENSIONS,
 } from '@/lib/document-types'
 import {
@@ -64,7 +64,7 @@ import { DocumentTypePicker } from './document-type-picker'
 
 const importDocSchema = z.object({
   title: z.string().min(1, 'Please enter a document title'),
-  type: documentTypeSchema,
+  type: creatableDocumentTypeSchema,
   projectId: z.string(),
   categories: z.array(z.string()),
   content: z.string(),
