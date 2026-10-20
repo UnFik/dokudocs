@@ -6,14 +6,6 @@
 .welcome-preview {
   animation: welcome-appear 240ms ease-out;
 }
-.welcome-preview[data-format='mermaid'] {
-  position: relative;
-  aspect-ratio: 1280 / 460;
-}
-.welcome-preview[data-format='mermaid'] img {
-  position: absolute;
-  top: -54.56%;
-}
 .welcome-link,
 .welcome-primary,
 .welcome-format {
@@ -27,8 +19,32 @@
 .welcome-primary:hover {
   background-color: color-mix(in srgb, var(--signal) 88%, var(--foreground));
 }
+.welcome-format {
+  position: relative;
+  overflow: hidden;
+}
 .welcome-format:hover {
   background: var(--muted);
+}
+.welcome-progress {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.55;
+  transform-origin: left;
+  animation: welcome-progress linear both;
+}
+.welcome-progress[data-paused='true'] {
+  animation-play-state: paused;
+}
+@keyframes welcome-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 .welcome-format[aria-pressed='true'] {
   color: var(--primary-foreground);
@@ -66,6 +82,98 @@
 .welcome-code {
   tab-size: 2;
 }
+.hero-visual {
+  min-width: 0;
+  container-type: inline-size;
+}
+.hero-stack {
+  position: relative;
+  aspect-ratio: 100 / 74;
+  margin-inline: 4%;
+}
+.hero-screen {
+  position: absolute;
+  width: 66%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transform: translate(var(--x, 0), var(--y, 0));
+  z-index: var(--z);
+  transition:
+    transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 200ms ease,
+    border-color 120ms ease;
+}
+.hero-screen-flow {
+  --z: 1;
+  --fx: 7%;
+  --fy: -9%;
+  top: 0;
+  left: 34%;
+}
+.hero-screen-schema {
+  --z: 2;
+  --fx: 3%;
+  --fy: -3.5%;
+  top: 14.7%;
+  left: 22.67%;
+}
+.hero-screen-architecture {
+  --z: 3;
+  --fx: -2%;
+  --fy: 2.5%;
+  top: 29.5%;
+  left: 11.33%;
+}
+.hero-screen-collab {
+  --z: 4;
+  --fx: -5%;
+  --fy: 4%;
+  top: 44.3%;
+  left: 0;
+}
+.hero-stack:hover .hero-screen {
+  --x: var(--fx);
+  --y: var(--fy);
+}
+.hero-stack:has(.hero-screen:hover) .hero-screen:not(:hover),
+.hero-stack:has(.hero-screen:focus-visible) .hero-screen:not(:focus-visible) {
+  opacity: 0.5;
+}
+.hero-stack .hero-screen:hover,
+.hero-stack .hero-screen:focus-visible {
+  --z: 10;
+  --x: var(--fx);
+  --y: calc(var(--fy) - 6%);
+  border-color: var(--foreground);
+  opacity: 1;
+}
+@container (max-width: 520px) {
+  .hero-stack {
+    aspect-ratio: 100 / 66;
+  }
+  .hero-screen {
+    width: 80%;
+  }
+  .hero-screen-flow,
+  .hero-screen-schema {
+    display: none;
+  }
+  .hero-screen-architecture {
+    --fx: 3%;
+    --fy: -4%;
+    top: 0;
+    left: 20%;
+  }
+  .hero-screen-collab {
+    --fx: -3%;
+    --fy: 5%;
+    top: 36%;
+    left: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .welcome-page *,
   .welcome-page *::before,
@@ -73,5 +181,11 @@
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+  .hero-stack:hover .hero-screen,
+  .hero-stack .hero-screen:hover,
+  .hero-stack .hero-screen:focus-visible {
+    --x: 0px;
+    --y: 0px;
   }
 }
