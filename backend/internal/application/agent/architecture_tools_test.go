@@ -66,6 +66,26 @@ func TestAnApprovedCanvasEditRunsAndAnswersWithTheIdsItMade(t *testing.T) {
 	}
 }
 
+func TestAddingANodeTheCanvasAlreadyHasIsRefusedBeforeApprovalNamingTheExistingOne(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	exec := canvasExecutor(e, CapRead, CapContent)
+	ops := `[{"type":"add_node","kind":"system","name":"API","catalog":"golang","parent":"vps"}]`
+	out, err := exec.Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws}, "edit_architecture", canvasArgs(e, ops))
+	if out.Pending != nil || !strings.Contains(refused(t, err), `operation 1: "API" is already on the canvas as api`) {
+		t.Fatalf("Call() = %+v, %v; want a refusal that names the node api", out, err)
+	}
+}
+
+func TestAnApprovedCanvasEditStillRunsWhenAnEarlierApprovalChangedTheVersion(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	exec := canvasExecutor(e, CapRead, CapContent)
+	args := json.RawMessage(`{"workspace_id":"` + e.ws.String() + `","document_id":"` + e.doc.String() + `","version":"v0","operations":` + renameOps + `}`)
+	out, err := exec.Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws, Approved: true}, "edit_architecture", args)
+	if err != nil || len(e.rooms.edits) != 1 || e.rooms.edits[0].BaseVersion != "v1" {
+		t.Fatalf("Call() = %+v, %v, edits %+v; want one edit on the live version v1", out, err, e.rooms.edits)
+	}
+}
+
 func TestOverMCPACanvasEditGoesStraightInForAnEditor(t *testing.T) {
 	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
 	exec := canvasExecutor(e, CapRead, CapContent)

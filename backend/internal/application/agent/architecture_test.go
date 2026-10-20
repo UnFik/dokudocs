@@ -141,7 +141,8 @@ func TestEditArchitectureRefusesOtherDocumentsAndEditDocumentContentRefusesCanva
 
 func TestAStaleCanvasVersionMakesNoRevision(t *testing.T) {
 	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
-	_, err := e.svc.EditArchitecture(context.Background(), chat(e), e.ws, e.doc, "v0", json.RawMessage(`[{"type":"update_node","id":"api","name":"X"}]`))
+	mcp := Actor{UserID: e.user, Channel: ChannelMCP, KeyName: "Laptop"}
+	_, err := e.svc.EditArchitecture(context.Background(), mcp, e.ws, e.doc, "v0", json.RawMessage(`[{"type":"update_node","id":"api","name":"X"}]`))
 	if !strings.Contains(refused(t, err), "read it again") || len(e.revisions.titles)+len(e.rooms.edits) != 0 {
 		t.Fatalf("error = %v, revisions %v, edits %v", err, e.revisions.titles, e.rooms.edits)
 	}
