@@ -53,7 +53,11 @@ async function flushClosedCopies(
   if (!options.token) return []
   const openIDs = new Set(open.map((document) => document.documentID))
   const databases = await indexedDB.databases()
-  const left: UnsyncedDocument[] = []
+  const copies: Array<{
+    workspaceID: string
+    documentID: string
+    record: string | undefined
+  }> = []
   for (const { name } of databases) {
     const room = name?.startsWith(localCopyPrefix)
       ? name.slice(localCopyPrefix.length).split('.')
@@ -63,27 +67,40 @@ async function flushClosedCopies(
     if (room.length < 2 || room.length > 3 || !workspaceID || !documentID)
       continue
     if (openIDs.has(documentID)) continue
-    const session = openCollabSession({
-      workspaceID,
-      documentID,
-      record,
-      userID: options.userID,
-      token: options.token,
-    })
-    try {
-      await session.loaded
-      const drained = await session.drained(timeoutMs)
-      if (!drained)
-        left.push({
-          documentID,
-          count: session.unsyncedChanges(),
-          workspaceID,
-        })
-    } finally {
-      session.destroy()
-    }
+    copies.push({ workspaceID, documentID, record })
   }
-  return left
+  // One after the other, an unreachable server would cost the timeout once per copy.
+  const outcomes = await Promise.all(
+    copies.map(async ({ workspaceID, documentID, record }) => {
+      const session = openCollabSession({
+        workspaceID,
+        documentID,
+        record,
+        userID: options.userID,
+        token: options.token!,
+      })
+      try {
+        const started = Date.now()
+        const loaded = await Promise.race([
+          session.loaded.then(() => true),
+          new Promise<boolean>((resolve) =>
+            setTimeout(() => resolve(false), timeoutMs)
+          ),
+        ])
+        const drained =
+          loaded &&
+          (await session.drained(
+            Math.max(0, timeoutMs - (Date.now() - started))
+          ))
+        return drained
+          ? null
+          : { documentID, count: session.unsyncedChanges(), workspaceID }
+      } finally {
+        session.destroy()
+      }
+    })
+  )
+  return outcomes.filter((outcome) => outcome !== null)
 }
 
 export async function discardLocalEdits(userID: string) {
