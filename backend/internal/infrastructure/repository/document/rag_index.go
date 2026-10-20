@@ -55,7 +55,7 @@ func (r *Repository) RebuildRAGIndex(ctx context.Context, documentID uuid.UUID) 
 			SELECT d.content_json, d.title, COALESCE(p.name, ''), d.body_version, d.project_id::text, d.type::text
 			FROM documents d
 			LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
-			WHERE d.id = $1 AND d.type IN ('markdown', 'architecture') AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
+			WHERE d.id = $1 AND d.type IN ('markdown', 'architecture', 'html') AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
 		`, documentID).Scan(&contentJSON, &title, &projectName, &bodyVersion, &projectIDText, &documentType); err != nil {
 			return err
 		}
@@ -72,8 +72,11 @@ func (r *Repository) RebuildRAGIndex(ctx context.Context, documentID uuid.UUID) 
 			return err
 		}
 		chunks, skipped := renderRAGJSON(contentJSON)
-		if documentType == "architecture" {
+		switch documentType {
+		case "architecture":
 			chunks, skipped = renderArchitectureRAG(contentJSON), 0
+		case "html":
+			chunks, skipped = renderHTMLRAG(contentJSON), 0
 		}
 		for chunkCount, chunk := range chunks {
 			if _, err := tx.ExecContext(ctx, `
@@ -117,7 +120,7 @@ func (r *Repository) RebuildStaleRAGIndexes(ctx context.Context, limit int) (int
 		FROM documents d
 		LEFT JOIN projects p ON p.id = d.project_id AND p.workspace_id = d.workspace_id AND p.deleted_at IS NULL
 		LEFT JOIN rag_document_indexes ri ON ri.document_id = d.id
-		WHERE d.type IN ('markdown', 'architecture') AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
+		WHERE d.type IN ('markdown', 'architecture', 'html') AND d.deleted_at IS NULL AND d.content_json IS NOT NULL
 		  AND (
 			ri.document_id IS NULL
 			OR ri.indexed_body_version <> d.body_version
