@@ -3,6 +3,7 @@ import 'katex/dist/contrib/mhchem.mjs'
 import 'katex/dist/katex.min.css'
 import type { Node as ProseMirrorNode } from 'prosemirror-model'
 import type { NodeView, NodeViewConstructor } from 'prosemirror-view'
+import { getAppMermaidConfig, isAppDark } from '../../mermaid-theme'
 import './blocks.css'
 import { isSafeImageSource } from './mediaCommands'
 
@@ -122,7 +123,9 @@ function attachmentView(options: MediaNodeViewOptions): NodeViewConstructor {
       dom.replaceChildren()
       applyIdentity(dom, node)
       const resolve = () =>
-        options.resolveSource ? options.resolveSource(src) : Promise.resolve(src)
+        options.resolveSource
+          ? options.resolveSource(src)
+          : Promise.resolve(src)
       const media = contentType.startsWith('video/')
         ? document.createElement('video')
         : contentType === 'application/pdf'
@@ -238,11 +241,8 @@ async function renderMermaid(target: HTMLElement, source: string) {
   try {
     const { default: mermaid } = await import('mermaid')
     mermaid.initialize({
-      startOnLoad: false,
+      ...getAppMermaidConfig(isAppDark()),
       securityLevel: 'strict',
-      theme: document.documentElement.classList.contains('dark')
-        ? 'dark'
-        : 'default',
     })
     const { svg } = await mermaid.render(`dd-mermaid-${ticket}`, source)
     if (target.dataset.renderTicket !== String(ticket)) return

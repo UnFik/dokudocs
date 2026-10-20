@@ -330,15 +330,26 @@ describe('Mermaid Dark Mode SVG Enhancement & Theme Configuration', () => {
     expect(result).toBe(rawSvg)
   })
 
-  it('provides dark theme variables with high contrast in dark mode', async () => {
+  it('themes both modes from the app tokens', async () => {
     const { getMermaidConfig } = await import('../../hooks/use-mermaid-render')
+    const { FALLBACK_TOKENS } = await import('../../lib/mermaid-theme')
+    type ThemedConfig = {
+      theme: string
+      themeVariables: Record<string, unknown>
+    }
 
-    const darkConfig = getMermaidConfig(true)
-    expect(darkConfig.theme).toBe('dark')
-    expect(darkConfig.themeVariables?.darkMode).toBe(true)
-    expect(darkConfig.themeVariables?.signalTextColor).toBe('#ffffff')
+    const darkConfig = getMermaidConfig(true) as ThemedConfig
+    expect(darkConfig.theme).toBe('base')
+    expect(darkConfig.themeVariables.darkMode).toBe(true)
+    expect(darkConfig.themeVariables.primaryBorderColor).toBe(
+      FALLBACK_TOKENS.dark.signal
+    )
 
-    const lightConfig = getMermaidConfig(false)
-    expect(lightConfig.theme).toBe('default')
+    const lightConfig = getMermaidConfig(false) as ThemedConfig
+    expect(lightConfig.theme).toBe('base')
+    expect(lightConfig.themeVariables.darkMode).toBe(false)
+    expect(lightConfig.themeVariables.primaryBorderColor).toBe(
+      FALLBACK_TOKENS.light.signal
+    )
   })
 })

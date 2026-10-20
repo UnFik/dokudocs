@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { Marked, type TokenizerAndRendererExtension } from 'marked'
+import { getAppMermaidConfig, isAppDark } from './mermaid-theme'
 
 const noticeVariants = ['info', 'success', 'warning', 'tip']
 
@@ -116,11 +117,8 @@ export async function drawDiagrams(root: HTMLElement) {
   if (!blocks.length) return
   const { default: mermaid } = await import('mermaid')
   mermaid.initialize({
-    startOnLoad: false,
+    ...getAppMermaidConfig(isAppDark()),
     securityLevel: 'strict',
-    theme: document.documentElement.classList.contains('dark')
-      ? 'dark'
-      : 'default',
   })
   for (const block of blocks) {
     try {
