@@ -48,7 +48,7 @@ export interface ParsedRecordSet {
   rows: string[][]
 }
 
-interface TableColumn {
+export interface TableColumn {
   name: string
   type: string
   isPk: boolean
@@ -61,14 +61,14 @@ interface TableColumn {
   }
 }
 
-interface TableIndex {
+export interface TableIndex {
   columns: string[]
   name?: string
   isUnique: boolean
   isPk: boolean
 }
 
-interface ParsedTable {
+export interface ParsedTable {
   name: string
   alias?: string
   headerColor?: string
@@ -76,7 +76,7 @@ interface ParsedTable {
   indexes: TableIndex[]
 }
 
-interface ParsedTableGroup {
+export interface ParsedTableGroup {
   name: string
   color?: string
   tables: string[]
@@ -91,7 +91,7 @@ export interface ParsedRelation {
   raw: string
 }
 
-interface TablePosition {
+export interface TablePosition {
   x: number
   y: number
 }
@@ -494,6 +494,109 @@ function calculateTableHeight(table: ParsedTable): number {
   return height
 }
 
+const LAYOUT_ORIGIN = 60
+const LAYOUT_COL_GAP = 48
+const LAYOUT_ROW_GAP = 36
+const LAYOUT_GROUP_GAP = 80
+const LAYOUT_GROUP_PAD_X = 32
+const LAYOUT_GROUP_PAD_Y = 48
+const LAYOUT_TARGET_ASPECT = 1.6
+const LAYOUT_LARGE_GROUP_SIZE = 20
+
+function columnsForGroup(tableCount: number): number {
+  const maxCols = tableCount > LAYOUT_LARGE_GROUP_SIZE ? 6 : 3
+  return Math.min(Math.ceil(Math.sqrt(tableCount)), maxCols)
+}
+
+interface LayoutBlock {
+  positions: Record<string, TablePosition>
+  width: number
+  height: number
+}
+
+function packGroupBlock(
+  members: ParsedTable[],
+  colsCount: number
+): LayoutBlock {
+  const colHeights = new Array(colsCount).fill(LAYOUT_GROUP_PAD_Y)
+  const positions: Record<string, TablePosition> = {}
+  members.forEach((t) => {
+    let minColIdx = 0
+    for (let i = 1; i < colsCount; i++) {
+      if (colHeights[i] < colHeights[minColIdx]) minColIdx = i
+    }
+    positions[t.name] = {
+      x: LAYOUT_GROUP_PAD_X + minColIdx * (TABLE_WIDTH + LAYOUT_COL_GAP),
+      y: colHeights[minColIdx],
+    }
+    colHeights[minColIdx] += calculateTableHeight(t) + LAYOUT_ROW_GAP
+  })
+  return {
+    positions,
+    width:
+      LAYOUT_GROUP_PAD_X * 2 +
+      colsCount * TABLE_WIDTH +
+      (colsCount - 1) * LAYOUT_COL_GAP,
+    height: Math.max(...colHeights),
+  }
+}
+
+function wrapBlocksIntoRows(
+  blocks: LayoutBlock[]
+): Record<string, TablePosition> {
+  const area = blocks.reduce(
+    (sum, b) =>
+      sum + (b.width + LAYOUT_GROUP_GAP) * (b.height + LAYOUT_GROUP_GAP),
+    0
+  )
+  const widest = Math.max(...blocks.map((b) => b.width))
+  const targetWidth = Math.max(Math.sqrt(area * LAYOUT_TARGET_ASPECT), widest)
+
+  const out: Record<string, TablePosition> = {}
+  let x = 0
+  let y = 0
+  let rowHeight = 0
+  blocks.forEach((block) => {
+    if (x > 0 && x + block.width > targetWidth) {
+      x = 0
+      y += rowHeight + LAYOUT_GROUP_GAP
+      rowHeight = 0
+    }
+    for (const [name, pos] of Object.entries(block.positions)) {
+      out[name] = { x: LAYOUT_ORIGIN + x + pos.x, y: LAYOUT_ORIGIN + y + pos.y }
+    }
+    x += block.width + LAYOUT_GROUP_GAP
+    rowHeight = Math.max(rowHeight, block.height)
+  })
+  return out
+}
+
+export function calculateAutoLayout(
+  tables: ParsedTable[],
+  groups: ParsedTableGroup[]
+): Record<string, TablePosition> {
+  const assigned = new Set<string>()
+  const blocks: LayoutBlock[] = []
+
+  groups.forEach((group) => {
+    const groupMembers = tables.filter((t) =>
+      group.tables.some((gt) => gt.toLowerCase() === t.name.toLowerCase())
+    )
+    if (groupMembers.length === 0) return
+    groupMembers.forEach((t) => assigned.add(t.name))
+    blocks.push(
+      packGroupBlock(groupMembers, columnsForGroup(groupMembers.length))
+    )
+  })
+
+  const ungrouped = tables.filter((t) => !assigned.has(t.name))
+  if (ungrouped.length > 0) {
+    blocks.push(packGroupBlock(ungrouped, columnsForGroup(ungrouped.length)))
+  }
+
+  return blocks.length > 0 ? wrapBlocksIntoRows(blocks) : {}
+}
+
 const DEFAULT_INITIAL_PAN = { x: 60, y: 60 }
 
 export function DbmlVisualCanvas({
@@ -875,77 +978,6 @@ export function DbmlVisualCanvas({
       }
     }, [content])
 
-  const calculateAutoLayout = useCallback(
-    (tables: ParsedTable[], groups: ParsedTableGroup[]) => {
-      const nextPositions: Record<string, TablePosition> = {}
-      const assigned = new Set<string>()
-
-      let curX = 60
-      let curY = 60
-
-      groups.forEach((group) => {
-        const groupMembers = tables.filter((t) =>
-          group.tables.some((gt) => gt.toLowerCase() === t.name.toLowerCase())
-        )
-
-        if (groupMembers.length === 0) return
-
-        const colsCount = Math.min(Math.ceil(Math.sqrt(groupMembers.length)), 3)
-        let groupColX = curX + 32
-        let groupRowY = curY + 48
-        let maxColHeight = 0
-        let groupMaxX = 0
-
-        const colHeights = new Array(colsCount).fill(groupRowY)
-
-        groupMembers.forEach((t) => {
-          assigned.add(t.name)
-          let minColIdx = 0
-          for (let i = 1; i < colsCount; i++) {
-            if (colHeights[i] < colHeights[minColIdx]) {
-              minColIdx = i
-            }
-          }
-
-          const posX = groupColX + minColIdx * (TABLE_WIDTH + 48)
-          const posY = colHeights[minColIdx]
-          const tHeight = calculateTableHeight(t)
-
-          nextPositions[t.name] = { x: posX, y: posY }
-          colHeights[minColIdx] += tHeight + 36
-
-          groupMaxX = Math.max(groupMaxX, posX + TABLE_WIDTH)
-          maxColHeight = Math.max(maxColHeight, colHeights[minColIdx])
-        })
-
-        curX = groupMaxX + 80
-      })
-
-      const ungrouped = tables.filter((t) => !assigned.has(t.name))
-      if (ungrouped.length > 0) {
-        let colHeights = [curY, curY, curY]
-        ungrouped.forEach((t) => {
-          let minColIdx = 0
-          for (let i = 1; i < 3; i++) {
-            if (colHeights[i] < colHeights[minColIdx]) {
-              minColIdx = i
-            }
-          }
-
-          const posX = curX + minColIdx * (TABLE_WIDTH + 48)
-          const posY = colHeights[minColIdx]
-          const tHeight = calculateTableHeight(t)
-
-          nextPositions[t.name] = { x: posX, y: posY }
-          colHeights[minColIdx] += tHeight + 36
-        })
-      }
-
-      return nextPositions
-    },
-    []
-  )
-
   const effectiveTablePositions = useMemo(() => {
     let hasMissing = false
     for (const t of parsedTables) {
@@ -966,7 +998,7 @@ export function DbmlVisualCanvas({
       }
     }
     return merged
-  }, [parsedTables, parsedTableGroups, tablePositions, calculateAutoLayout])
+  }, [parsedTables, parsedTableGroups, tablePositions])
 
   const handleApplyAutoLayout = () => {
     const layout = calculateAutoLayout(parsedTables, parsedTableGroups)
