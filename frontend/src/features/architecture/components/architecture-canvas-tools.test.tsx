@@ -280,6 +280,68 @@ describe('tool keys', () => {
     await userEvent.keyboard('{/Space}')
     expect(pressed('Cursor')).toBe('true')
   })
+
+  it('pan the canvas with a drag while Space is held', async () => {
+    await show({ doc: sample().doc })
+    const viewport = document.querySelector<HTMLElement>(
+      '.react-flow__viewport'
+    )!
+    const before = viewport.style.transform
+    const pane = document.querySelector<HTMLElement>('.react-flow__pane')!
+    await userEvent.keyboard('{Space>}')
+    expect(getComputedStyle(pane).cursor).toBe('grab')
+    await drag(pane, 120, 40)
+    await userEvent.keyboard('{/Space}')
+    expect(viewport.style.transform).not.toBe(before)
+    const mid = viewport.style.transform
+    await userEvent.keyboard('{Space>}')
+    await userEvent.dragAndDrop(
+      page.elementLocator(pane),
+      page.elementLocator(pane),
+      {
+        sourcePosition: { x: 700, y: 400 },
+        targetPosition: { x: 600, y: 350 },
+      }
+    )
+    await userEvent.keyboard('{/Space}')
+    expect(viewport.style.transform).not.toBe(mid)
+    const last = viewport.style.transform
+    const cache = element('Cache')
+    await userEvent.keyboard('{Space>}')
+    expect(getComputedStyle(cache).cursor).toBe('grab')
+    await drag(cache, -80, 30)
+    await userEvent.keyboard('{/Space}')
+    expect(viewport.style.transform).not.toBe(last)
+  })
+})
+
+describe('Scroll', () => {
+  it('pans both ways with the wheel and zooms with Ctrl', async () => {
+    await show({ doc: sample().doc })
+    const viewport = document.querySelector<HTMLElement>(
+      '.react-flow__viewport'
+    )!
+    const pane = document.querySelector<HTMLElement>('.react-flow__pane')!
+    const wheel = async (init: WheelEventInit) => {
+      pane.dispatchEvent(
+        new WheelEvent('wheel', { bubbles: true, cancelable: true, ...init })
+      )
+      await wait(80)
+    }
+    const read = () =>
+      /translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([-\d.]+)\)/
+        .exec(viewport.style.transform)!
+        .slice(1)
+        .map(Number)
+    const [x0, y0, k0] = read()
+    await wheel({ deltaX: 50, deltaY: 80, clientX: 400, clientY: 300 })
+    const [x1, y1, k1] = read()
+    expect(x1).toBeLessThan(x0)
+    expect(y1).toBeLessThan(y0)
+    expect(k1).toBe(k0)
+    await wheel({ deltaY: -100, ctrlKey: true, clientX: 400, clientY: 300 })
+    expect(read()[2]).toBeGreaterThan(k1)
+  })
 })
 
 describe('Hand', () => {
