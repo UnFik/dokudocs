@@ -161,10 +161,16 @@ export function getMermaidConfig(
 export async function renderMermaidSvgDirect(
   code: string,
   isDark: boolean,
-  themeName: string = 'default'
+  themeName: string = 'default',
+  options: { plainLabels?: boolean } = {}
 ): Promise<string> {
   const config = getMermaidConfig(isDark, themeName)
-  mermaid.initialize(config)
+  // HTML labels (foreignObject) cannot be drawn onto a canvas, so exports ask for plain SVG text.
+  mermaid.initialize(
+    options.plainLabels
+      ? { ...config, htmlLabels: false, flowchart: { htmlLabels: false } }
+      : config
+  )
   const renderId = `mermaid-export-${Date.now()}-${++renderCounter}`
   try {
     const { svg: rawSvg } = await mermaid.render(renderId, code)
