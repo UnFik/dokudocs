@@ -189,8 +189,11 @@ func (s *ContentService) EditArchitecture(ctx context.Context, actor Actor, work
 	if err != nil {
 		return EditResult{}, err
 	}
-	if len(found.bare) > 0 || len(found.resolved) > 0 {
-		if raw, err = json.Marshal(ops); err != nil {
+	if len(found.ops) == 0 {
+		return EditResult{Mode: "direct", Version: live.Version, Next: "Everything asked is already on the canvas."}, nil
+	}
+	if len(found.bare) > 0 || len(found.resolved) > 0 || len(found.ops) != len(ops) {
+		if raw, err = json.Marshal(found.ops); err != nil {
 			return EditResult{}, err
 		}
 	}
@@ -291,17 +294,24 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 		drawn = append(drawn, Uncataloged{Name: name, Kind: kind})
 	}
 	refs := newRefs(c)
+	kept := make([]operation, 0, len(ops))
 	for i, op := range ops {
 		if err := refs.resolve(op); err != nil {
 			return checked{}, fail(i, "%s", err.Error())
 		}
+		drop := false
 		switch op.text("type") {
 		case "add_node":
 			if ref := op.text("ref"); ref != "" {
 				kinds[ref] = op.text("kind")
 			}
+			// What the canvas has is not added again; later operations on its ref use the node that is there.
 			if existing, found := c.twin(op); found {
-				return checked{}, fail(i, "%q is already on the canvas as %s; use that id, or give the new one a different name if you want a second", op.text("name"), existing.ID)
+				if ref := op.text("ref"); ref != "" {
+					refs.alias[ref] = existing.ID
+				}
+				drop = true
+				break
 			}
 			without(op, op.text("kind"), op.text("name"))
 			if msg := checkSlug(entries, slugs, op.text("kind"), op.text("catalog")); msg != "" {
@@ -335,8 +345,11 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 				return checked{}, err
 			}
 		}
+		if !drop {
+			kept = append(kept, op)
+		}
 	}
-	return checked{bare: drawn, resolved: refs.resolved}, nil
+	return checked{bare: drawn, resolved: refs.resolved, ops: kept}, nil
 }
 
 // checked is what checking the operations found: nodes to draw bare, and names the
@@ -344,6 +357,8 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 type checked struct {
 	bare     []Uncataloged
 	resolved []Resolved
+	// ops are the operations to run: an add_node for what the canvas already has is left out.
+	ops []operation
 }
 
 // Resolved is a name the Agent wrote where an element id belongs, and the element it meant.
@@ -360,10 +375,12 @@ type refs struct {
 	parsed   bool
 	known    map[string]bool
 	resolved []Resolved
+	// alias maps the ref of a node the canvas already has to the id of the node that is there.
+	alias map[string]string
 }
 
 func newRefs(c canvas) *refs {
-	r := &refs{canvas: c, parsed: c.Nodes != nil, known: map[string]bool{}}
+	r := &refs{canvas: c, parsed: c.Nodes != nil, known: map[string]bool{}, alias: map[string]string{}}
 	for _, n := range c.Nodes {
 		r.known[n.ID] = true
 	}
@@ -393,6 +410,10 @@ func (r *refs) resolve(op operation) error {
 	if r.parsed {
 		for _, key := range elementKeys[op.text("type")] {
 			value := op.text(key)
+			if id, ok := r.alias[value]; ok {
+				op[key] = id
+				continue
+			}
 			if value == "" || r.known[value] {
 				continue
 			}
@@ -585,8 +606,12 @@ func (s *ContentService) ArchitectureSummary(ctx context.Context, actor Actor, w
 		return "", err
 	}
 	// A change the server would refuse is refused before the User is asked to approve it.
-	if _, err := s.checkArchitectureOperations(ctx, actor, workspaceID, parseCanvas(live.Text), ops); err != nil {
+	found, err := s.checkArchitectureOperations(ctx, actor, workspaceID, parseCanvas(live.Text), ops)
+	if err != nil {
 		return "", err
+	}
+	if ops = found.ops; len(ops) == 0 {
+		return "", nil
 	}
 	d := describer{canvas: parseCanvas(live.Text), names: map[string]string{}, kinds: map[string]string{}}
 	var lines []string

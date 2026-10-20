@@ -707,7 +707,8 @@ func DokudocsTools(d ToolDeps) []Tool {
 					return false, "", err
 				}
 				summary, err := d.Content.ArchitectureSummary(ctx, actor, ws, doc, a.Operations)
-				return true, summary, err
+				// Nothing left to change: there is nothing to approve.
+				return summary != "", summary, err
 			},
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
 				a, err := parse[struct {
