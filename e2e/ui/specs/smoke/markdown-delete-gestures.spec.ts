@@ -198,6 +198,10 @@ async function openDocument(page: Page, blocks: Block[]) {
   await expect(page.getByRole("status")).toContainText("Synced");
   await page.getByRole("button", { name: /^Editor mode/ }).click();
   await page.getByRole("menuitemradio", { name: "Edit", exact: true }).click();
+  // The menu hides the page (aria-hidden) and hands focus back to its button while
+  // it closes. A click or key before that ends is lost or lands on the wrong element.
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(editor).not.toHaveAttribute("aria-hidden", "true");
   return { editor, documentURL: page.url() };
 }
 

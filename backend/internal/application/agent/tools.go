@@ -596,7 +596,7 @@ func DokudocsTools(d ToolDeps) []Tool {
 				if err := checkContentOperations(docType, a.Operations); err != nil {
 					return false, "", err
 				}
-				return true, "Change the diagram source", d.Content.CheckVersion(ctx, actor, ws, doc, a.Version)
+				return true, "Change the diagram source", d.Content.CheckSourceEdit(ctx, actor, ws, doc, a.Version, a.Operations)
 			},
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
 				a, err := parse[struct {
