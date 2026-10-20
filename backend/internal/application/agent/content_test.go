@@ -209,3 +209,33 @@ func TestAWronglyTypedArgumentNamesTheField(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func sourceExecutor(e *contentEnv) *Executor {
+	tools := DokudocsTools(ToolDeps{Documents: docsStub{doc: model.Document{ID: e.doc, Title: "Flow", Type: "mermaid"}}, Content: e.svc, Catalog: testCatalog})
+	return NewExecutor(NewPermissionService(memPermissions{e.user: {CapRead, CapContent}}), tools, func(context.Context) int { return 1 << 20 })
+}
+
+func sourceArgs(e *contentEnv, ops string) json.RawMessage {
+	return json.RawMessage(`{"workspace_id":"` + e.ws.String() + `","document_id":"` + e.doc.String() + `","version":"v1","operations":` + ops + `}`)
+}
+
+func TestAReplaceOfSourceTextThatIsNotThereIsRefusedBeforeApprovalWithTheLiveSource(t *testing.T) {
+	e := newContentEnv("mermaid", collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	e.rooms.text = "graph TD\n  Start --> Done"
+	ops := `[{"type":"replace_text","find":"graph TD\n  Begin --> Done","replace":"x"}]`
+	out, err := sourceExecutor(e).Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws}, "edit_document_content", sourceArgs(e, ops))
+	got := refused(t, err)
+	if out.Pending != nil || !strings.Contains(got, "not in the document") || !strings.Contains(got, "Start --> Done") {
+		t.Fatalf("Call() = %+v, %q; want a refusal that quotes the live source and no card", out, got)
+	}
+}
+
+func TestAReplaceOfSourceTextThatIsThereStillAsksTheUser(t *testing.T) {
+	e := newContentEnv("mermaid", collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	e.rooms.text = "graph TD\n  Start --> Done"
+	ops := `[{"type":"replace_text","find":"Start","replace":"Begin"}]`
+	out, err := sourceExecutor(e).Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws}, "edit_document_content", sourceArgs(e, ops))
+	if err != nil || out.Pending == nil {
+		t.Fatalf("Call() = %+v, %v; want a card", out, err)
+	}
+}
