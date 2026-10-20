@@ -81,6 +81,11 @@ func (r *Repository) RestoreDocumentRevision(ctx context.Context, documentID, so
 		`, documentID, workspaceID).Scan(&documentType, &currentMarkdown, &currentJSON, &bodyVersion); err != nil {
 			return err
 		}
+		if documentType == "html" {
+			// The page is plain text in content: there is no state to drop and no JSON.
+			result, err = restoreHTMLRevision(ctx, tx, documentID, workspaceID, actorID, requestID, sourceRevisionID, sourceRevisionNumber, sourceMarkdown, currentMarkdown, bodyVersion)
+			return err
+		}
 		if !hasCollabBody(documentType) || len(sourceJSON) == 0 {
 			return constant.ErrDocumentConflict
 		}
@@ -144,4 +149,46 @@ func (r *Repository) RestoreDocumentRevision(ctx context.Context, documentID, so
 		return model.DocumentRestoreResult{}, err
 	}
 	return result, nil
+}
+
+// restoreHTMLRevision puts a revision's page back. The page as it stood is kept
+// first as a revision of its own, so a restore can be undone.
+func restoreHTMLRevision(ctx context.Context, tx database.Queryer, documentID, workspaceID, actorID, requestID, sourceRevisionID uuid.UUID, sourceRevisionNumber int, sourcePage, currentPage string, bodyVersion int64) (model.DocumentRestoreResult, error) {
+	if bodyVersion == math.MaxInt64 {
+		return model.DocumentRestoreResult{}, constant.ErrDocumentConflict
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO document_revisions (document_id, author_id, version_number, title, content, is_named, body_version)
+		SELECT $1, $2, COALESCE(MAX(version_number), 0) + 1, 'Before restore', $3, FALSE, $4
+		FROM document_revisions WHERE document_id = $1
+	`, documentID, actorID, currentPage, bodyVersion); err != nil {
+		return model.DocumentRestoreResult{}, err
+	}
+	newBodyVersion := bodyVersion + 1
+	var replacementID uuid.UUID
+	if err := tx.QueryRowContext(ctx, `
+		UPDATE documents
+		SET content = $2, body_version = $3, updated_at = NOW(), body_replacement_id = gen_random_uuid()
+		WHERE id = $1 AND workspace_id = $4
+		RETURNING body_replacement_id
+	`, documentID, sourcePage, newBodyVersion, workspaceID).Scan(&replacementID); err != nil {
+		return model.DocumentRestoreResult{}, err
+	}
+	var restored model.DocumentRevision
+	if err := tx.QueryRowContext(ctx, `
+		INSERT INTO document_revisions (
+			document_id, author_id, version_number, title, content, is_named,
+			body_version, restore_request_id, restore_source_revision_id, restore_replacement_id
+		)
+		SELECT $1, $2, COALESCE(MAX(version_number), 0) + 1, $3, $4, FALSE, $5, $6, $7, $8
+		FROM document_revisions WHERE document_id = $1
+		RETURNING id
+	`, documentID, actorID, fmt.Sprintf("Restored from v%d", sourceRevisionNumber), sourcePage,
+		newBodyVersion, requestID, sourceRevisionID, replacementID).Scan(&restored.ID); err != nil {
+		return model.DocumentRestoreResult{}, err
+	}
+	return model.DocumentRestoreResult{
+		DocumentID: documentID, RevisionID: restored.ID, SourceRevisionID: sourceRevisionID,
+		BodyVersion: newBodyVersion, ReplacementID: replacementID,
+	}, nil
 }

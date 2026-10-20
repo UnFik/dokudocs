@@ -13,4 +13,6 @@ type UpdateDocumentInput struct {
 	Categories  []string
 	IsDraft     *bool
 	ProjectID   *uuid.UUID
+	// FromMCP is set only by the MCP tools; only they may change the body of an HTML document.
+	FromMCP bool
 }

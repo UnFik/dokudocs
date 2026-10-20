@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { Database, FileText, GitFork, Network } from 'lucide-react'
+import { Database, FileCode, FileText, GitFork, Network } from 'lucide-react'
 
 export const DOCUMENT_TYPES = [
   {
@@ -36,13 +36,38 @@ export const DOCUMENT_TYPES = [
   },
 ] as const
 
-export const documentTypeSchema = z.enum(
+/**
+ * A page written through MCP (ADR 0052). It is a document type like the others
+ * but is not in DOCUMENT_TYPES, which feeds every menu that makes a document.
+ */
+const HTML_DOCUMENT_TYPE = {
+  value: 'html',
+  label: 'HTML',
+  keywords: 'page html',
+  description: 'A page written through MCP',
+  icon: FileCode,
+  extensions: [],
+} as const
+
+/** The types a person can make from the app. */
+export const creatableDocumentTypeSchema = z.enum(
   DOCUMENT_TYPES.map(({ value }) => value)
 )
+
+export type CreatableDocType = z.infer<typeof creatableDocumentTypeSchema>
+
+export const documentTypeSchema = z.enum([
+  ...DOCUMENT_TYPES.map(({ value }) => value),
+  HTML_DOCUMENT_TYPE.value,
+])
 export type DocType = z.infer<typeof documentTypeSchema>
 
 export function getDocumentType(type: DocType) {
-  return DOCUMENT_TYPES.find(({ value }) => value === type) ?? DOCUMENT_TYPES[0]
+  return (
+    [...DOCUMENT_TYPES, HTML_DOCUMENT_TYPE].find(
+      ({ value }) => value === type
+    ) ?? DOCUMENT_TYPES[0]
+  )
 }
 
 export const DOCUMENT_IMPORT_EXTENSIONS = DOCUMENT_TYPES.flatMap(

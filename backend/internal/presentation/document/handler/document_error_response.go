@@ -26,6 +26,10 @@ func writeDocumentError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, appdoc.ErrInvalidContentJSON):
 		response.Error(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, appdoc.ErrHTMLNotWritable):
+		response.Error(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, appdoc.ErrHTMLTooLarge):
+		response.Error(w, http.StatusRequestEntityTooLarge, err.Error())
 	case errors.Is(err, constant.ErrInvalidIdempotencyKey):
 		response.Error(w, http.StatusBadRequest, err.Error())
 	default:

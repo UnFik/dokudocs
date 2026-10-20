@@ -11,10 +11,11 @@ var ErrInvalidCommentAnchor = errors.New("comment anchor does not fit the docume
 // pins a comment with: Yjs positions inside a text node (markdown), an element
 // (architecture), or Yjs positions in the shared source (dbdiagram, mermaid).
 // It checks the shape only, not that the node or element still exists.
-// Markdown alone may have no anchor, for threads made before anchors existed.
+// Markdown may have no anchor, for threads made before anchors existed, and an
+// HTML document takes only that: its comments are about the page as a whole.
 func ValidateCommentAnchor(docType string, anchor json.RawMessage) error {
 	if len(anchor) == 0 {
-		if docType == "markdown" {
+		if docType == "markdown" || docType == "html" {
 			return nil
 		}
 		return ErrInvalidCommentAnchor

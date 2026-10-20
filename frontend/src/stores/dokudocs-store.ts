@@ -176,6 +176,8 @@ Table orders {
 
   // An Architecture document's text is derived from its canvas.
   architecture: '',
+  // A page is written through MCP; no one starts one from a template.
+  html: '',
 }
 
 export function getDefaultDocumentContent(type: DocType) {
