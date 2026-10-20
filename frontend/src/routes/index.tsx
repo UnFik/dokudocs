@@ -11,7 +11,7 @@ export const Route = createFileRoute('/')({
       {
         name: 'description',
         content:
-          'Write Markdown with your team in real time. Keep DBML schemas, Mermaid flows and architecture drawings beside it, with an AI that proposes edits you approve.',
+          'Write Markdown with your team in real time. Keep DBML schemas, Mermaid flows and architecture drawings beside it, with an AI whose edits you review.',
       },
     ],
     links: [{ rel: 'canonical', href: 'https://unfik.my.id/' }],

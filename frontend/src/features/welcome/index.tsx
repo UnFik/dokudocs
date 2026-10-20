@@ -1,10 +1,18 @@
 import { useState } from 'react'
 import { Link, useSearch } from '@tanstack/react-router'
+import aiDark from '@/assets/landing/ai-dark.webp'
+import aiLight from '@/assets/landing/ai-light.webp'
+import architectureDark from '@/assets/landing/architecture-dark.webp'
+import architectureLight from '@/assets/landing/architecture-light.webp'
+import collabDark from '@/assets/landing/collab-dark.webp'
+import collabLight from '@/assets/landing/collab-light.webp'
 import dbmlDark from '@/assets/landing/dbml-dark.webp'
 import dbmlLight from '@/assets/landing/dbml-light.webp'
 import markdownDark from '@/assets/landing/markdown-dark.webp'
 import markdownLight from '@/assets/landing/markdown-light.webp'
 import mermaidDark from '@/assets/landing/mermaid-dark.webp'
+import shareDark from '@/assets/landing/share-dark.webp'
+import shareLight from '@/assets/landing/share-light.webp'
 import { Logo } from '@/assets/logo'
 import { useTheme } from '@/context/theme-provider'
 import './welcome.css'
@@ -31,7 +39,32 @@ const previews = [
     dark: mermaidDark,
     alt: 'A Mermaid diagram in a DokuDocs Markdown document',
   },
+  {
+    type: 'architecture',
+    label: 'System drawing',
+    light: architectureLight,
+    dark: architectureDark,
+    alt: 'An Architecture document: hosts, systems and their connections drawn on a canvas',
+  },
 ] as const
+
+const collabShot = {
+  light: collabLight,
+  dark: collabDark,
+  alt: 'A Markdown document with a pending suggestion and a comment thread between two teammates',
+} as const
+
+const aiShot = {
+  light: aiLight,
+  dark: aiDark,
+  alt: 'The document chat: the assistant proposed a change that now waits for review',
+} as const
+
+const shareShot = {
+  light: shareLight,
+  dark: shareDark,
+  alt: 'A document opened from a shared link, read-only',
+} as const
 
 const documentTypes = ['markdown', 'dbml', 'mermaid', 'architecture'] as const
 
@@ -90,10 +123,30 @@ const sectionLabel = 'font-mono text-xs text-muted-foreground'
 const sectionHeading =
   'text-2xl leading-tight font-semibold tracking-tight text-balance sm:text-3xl'
 
+type ShotProps = {
+  shot: { light: string; dark: string; alt: string }
+  dark: boolean
+}
+
+function Shot({ shot, dark }: ShotProps) {
+  return (
+    <div className='min-w-0 overflow-hidden rounded-md border border-border bg-background'>
+      <img
+        src={dark ? shot.dark : shot.light}
+        alt={shot.alt}
+        width='1280'
+        height='800'
+        loading='lazy'
+        className='block h-auto w-full'
+      />
+    </div>
+  )
+}
+
 export function WelcomePage() {
   const { redirect } = useSearch({ from: '/' })
   const { resolvedTheme, setTheme } = useTheme()
-  const [previewIndex, setPreviewIndex] = useState(1)
+  const [previewIndex, setPreviewIndex] = useState(3)
   const preview = previews[previewIndex]!
   const heroPreview = previews[0]
 
@@ -160,7 +213,7 @@ export function WelcomePage() {
           <p className='mt-6 max-w-md text-base leading-7 text-muted-foreground'>
             Write Markdown with your team in real time. Keep DBML schemas,
             Mermaid flows and architecture drawings beside it, and ask an AI
-            that proposes edits for you to approve.
+            whose edits you review before they land.
           </p>
           <div className='mt-8 flex flex-wrap items-center gap-5'>
             <Link
@@ -221,9 +274,9 @@ export function WelcomePage() {
               Notes, schemas and flows stay together
             </h2>
             <p className='mt-3 text-sm leading-6 text-muted-foreground'>
-              These are screens from DokuDocs. Architecture documents draw your
-              hosts, systems and the connections between them on a canvas, and
-              open like any other document.
+              These are screens from DokuDocs. An Architecture document draws
+              your hosts, systems and the connections between them on a canvas,
+              and opens like any other document.
             </p>
           </div>
           <div
@@ -273,62 +326,72 @@ export function WelcomePage() {
       </section>
 
       <section id='together' className='border-y border-border bg-card'>
-        <div className='mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-10 sm:py-20 md:grid-cols-[1fr_1.1fr] md:gap-14'>
+        <div className='mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-10 sm:py-20 lg:grid-cols-[1fr_1.25fr] lg:items-center lg:gap-14'>
           <div>
             <h2 className={sectionHeading}>
               Edit together, then review before a change lands
             </h2>
             <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
               Everyone types in the same document at once. When a change needs a
-              second pair of eyes, suggest it instead of making it.
+              second pair of eyes, suggest it instead of making it, and talk it
+              through in a comment on the passage.
             </p>
+            <dl className='mt-8 border-t border-border'>
+              {collaboration.map((item) => (
+                <div
+                  key={item.term}
+                  className='grid gap-1 border-b border-border py-4 sm:grid-cols-[5rem_1fr] sm:gap-6'
+                >
+                  <dt className={sectionLabel}>{item.term}</dt>
+                  <dd className='text-sm leading-6'>{item.text}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
-          <dl className='border-t border-border'>
-            {collaboration.map((item) => (
-              <div
-                key={item.term}
-                className='grid gap-1 border-b border-border py-5 sm:grid-cols-[6rem_1fr] sm:gap-6'
-              >
-                <dt className={sectionLabel}>{item.term}</dt>
-                <dd className='text-sm leading-6'>{item.text}</dd>
-              </div>
-            ))}
-          </dl>
+          <Shot shot={collabShot} dark={resolvedTheme === 'dark'} />
         </div>
       </section>
 
       <section
         id='ai'
-        className='mx-auto grid max-w-7xl gap-12 px-5 py-14 sm:px-10 sm:py-20 lg:grid-cols-2 lg:gap-16'
+        className='mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-10 sm:py-20 lg:grid-cols-[1.25fr_1fr] lg:items-center lg:gap-14'
       >
-        <div>
+        <div className='lg:order-2'>
           <h2 className={sectionHeading}>
-            Ask your documents. Approve what the agent changes
+            Ask your documents. Review what the agent proposes
           </h2>
           <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
             The chat answers from documents you can read and links the ones it
-            used. Mention a document in your question to make sure it reads that
+            used. Mention a document in a question to make sure it reads that
             one.
           </p>
           <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
-            When you ask the agent to edit a Markdown, DBML, Mermaid or
-            Architecture document, it shows the change first. Nothing is written
-            until you approve, and it can only touch what you could edit
-            yourself.
+            Ask the agent to change a document and the edit arrives as a
+            suggestion marked AI assisted, for you to accept or reject like a
+            teammate's. Changes to an Architecture canvas, and actions such as
+            moving a document to the trash, wait for your approval in the chat.
+            It can only touch what you could edit yourself.
           </p>
         </div>
-        <div id='mcp' className='min-w-0'>
-          <h3 className='text-xl font-semibold tracking-tight'>
-            Use your own AI app
-          </h3>
-          <p className='mt-3 max-w-md text-sm leading-6 text-muted-foreground'>
-            Connect an MCP client to Dokudocs with a key from your account. The
-            client acts as you, with your access.
-          </p>
+        <div className='lg:order-1'>
+          <Shot shot={aiShot} dark={resolvedTheme === 'dark'} />
+        </div>
+      </section>
+
+      <section id='mcp' className='border-y border-border bg-card'>
+        <div className='mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-10 sm:py-20 md:grid-cols-[1fr_1.1fr] md:gap-14'>
+          <div>
+            <h2 className={sectionHeading}>Use your own AI app</h2>
+            <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
+              Connect an MCP client to Dokudocs with a key from your account.
+              The client acts as you, with your access. When it edits a document
+              it saves a named version first, so one restore undoes the change.
+            </p>
+          </div>
           <pre
             tabIndex={0}
             aria-label='MCP endpoint and tools'
-            className='welcome-code mt-5 overflow-x-auto rounded-md border border-border bg-card p-4 font-mono text-xs leading-6'
+            className='welcome-code min-w-0 overflow-x-auto rounded-md border border-border bg-background p-4 font-mono text-xs leading-6'
           >
             <code>
               {`POST /api/v1/mcp\nAuthorization: Bearer <your MCP key>\n\ntools\n${mcpTools.map((tool) => `  ${tool}`).join('\n')}\n  ...and more`}
@@ -337,19 +400,21 @@ export function WelcomePage() {
         </div>
       </section>
 
-      <section id='sharing' className='border-y border-border bg-card'>
-        <div className='mx-auto grid max-w-7xl gap-8 px-5 py-14 sm:px-10 sm:py-20 md:grid-cols-[1fr_1.1fr] md:gap-14'>
+      <section
+        id='sharing'
+        className='mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-10 sm:py-20 lg:grid-cols-[1fr_1.25fr] lg:items-center lg:gap-14'
+      >
+        <div>
           <h2 className={sectionHeading}>
             Share a read-only link when it is ready
           </h2>
-          <div className='max-w-lg'>
-            <p className='text-base leading-7 text-muted-foreground'>
-              Send a link to someone outside the workspace. They read the
-              document and cannot change it. You choose which documents have a
-              link, and you control access to every other page.
-            </p>
-          </div>
+          <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
+            Send a link to someone outside the workspace. They read the document
+            and cannot change it. You choose which documents have a link, and
+            you control access to every other page.
+          </p>
         </div>
+        <Shot shot={shareShot} dark={resolvedTheme === 'dark'} />
       </section>
 
       <section className='mx-auto max-w-7xl px-5 py-14 sm:px-10 sm:py-20'>
