@@ -19,6 +19,8 @@ import (
 var (
 	ErrTooLarge = errors.New("asset: file is too large")
 	ErrNotFound = errors.New("asset: not found")
+	// ErrTooManySVGs means the document already holds MaxSVGsPerDocument vector images.
+	ErrTooManySVGs = errors.New("asset: too many svg images in this document")
 )
 
 // Asset is what is known about one stored file.
@@ -59,9 +61,14 @@ type Repository interface {
 	Remove(ctx context.Context, assetID uuid.UUID) error
 }
 
-// inlineTypes may be shown in the page; SVG is left out because it can carry script.
+// MaxSVGsPerDocument bounds how many SVG uploads one document keeps.
+const MaxSVGsPerDocument = 50
+
+// inlineTypes may be shown in the page. SVG is here only because Upload
+// rewrites it through SanitizeSVG first, and the page shows it through <img>.
 var inlineTypes = map[string]bool{
-	"image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true,
+	"image/svg+xml": true,
+	"image/png":     true, "image/jpeg": true, "image/gif": true, "image/webp": true,
 	"video/mp4": true, "video/webm": true, "application/pdf": true,
 }
 
@@ -93,6 +100,13 @@ func (s *Service) Upload(ctx context.Context, workspaceID, documentID, actorID u
 		return Asset{}, ErrTooLarge
 	}
 	contentType := detectType(data)
+	if contentType == "application/octet-stream" && looksLikeSVG(data) {
+		clean, err := SanitizeSVG(data)
+		if err != nil {
+			return Asset{}, err
+		}
+		data, contentType = clean, "image/svg+xml"
+	}
 	id := uuid.New()
 	asset := Asset{
 		ID: id, DocumentID: documentID, WorkspaceID: workspaceID,

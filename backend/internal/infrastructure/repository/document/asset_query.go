@@ -34,6 +34,15 @@ func (r *AssetRepository) Create(ctx context.Context, record asset.Asset, actorI
 			}
 			return constant.ErrForbidden
 		}
+		if record.ContentType == "image/svg+xml" {
+			var count int
+			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM document_assets WHERE document_id = $1 AND content_type = 'image/svg+xml'`, record.DocumentID).Scan(&count); err != nil {
+				return err
+			}
+			if count >= asset.MaxSVGsPerDocument {
+				return asset.ErrTooManySVGs
+			}
+		}
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO document_assets (id, document_id, workspace_id, uploaded_by, file_name, content_type, size_bytes, sha256, store_key)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
