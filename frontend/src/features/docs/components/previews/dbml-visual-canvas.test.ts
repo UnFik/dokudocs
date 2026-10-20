@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  calculateAutoLayout,
   computeCleanedOrthogonalPointsWithSegments,
   getDefaultEdgeJoints,
   getGhostJointCandidates,
   snapJointsToPath,
   type JointPoint,
+  type ParsedTable,
+  type ParsedTableGroup,
 } from './dbml-visual-canvas'
 
 describe('DBML edge joints', () => {
@@ -203,5 +206,70 @@ Records follows(following_user_id, followed_user_id, created_at) {
     ])
     expect(parsedRecords['follows'].rows).toHaveLength(2)
     expect(parsedRecords['follows'].rows[1]).toEqual(['3', '2', '2026-02-28'])
+  })
+})
+
+function makeTable(name: string, columnCount = 4): ParsedTable {
+  return {
+    name,
+    columns: Array.from({ length: columnCount }, (_, i) => ({
+      name: `c${i}`,
+      type: 'int',
+      isPk: i === 0,
+      isFk: false,
+      isUnique: false,
+    })),
+    indexes: [],
+  }
+}
+
+function makeGroups(groupCount: number, tablesPerGroup: number) {
+  const tables: ParsedTable[] = []
+  const groups: ParsedTableGroup[] = []
+  for (let g = 0; g < groupCount; g++) {
+    const names: string[] = []
+    for (let t = 0; t < tablesPerGroup; t++) {
+      const name = `g${g}_t${t}`
+      names.push(name)
+      tables.push(makeTable(name))
+    }
+    groups.push({ name: `group${g}`, tables: names })
+  }
+  return { tables, groups }
+}
+
+function bounds(positions: Record<string, { x: number; y: number }>) {
+  const xs = Object.values(positions).map((p) => p.x)
+  const ys = Object.values(positions).map((p) => p.y)
+  return {
+    width: Math.max(...xs) - Math.min(...xs) + 280,
+    height: Math.max(...ys) - Math.min(...ys),
+  }
+}
+
+describe('DBML auto layout', () => {
+  it('wraps many groups onto new rows instead of one very wide strip', () => {
+    const { tables, groups } = makeGroups(12, 4)
+    const { width, height } = bounds(calculateAutoLayout(tables, groups))
+
+    expect(width / height).toBeLessThan(2.5)
+  })
+
+  it('spreads a very large group over more columns instead of a tall tower', () => {
+    const { tables, groups } = makeGroups(1, 40)
+    const { width, height } = bounds(calculateAutoLayout(tables, groups))
+
+    expect(width / height).toBeGreaterThan(0.5)
+  })
+
+  it('places ungrouped tables after the groups in reading order', () => {
+    const { tables, groups } = makeGroups(12, 4)
+    const loose = Array.from({ length: 6 }, (_, i) => makeTable(`loose_${i}`))
+    const positions = calculateAutoLayout([...tables, ...loose], groups)
+
+    const firstRowY = Math.min(...tables.map((t) => positions[t.name].y))
+    const looseTopY = Math.min(...loose.map((t) => positions[t.name].y))
+
+    expect(looseTopY).toBeGreaterThan(firstRowY)
   })
 })
