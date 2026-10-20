@@ -75,6 +75,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:5173}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:5173}
+      # Locally, reach the API by another name than the app uses (the app is on localhost,
+      # so http://127.0.0.1:8080 is a different origin). Empty keeps HTML pages closed.
+      CONTENT_ORIGIN: ${CONTENT_ORIGIN:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       # Dev-only sealing key; production must set its own (openssl rand -base64 32).

@@ -60,6 +60,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       ALLOWED_ORIGIN: ${PUBLIC_APP_URL:?Set PUBLIC_APP_URL in .env}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:?Set PUBLIC_APP_URL in .env}
+      # HTML pages stay closed while this is empty (docs/deployment.md, "HTML pages").
+      CONTENT_ORIGIN: ${CONTENT_ORIGIN:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       # Required: seals the AI provider API key stored in the database. Generate: openssl rand -base64 32

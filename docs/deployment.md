@@ -175,6 +175,51 @@ before.
   never stored as documents; PDF is not supported. After a chat's first answer
   the answer model writes its title, which counts toward the limit.
 
+## HTML pages
+
+An HTML document (ADR 0052) is shown in a sandboxed frame loaded from a second
+origin, never from the application's. Until that origin exists the feature is
+closed: set `CONTENT_ORIGIN` in `.env` (for example
+`https://usercontent.example.com`) and the API opens it. With the variable
+empty, or equal to the application's own origin, tickets are refused and the
+page route answers 404, so deploying this code changes nothing by itself.
+
+What the origin needs:
+
+1. A DNS name of its own that is **not** under the application's cookie scope
+   in any way that matters (the application keeps its token in the browser, not
+   in a cookie, but use a sibling name or a separate registrable domain).
+2. A TLS certificate for it.
+3. A reverse proxy server block for that name that sends only `/content/p/` to
+   the API, **with the `Host` header unchanged** (the API answers the page route
+   only on the content host, and answers nothing else there), and refuses
+   everything else:
+
+   ```nginx
+   server {
+       listen 443 ssl;
+       server_name usercontent.example.com;
+       # certificate lines here
+       location /content/p/ {
+           proxy_pass http://api;
+           proxy_set_header Host $http_host;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           proxy_set_header Cookie "";   # nothing of a visitor's goes to the API from here
+       }
+       location / { return 404; }
+   }
+   ```
+
+   The API sends the `Content-Security-Policy`, `X-Content-Type-Options`,
+   `Referrer-Policy` and `Cache-Control` headers itself; the proxy must not
+   replace them.
+4. Locally, the API is reached by two names: the app at `http://localhost:5173`,
+   and `CONTENT_ORIGIN=http://127.0.0.1:8080` for the frame. They are different
+   origins, which is all the sandbox needs to be tested.
+
+`docs/html-pages-security.md` lists the checks that must pass on staging before
+`CONTENT_ORIGIN` is set in production.
+
 ## Rolling back
 
 Run the `Deploy` workflow by hand (Actions → Deploy → Run workflow, on `main`)
