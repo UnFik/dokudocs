@@ -72,6 +72,10 @@ func (h *AssetHandler) writeUploadError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, asset.ErrTooLarge), errors.As(err, &tooBig):
 		response.Error(w, http.StatusRequestEntityTooLarge, "file is too large")
+	case errors.Is(err, asset.ErrInvalidSVG):
+		response.Error(w, http.StatusUnprocessableEntity, "the svg is not valid or cannot be made safe")
+	case errors.Is(err, asset.ErrTooManySVGs):
+		response.Error(w, http.StatusConflict, "this document has too many svg images")
 	default:
 		writeDocumentError(w, err)
 	}
