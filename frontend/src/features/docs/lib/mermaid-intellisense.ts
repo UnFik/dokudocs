@@ -1,3 +1,5 @@
+import { MERMAID_DIAGRAM_TYPES } from './mermaid-diagram-types'
+
 export interface MermaidSuggestion {
   label: string
   insertText: string
@@ -7,7 +9,18 @@ export interface MermaidSuggestion {
   cursorOffset?: number
 }
 
+const NEW_TYPE_SUGGESTIONS: MermaidSuggestion[] = MERMAID_DIAGRAM_TYPES.map(
+  (type) => ({
+    label: type.keyword,
+    insertText: type.template,
+    kind: 'diagram',
+    detail: `${type.category} Template`,
+    documentation: type.description,
+  })
+)
+
 export const MERMAID_KEYWORDS: MermaidSuggestion[] = [
+  ...NEW_TYPE_SUGGESTIONS,
   {
     label: 'sequenceDiagram',
     insertText:

@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { MERMAID_DIAGRAM_TYPES } from '../lib/mermaid-diagram-types'
 import type { SourceBinding } from '../lib/source-binding'
 import { MermaidPreview } from './previews/mermaid-preview'
 import { UnifiedMonacoEditor, type SourceCollab } from './unified-monaco-editor'
@@ -133,6 +134,12 @@ const MERMAID_TEMPLATES = [
     merge develop tag: "v1.1.0"
 `,
   },
+  ...MERMAID_DIAGRAM_TYPES.map(({ name, description, category, template }) => ({
+    name,
+    description,
+    category,
+    code: template,
+  })),
 ]
 
 export function MermaidEditor({
