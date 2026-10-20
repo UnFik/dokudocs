@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 import * as Y from 'yjs'
-import { addSystem, readCanvas } from '../lib/canvas-doc'
+import { addContainer, addSystem, readCanvas } from '../lib/canvas-doc'
 import { PropertiesPanel } from './properties-panel'
 
 describe('the properties panel with several elements selected', () => {
@@ -41,9 +41,6 @@ describe('the properties panel with several elements selected', () => {
           projectID={null}
           onDelete={onDelete}
           onGesture={vi.fn()}
-          documentID='d'
-          canComment
-          onCommentsChanged={vi.fn()}
         />
       </QueryClientProvider>
     )
@@ -52,5 +49,73 @@ describe('the properties panel with several elements selected', () => {
       page.getByRole('button', { name: 'Delete 2 elements' })
     )
     expect(onDelete).toHaveBeenCalledWith(selection)
+  })
+})
+
+function mountHost() {
+  const doc = new Y.Doc()
+  const host = addContainer(doc, {
+    kind: 'host',
+    catalog: 'vps',
+    name: 'Docker host',
+    x: 0,
+    y: 0,
+    w: 320,
+    h: 206,
+    parentId: null,
+  })
+  addSystem(doc, {
+    catalog: 'golang',
+    name: 'API',
+    x: 14,
+    y: 32,
+    parentId: host,
+  })
+  const mount = (canEdit = true) =>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PropertiesPanel
+          doc={doc}
+          canvas={readCanvas(doc)}
+          catalog={[]}
+          selection={[{ kind: 'node', id: host }]}
+          canEdit={canEdit}
+          workspaceID='w'
+          projectID={null}
+          onDelete={vi.fn()}
+          onGesture={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+  return { doc, host, mount }
+}
+
+describe('the properties panel for a Host', () => {
+  it('holds the fields and Delete, with no helper text, fit button or comments', async () => {
+    const { mount } = mountHost()
+    await mount()
+    await expect.element(page.getByLabelText('name')).toHaveValue('Docker host')
+    await expect.element(page.getByLabelText('Width')).toHaveValue(320)
+    await expect
+      .element(page.getByRole('button', { name: 'Delete host' }))
+      .toBeVisible()
+    for (const gone of [
+      /Not smaller than/,
+      /Holds \d/,
+      /Documents are linked/,
+      /Nothing inside to fit/,
+      /comments/i,
+    ])
+      await expect.element(page.getByText(gone)).not.toBeInTheDocument()
+    await expect
+      .element(page.getByRole('button', { name: 'Fit to contents' }))
+      .not.toBeInTheDocument()
+  })
+
+  it('says why a size was refused only when a size is refused', async () => {
+    const { mount } = mountHost()
+    await mount()
+    await page.getByLabelText('Width').fill('40')
+    await expect.element(page.getByText(/Not smaller than/)).toBeVisible()
   })
 })

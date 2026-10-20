@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -15,8 +15,12 @@ import {
 import { formatRelativeTime } from '@/lib/time-utils'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { CommentText } from '@/components/comment-text'
 import { MentionTextarea } from '@/components/mention-textarea'
+import type { ArchitectureJSON } from '../lib/canvas-model'
+import type { Selected } from '../lib/canvas-selection'
 
 export const commentsKey = (workspaceID: string, documentID: string) => [
   'document-comments',
@@ -356,33 +360,46 @@ export function Thread({
   )
 }
 
-/** The threads on one element of the canvas, and a box to start a new one. */
-export function ElementComments({
+/** The Comments tab's label, with how many threads are still open. */
+export function CommentsTabLabel({
+  workspaceID,
+  documentID,
+}: {
+  workspaceID: string
+  documentID: string
+}) {
+  const comments = useCanvasComments(workspaceID, documentID)
+  const open = (comments.data ?? []).filter(
+    (t) => t.elementAnchor && !t.resolvedAt
+  ).length
+  return (
+    <>
+      Comments
+      {open > 0 && (
+        <span className='rounded-[2px] border border-border bg-muted px-1 font-mono text-[11px] tabular-nums'>
+          {open}
+        </span>
+      )}
+    </>
+  )
+}
+
+/** A box to start a thread on one element; remounted when another element is selected. */
+function NewThread({
   workspaceID,
   documentID,
   elementID,
   elementName,
-  canComment,
-  userID,
   onChanged,
-  onOpenThread,
 }: {
   workspaceID: string
   documentID: string
   elementID: string
   elementName: string
-  canComment: boolean
-  userID?: string
   onChanged: () => void
-  /** Opens the thread's pin on the canvas. */
-  onOpenThread?: (threadID: string) => void
 }) {
-  const comments = useCanvasComments(workspaceID, documentID)
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')
-  const threads = (comments.data ?? []).filter(
-    (t) => t.elementAnchor?.elementId === elementID
-  )
   const create = useMutation({
     mutationFn: () =>
       createDocumentComment(workspaceID, documentID, {
@@ -402,21 +419,134 @@ export function ElementComments({
     onError: (error) =>
       toast.error(`The comment was not sent: ${error.message}`),
   })
-  const newID = `element-comment-${elementID}`
+  const fieldID = `element-comment-${elementID}`
   return (
-    <section
-      className='flex flex-col gap-1.5'
-      aria-labelledby={`${newID}-heading`}
+    <form
+      className='flex flex-col gap-1'
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (draft.trim()) create.mutate()
+      }}
     >
-      <h3
-        id={`${newID}-heading`}
-        className='font-mono text-[11px] text-muted-foreground'
+      <label htmlFor={fieldID} className='sr-only'>
+        New comment on {elementName}
+      </label>
+      <MentionTextarea
+        id={fieldID}
+        workspaceID={workspaceID}
+        documentID={documentID}
+        value={draft}
+        onValueChange={setDraft}
+        placeholder={`Comment on ${elementName}`}
+        maxLength={2000}
+        className='min-h-14 text-[12.5px]'
+      />
+      <Button
+        type='submit'
+        size='sm'
+        variant='outline'
+        className='self-start'
+        disabled={!draft.trim() || create.isPending}
       >
-        comments ·{' '}
-        <span className='tabular-nums'>
-          {threads.filter((t) => !t.resolvedAt).length}
-        </span>
-      </h3>
+        Comment
+      </Button>
+    </form>
+  )
+}
+
+/**
+ * Every thread of the canvas in one list, filtered to the selection on demand.
+ * Threads of removed elements stay readable and come last.
+ */
+export function CommentsPanel({
+  workspaceID,
+  documentID,
+  canvas,
+  selection,
+  canComment,
+  userID,
+  onChanged,
+  onSelectElement,
+  onOpenThread,
+  showResolved,
+  onShowResolved,
+}: {
+  workspaceID: string
+  documentID: string
+  canvas: ArchitectureJSON
+  selection: Selected[]
+  canComment: boolean
+  userID?: string
+  onChanged: () => void
+  /** Selects the element a thread is about. */
+  onSelectElement?: (elementID: string) => void
+  /** Opens the thread's pin on the canvas. */
+  onOpenThread?: (threadID: string) => void
+  /** Pins of resolved threads are shown on the canvas. */
+  showResolved?: boolean
+  onShowResolved?: (show: boolean) => void
+}) {
+  const comments = useCanvasComments(workspaceID, documentID)
+  const [filter, setFilter] = useState<'all' | 'selected'>('all')
+  const names = useMemo(() => {
+    const byID = new Map(canvas.nodes.map((n) => [n.id, n.name]))
+    const map = new Map<string, string>()
+    for (const n of canvas.nodes) map.set(n.id, n.name || 'Untitled')
+    for (const c of canvas.connections)
+      map.set(
+        c.id,
+        `${byID.get(c.source) || 'Untitled'} → ${byID.get(c.target) || 'Untitled'}`
+      )
+    return map
+  }, [canvas])
+  const selectedIDs = new Set(selection.map((s) => s.id))
+  const target =
+    selection.length === 1 && names.has(selection[0]!.id)
+      ? { id: selection[0]!.id, name: names.get(selection[0]!.id)! }
+      : null
+  const threads = (comments.data ?? []).filter((t) => t.elementAnchor)
+  const live = threads.filter((t) => names.has(t.elementAnchor!.elementId))
+  const orphans = threads.filter((t) => !names.has(t.elementAnchor!.elementId))
+  const shown =
+    filter === 'selected'
+      ? live.filter((t) => selectedIDs.has(t.elementAnchor!.elementId))
+      : [...live, ...orphans]
+  return (
+    <div className='flex flex-col gap-2.5'>
+      <div
+        role='group'
+        aria-label='Which threads'
+        className='grid grid-cols-2 overflow-hidden rounded-[4px] border border-input'
+      >
+        {(['all', 'selected'] as const).map((which) => (
+          <button
+            key={which}
+            type='button'
+            aria-pressed={filter === which}
+            onClick={() => setFilter(which)}
+            className={cn(
+              'h-7 text-xs focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-signal',
+              filter === which
+                ? 'bg-accent font-medium'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {which === 'all' ? 'All' : 'Selected'}
+          </button>
+        ))}
+      </div>
+      {onShowResolved && (
+        <div className='flex items-center justify-between gap-2'>
+          <Label htmlFor='architecture-show-resolved' className='text-xs'>
+            Show resolved on canvas
+          </Label>
+          <Switch
+            id='architecture-show-resolved'
+            checked={Boolean(showResolved)}
+            onCheckedChange={onShowResolved}
+          />
+        </div>
+      )}
       {comments.isPending && (
         <p className='text-xs text-muted-foreground'>Loading comments…</p>
       )}
@@ -432,107 +562,70 @@ export function ElementComments({
           </button>
         </p>
       )}
-      {comments.isSuccess && !threads.length && (
+      {comments.isSuccess && !shown.length && (
         <p className='text-xs text-muted-foreground'>
-          No comments on this element.
+          {filter === 'selected'
+            ? selection.length
+              ? 'No comments on the selection.'
+              : 'Select an element to see its comments.'
+            : 'No comments yet.'}
         </p>
       )}
-      <ul>
-        {threads.map((t) => (
-          <Thread
-            key={t.id}
-            thread={t}
+      <ul className='flex flex-col'>
+        {shown.map((t) => {
+          const elementID = t.elementAnchor!.elementId
+          const known = names.get(elementID)
+          return (
+            <li
+              key={t.id}
+              className='flex flex-col border-t border-border pt-2 first:border-t-0 first:pt-0'
+            >
+              {known !== undefined ? (
+                <button
+                  type='button'
+                  className='self-start truncate font-mono text-[11px] text-muted-foreground hover:text-signal focus-visible:outline-2 focus-visible:outline-signal'
+                  onClick={() => onSelectElement?.(elementID)}
+                >
+                  {known}
+                </button>
+              ) : (
+                <span className='font-mono text-[11px] text-muted-foreground'>
+                  removed element · “{t.selectedText}”
+                </span>
+              )}
+              <Thread
+                as='div'
+                thread={t}
+                workspaceID={workspaceID}
+                documentID={documentID}
+                canComment={canComment}
+                userID={userID}
+                onChanged={onChanged}
+                onOpenOnCanvas={
+                  onOpenThread && known !== undefined && !t.resolvedAt
+                    ? () => onOpenThread(t.id)
+                    : undefined
+                }
+              />
+            </li>
+          )
+        })}
+      </ul>
+      {canComment &&
+        (target ? (
+          <NewThread
+            key={target.id}
             workspaceID={workspaceID}
             documentID={documentID}
-            canComment={canComment}
-            userID={userID}
+            elementID={target.id}
+            elementName={target.name}
             onChanged={onChanged}
-            onOpenOnCanvas={
-              onOpenThread && !t.resolvedAt
-                ? () => onOpenThread(t.id)
-                : undefined
-            }
           />
+        ) : (
+          <p className='text-xs text-muted-foreground'>
+            Select one element to start a thread.
+          </p>
         ))}
-      </ul>
-      {canComment && (
-        <form
-          className='flex flex-col gap-1'
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (draft.trim()) create.mutate()
-          }}
-        >
-          <label htmlFor={newID} className='sr-only'>
-            New comment on {elementName}
-          </label>
-          <MentionTextarea
-            id={newID}
-            workspaceID={workspaceID}
-            documentID={documentID}
-            value={draft}
-            onValueChange={setDraft}
-            placeholder={`Ask or note something about ${elementName}`}
-            maxLength={2000}
-            className='min-h-14 text-[12.5px]'
-          />
-          <Button
-            type='submit'
-            size='sm'
-            variant='outline'
-            className='self-start'
-            disabled={!draft.trim() || create.isPending}
-          >
-            Comment
-          </Button>
-        </form>
-      )}
-    </section>
-  )
-}
-
-/** Threads whose element was removed: still readable, listed when nothing is selected. */
-export function OrphanedComments({
-  workspaceID,
-  documentID,
-  elementIDs,
-}: {
-  workspaceID: string
-  documentID: string
-  elementIDs: Set<string>
-}) {
-  const comments = useCanvasComments(workspaceID, documentID)
-  const orphans = (comments.data ?? []).filter(
-    (t) =>
-      t.elementAnchor &&
-      !elementIDs.has(t.elementAnchor.elementId) &&
-      !t.resolvedAt
-  )
-  if (!orphans.length) return null
-  return (
-    <section
-      className='flex flex-col gap-1.5'
-      aria-label='Comments on removed elements'
-    >
-      <h3 className='font-mono text-[11px] text-muted-foreground'>
-        comments on removed elements · {orphans.length}
-      </h3>
-      <ul>
-        {orphans.map((t) => (
-          <li
-            key={t.id}
-            className='border-t border-border py-1.5 text-[12.5px]'
-          >
-            <p className='text-xs text-muted-foreground'>
-              {t.authorName || 'Someone'}, on an element that was removed: “
-              {t.selectedText}”
-            </p>
-            <p>
-              <CommentText content={t.content} />
-            </p>
-          </li>
-        ))}
-      </ul>
-    </section>
+    </div>
   )
 }
