@@ -105,6 +105,18 @@ func TestAskingForOnlyWhatTheCanvasHasNeedsNoApprovalAndChangesNothing(t *testin
 	}
 }
 
+func TestAConnectionToAHostIsRefusedBeforeApprovalNamingTheSystems(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	exec := canvasExecutor(e, CapRead, CapContent)
+	ops := `[{"type":"add_node","ref":"web","kind":"system","name":"React","parent":"vps"},` +
+		`{"type":"add_connection","source":"api","target":"vps","protocol":"rest"}]`
+	out, err := exec.Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws}, "edit_architecture", canvasArgs(e, ops))
+	got := refused(t, err)
+	if out.Pending != nil || !strings.Contains(got, `operation 2: "VPS-1" is a Host, and a Connection joins two Systems`) || !strings.Contains(got, "web (React)") {
+		t.Fatalf("Call() = %+v, %q; want a refusal that names the Systems, including web (React)", out, got)
+	}
+}
+
 func TestAnApprovedCanvasEditStillRunsWhenAnEarlierApprovalChangedTheVersion(t *testing.T) {
 	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
 	exec := canvasExecutor(e, CapRead, CapContent)

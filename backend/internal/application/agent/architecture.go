@@ -277,9 +277,13 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 	}
 	kinds := map[string]string{}
 	names := map[string]string{}
+	var systems []string // "id (Name)" of every System a Connection may end at
 	for _, n := range c.Nodes {
 		kinds[n.ID] = n.Kind
 		names[n.ID] = n.Name
+		if n.Kind == "system" {
+			systems = append(systems, fmt.Sprintf("%s (%s)", n.ID, n.Name))
+		}
 	}
 	fail := func(i int, format string, args ...any) error {
 		return &ToolError{Message: fmt.Sprintf("operation %d: ", i+1) + fmt.Sprintf(format, args...)}
@@ -313,6 +317,9 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 				drop = true
 				break
 			}
+			if ref := op.text("ref"); ref != "" && op.text("kind") == "system" {
+				systems = append(systems, fmt.Sprintf("%s (%s)", ref, op.text("name")))
+			}
 			without(op, op.text("kind"), op.text("name"))
 			if msg := checkSlug(entries, slugs, op.text("kind"), op.text("catalog")); msg != "" {
 				return checked{}, fail(i, "%s", msg)
@@ -332,6 +339,13 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 				return checked{}, fail(i, "%s", msg)
 			}
 		case "add_connection", "update_connection":
+			if op.text("type") == "add_connection" {
+				for _, end := range []string{"source", "target"} {
+					if kind := kinds[op.text(end)]; kind == "host" || kind == "group" {
+						return checked{}, fail(i, "%q is a %s, and a Connection joins two Systems; the Systems are %s", names[op.text(end)], title(kind), strings.Join(systems, ", "))
+					}
+				}
+			}
 			if msg := checkSlug(entries, slugs, "protocol", op.text("protocol")); msg != "" {
 				return checked{}, fail(i, "%s", msg)
 			}
