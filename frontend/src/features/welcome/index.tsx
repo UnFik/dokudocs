@@ -1,15 +1,30 @@
 import { useState } from 'react'
 import { Link, useSearch } from '@tanstack/react-router'
+import aiDark from '@/assets/landing/ai-dark.webp'
+import aiLight from '@/assets/landing/ai-light.webp'
+import architectureDark from '@/assets/landing/architecture-dark.webp'
+import architectureLight from '@/assets/landing/architecture-light.webp'
+import collabDark from '@/assets/landing/collab-dark.webp'
+import collabLight from '@/assets/landing/collab-light.webp'
 import dbmlDark from '@/assets/landing/dbml-dark.webp'
 import dbmlLight from '@/assets/landing/dbml-light.webp'
 import markdownDark from '@/assets/landing/markdown-dark.webp'
 import markdownLight from '@/assets/landing/markdown-light.webp'
 import mermaidDark from '@/assets/landing/mermaid-dark.webp'
+import shareDark from '@/assets/landing/share-dark.webp'
+import shareLight from '@/assets/landing/share-light.webp'
 import { Logo } from '@/assets/logo'
 import { useTheme } from '@/context/theme-provider'
 import './welcome.css'
 
 const previews = [
+  {
+    type: 'markdown',
+    label: 'Notes',
+    light: markdownLight,
+    dark: markdownDark,
+    alt: 'A Markdown document open in the DokuDocs editor',
+  },
   {
     type: 'dbml',
     label: 'Data schema',
@@ -25,104 +40,115 @@ const previews = [
     alt: 'A Mermaid diagram in a DokuDocs Markdown document',
   },
   {
-    type: 'markdown',
-    label: 'Notes',
-    light: markdownLight,
-    dark: markdownDark,
-    alt: 'A Markdown document open in the DokuDocs editor',
+    type: 'architecture',
+    label: 'System drawing',
+    light: architectureLight,
+    dark: architectureDark,
+    alt: 'An Architecture document: hosts, systems and their connections drawn on a canvas',
   },
 ] as const
 
-function SchemaIllustration() {
+const collabShot = {
+  light: collabLight,
+  dark: collabDark,
+  alt: 'A Markdown document with a pending suggestion and a comment thread between two teammates',
+} as const
+
+const aiShot = {
+  light: aiLight,
+  dark: aiDark,
+  alt: 'The document chat: the assistant proposed a change that now waits for review',
+} as const
+
+const shareShot = {
+  light: shareLight,
+  dark: shareDark,
+  alt: 'A document opened from a shared link, read-only',
+} as const
+
+const documentTypes = ['markdown', 'dbml', 'mermaid', 'architecture'] as const
+
+const collaboration = [
+  {
+    term: 'view',
+    text: 'Read the document as it stands.',
+  },
+  {
+    term: 'edit',
+    text: 'Type together in real time and see where everyone is.',
+  },
+  {
+    term: 'suggest',
+    text: 'Propose a change. It waits for an editor to accept or reject it, and the document stays as it was until then.',
+  },
+] as const
+
+const mcpTools = [
+  'search_documents',
+  'read_document',
+  'create_document',
+  'edit_document_content',
+  'edit_architecture',
+  'add_comment',
+] as const
+
+const workspaceParts = [
+  {
+    name: 'Command search',
+    text: 'Press Ctrl+K on any page to find a document.',
+  },
+  {
+    name: 'Comments',
+    text: 'Comment on a passage and mention a teammate in the thread.',
+  },
+  {
+    name: 'Revisions',
+    text: 'Save a version of a document and read earlier ones.',
+  },
+  {
+    name: 'Trash',
+    text: 'A deleted document waits in the trash until you restore it.',
+  },
+  {
+    name: 'Invites',
+    text: 'Invite someone to a workspace with an emailed link.',
+  },
+  {
+    name: 'Themes',
+    text: 'Light and dark, following your system unless you choose.',
+  },
+] as const
+
+const sectionLabel = 'font-mono text-xs text-muted-foreground'
+const sectionHeading =
+  'text-2xl leading-tight font-semibold tracking-tight text-balance sm:text-3xl'
+
+type ShotProps = {
+  shot: { light: string; dark: string; alt: string }
+  dark: boolean
+}
+
+function Shot({ shot, dark }: ShotProps) {
   return (
-    <figure className='welcome-schema'>
-      <svg
-        viewBox='0 0 600 460'
-        role='img'
-        aria-labelledby='schema-title schema-description'
-      >
-        <title id='schema-title'>
-          Workspaces, documents, revisions, and comments connected
-        </title>
-        <desc id='schema-description'>
-          A simplified excerpt of the DokuDocs schema. A workspace contains
-          documents. Each document has revisions and comment threads.
-        </desc>
-        <g
-          className='schema-links'
-          fill='none'
-          stroke='currentColor'
-          strokeWidth='1.5'
-        >
-          <path pathLength='1' d='M250 96 H290 V186 H326' />
-          <path pathLength='1' d='M326 228 H286 V373 H260' />
-          <path pathLength='1' d='M447 266 V324' />
-        </g>
-        <g className='schema-node schema-node-1' transform='translate(24 36)'>
-          <rect width='226' height='118' rx='6' />
-          <text x='18' y='32' className='schema-name'>
-            workspaces
-          </text>
-          <path d='M0 48 H226' />
-          <text x='18' y='77' className='schema-field'>
-            id
-          </text>
-          <text x='18' y='100' className='schema-field'>
-            name
-          </text>
-        </g>
-        <g className='schema-node schema-node-2' transform='translate(326 148)'>
-          <rect width='246' height='118' rx='6' />
-          <text x='18' y='32' className='schema-name'>
-            documents
-          </text>
-          <path d='M0 48 H246' />
-          <text x='18' y='77' className='schema-field'>
-            workspace_id
-          </text>
-          <text x='18' y='100' className='schema-field'>
-            title
-          </text>
-        </g>
-        <g className='schema-node schema-node-3' transform='translate(24 324)'>
-          <rect width='236' height='118' rx='6' />
-          <text x='18' y='32' className='schema-name'>
-            document_revisions
-          </text>
-          <path d='M0 48 H236' />
-          <text x='18' y='77' className='schema-field'>
-            document_id
-          </text>
-          <text x='18' y='100' className='schema-field'>
-            version_number
-          </text>
-        </g>
-        <g className='schema-node schema-node-4' transform='translate(326 324)'>
-          <rect width='246' height='118' rx='6' />
-          <text x='18' y='32' className='schema-name'>
-            comment_threads
-          </text>
-          <path d='M0 48 H246' />
-          <text x='18' y='77' className='schema-field'>
-            document_id
-          </text>
-          <text x='18' y='100' className='schema-field'>
-            selected_text
-          </text>
-        </g>
-      </svg>
-      <figcaption className='mt-5 font-mono text-xs text-muted-foreground'>
-        The DokuDocs schema, simplified.
-      </figcaption>
-    </figure>
+    <div className='min-w-0 overflow-hidden rounded-md border border-border bg-background'>
+      <img
+        src={dark ? shot.dark : shot.light}
+        alt={shot.alt}
+        width='1280'
+        height='800'
+        loading='lazy'
+        className='block h-auto w-full'
+      />
+    </div>
   )
 }
 
 export function WelcomePage() {
   const { redirect } = useSearch({ from: '/' })
   const { resolvedTheme, setTheme } = useTheme()
-  const [previewIndex, setPreviewIndex] = useState(1)
+  const [previewIndex, setPreviewIndex] = useState(3)
   const preview = previews[previewIndex]!
+  const heroPreview = previews[0]
 
   return (
     <main
@@ -135,7 +161,7 @@ export function WelcomePage() {
       <header className='border-b border-border'>
         <nav
           aria-label='Main navigation'
-          className='mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-4 px-5 sm:px-10'
+          className='mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-5 sm:px-10'
         >
           <Link
             to='/'
@@ -147,16 +173,22 @@ export function WelcomePage() {
           </Link>
           <div className='flex items-center gap-4 sm:gap-7'>
             <a
-              href='#editor'
-              className='welcome-link hidden min-h-11 items-center text-sm text-muted-foreground sm:inline-flex'
+              href='#documents'
+              className='welcome-link hidden min-h-11 items-center text-sm text-muted-foreground md:inline-flex'
             >
-              Editor
+              Documents
             </a>
             <a
               href='#together'
-              className='welcome-link hidden min-h-11 items-center text-sm text-muted-foreground sm:inline-flex'
+              className='welcome-link hidden min-h-11 items-center text-sm text-muted-foreground md:inline-flex'
             >
               Collaboration
+            </a>
+            <a
+              href='#ai'
+              className='welcome-link hidden min-h-11 items-center text-sm text-muted-foreground md:inline-flex'
+            >
+              AI and MCP
             </a>
             <Link
               to='/sign-in'
@@ -172,17 +204,16 @@ export function WelcomePage() {
       <section
         id='main-content'
         tabIndex={-1}
-        className='mx-auto grid max-w-7xl gap-10 px-5 pt-14 pb-12 sm:px-10 sm:pt-20 sm:pb-20 lg:grid-cols-[1fr_1.05fr] lg:items-center lg:gap-12'
+        className='mx-auto grid max-w-7xl gap-10 px-5 pt-12 pb-10 sm:px-10 sm:pt-20 sm:pb-16 lg:grid-cols-[1fr_1.15fr] lg:items-center lg:gap-14'
       >
         <div>
-          <h1 className='welcome-heading max-w-xl font-semibold tracking-tight text-balance'>
-            Write it down.
-            <br />
-            <span className='text-muted-foreground'>Map it out.</span>
+          <h1 className='welcome-heading max-w-xl font-semibold text-balance'>
+            Docs, schemas and diagrams in one workspace
           </h1>
-          <p className='mt-7 max-w-sm text-base leading-7 text-muted-foreground'>
-            Keep Markdown notes, DBML schemas, and Mermaid diagrams in one
-            shared workspace.
+          <p className='mt-6 max-w-md text-base leading-7 text-muted-foreground'>
+            Write Markdown with your team in real time. Keep DBML schemas,
+            Mermaid flows and architecture drawings beside it, and ask an AI
+            whose edits you review before they land.
           </p>
           <div className='mt-8 flex flex-wrap items-center gap-5'>
             <Link
@@ -192,93 +223,235 @@ export function WelcomePage() {
               Create an account
             </Link>
             <a
-              href='#editor'
+              href='#documents'
               className='welcome-link inline-flex min-h-12 items-center text-sm underline underline-offset-4'
             >
-              See the editor
+              See the document types
             </a>
           </div>
         </div>
-        <SchemaIllustration />
-      </section>
-
-      <section id='editor' className='border-y border-border bg-card'>
-        <div className='mx-auto max-w-7xl px-5 py-10 sm:px-10 sm:py-16'>
-          <div className='flex flex-col justify-between gap-6 lg:flex-row lg:items-end'>
-            <div>
-              <h2 className='text-2xl font-semibold tracking-tight sm:text-3xl'>
-                Notes, schemas, flows.
-              </h2>
-              <p className='mt-2 text-sm text-muted-foreground'>
-                Actual screens from DokuDocs.
-              </p>
-            </div>
-            <div
-              role='group'
-              aria-label='Choose an editor preview'
-              className='flex flex-wrap gap-2'
-            >
-              {previews.map((item, index) => (
-                <button
-                  key={item.type}
-                  type='button'
-                  aria-pressed={previewIndex === index}
-                  aria-controls='editor-preview'
-                  onClick={() => setPreviewIndex(index)}
-                  className='welcome-format min-h-12 rounded-sm border border-input px-4 text-left'
-                >
-                  <span className='block text-sm font-medium'>
-                    {item.label}
-                  </span>
-                  <span className='block font-mono text-xs text-muted-foreground'>
-                    {item.type}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <figure id='editor-preview' className='mt-8'>
-            <div
-              key={preview.type}
-              data-format={preview.type}
-              className='welcome-preview overflow-hidden rounded-md border border-border bg-background'
-            >
-              <img
-                src={resolvedTheme === 'dark' ? preview.dark : preview.light}
-                alt={preview.alt}
-                width='1280'
-                height='800'
-                loading='lazy'
-                className='block h-auto w-full'
-              />
-            </div>
-            <figcaption
-              aria-live='polite'
-              className='mt-3 text-xs text-muted-foreground'
-            >
-              {preview.alt}
-            </figcaption>
-          </figure>
+        <div className='overflow-hidden rounded-md border border-border bg-card'>
+          <img
+            src={
+              resolvedTheme === 'dark' ? heroPreview.dark : heroPreview.light
+            }
+            alt={heroPreview.alt}
+            width='1280'
+            height='800'
+            className='block h-auto w-full'
+          />
         </div>
       </section>
 
       <section
-        id='together'
-        className='mx-auto grid max-w-7xl gap-8 px-5 py-16 sm:px-10 sm:py-24 md:grid-cols-[1fr_1.05fr] md:gap-12'
+        aria-label='Document types'
+        className='border-y border-border bg-card'
       >
-        <h2 className='max-w-md text-3xl leading-tight font-semibold tracking-tight sm:text-4xl'>
-          Work on the
-          <br />
-          same page.
-        </h2>
-        <div className='max-w-lg'>
-          <p className='text-lg leading-8 text-muted-foreground'>
-            Edit together in real time. Review suggestions and revisions, then
-            share a read-only link when the document is ready.
+        <div className='mx-auto flex max-w-7xl flex-col gap-4 px-5 py-6 sm:px-10 md:flex-row md:items-center md:justify-between'>
+          <p className='text-sm text-muted-foreground'>
+            Four document types, one place to search, share and review.
           </p>
-          <p className='mt-5 text-sm leading-6 text-muted-foreground'>
-            You control access to each page.
+          <ul className='flex flex-wrap gap-2'>
+            {documentTypes.map((type) => (
+              <li
+                key={type}
+                className='rounded-xs bg-border px-2 py-1 font-mono text-[10.5px] text-foreground'
+              >
+                {type}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section
+        id='documents'
+        className='mx-auto max-w-7xl px-5 py-14 sm:px-10 sm:py-20'
+      >
+        <div className='flex flex-col justify-between gap-6 lg:flex-row lg:items-end'>
+          <div className='max-w-xl'>
+            <h2 className={sectionHeading}>
+              Notes, schemas and flows stay together
+            </h2>
+            <p className='mt-3 text-sm leading-6 text-muted-foreground'>
+              These are screens from DokuDocs. An Architecture document draws
+              your hosts, systems and the connections between them on a canvas,
+              and opens like any other document.
+            </p>
+          </div>
+          <div
+            role='group'
+            aria-label='Choose an editor preview'
+            className='flex flex-wrap gap-2'
+          >
+            {previews.map((item, index) => (
+              <button
+                key={item.type}
+                type='button'
+                aria-pressed={previewIndex === index}
+                aria-controls='editor-preview'
+                onClick={() => setPreviewIndex(index)}
+                className='welcome-format min-h-12 rounded-sm border border-input px-4 text-left'
+              >
+                <span className='block text-sm font-medium'>{item.label}</span>
+                <span className='block font-mono text-xs text-muted-foreground'>
+                  {item.type}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <figure id='editor-preview' className='mt-8'>
+          <div
+            key={preview.type}
+            data-format={preview.type}
+            className='welcome-preview overflow-hidden rounded-md border border-border bg-background'
+          >
+            <img
+              src={resolvedTheme === 'dark' ? preview.dark : preview.light}
+              alt={preview.alt}
+              width='1280'
+              height='800'
+              loading='lazy'
+              className='block h-auto w-full'
+            />
+          </div>
+          <figcaption
+            aria-live='polite'
+            className='mt-3 text-xs text-muted-foreground'
+          >
+            {preview.alt}
+          </figcaption>
+        </figure>
+      </section>
+
+      <section id='together' className='border-y border-border bg-card'>
+        <div className='mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-10 sm:py-20 lg:grid-cols-[1fr_1.25fr] lg:items-center lg:gap-14'>
+          <div>
+            <h2 className={sectionHeading}>
+              Edit together, then review before a change lands
+            </h2>
+            <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
+              Everyone types in the same document at once. When a change needs a
+              second pair of eyes, suggest it instead of making it, and talk it
+              through in a comment on the passage.
+            </p>
+            <dl className='mt-8 border-t border-border'>
+              {collaboration.map((item) => (
+                <div
+                  key={item.term}
+                  className='grid gap-1 border-b border-border py-4 sm:grid-cols-[5rem_1fr] sm:gap-6'
+                >
+                  <dt className={sectionLabel}>{item.term}</dt>
+                  <dd className='text-sm leading-6'>{item.text}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <Shot shot={collabShot} dark={resolvedTheme === 'dark'} />
+        </div>
+      </section>
+
+      <section
+        id='ai'
+        className='mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-10 sm:py-20 lg:grid-cols-[1.25fr_1fr] lg:items-center lg:gap-14'
+      >
+        <div className='lg:order-2'>
+          <h2 className={sectionHeading}>
+            Ask your documents. Review what the agent proposes
+          </h2>
+          <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
+            The chat answers from documents you can read and links the ones it
+            used. Mention a document in a question to make sure it reads that
+            one.
           </p>
+          <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
+            Ask the agent to change a document and the edit arrives as a
+            suggestion marked AI assisted, for you to accept or reject like a
+            teammate's. Changes to an Architecture canvas, and actions such as
+            moving a document to the trash, wait for your approval in the chat.
+            It can only touch what you could edit yourself.
+          </p>
+        </div>
+        <div className='lg:order-1'>
+          <Shot shot={aiShot} dark={resolvedTheme === 'dark'} />
+        </div>
+      </section>
+
+      <section id='mcp' className='border-y border-border bg-card'>
+        <div className='mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-10 sm:py-20 md:grid-cols-[1fr_1.1fr] md:gap-14'>
+          <div>
+            <h2 className={sectionHeading}>Use your own AI app</h2>
+            <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
+              Connect an MCP client to Dokudocs with a key from your account.
+              The client acts as you, with your access. When it edits a document
+              it saves a named version first, so one restore undoes the change.
+            </p>
+          </div>
+          <pre
+            tabIndex={0}
+            aria-label='MCP endpoint and tools'
+            className='welcome-code min-w-0 overflow-x-auto rounded-md border border-border bg-background p-4 font-mono text-xs leading-6'
+          >
+            <code>
+              {`POST /api/v1/mcp\nAuthorization: Bearer <your MCP key>\n\ntools\n${mcpTools.map((tool) => `  ${tool}`).join('\n')}\n  ...and more`}
+            </code>
+          </pre>
+        </div>
+      </section>
+
+      <section
+        id='sharing'
+        className='mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-10 sm:py-20 lg:grid-cols-[1fr_1.25fr] lg:items-center lg:gap-14'
+      >
+        <div>
+          <h2 className={sectionHeading}>
+            Share a read-only link when it is ready
+          </h2>
+          <p className='mt-4 max-w-md text-base leading-7 text-muted-foreground'>
+            Send a link to someone outside the workspace. They read the document
+            and cannot change it. You choose which documents have a link, and
+            you control access to every other page.
+          </p>
+        </div>
+        <Shot shot={shareShot} dark={resolvedTheme === 'dark'} />
+      </section>
+
+      <section className='mx-auto max-w-7xl px-5 py-14 sm:px-10 sm:py-20'>
+        <h2 className={sectionHeading}>The rest of the workspace</h2>
+        <ul className='mt-8 grid border-t border-border md:grid-cols-2 md:gap-x-12'>
+          {workspaceParts.map((item) => (
+            <li
+              key={item.name}
+              className='grid gap-1 border-b border-border py-5 sm:grid-cols-[9rem_1fr] sm:gap-6'
+            >
+              <span className='text-sm font-medium'>{item.name}</span>
+              <span className='text-sm leading-6 text-muted-foreground'>
+                {item.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className='border-t border-border bg-card'>
+        <div className='mx-auto flex max-w-7xl flex-col gap-6 px-5 py-14 sm:px-10 sm:py-20 md:flex-row md:items-center md:justify-between'>
+          <h2 className={sectionHeading}>Start a workspace for your team</h2>
+          <div className='flex flex-wrap items-center gap-5'>
+            <Link
+              to='/sign-up'
+              className='welcome-primary inline-flex min-h-12 items-center rounded-sm bg-signal px-6 text-sm font-medium text-signal-foreground'
+            >
+              Create an account
+            </Link>
+            <Link
+              to='/sign-in'
+              search={{ redirect }}
+              className='welcome-link inline-flex min-h-12 items-center text-sm underline underline-offset-4'
+            >
+              Sign in
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -295,6 +468,18 @@ export function WelcomePage() {
             aria-label='Service information'
             className='flex flex-wrap items-center gap-x-6 gap-y-2 text-sm'
           >
+            <a
+              href='#documents'
+              className='welcome-link inline-flex min-h-11 items-center text-muted-foreground'
+            >
+              Documents
+            </a>
+            <a
+              href='#ai'
+              className='welcome-link inline-flex min-h-11 items-center text-muted-foreground'
+            >
+              AI and MCP
+            </a>
             <Link
               to='/privacy'
               className='welcome-link inline-flex min-h-11 items-center'
