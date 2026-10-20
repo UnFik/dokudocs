@@ -112,7 +112,7 @@ func addAgentRoutes(mux *http.ServeMux, f Router, c *container.Container, cfg co
 	h := agenthandler.New(kit.permissions, kit.mcp, kit.skills, kit.usage).WithPlanLimits(aiusagerepo.NewStore(c.DB)).WithQuotas(aiusagerepo.NewStore(c.DB)).WithTraces(kit.traces)
 
 	// Under /api so the same proxy rule reaches it.
-	mux.Handle("/api/v1/mcp", mcpserver.New(mcpserver.Deps{Keys: kit.mcp, Executor: kit.executor, Skills: kit.skills}))
+	mux.Handle("/api/v1/mcp", mcpserver.New(mcpserver.Deps{Keys: kit.mcp, Executor: kit.executor, Skills: kit.skills, AppURL: cfg.PublicAppURL}))
 
 	me := f.Group("/users/me", authRequired)
 	me.Get("/ai-permissions", h.AIPermissions)
