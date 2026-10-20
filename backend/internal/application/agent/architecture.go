@@ -31,6 +31,7 @@ type canvasNode struct {
 	Kind     string  `json:"kind"`
 	ParentID *string `json:"parentId"`
 	Name     string  `json:"name"`
+	Catalog  string  `json:"catalog"`
 }
 
 type canvasConnection struct {
@@ -53,6 +54,20 @@ func parseCanvas(text string) canvas {
 func (c canvas) node(id string) (canvasNode, bool) {
 	for _, n := range c.Nodes {
 		if n.ID == id {
+			return n, true
+		}
+	}
+	return canvasNode{}, false
+}
+
+// twin finds the node an add_node would repeat: same kind, name, catalog and parent.
+func (c canvas) twin(op operation) (canvasNode, bool) {
+	for _, n := range c.Nodes {
+		parent := ""
+		if n.ParentID != nil {
+			parent = *n.ParentID
+		}
+		if n.Kind == op.text("kind") && strings.EqualFold(n.Name, op.text("name")) && n.Catalog == op.text("catalog") && parent == op.text("parent") {
 			return n, true
 		}
 	}
@@ -158,7 +173,13 @@ func (s *ContentService) EditArchitecture(ctx context.Context, actor Actor, work
 		return EditResult{}, err
 	}
 	if version != "" && live.Version != version {
-		return EditResult{}, errStale
+		// The User approved this exact list of operations, which name elements by id and are
+		// checked against the live canvas below. An earlier approval in the same answer moves
+		// the version, so refusing here would make a second card fail every time.
+		if !actor.Approved {
+			return EditResult{}, errStale
+		}
+		version = live.Version
 	}
 	ops, err := parseOperations(raw)
 	if err != nil {
@@ -278,6 +299,9 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 		case "add_node":
 			if ref := op.text("ref"); ref != "" {
 				kinds[ref] = op.text("kind")
+			}
+			if existing, found := c.twin(op); found {
+				return checked{}, fail(i, "%q is already on the canvas as %s; use that id, or give the new one a different name if you want a second", op.text("name"), existing.ID)
 			}
 			without(op, op.text("kind"), op.text("name"))
 			if msg := checkSlug(entries, slugs, op.text("kind"), op.text("catalog")); msg != "" {

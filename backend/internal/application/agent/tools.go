@@ -650,7 +650,7 @@ func DokudocsTools(d ToolDeps) []Tool {
 		{
 			Name: "edit_architecture", Capability: CapContent, Write: true, DocumentTool: true,
 			Description: "Change an Architecture document (a canvas of Hosts, Systems, Groups and Connections) with operations, using the version from read_document. " +
-				"Operations run all together or not at all, at most 50 per call. Name an existing element by its id from read_document, never by its name; name one you add in the same call by the ref you gave it. " +
+				"Operations run all together or not at all, at most 50 per call. Name an existing element by its id from read_document, never by its name; name one you add in the same call by the ref you gave it, so a new node and the Connections to it go in one call. Check read_document first: do not add a node the canvas already has. " +
 				"add_node {kind host|system|group, name, catalog, parent, ref, description, tags, repoUrl, x, y, w, h}; update_node {id, name, catalog, description, tags, repoUrl}; " +
 				"move_node {id, parent (an id, or null for the top level), x, y, w, h}; remove_node {id, cascade (required to remove a Host or Group that holds elements)}; " +
 				"add_connection {source, target, protocol, ref, label, port} between two Systems; update_connection {id, protocol, label, port}; remove_connection {id}; " +
