@@ -66,6 +66,21 @@ Catatan:
 - **Beta.** Semua kata kunci berakhiran `-beta` dapat berubah antar versi minor. [#180](https://github.com/UnFik/dokudocs/issues/180) perlu mengunci versi Mermaid dan mencatat tipe mana yang beta.
 - **Belum diperiksa.** Kontras warna tiap tipe di mode terang/gelap belum dilihat secara visual; yang dicek hanya bahwa render berhasil. Ini dikerjakan bersama [#180](https://github.com/UnFik/dokudocs/issues/180) setelah tema Dokudocs masuk.
 
+#### Tipe yang diaktifkan di editor ([#180](https://github.com/UnFik/dokudocs/issues/180))
+
+Enam tipe masuk ke pemilih templat, saran kode, dan highlight (`lib/mermaid-diagram-types.ts` adalah satu-satunya daftar). Semuanya **beta** di Mermaid terpasang, jadi sintaksnya bisa berubah antar versi minor; `package-lock.json` mengunci versinya.
+
+| Tipe | Kata kunci | Ekspor SVG | Ekspor PNG |
+| --- | --- | --- | --- |
+| Radar | `radar-beta` | ya | ya |
+| Treemap | `treemap-beta` | ya | ya |
+| Venn | `venn-beta` | ya | ya |
+| Wardley | `wardley-beta` | ya | ya |
+| Fishbone | `ishikawa-beta` | ya | ya |
+| Swimlane | `swimlane-beta` | ya | **tidak**: SVG-nya membuat canvas Chromium tercemar, penyebabnya belum ketemu |
+
+Tipe yang lolos spike tetapi belum dipilih: cynefin, tree view, railroad, event modeling, requirement, dan C4. Tipe Mermaid yang tidak lolos spike (tidak dikenali Mermaid) tercatat di bagian di bawah sebagai kandidat `kind` untuk #178.
+
 #### Masukan untuk #178
 
 Dari daftar usulan awal (swimlane, pyramid/funnel, radar, venn, waterfall, heatmap, treemap, fishbone, wardley, org chart), Mermaid terpasang sudah menangani **swimlane, radar, venn, treemap, fishbone, dan wardley**. Yang tetap belum tertangani: **pyramid/funnel, waterfall, heatmap, dan org chart** (`funnel`, `pyramid`, `waterfall`, `heatmap`, `orgchart` tidak dikenali). Daftar `kind` untuk tipe `diagram` sebaiknya dimulai dari keempat ini, dan hanya bila ada bukti kebutuhan.
