@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type TransitionEvent } from 'react'
 import { Link, useSearch } from '@tanstack/react-router'
 import aiDark from '@/assets/landing/ai-dark.webp'
 import aiLight from '@/assets/landing/ai-light.webp'
@@ -213,21 +213,39 @@ function Shot({ shot, dark }: ShotProps) {
 export function WelcomePage() {
   const { redirect } = useSearch({ from: '/' })
   const { resolvedTheme, setTheme } = useTheme()
-  const [previewIndex, setPreviewIndex] = useState(0)
-  const [autoplay, setAutoplay] = useState(true)
-  const [held, setHeld] = useState(false)
+  const [position, setPosition] = useState(0)
+  const [instant, setInstant] = useState(false)
   const [inView, setInView] = useState(false)
+  const [seen, setSeen] = useState(false)
   const documentsRef = useRef<HTMLElement>(null)
-  const preview = previews[previewIndex]!
-  const paused = held || !inView
-  const advance = () =>
-    setPreviewIndex((index) => (index + 1) % previews.length)
+  const count = previews.length
+  const active = position % count
+  const advance = () => setPosition((value) => value + 1)
+  const onTrackEnd = (event: TransitionEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return
+    if (position === count) {
+      setInstant(true)
+      setPosition(0)
+    }
+  }
+
+  useEffect(() => {
+    if (!instant) return
+    const frame = requestAnimationFrame(() =>
+      requestAnimationFrame(() => setInstant(false))
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [instant])
 
   useEffect(() => {
     const node = documentsRef.current
     if (!node || typeof IntersectionObserver === 'undefined') return
     const observer = new IntersectionObserver(
-      ([entry]) => setInView(entry?.isIntersecting ?? false),
+      ([entry]) => {
+        const visible = entry?.isIntersecting ?? false
+        setInView(visible)
+        if (visible) setSeen(true)
+      },
       { threshold: 0.3 }
     )
     observer.observe(node)
@@ -341,10 +359,6 @@ export function WelcomePage() {
       <section
         id='documents'
         ref={documentsRef}
-        onMouseEnter={() => setHeld(true)}
-        onMouseLeave={() => setHeld(false)}
-        onFocus={() => setHeld(true)}
-        onBlur={() => setHeld(false)}
         className='mx-auto max-w-7xl px-5 py-14 sm:px-10 sm:py-20'
       >
         <div className='flex flex-col justify-between gap-6 lg:flex-row lg:items-end'>
@@ -367,55 +381,59 @@ export function WelcomePage() {
               <button
                 key={item.type}
                 type='button'
-                aria-pressed={previewIndex === index}
+                aria-pressed={active === index}
                 aria-controls='editor-preview'
-                onClick={() => setPreviewIndex(index)}
+                onClick={() => setPosition(index)}
                 className='welcome-format min-h-12 rounded-sm border border-input px-4 text-left'
               >
                 <span className='block text-sm font-medium'>{item.label}</span>
                 <span className='block font-mono text-xs text-muted-foreground'>
                   {item.type}
                 </span>
-                {autoplay && previewIndex === index && (
+                {active === index && (
                   <span
                     aria-hidden='true'
                     className='welcome-progress'
-                    data-paused={paused}
+                    data-paused={!inView}
                     style={{ animationDuration: `${AUTO_ADVANCE_MS}ms` }}
                     onAnimationEnd={advance}
                   />
                 )}
               </button>
             ))}
-            <button
-              type='button'
-              aria-pressed={!autoplay}
-              onClick={() => setAutoplay((value) => !value)}
-              className='welcome-link min-h-12 px-3 text-sm text-muted-foreground underline underline-offset-4'
-            >
-              {autoplay ? 'Pause slides' : 'Play slides'}
-            </button>
           </div>
         </div>
         <figure id='editor-preview' className='mt-8'>
-          <div
-            key={preview.type}
-            className='welcome-preview overflow-hidden rounded-md border border-border bg-background'
-          >
-            <img
-              src={resolvedTheme === 'dark' ? preview.dark : preview.light}
-              alt={preview.alt}
-              width='1280'
-              height='800'
-              loading='lazy'
-              className='block h-auto w-full'
-            />
+          <div className='overflow-hidden rounded-md border border-border bg-background'>
+            <div
+              className='welcome-track'
+              data-instant={instant}
+              style={{ transform: `translateX(-${position * 100}%)` }}
+              onTransitionEnd={onTrackEnd}
+            >
+              {[...previews, previews[0]].map((item, index) => (
+                <div
+                  key={`${item.type}-${index}`}
+                  aria-hidden={index % count !== active}
+                  className='welcome-slide'
+                >
+                  <img
+                    src={resolvedTheme === 'dark' ? item.dark : item.light}
+                    alt={item.alt}
+                    width='1280'
+                    height='800'
+                    loading={seen ? 'eager' : 'lazy'}
+                    className='block h-auto w-full'
+                  />
+                </div>
+              ))}
+            </div>
           </div>
           <figcaption
-            aria-live={autoplay && !paused ? 'off' : 'polite'}
+            aria-live='off'
             className='mt-3 text-xs text-muted-foreground'
           >
-            {preview.alt}
+            {previews[active]!.alt}
           </figcaption>
         </figure>
       </section>
