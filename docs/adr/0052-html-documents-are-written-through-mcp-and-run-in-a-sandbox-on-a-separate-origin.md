@@ -39,6 +39,12 @@ The main risk is that the page is code written by a model and run in other peopl
 - A very large body, deeply nested markup, and a `data:` image over the limit.
 - The same set against the downloaded file opened from disk, which has no CSP.
 
+## Amendments made while building it
+
+- **Inline scripts are allowed**, `unsafe-eval` is not. A page that is one self-contained file needs its own `<script>`; what stops it from sending anything out is `connect-src 'none'`, `img-src data:`, `form-action 'none'`, `frame-src 'none'` and the script and style host lists, not a ban on inline script. The CDN allowlist is by host: a policy cannot require a pinned version.
+- **A page can still send its own frame to another address.** No policy prevents that, so version 1 gives a page no data of the viewer's or the workspace's. The viewer-information and state capabilities (version 2) need this limit in mind, and the checks in `docs/html-pages-security.md` pass before either is built.
+- **The content origin must not equal the application's.** The API treats such a configuration as the feature being off.
+
 ## Considered options
 
 - **Users write HTML in an editor.** The most useful, and the most dangerous: anyone with edit rights could ship hostile markup to every viewer. Left out; the MCP path has a named User and key behind each write.
