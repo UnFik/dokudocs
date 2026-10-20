@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearch } from '@tanstack/react-router'
 import aiDark from '@/assets/landing/ai-dark.webp'
 import aiLight from '@/assets/landing/ai-light.webp'
@@ -6,11 +6,10 @@ import architectureDark from '@/assets/landing/architecture-dark.webp'
 import architectureLight from '@/assets/landing/architecture-light.webp'
 import collabDark from '@/assets/landing/collab-dark.webp'
 import collabLight from '@/assets/landing/collab-light.webp'
-import dbmlDark from '@/assets/landing/dbml-dark.webp'
-import dbmlLight from '@/assets/landing/dbml-light.webp'
-import markdownDark from '@/assets/landing/markdown-dark.webp'
-import markdownLight from '@/assets/landing/markdown-light.webp'
-import mermaidDark from '@/assets/landing/mermaid-dark.webp'
+import flowDark from '@/assets/landing/flow-dark.webp'
+import flowLight from '@/assets/landing/flow-light.webp'
+import schemaDark from '@/assets/landing/schema-dark.webp'
+import schemaLight from '@/assets/landing/schema-light.webp'
 import shareDark from '@/assets/landing/share-dark.webp'
 import shareLight from '@/assets/landing/share-light.webp'
 import { Logo } from '@/assets/logo'
@@ -21,23 +20,23 @@ const previews = [
   {
     type: 'markdown',
     label: 'Notes',
-    light: markdownLight,
-    dark: markdownDark,
-    alt: 'A Markdown document open in the DokuDocs editor',
+    light: collabLight,
+    dark: collabDark,
+    alt: 'A Markdown document with a pending suggestion and a comment thread between two teammates',
   },
   {
     type: 'dbml',
     label: 'Data schema',
-    light: dbmlLight,
-    dark: dbmlDark,
-    alt: 'DokuDocs DBML editor with its table relationship canvas',
+    light: schemaLight,
+    dark: schemaDark,
+    alt: 'A DBML schema drawn as tables and relations: orders, items, payments, refunds and an outbox',
   },
   {
     type: 'mermaid',
     label: 'Flow diagram',
-    light: mermaidDark,
-    dark: mermaidDark,
-    alt: 'A Mermaid diagram in a DokuDocs Markdown document',
+    light: flowLight,
+    dark: flowDark,
+    alt: 'A Mermaid sequence diagram of a checkout and payment flow',
   },
   {
     type: 'architecture',
@@ -48,11 +47,36 @@ const previews = [
   },
 ] as const
 
-const collabShot = {
-  light: collabLight,
-  dark: collabDark,
-  alt: 'A Markdown document with a pending suggestion and a comment thread between two teammates',
-} as const
+const AUTO_ADVANCE_MS = 5000
+
+const heroScreens = [
+  {
+    id: 'flow',
+    type: 'mermaid',
+    text: 'A sequence diagram rendered from Mermaid text.',
+    shot: previews[2],
+  },
+  {
+    id: 'schema',
+    type: 'dbml',
+    text: 'Tables and relations drawn from DBML source.',
+    shot: previews[1],
+  },
+  {
+    id: 'architecture',
+    type: 'architecture',
+    text: 'Hosts, systems and the connections between them on one canvas.',
+    shot: previews[3],
+  },
+  {
+    id: 'collab',
+    type: 'markdown',
+    text: 'A document under review: a pending suggestion and a comment thread.',
+    shot: previews[0],
+  },
+] as const
+
+const collabShot = previews[0]
 
 const aiShot = {
   light: aiLight,
@@ -123,6 +147,49 @@ const sectionLabel = 'font-mono text-xs text-muted-foreground'
 const sectionHeading =
   'text-2xl leading-tight font-semibold tracking-tight text-balance sm:text-3xl'
 
+function HeroStack({ dark }: { dark: boolean }) {
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const shown =
+    heroScreens.find((item) => item.id === activeId) ?? heroScreens[3]
+
+  return (
+    <div className='hero-visual'>
+      <div className='hero-stack'>
+        {heroScreens.map((item) => (
+          <figure
+            key={item.id}
+            tabIndex={0}
+            aria-label={`${item.type}: ${item.text}`}
+            className={`hero-screen hero-screen-${item.id}`}
+            onMouseEnter={() => setActiveId(item.id)}
+            onMouseLeave={() => setActiveId(null)}
+            onFocus={() => setActiveId(item.id)}
+            onBlur={() => setActiveId(null)}
+          >
+            <img
+              src={dark ? item.shot.dark : item.shot.light}
+              alt=''
+              width='1280'
+              height='800'
+              className='block h-auto w-full'
+            />
+          </figure>
+        ))}
+      </div>
+      <p
+        aria-live='polite'
+        className='mt-8 flex min-h-11 items-baseline gap-3 text-sm text-muted-foreground'
+        style={{ marginInline: '4%' }}
+      >
+        <span className='rounded-xs bg-border px-2 py-1 font-mono text-[10.5px] text-foreground'>
+          {shown.type}
+        </span>
+        <span>{shown.text}</span>
+      </p>
+    </div>
+  )
+}
+
 type ShotProps = {
   shot: { light: string; dark: string; alt: string }
   dark: boolean
@@ -146,9 +213,26 @@ function Shot({ shot, dark }: ShotProps) {
 export function WelcomePage() {
   const { redirect } = useSearch({ from: '/' })
   const { resolvedTheme, setTheme } = useTheme()
-  const [previewIndex, setPreviewIndex] = useState(3)
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const [autoplay, setAutoplay] = useState(true)
+  const [held, setHeld] = useState(false)
+  const [inView, setInView] = useState(false)
+  const documentsRef = useRef<HTMLElement>(null)
   const preview = previews[previewIndex]!
-  const heroPreview = previews[0]
+  const paused = held || !inView
+  const advance = () =>
+    setPreviewIndex((index) => (index + 1) % previews.length)
+
+  useEffect(() => {
+    const node = documentsRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry?.isIntersecting ?? false),
+      { threshold: 0.3 }
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   return (
     <main
@@ -230,17 +314,7 @@ export function WelcomePage() {
             </a>
           </div>
         </div>
-        <div className='overflow-hidden rounded-md border border-border bg-card'>
-          <img
-            src={
-              resolvedTheme === 'dark' ? heroPreview.dark : heroPreview.light
-            }
-            alt={heroPreview.alt}
-            width='1280'
-            height='800'
-            className='block h-auto w-full'
-          />
-        </div>
+        <HeroStack dark={resolvedTheme === 'dark'} />
       </section>
 
       <section
@@ -266,6 +340,11 @@ export function WelcomePage() {
 
       <section
         id='documents'
+        ref={documentsRef}
+        onMouseEnter={() => setHeld(true)}
+        onMouseLeave={() => setHeld(false)}
+        onFocus={() => setHeld(true)}
+        onBlur={() => setHeld(false)}
         className='mx-auto max-w-7xl px-5 py-14 sm:px-10 sm:py-20'
       >
         <div className='flex flex-col justify-between gap-6 lg:flex-row lg:items-end'>
@@ -297,14 +376,30 @@ export function WelcomePage() {
                 <span className='block font-mono text-xs text-muted-foreground'>
                   {item.type}
                 </span>
+                {autoplay && previewIndex === index && (
+                  <span
+                    aria-hidden='true'
+                    className='welcome-progress'
+                    data-paused={paused}
+                    style={{ animationDuration: `${AUTO_ADVANCE_MS}ms` }}
+                    onAnimationEnd={advance}
+                  />
+                )}
               </button>
             ))}
+            <button
+              type='button'
+              aria-pressed={!autoplay}
+              onClick={() => setAutoplay((value) => !value)}
+              className='welcome-link min-h-12 px-3 text-sm text-muted-foreground underline underline-offset-4'
+            >
+              {autoplay ? 'Pause slides' : 'Play slides'}
+            </button>
           </div>
         </div>
         <figure id='editor-preview' className='mt-8'>
           <div
             key={preview.type}
-            data-format={preview.type}
             className='welcome-preview overflow-hidden rounded-md border border-border bg-background'
           >
             <img
@@ -317,7 +412,7 @@ export function WelcomePage() {
             />
           </div>
           <figcaption
-            aria-live='polite'
+            aria-live={autoplay && !paused ? 'off' : 'polite'}
             className='mt-3 text-xs text-muted-foreground'
           >
             {preview.alt}
