@@ -8,6 +8,7 @@ import (
 	"math"
 
 	"backend/constant"
+	"backend/internal/application/htmlpage"
 	"backend/internal/domain/model"
 	"backend/internal/domain/policy"
 	"backend/internal/infrastructure/database"
@@ -168,10 +169,10 @@ func restoreHTMLRevision(ctx context.Context, tx database.Queryer, documentID, w
 	var replacementID uuid.UUID
 	if err := tx.QueryRowContext(ctx, `
 		UPDATE documents
-		SET content = $2, body_version = $3, updated_at = NOW(), body_replacement_id = gen_random_uuid()
+		SET content = $2, content_json = $5::jsonb, body_version = $3, updated_at = NOW(), body_replacement_id = gen_random_uuid()
 		WHERE id = $1 AND workspace_id = $4
 		RETURNING body_replacement_id
-	`, documentID, sourcePage, newBodyVersion, workspaceID).Scan(&replacementID); err != nil {
+	`, documentID, sourcePage, newBodyVersion, workspaceID, string(htmlpage.IndexJSON(sourcePage))).Scan(&replacementID); err != nil {
 		return model.DocumentRestoreResult{}, err
 	}
 	var restored model.DocumentRevision

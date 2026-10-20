@@ -137,7 +137,8 @@ export function NewCommentCard({
   workspaceID: string
   documentID: string
   selectedText: string
-  anchor: CommentAnchor | SourceCommentAnchor
+  /** A comment on the whole document, as on an HTML page, has none. */
+  anchor?: CommentAnchor | SourceCommentAnchor
   onDone: () => void
 }) {
   const queryClient = useQueryClient()

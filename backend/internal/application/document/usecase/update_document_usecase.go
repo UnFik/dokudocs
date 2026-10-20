@@ -6,6 +6,7 @@ import (
 
 	"backend/constant"
 	"backend/internal/application/document/dto"
+	"backend/internal/application/htmlpage"
 	"backend/internal/domain/model"
 )
 
@@ -35,6 +36,9 @@ func (u *useCase) UpdateDocument(ctx context.Context, input dto.UpdateDocumentIn
 			}
 		}
 		doc.Content = input.Content
+		if doc.Type == "html" {
+			doc.ContentJSON = htmlpage.IndexJSON(input.Content)
+		}
 	}
 	if input.Visibility != "" {
 		doc.Visibility = input.Visibility
