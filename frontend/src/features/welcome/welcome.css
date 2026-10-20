@@ -3,8 +3,16 @@
   line-height: 1.08;
   letter-spacing: -0.035em;
 }
-.welcome-preview {
-  animation: welcome-appear 240ms ease-out;
+.welcome-track {
+  display: flex;
+  transition: transform 640ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.welcome-track[data-instant='true'] {
+  transition: none;
+}
+.welcome-slide {
+  flex: 0 0 100%;
+  min-width: 0;
 }
 .welcome-link,
 .welcome-primary,
@@ -70,14 +78,6 @@
 }
 .welcome-skip:focus {
   transform: translateY(0);
-}
-@keyframes welcome-appear {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 .welcome-code {
   tab-size: 2;
