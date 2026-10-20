@@ -659,29 +659,47 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   // small for a pinch, so it is done here: a pinch zooms in proportion to how
   // far the fingers moved, a mouse wheel notch is one fixed step.
   const root = useRef<HTMLDivElement>(null)
+  const lastZoom = useRef(0)
   useEffect(() => {
     const el = root.current
     if (!el) return
+    // A trackpad sends up to 120 events a second; they are summed and applied
+    // once per frame.
+    let pending: { step: number; px: number; py: number } | null = null
+    const apply = () => {
+      const job = pending
+      pending = null
+      if (!job) return
+      const { zoom, x, y } = flow.getViewport()
+      const next = Math.min(2, Math.max(0.05, zoom * Math.exp(-job.step)))
+      const k = next / zoom
+      void flow.setViewport({
+        x: job.px - (job.px - x) * k,
+        y: job.py - (job.py - y) * k,
+        zoom: next,
+      })
+    }
     const onWheel = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return
       if ((event.target as HTMLElement).closest('.nowheel')) return
       event.preventDefault()
       event.stopPropagation()
+      lastZoom.current = performance.now()
       const notch = event.deltaMode !== 0 || Math.abs(event.deltaY) >= 50
       const step = notch
         ? Math.sign(event.deltaY) * 0.1
         : Math.max(-30, Math.min(30, event.deltaY)) * 0.025
-      const { zoom, x, y } = flow.getViewport()
-      const next = Math.min(2, Math.max(0.05, zoom * Math.exp(-step)))
       const rect = el.getBoundingClientRect()
       const px = event.clientX - rect.left
       const py = event.clientY - rect.top
-      const k = next / zoom
-      void flow.setViewport({
-        x: px - (px - x) * k,
-        y: py - (py - y) * k,
-        zoom: next,
-      })
+      if (pending) {
+        pending.step += step
+        pending.px = px
+        pending.py = py
+      } else {
+        pending = { step, px, py }
+        requestAnimationFrame(apply)
+      }
     }
     el.addEventListener('wheel', onWheel, { passive: false, capture: true })
     return () => el.removeEventListener('wheel', onWheel, { capture: true })
@@ -733,6 +751,8 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
         onPointerMove={(event) => {
           lastPointer.current = { x: event.clientX, y: event.clientY }
           followBox(event)
+          // Others need not see the pointer slide across the canvas as it zooms.
+          if (performance.now() - lastZoom.current < 200) return
           props.onPointer(
             flow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
           )
