@@ -33,6 +33,7 @@ import type { Peer } from '../hooks/use-architecture-session'
 import {
   boxHoldsChildren,
   dropElement,
+  fitElement,
   landingFor,
   resizeElement,
   takeOutElement,
@@ -55,7 +56,14 @@ import {
 } from '../lib/canvas-tools'
 import { familyOf, suggestedProtocols, type CatalogEntry } from '../lib/catalog'
 import { anchorAt, type PinAnchor } from '../lib/comment-pins'
-import { LABEL, minSize, PAD, type Point, type Rect } from '../lib/layout'
+import {
+  fitsContents,
+  LABEL,
+  minSize,
+  PAD,
+  type Point,
+  type Rect,
+} from '../lib/layout'
 import './architecture-canvas.css'
 import {
   CanvasContext,
@@ -362,6 +370,18 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
         if (!doc) return
         props.onGesture()
         takeOutElement(doc, canvas, id)
+        props.onGesture()
+      },
+      canFit: (id) => {
+        const layout = toLayoutNodes(canvas)
+        return (
+          layout.some((n) => n.parentId === id) && !fitsContents(layout, id)
+        )
+      },
+      fit: (id) => {
+        if (!doc) return
+        props.onGesture()
+        fitElement(doc, canvas, id)
         props.onGesture()
       },
       familyOf: (protocol) => familyOf(props.catalog, protocol),

@@ -63,7 +63,8 @@ test("@live @smoke @comments: @ in a canvas comment offers the workspace, narrow
   await page.goto(`/docs/${documentID}?workspaceId=${workspaceID}`);
   await expect(page.getByText("Editing together")).toBeVisible({ timeout: 20000 });
   await page.locator(".react-flow__node-system").filter({ hasText: "Backend" }).click();
-  const properties = page.locator("#architecture-properties");
+  await page.getByRole("tab", { name: /^Comments/ }).click();
+  const properties = page.locator("#architecture-comments");
   const box = properties.getByLabel("New comment on Backend");
   await box.click();
   await page.keyboard.type("cc @");
@@ -120,7 +121,8 @@ test("@live @smoke @comments: @ in a canvas comment offers the workspace, narrow
   await inbox.click();
   await memberPage.getByRole("button", { name: /mentioned you in/ }).click();
   await memberPage.waitForURL((url) => url.pathname === `/docs/${documentID}` && url.searchParams.has("thread"));
-  const memberProperties = memberPage.locator("#architecture-properties");
+  await memberPage.getByRole("tab", { name: /^Comments/ }).click();
+  const memberProperties = memberPage.locator("#architecture-comments");
   await expect(memberProperties).toContainText("can you check?", { timeout: 20000 });
   await expect(memberProperties.locator("[data-mention]")).toHaveText("@Dewi Lestari");
   await memberContext.close();

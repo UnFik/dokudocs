@@ -78,8 +78,7 @@ test("@live @smoke: Used in, versions with pinned documents, take out and fit", 
   // Take the System out of its Host, then fit the empty Host's neighbour.
   await page.locator(".react-flow__node-system").filter({ hasText: "Backend Order API" }).click();
   await page.getByRole("button", { name: /Take Backend Order API out of VPS-1/ }).click();
-  await expect(page.locator("#architecture-properties")).toContainText("No Host");
+  await expect(page.locator("#architecture-properties")).toContainText(/runs on\s*none/);
   await page.locator(".react-flow__node-host").getByText("VPS-1").click();
-  await expect(page.getByRole("button", { name: "Fit to contents" })).toBeDisabled();
-  await expect(page.locator("#architecture-properties")).toContainText("Nothing inside to fit to.");
+  await expect(page.getByRole("button", { name: "Fit to contents" })).toHaveCount(0);
 });
