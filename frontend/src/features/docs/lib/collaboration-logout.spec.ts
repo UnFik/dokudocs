@@ -96,6 +96,29 @@ describe('logout and local document data', () => {
     await discardLocalEdits(userID)
   })
 
+  it('waits once, not once per closed copy, when no server answers', async () => {
+    const userID = `user-${crypto.randomUUID()}`
+    await discardLocalEdits(userID)
+    for (const id of ['doc-a', 'doc-b', 'doc-c', 'doc-d']) {
+      const doc = new Y.Doc()
+      const copy = new IndexeddbPersistence(`dokudocs:ws.${id}`, doc)
+      await copy.whenSynced
+      doc.getText('source').insert(0, 'unsent')
+      await copy.destroy()
+    }
+
+    const started = Date.now()
+    const result = await flushLocalEditsForLogout({
+      userID,
+      token: () => 'token',
+      timeoutMs: 400,
+    })
+
+    expect(result.unsynced).toHaveLength(4)
+    expect(Date.now() - started).toBeLessThan(1200)
+    await discardLocalEdits(userID)
+  })
+
   it('discards local copies and stops open editors on request', async () => {
     const userID = `user-${crypto.randomUUID()}`
     await createLocalCopy('dokudocs:ws.doc-3')
