@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,6 +134,30 @@ func TestAssetsHTTPUploadReadSharingAndSweep(t *testing.T) {
 	_ = json.Unmarshal(created.Body.Bytes(), &asset)
 	if asset.Data.ContentType != "image/png" || !asset.Data.Inline || asset.Data.URL != "/api/v1/documents/"+documentID.String()+"/assets/"+asset.Data.ID {
 		t.Fatalf("uploaded = %+v, want an inline png with its url", asset.Data)
+	}
+
+	// An SVG is rewritten before it is kept: script, handlers and outside references are gone.
+	evil := []byte(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" onload="alert(1)"><script>alert(2)</script><foreignObject><iframe src="https://evil.invalid"/></foreignObject><image xlink:href="https://evil.invalid/x.png"/><rect width="4" height="4" fill="url(https://evil.invalid/p)"/></svg>`)
+	svgCreated := upload(editorID, "diagram.svg", evil)
+	if svgCreated.Code != http.StatusCreated {
+		t.Fatalf("svg upload = %d %s, want 201", svgCreated.Code, svgCreated.Body.String())
+	}
+	var svgAsset uploaded
+	_ = json.Unmarshal(svgCreated.Body.Bytes(), &svgAsset)
+	svgRead := call(http.MethodGet, svgAsset.Data.URL, nil, "", editorID, true)
+	if svgRead.Header().Get("Content-Type") != "image/svg+xml" || !strings.Contains(svgRead.Header().Get("Content-Security-Policy"), "default-src 'none'") {
+		t.Fatalf("svg served as %q with csp %q", svgRead.Header().Get("Content-Type"), svgRead.Header().Get("Content-Security-Policy"))
+	}
+	for _, bad := range []string{"script", "alert", "onload", "foreignObject", "iframe", "evil.invalid", "<image"} {
+		if strings.Contains(svgRead.Body.String(), bad) {
+			t.Fatalf("stored svg still has %q: %s", bad, svgRead.Body.String())
+		}
+	}
+	if got := upload(editorID, "broken.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><rect></svg>`)).Code; got == http.StatusCreated {
+		t.Fatalf("broken svg upload = %d, want it refused", got)
+	}
+	if got := upload(editorID, "page.svg", []byte(`<html><script>alert(1)</script></html>`)); got.Header().Get("Content-Type") == "image/svg+xml" {
+		t.Fatalf("html named .svg was kept as svg")
 	}
 
 	// Someone who can only view may not upload; a stranger may not read.
