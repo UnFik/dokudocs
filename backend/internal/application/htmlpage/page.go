@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"backend/constant"
+	"backend/internal/application/collaboration"
 	"backend/internal/domain/model"
 
 	"github.com/google/uuid"
@@ -28,9 +29,15 @@ type Source interface {
 	GetDocument(ctx context.Context, id, workspaceID, userID uuid.UUID) (model.Document, error)
 }
 
+// Access says what a viewer may do with a page.
+type Access interface {
+	ReadPageAccess(ctx context.Context, workspaceID, documentID, userID uuid.UUID) (collaboration.RoomAccess, error)
+}
+
 // Service issues tickets to view a page and renders the page for the frame.
 type Service struct {
 	source        Source
+	access        Access
 	signer        *Signer
 	contentOrigin string
 	appOrigin     string
@@ -38,8 +45,8 @@ type Service struct {
 
 // NewService serves pages from contentOrigin (for example https://usercontent.example.com)
 // to frames inside the application at appOrigin. With no content origin the feature is off.
-func NewService(source Source, signer *Signer, contentOrigin, appOrigin string) *Service {
-	return &Service{source: source, signer: signer, contentOrigin: strings.TrimRight(contentOrigin, "/"), appOrigin: originOf(appOrigin)}
+func NewService(source Source, access Access, signer *Signer, contentOrigin, appOrigin string) *Service {
+	return &Service{source: source, access: access, signer: signer, contentOrigin: strings.TrimRight(contentOrigin, "/"), appOrigin: originOf(appOrigin)}
 }
 
 func originOf(raw string) string {
@@ -70,6 +77,10 @@ type Ticket struct {
 	URL          string    `json:"url"`
 	ExpiresAt    time.Time `json:"expiresAt"`
 	Capabilities []string  `json:"capabilities"`
+	// CanEdit and CanComment say what the viewer may do beside reading, so the application
+	// shows the right actions; the server still decides each one.
+	CanEdit    bool `json:"canEdit"`
+	CanComment bool `json:"canComment"`
 }
 
 func (s *Service) load(ctx context.Context, workspaceID, documentID, userID uuid.UUID) (model.Document, error) {
@@ -92,8 +103,15 @@ func (s *Service) Issue(ctx context.Context, workspaceID, documentID, userID uui
 	if err != nil {
 		return Ticket{}, err
 	}
+	access, err := s.access.ReadPageAccess(ctx, workspaceID, documentID, userID)
+	if err != nil {
+		return Ticket{}, err
+	}
 	token, expires := s.signer.Issue(workspaceID, documentID, userID)
-	return Ticket{URL: s.contentOrigin + "/content/p/" + token, ExpiresAt: expires, Capabilities: DeclaredCapabilities(doc.Content)}, nil
+	return Ticket{
+		URL: s.contentOrigin + "/content/p/" + token, ExpiresAt: expires, Capabilities: DeclaredCapabilities(doc.Content),
+		CanEdit: access.CanEdit, CanComment: access.CanEdit || access.CanSuggest,
+	}, nil
 }
 
 // Page is a response for the frame.
