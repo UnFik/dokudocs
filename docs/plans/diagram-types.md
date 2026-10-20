@@ -25,6 +25,51 @@ Artifact Claude punya kapabilitas runtime yang harus dideklarasikan halaman. Pad
 
 Cek tipe diagram Mermaid apa yang aktif di versi terpasang (`^11.17.0`): xychart, radar, treemap, block, dan lainnya. Hasilnya menentukan isi jalur 2. Tipe yang sudah tertangani Mermaid tidak perlu renderer sendiri.
 
+### Hasil spike ([#179](https://github.com/UnFik/dokudocs/issues/179))
+
+Diuji pada Mermaid 11.17.2 (terpasang dari `^11.17.0`), di Chromium headless. Tiap tipe diparse (`mermaid.parse`), dirender dengan tema bawaan terang (`default`) dan gelap (`dark`), lalu SVG-nya dimuat sebagai gambar dan digambar ke canvas, seperti jalur ekspor PNG di dialog ekspor. Tema Dokudocs ([#176](https://github.com/UnFik/dokudocs/issues/176)) belum dipakai pada pengujian ini.
+
+Kata kunci tiap tipe diambil dari detektor di paket Mermaid, bukan dari dokumentasi. Contoh sintaks untuk tipe baru ditulis dari tata bahasa yang terpasang, jadi hanya sebagian yang diverifikasi lewat render.
+
+| Tipe | Kata kunci | Parse + render terang/gelap | Ekspor PNG lewat canvas | Dikenali editor |
+| --- | --- | --- | --- | --- |
+| xychart (bar/line) | `xychart-beta` | ya | ya | ya |
+| quadrant | `quadrantChart` | ya | ya | ya |
+| sankey | `sankey-beta` | ya | ya | ya |
+| packet | `packet-beta` | ya | ya | ya |
+| architecture | `architecture-beta` | ya | ya | ya |
+| timeline | `timeline` | ya | ya | ya |
+| gitGraph | `gitGraph` | ya | ya | ya |
+| block | `block-beta` | ya | **gagal** | ya |
+| kanban | `kanban` | ya | **gagal** | ya |
+| mindmap | `mindmap` | ya | **gagal** | ya |
+| journey | `journey` | ya | **gagal** | ya |
+| flowchart | `flowchart` | ya | **gagal** | ya |
+| radar | `radar-beta` | ya | ya | **tidak** |
+| treemap | `treemap` (juga `treemap-beta`) | ya | ya | **tidak** |
+| venn | `venn-beta` | ya | ya | **tidak** |
+| wardley | `wardley-beta` | ya | ya | **tidak** |
+| ishikawa (fishbone) | `ishikawa-beta` | ya | ya | **tidak** |
+| cynefin | `cynefin-beta` | ya | ya | **tidak** |
+| tree view | `treeView-beta` | ya | ya | **tidak** |
+| swimlane | `swimlane-beta` | ya (sintaks mirip flowchart dengan `subgraph`) | belum diuji | **tidak** |
+| railroad | `railroad-ebnf-beta` (juga `-abnf-`, `-peg-`) | ya (EBNF); sintaks pendek lain ditolak | belum diuji | **tidak** |
+| event modeling | `eventmodeling` | ya | **gagal** | **tidak** |
+| requirement | `requirementDiagram` | ya | **gagal** | **tidak** |
+| C4 | `C4Context` | ya | ya | **tidak** |
+| ZenUML | - | tidak ada | - | - |
+
+Catatan:
+
+- **Ekspor PNG.** Diagram yang memakai `foreignObject` untuk label (flowchart, mindmap, journey, block, kanban, event modeling, requirement) gagal digambar ke canvas pada SVG mentahnya. Ini bukan masalah tipe baru: flowchart ikut terkena. [#177](https://github.com/UnFik/dokudocs/issues/177) harus menangani ini (mis. `htmlLabels: false` untuk jalur ekspor), atau ekspor PNG hanya benar untuk sebagian tipe.
+- **Editor.** Validasi di Monaco memakai `mermaid.parse`, jadi semua tipe di atas sudah divalidasi. Yang belum ada adalah daftar kata kunci di tiga tempat: `monaco-setup.ts` (highlight), `mermaid-tokenizer.ts` (`DIAGRAM_TYPES`), dan `mermaid-intellisense.ts` (templat dan saran).
+- **Beta.** Semua kata kunci berakhiran `-beta` dapat berubah antar versi minor. [#180](https://github.com/UnFik/dokudocs/issues/180) perlu mengunci versi Mermaid dan mencatat tipe mana yang beta.
+- **Belum diperiksa.** Kontras warna tiap tipe di mode terang/gelap belum dilihat secara visual; yang dicek hanya bahwa render berhasil. Ini dikerjakan bersama [#180](https://github.com/UnFik/dokudocs/issues/180) setelah tema Dokudocs masuk.
+
+#### Masukan untuk #178
+
+Dari daftar usulan awal (swimlane, pyramid/funnel, radar, venn, waterfall, heatmap, treemap, fishbone, wardley, org chart), Mermaid terpasang sudah menangani **swimlane, radar, venn, treemap, fishbone, dan wardley**. Yang tetap belum tertangani: **pyramid/funnel, waterfall, heatmap, dan org chart** (`funnel`, `pyramid`, `waterfall`, `heatmap`, `orgchart` tidak dikenali). Daftar `kind` untuk tipe `diagram` sebaiknya dimulai dari keempat ini, dan hanya bila ada bukti kebutuhan.
+
 ## Jalur 1: perluas yang ada (tanpa migrasi)
 
 1. Tema Mermaid selaras design system ([#176](https://github.com/UnFik/dokudocs/issues/176)).
