@@ -66,13 +66,42 @@ func TestAnApprovedCanvasEditRunsAndAnswersWithTheIdsItMade(t *testing.T) {
 	}
 }
 
-func TestAddingANodeTheCanvasAlreadyHasIsRefusedBeforeApprovalNamingTheExistingOne(t *testing.T) {
+// The Agent adds a component the canvas already has and connects to it: the User should see
+// only the real change, with the connection ending at the node that is there.
+const addsATwinOps = `[{"type":"add_node","ref":"twin","kind":"system","name":"API","catalog":"golang","parent":"vps"},` +
+	`{"type":"add_node","ref":"web","kind":"system","name":"React","parent":"vps"},` +
+	`{"type":"add_connection","source":"web","target":"twin","protocol":"rest"}]`
+
+func TestAddingANodeTheCanvasAlreadyHasShowsOnlyTheRealChangesInTheCard(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	exec := canvasExecutor(e, CapRead, CapContent)
+	out, err := exec.Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws}, "edit_architecture", canvasArgs(e, addsATwinOps))
+	want := "Change the Architecture diagram:\n- Add System \"React\" inside Host \"VPS-1\"\n- Connect \"React\" to \"API\" over rest"
+	if err != nil || out.Pending == nil || out.Pending.Summary != want {
+		t.Fatalf("Call() = %+v, %v; want a card that reads %q", out, err, want)
+	}
+}
+
+func TestAnApprovedEditDropsTheNodeTheCanvasHasAndConnectsToTheOneThatIsThere(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	exec := canvasExecutor(e, CapRead, CapContent)
+	_, err := exec.Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws, Approved: true}, "edit_architecture", canvasArgs(e, addsATwinOps))
+	if err != nil || len(e.rooms.edits) != 1 {
+		t.Fatalf("Call() error = %v, edits %d", err, len(e.rooms.edits))
+	}
+	sent := string(e.rooms.edits[0].Operations)
+	if strings.Count(sent, `"add_node"`) != 1 || !strings.Contains(sent, `"target":"api"`) || strings.Contains(sent, `"ref":"twin"`) {
+		t.Fatalf("operations sent = %s; want one add_node and a connection to api", sent)
+	}
+}
+
+func TestAskingForOnlyWhatTheCanvasHasNeedsNoApprovalAndChangesNothing(t *testing.T) {
 	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
 	exec := canvasExecutor(e, CapRead, CapContent)
 	ops := `[{"type":"add_node","kind":"system","name":"API","catalog":"golang","parent":"vps"}]`
 	out, err := exec.Call(context.Background(), Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws}, "edit_architecture", canvasArgs(e, ops))
-	if out.Pending != nil || !strings.Contains(refused(t, err), `operation 1: "API" is already on the canvas as api`) {
-		t.Fatalf("Call() = %+v, %v; want a refusal that names the node api", out, err)
+	if err != nil || out.Pending != nil || !strings.Contains(out.Text, "already on the canvas") || len(e.rooms.edits)+len(e.revisions.titles) != 0 {
+		t.Fatalf("Call() = %+v, %v, edits %d, revisions %d; want an answer, no card, no change", out, err, len(e.rooms.edits), len(e.revisions.titles))
 	}
 }
 
