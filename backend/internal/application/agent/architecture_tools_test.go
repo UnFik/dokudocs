@@ -219,6 +219,18 @@ func TestARequestForWhatTheCatalogHasAnswersWithItsSlug(t *testing.T) {
 	}
 }
 
+func TestARequestForWhatTheCatalogHasNeedsNoApprovalAndAnswersWithItsSlug(t *testing.T) {
+	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
+	requests := &fakeRequests{}
+	exec := requestExecutor(e, requests)
+	args := json.RawMessage(`{"workspace_id":"` + e.ws.String() + `","name":"redis","category":"system"}`)
+	actor := Actor{UserID: e.user, Channel: ChannelChat, WorkspaceID: e.ws, DocumentID: e.doc}
+	out, err := exec.Call(context.Background(), actor, "request_catalog_entry", args)
+	if err != nil || out.Pending != nil || !strings.Contains(out.Text, `"in_catalog"`) || !strings.Contains(out.Text, `"redis"`) || requests.got.Name != "" {
+		t.Fatalf("Call() = %+v, %v, filed %+v", out, err, requests.got)
+	}
+}
+
 type fakeComments struct {
 	got appdoc.CommentInput
 	err error

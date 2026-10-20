@@ -52,6 +52,24 @@ type ToolDeps struct {
 	}
 }
 
+// catalogEntry finds a live entry of the category whose name or slug is name, ignoring case.
+func catalogEntry(ctx context.Context, catalog ArchitectureCatalog, name, category string) (string, bool, error) {
+	name = strings.TrimSpace(name)
+	if catalog == nil || name == "" {
+		return "", false, nil
+	}
+	entries, err := catalog.List(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	for _, e := range entries {
+		if !e.Deprecated && e.Category == category && (strings.EqualFold(e.Name, name) || strings.EqualFold(e.Slug, name)) {
+			return e.Slug, true, nil
+		}
+	}
+	return "", false, nil
+}
+
 // schema helpers
 func object(required []string, props map[string]any) map[string]any {
 	if required == nil {
@@ -718,9 +736,13 @@ func DokudocsTools(d ToolDeps) []Tool {
 				"website":  pText("Its website, if you know it."),
 				"note":     pText("Why the User needs it."),
 			}),
-			NeedsApproval: always(func(args json.RawMessage) string {
-				return fmt.Sprintf("Ask for a catalog entry: %s (%s)", truncate(field(args, "name"), 100), title(field(args, "category")))
-			}),
+			// An entry the catalog already has is no request: skip the card and answer with its slug.
+			NeedsApproval: func(ctx context.Context, _ Actor, args json.RawMessage) (bool, string, error) {
+				if _, found, err := catalogEntry(ctx, d.Catalog, field(args, "name"), field(args, "category")); err != nil || found {
+					return false, "", err
+				}
+				return true, fmt.Sprintf("Ask for a catalog entry: %s (%s)", truncate(field(args, "name"), 100), title(field(args, "category"))), nil
+			},
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
 				a, err := parse[struct {
 					wsDoc
@@ -735,6 +757,11 @@ func DokudocsTools(d ToolDeps) []Tool {
 				ws, _, err := a.ids()
 				if err != nil && ws == uuid.Nil {
 					return nil, err
+				}
+				if slug, found, err := catalogEntry(ctx, d.Catalog, a.Name, a.Category); err != nil {
+					return nil, err
+				} else if found {
+					return map[string]any{"status": "in_catalog", "slug": slug, "next": "The catalog has it. Use this slug with update_node."}, nil
 				}
 				if d.CatalogRequests == nil {
 					return nil, ErrUnknownTool
