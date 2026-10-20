@@ -240,7 +240,9 @@ export function openCollabSession(input: {
       Math.max(provider.unsyncedChanges, wroteOffline ? 1 : 0),
     /** Resolves true once the server has every change made here, false at the timeout. */
     drained(timeoutMs: number) {
-      const settled = () => provider.unsyncedChanges === 0 && !wroteOffline
+      // An offline write only needs the room's answer below; waiting for an unsyncedChanges event
+      // would hang on a copy whose edits were already synced earlier.
+      const settled = () => provider.unsyncedChanges === 0
       // Once the provider says nothing is waiting, ask the room: it answers only after
       // everything this connection sent before the question.
       const askRoom = (left: number) =>
@@ -265,7 +267,10 @@ export function openCollabSession(input: {
             clearInterval(poll)
             // The provider answers the room's first sync right after this point; let that go out before asking.
             setTimeout(() => {
-              void askRoom(timeoutMs - (Date.now() - started)).then(resolve)
+              void askRoom(timeoutMs - (Date.now() - started)).then((ok) => {
+                if (ok && provider.unsyncedChanges === 0) wroteOffline = false
+                resolve(ok)
+              })
             }, 200)
           }
         }, 50)
