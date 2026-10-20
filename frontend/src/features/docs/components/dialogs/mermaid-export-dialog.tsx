@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Check,
   Copy,
@@ -21,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { renderMermaidSvgDirect } from '../../hooks/use-mermaid-render'
+import { rasterizeSvg, renderExportSvg } from '../../lib/mermaid-export'
 
 export type MermaidExportFormat = 'png' | 'svg' | 'pdf' | 'mmd'
 export type MermaidBackgroundType = 'transparent' | 'light' | 'dark' | 'custom'
@@ -120,13 +121,35 @@ export function MermaidExportDialog({
     return `${base}.${format}`
   }, [docTitle, format])
 
-  const getExportSvgXml = useMemo(() => {
-    if (!activeSvg) return ''
-    if (bgType === 'transparent') return activeSvg
-
-    const bgRect = `<rect width="100%" height="100%" fill="${effectiveBgColor}"/>`
-    return activeSvg.replace(/(<svg[^>]*>)/i, `$1${bgRect}`)
-  }, [activeSvg, bgType, effectiveBgColor])
+  // The file that is exported: rendered from the source, not copied from the page.
+  const [exportSvg, setExportSvg] = useState('')
+  const [exportError, setExportError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!open || !content.trim()) return
+    let current = true
+    renderExportSvg(content, {
+      isDark: computeIsTargetDark(theme, bgType, customBgColor),
+      themeName: theme,
+      background: effectiveBgColor,
+    }).then(
+      (next) => {
+        if (!current) return
+        setExportSvg(next)
+        setExportError(null)
+      },
+      (error: unknown) => {
+        if (!current) return
+        setExportSvg('')
+        setExportError(
+          error instanceof Error ? error.message : 'The diagram has errors'
+        )
+      }
+    )
+    return () => {
+      current = false
+    }
+  }, [open, content, theme, bgType, customBgColor, effectiveBgColor])
+  const canExport = format === 'mmd' || (exportSvg !== '' && !exportError)
 
   const handleThemeChange = async (nextTheme: MermaidDiagramTheme) => {
     setTheme(nextTheme)
@@ -164,64 +187,13 @@ export function MermaidExportDialog({
     }
   }
 
-  const renderSvgToCanvas = async (
-    multiplier: number
-  ): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> => {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(activeSvg, 'image/svg+xml')
-    const svgEl = doc.querySelector('svg')
-    if (!svgEl) throw new Error('SVG not found')
-
-    const viewBox = svgEl.viewBox?.baseVal
-    let baseWidth =
-      viewBox && viewBox.width > 0
-        ? viewBox.width
-        : parseFloat(svgEl.getAttribute('width') || '800')
-    let baseHeight =
-      viewBox && viewBox.height > 0
-        ? viewBox.height
-        : parseFloat(svgEl.getAttribute('height') || '600')
-
-    if (!baseWidth || isNaN(baseWidth) || baseWidth <= 0) baseWidth = 800
-    if (!baseHeight || isNaN(baseHeight) || baseHeight <= 0) baseHeight = 600
-
-    const width = Math.round(baseWidth * multiplier)
-    const height = Math.round(baseHeight * multiplier)
-
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('Could not create canvas context')
-
-    if (effectiveBgColor !== 'transparent') {
-      ctx.fillStyle = effectiveBgColor
-      ctx.fillRect(0, 0, width, height)
-    }
-
-    const xml = getExportSvgXml
-    const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-
-    await new Promise<void>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, width, height)
-        URL.revokeObjectURL(url)
-        resolve()
-      }
-      img.onerror = () => {
-        URL.revokeObjectURL(url)
-        reject(new Error('Failed to load SVG for rasterization'))
-      }
-      img.src = url
-    })
-
-    return { canvas, width, height }
+  const renderSvgToCanvas = async (multiplier: number) => {
+    const canvas = await rasterizeSvg(exportSvg, multiplier)
+    return { canvas, width: canvas.width, height: canvas.height }
   }
 
   const handleDownload = async () => {
-    if (!activeSvg && format !== 'mmd') {
+    if (!canExport) {
       toast.error('No diagram SVG available to export')
       return
     }
@@ -244,7 +216,7 @@ export function MermaidExportDialog({
       }
 
       if (format === 'svg') {
-        const xml = getExportSvgXml
+        const xml = exportSvg
         const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -301,7 +273,7 @@ export function MermaidExportDialog({
   }
 
   const handleCopyClipboard = async () => {
-    if (!activeSvg && format !== 'mmd') {
+    if (!canExport) {
       toast.error('No diagram SVG available to copy')
       return
     }
@@ -316,7 +288,7 @@ export function MermaidExportDialog({
       }
 
       if (format === 'svg') {
-        await navigator.clipboard.writeText(getExportSvgXml)
+        await navigator.clipboard.writeText(exportSvg)
         setHasCopied(true)
         setTimeout(() => setHasCopied(false), 2000)
         toast.success('SVG markup copied to clipboard')
@@ -562,10 +534,15 @@ export function MermaidExportDialog({
             </div>
 
             <div className='space-y-1.5 border-t border-border/80 pt-3'>
+              {exportError && format !== 'mmd' && (
+                <p role='alert' className='text-[11px] text-destructive'>
+                  Fix the diagram before exporting: {exportError}
+                </p>
+              )}
               <Button
                 type='button'
                 onClick={handleDownload}
-                disabled={isExporting}
+                disabled={isExporting || !canExport}
                 className='h-8 w-full gap-1.5 text-xs font-semibold'
               >
                 <Download className='size-3.5' />
@@ -581,6 +558,7 @@ export function MermaidExportDialog({
                   type='button'
                   variant='outline'
                   onClick={handleCopyClipboard}
+                  disabled={!canExport}
                   className='h-7 w-full gap-1.5 text-xs font-medium'
                 >
                   {hasCopied ? (
