@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"backend/internal/application/document/dto"
+	"backend/internal/application/htmlpage"
 	"backend/internal/domain/model"
 )
 
@@ -93,7 +94,9 @@ func (u *useCase) CreateDocument(ctx context.Context, input dto.CreateDocumentIn
 		if len(input.Content) > MaxHTMLBytes {
 			return data, ErrHTMLTooLarge
 		}
-		// The page is the body, kept as text and never as a collaborative state.
+		// The page is the body, kept as text and never as a collaborative state; the
+		// RAG index reads the text extracted from it.
+		doc.ContentJSON = htmlpage.IndexJSON(input.Content)
 	case docType == "architecture":
 		// The text in content is derived from the canvas by the collaboration service.
 		doc.Content = ""

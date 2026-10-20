@@ -35,7 +35,11 @@ type Config struct {
 	AllowPrivateAIHosts bool
 	RAGRequestTimeout   time.Duration
 	PublicAppURL        string
-	JWTSecret           string
+	// ContentOrigin is the separate origin that serves HTML documents to sandboxed frames
+	// (for example https://usercontent.example.com, ADR 0052). HTML documents stay
+	// closed while it is empty.
+	ContentOrigin string
+	JWTSecret     string
 	// CollabServiceSecret is shared with the collaboration service; the internal
 	// endpoints it calls are off while it is empty.
 	CollabServiceSecret string
@@ -113,6 +117,7 @@ func LoadConfig() (Config, error) {
 		AISettingsEncryptionKey: strings.TrimSpace(env.GetString("AI_SETTINGS_ENCRYPTION_KEY", "")),
 		AllowPrivateAIHosts:     env.GetBool("AI_ALLOW_PRIVATE_HOSTS", false),
 		PublicAppURL:            env.GetString("PUBLIC_APP_URL", "http://localhost:5173"),
+		ContentOrigin:           env.GetString("CONTENT_ORIGIN", ""),
 		JWTSecret:               env.GetString("JWT_SECRET", ""),
 		CollabServiceSecret:     env.GetString("COLLAB_SERVICE_SECRET", ""),
 		CollabServiceURL:        env.GetString("COLLAB_SERVICE_URL", ""),

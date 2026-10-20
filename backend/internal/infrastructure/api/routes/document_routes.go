@@ -45,6 +45,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 	commentHandler := dochandler.NewCommentHandler(commentUseCase)
 
 	assetHandler := dochandler.NewAssetHandler(newAssetService(c, cfg), cfg.MaxUploadBytes)
+	pageHandler := dochandler.NewPageHandler(newPageService(c, cfg))
 
 	// Public Shared Documents (No auth required)
 	f.Get("/public/documents/{shareToken}/assets/{assetID}", assetHandler.GetPublic)
@@ -55,6 +56,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 
 	// Documents CRUD & Operations
 	docGroup.Get("", docHandler.List)
+	docGroup.Post("/{id}/page", pageHandler.Ticket)
 	docGroup.Get("/search", docHandler.Search)
 	docGroup.Post("", docHandler.Create)
 	docGroup.Get("/{id}/suggestions", suggestionHandler.List)

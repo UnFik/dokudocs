@@ -5,8 +5,10 @@ package document
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
+	"backend/internal/application/htmlpage"
 	"backend/internal/infrastructure/database"
 
 	"github.com/google/uuid"
@@ -114,5 +116,74 @@ func TestReadPageAccessAnswersForADocumentWithoutARoom(t *testing.T) {
 	mustExec(`UPDATE documents SET deleted_at = NOW() WHERE id = $1`, documentID)
 	if _, err := repo.ReadPageAccess(ctx, workspaceID, documentID, ownerID); err == nil {
 		t.Fatal("a trashed page still answered with access")
+	}
+}
+
+// The RAG index reads the text extracted from a page when it was written: words in
+// the page are found, code in it is not, and a rewrite makes the index stale.
+func TestHTMLPageTextIsIndexedWithoutItsCodeAndGoesStaleWhenRewritten(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("pgx", integrationDatabaseURL(t))
+	if err != nil {
+		t.Fatalf("open test database: %v", err)
+	}
+	defer db.Close()
+	ownerID := insertAccessTestUser(t, ctx, db)
+	workspaceID, documentID := uuid.New(), uuid.New()
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(ctx, `DELETE FROM workspaces WHERE id = $1`, workspaceID)
+		_, _ = db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, ownerID)
+	})
+	mustExec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := db.ExecContext(ctx, query, args...); err != nil {
+			t.Fatalf("seed %q: %v", query, err)
+		}
+	}
+	page := `<html><head><title>Quarterly</title><script>var hiddenToken = 1</script></head><body><p>Revenue grew sharply</p></body></html>`
+	mustExec(`INSERT INTO workspaces (id, name, slug, created_by) VALUES ($1, 'Html rag', $2, $3)`, workspaceID, "html-rag-"+workspaceID.String(), ownerID)
+	mustExec(`INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, workspaceID, ownerID)
+	mustExec(`INSERT INTO documents (id, workspace_id, title, type, content, content_json, author_id) VALUES ($1, $2, 'A page', 'html', $3, $4::jsonb, $5)`,
+		documentID, workspaceID, page, string(htmlpage.IndexJSON(page)), ownerID)
+	mustExec(`INSERT INTO document_accesses (document_id, user_id, access_level) VALUES ($1, $2, 'owner')`, documentID, ownerID)
+	repo := NewRepository(database.NewSQLDB(db))
+
+	result, err := repo.RebuildRAGIndex(ctx, documentID)
+	if err != nil || result.ChunkCount != 1 {
+		t.Fatalf("RebuildRAGIndex = (%+v, %v), want one chunk", result, err)
+	}
+	var text string
+	if err := db.QueryRowContext(ctx, `SELECT text FROM rag_chunks WHERE document_id = $1`, documentID).Scan(&text); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "Revenue grew sharply") || strings.Contains(text, "hiddenToken") {
+		t.Fatalf("indexed text = %q, want the words and not the script", text)
+	}
+	hits, err := repo.Search(ctx, workspaceID, ownerID, "sharply", 5)
+	if err != nil || len(hits) != 1 || hits[0].ID != documentID {
+		t.Fatalf("search = (%+v, %v), want the page found by its words", hits, err)
+	}
+
+	// A rewrite through the update path moves the body version, so the index is stale.
+	doc, err := repo.GetByID(ctx, documentID, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.Content = `<html><body><p>Costs fell</p></body></html>`
+	doc.ContentJSON = htmlpage.IndexJSON(doc.Content)
+	if err := repo.UpdateAuthorized(ctx, doc, nil, ownerID); err != nil {
+		t.Fatalf("UpdateAuthorized: %v", err)
+	}
+	var stale bool
+	if err := db.QueryRowContext(ctx, `
+		SELECT ri.indexed_body_version <> d.body_version FROM documents d JOIN rag_document_indexes ri ON ri.document_id = d.id WHERE d.id = $1
+	`, documentID).Scan(&stale); err != nil || !stale {
+		t.Fatalf("index stale = (%v, %v), want true after a rewrite", stale, err)
+	}
+	if _, err := repo.RebuildRAGIndex(ctx, documentID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT text FROM rag_chunks WHERE document_id = $1`, documentID).Scan(&text); err != nil || !strings.Contains(text, "Costs fell") {
+		t.Fatalf("reindexed text = (%q, %v), want the new page", text, err)
 	}
 }
