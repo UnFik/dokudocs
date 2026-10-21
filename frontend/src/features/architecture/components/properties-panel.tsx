@@ -17,6 +17,7 @@ import { minSize } from '../lib/layout'
 import type { Selection } from './architecture-canvas'
 import { CatalogIcon } from './catalog-icon'
 import { DocumentLinks } from './document-links'
+import { RepositoryJump } from './repository-jump'
 
 const fieldLabel = 'font-mono text-[11px] text-muted-foreground'
 const selectClass =
@@ -271,15 +272,22 @@ function SystemProperties({
         />
       </Field>
       <Field id='architecture-repo' label='repository URL'>
-        <Input
-          id='architecture-repo'
-          type='url'
-          value={node.repoUrl ?? ''}
-          disabled={!canEdit}
-          placeholder='https://'
-          onChange={(e) => set({ repoUrl: e.target.value || null })}
-          className='h-8 text-[12.5px]'
-        />
+        <div className='flex items-center gap-1.5'>
+          <Input
+            id='architecture-repo'
+            type='url'
+            value={node.repoUrl ?? ''}
+            disabled={!canEdit}
+            placeholder='https://'
+            onChange={(e) => set({ repoUrl: e.target.value || null })}
+            className='h-8 min-w-0 flex-1 text-[12.5px]'
+          />
+          <RepositoryJump
+            url={node.repoUrl ?? ''}
+            name={node.name}
+            className='inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[4px] border border-input bg-card px-2 text-xs font-medium hover:border-signal hover:text-signal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal'
+          />
+        </div>
       </Field>
       <DocumentLinks
         workspaceID={props.workspaceID}

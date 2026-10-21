@@ -12,6 +12,7 @@ import {
   addContainer,
   addSystem,
   readCanvas,
+  updateNode,
 } from '../lib/canvas-doc'
 import type { ArchitectureJSON } from '../lib/canvas-model'
 import type { Selected } from '../lib/canvas-selection'
@@ -462,6 +463,48 @@ describe('Comment', () => {
     )
     await wait()
     expect(spies.onComment).not.toHaveBeenCalled()
+  })
+})
+
+describe('the floating toolbar on a selected System with a repository', () => {
+  const repository = () =>
+    page.getByRole('button', { name: 'Open the repository of API' })
+
+  it('offers the repository only while that System is selected', async () => {
+    const { doc, api } = sample()
+    updateNode(doc, api, { repoUrl: 'https://github.com/acme/api' })
+    await show({ doc })
+    await expect.element(repository()).not.toBeInTheDocument()
+    await userEvent.click(page.getByText('API', { exact: true }))
+    await expect.element(repository()).toBeVisible()
+    await userEvent.click(page.getByText('DB', { exact: true }))
+    await expect.element(repository()).not.toBeInTheDocument()
+  })
+
+  it('stays away from a System with no usable repository address', async () => {
+    const { doc, api, cache } = sample()
+    updateNode(doc, cache, { repoUrl: 'javascript:alert(1)' })
+    await show({ doc })
+    await userEvent.click(page.getByText('Cache', { exact: true }))
+    await expect
+      .element(page.getByRole('button', { name: /repository/i }))
+      .not.toBeInTheDocument()
+    await userEvent.click(page.getByText('API', { exact: true }))
+    await expect
+      .element(page.getByRole('button', { name: /repository/i }))
+      .not.toBeInTheDocument()
+    expect(api).toBeTruthy()
+  })
+
+  it('is still there for someone who may only look, without the editing tools', async () => {
+    const { doc, api } = sample()
+    updateNode(doc, api, { repoUrl: 'https://github.com/acme/api' })
+    await show({ doc, canEdit: false })
+    await userEvent.click(page.getByText('API', { exact: true }))
+    await expect.element(repository()).toBeVisible()
+    await expect
+      .element(page.getByRole('button', { name: /^Take API out/ }))
+      .not.toBeInTheDocument()
   })
 })
 

@@ -21,7 +21,9 @@ import type {
   ArchitectureNode,
 } from '../lib/canvas-model'
 import type { CatalogEntry } from '../lib/catalog'
+import { isWebAddress } from '../lib/web-address'
 import { CatalogIcon } from './catalog-icon'
+import { RepositoryJump } from './repository-jump'
 
 /** What the custom nodes and edges need from the editor, without passing functions through node data. */
 export type CanvasContextValue = {
@@ -103,7 +105,7 @@ function EraseMark({ id }: { id: string }) {
 const toolbarButton =
   'nodrag inline-flex h-7 items-center gap-1.5 rounded-[4px] border border-input bg-card px-2 text-xs font-medium shadow-sm hover:border-signal hover:text-signal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal'
 
-/** Floats above the selected element: Fit to contents for a container, Take out when it sits inside one. */
+/** Floats above the selected element: Fit to contents for a container, Take out when it sits inside one, the repository of a System that has one. */
 function ElementToolbar({
   id,
   element,
@@ -115,8 +117,12 @@ function ElementToolbar({
 }) {
   const { readOnly, containers, takeOut, canFit, fit } = useCanvas()
   const parent = element.parentId ? containers.get(element.parentId) : undefined
-  const fitting = selected && element.kind !== 'system' && canFit(id)
-  if (readOnly || (!parent && !fitting)) return null
+  const fitting =
+    !readOnly && selected && element.kind !== 'system' && canFit(id)
+  const takingOut = !readOnly && Boolean(parent)
+  const repoUrl = element.kind === 'system' ? (element.repoUrl ?? '') : ''
+  const jumping = isWebAddress(repoUrl)
+  if (!takingOut && !fitting && !jumping) return null
   return (
     <NodeToolbar
       isVisible={selected}
@@ -131,7 +137,14 @@ function ElementToolbar({
           Fit to contents
         </button>
       )}
-      {parent && (
+      {jumping && (
+        <RepositoryJump
+          url={repoUrl}
+          name={element.name}
+          className={toolbarButton}
+        />
+      )}
+      {parent && takingOut && (
         <button
           type='button'
           className={toolbarButton}
