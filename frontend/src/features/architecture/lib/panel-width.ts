@@ -1,7 +1,8 @@
 /** How wide each side panel of the canvas may be, in pixels. */
 export const panelWidths = {
   palette: { default: 216, min: 180, max: 360 },
-  props: { default: 280, min: 240, max: 480 },
+  // The narrowest keeps the collapse button and the three tabs (Properties, Documents, Comments with its count) on one row.
+  props: { default: 320, min: 320, max: 480 },
 } as const
 
 export type SidePanel = keyof typeof panelWidths

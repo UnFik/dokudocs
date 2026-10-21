@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import type * as Y from 'yjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { resizeElement, toLayoutNodes } from '../lib/canvas-actions'
 import { updateConnection, updateNode } from '../lib/canvas-doc'
 import type { ArchitectureJSON, ArchitectureNode } from '../lib/canvas-model'
@@ -16,8 +15,9 @@ import {
 import { minSize } from '../lib/layout'
 import type { Selection } from './architecture-canvas'
 import { CatalogIcon } from './catalog-icon'
-import { DocumentLinks } from './document-links'
+import { InlineField } from './inline-field'
 import { RepositoryJump } from './repository-jump'
+import { SystemConnections } from './system-connections'
 
 const fieldLabel = 'font-mono text-[11px] text-muted-foreground'
 const selectClass =
@@ -34,7 +34,7 @@ function Field({
 }) {
   return (
     <div className='flex flex-col gap-1'>
-      <label htmlFor={id} className={fieldLabel}>
+      <label id={`${id}-label`} htmlFor={id} className={fieldLabel}>
         {label}
       </label>
       {children}
@@ -97,9 +97,9 @@ export type PropertiesPanelProps = {
   catalog: CatalogEntry[]
   selection: Selection
   canEdit: boolean
-  workspaceID: string
-  projectID: string | null
   onDelete: (elements: Selected[]) => void
+  /** Selects other elements, to walk from a System to the ones it connects to. */
+  onSelect: (selection: Selection) => void
   onGesture: () => void
 }
 
@@ -189,22 +189,19 @@ function SystemProperties({
           subkind={entry?.subkind ?? 'job'}
           size={24}
         />
-        <div className='min-w-0'>
+        <div className='min-w-0 flex-1'>
           <p className='font-mono text-[11px] text-muted-foreground'>system</p>
-          <h2 className='truncate text-sm font-semibold'>
-            {node.name || 'Untitled'}
-          </h2>
+          <InlineField
+            id='architecture-name'
+            label='name'
+            value={node.name}
+            canEdit={canEdit}
+            placeholder='Untitled'
+            className='text-sm font-semibold'
+            onChange={(name) => set({ name })}
+          />
         </div>
       </div>
-      <Field id='architecture-name' label='name'>
-        <Input
-          id='architecture-name'
-          value={node.name}
-          disabled={!canEdit}
-          onChange={(e) => set({ name: e.target.value })}
-          className='h-8 text-[12.5px]'
-        />
-      </Field>
       <Field id='architecture-type' label='type'>
         <CatalogSelect
           id='architecture-type'
@@ -263,25 +260,27 @@ function SystemProperties({
         </span>
       </div>
       <Field id='architecture-description' label='description'>
-        <Textarea
+        <InlineField
           id='architecture-description'
           value={node.description}
-          disabled={!canEdit}
-          onChange={(e) => set({ description: e.target.value })}
-          className='min-h-16 text-[12.5px]'
+          canEdit={canEdit}
+          multiline
+          placeholder='Add a description'
+          onChange={(description) => set({ description })}
         />
       </Field>
       <Field id='architecture-repo' label='repository URL'>
         <div className='flex items-center gap-1.5'>
-          <Input
-            id='architecture-repo'
-            type='url'
-            value={node.repoUrl ?? ''}
-            disabled={!canEdit}
-            placeholder='https://'
-            onChange={(e) => set({ repoUrl: e.target.value || null })}
-            className='h-8 min-w-0 flex-1 text-[12.5px]'
-          />
+          <div className='min-w-0 flex-1'>
+            <InlineField
+              id='architecture-repo'
+              type='url'
+              value={node.repoUrl ?? ''}
+              canEdit={canEdit}
+              placeholder='https://'
+              onChange={(repoUrl) => set({ repoUrl: repoUrl || null })}
+            />
+          </div>
           <RepositoryJump
             url={node.repoUrl ?? ''}
             name={node.name}
@@ -289,12 +288,10 @@ function SystemProperties({
           />
         </div>
       </Field>
-      <DocumentLinks
-        workspaceID={props.workspaceID}
-        projectID={props.projectID}
-        links={node.links}
-        canEdit={canEdit}
-        onChange={(links) => set({ links })}
+      <SystemConnections
+        canvas={props.canvas}
+        systemID={node.id}
+        onSelect={props.onSelect}
       />
       {canEdit && <DeleteButton {...props} node={node} />}
     </div>
@@ -358,13 +355,6 @@ function ConnectionProperties({
           className='h-8 text-[12.5px]'
         />
       </Field>
-      <DocumentLinks
-        workspaceID={props.workspaceID}
-        projectID={props.projectID}
-        links={connection.links}
-        canEdit={canEdit}
-        onChange={(links) => set({ links })}
-      />
       {canEdit && (
         <Button
           size='sm'

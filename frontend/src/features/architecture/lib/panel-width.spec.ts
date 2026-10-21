@@ -10,6 +10,11 @@ describe('the width of a side panel', () => {
   it('stays between its narrowest and widest', () => {
     expect(panelWidth('palette', 100)).toBe(panelWidths.palette.min)
     expect(panelWidth('palette', 900)).toBe(panelWidths.palette.max)
-    expect(panelWidth('props', 300.6)).toBe(301)
+    expect(panelWidth('props', 400.6)).toBe(401)
+  })
+
+  it('lifts a properties width saved before the third tab to the narrowest that holds the tabs', () => {
+    expect(panelWidth('props', 280)).toBe(panelWidths.props.min)
+    expect(panelWidths.props.min).toBeGreaterThanOrEqual(320)
   })
 })
