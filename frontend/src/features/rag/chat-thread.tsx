@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useRef,
   useState,
@@ -627,6 +628,7 @@ export function AskForm({
   onLanguage,
   scope = 'workspace',
   chats = [],
+  draft,
 }: {
   id: string
   pending: boolean
@@ -643,16 +645,32 @@ export function AskForm({
   scope?: 'document' | 'workspace'
   /** Other chats of the User that can be brought in as context (not the open one). */
   chats?: ContextChat[]
+  /**
+   * The files held for the question by whoever owns the page, so text added from
+   * the document is kept while the chat is shut. `focusRequest` going up moves
+   * the caret into the box.
+   */
+  draft?: {
+    attachments: Attachment[]
+    onChange: (attachments: Attachment[]) => void
+    focusRequest: number
+  }
 }) {
   const [question, setQuestion] = useState('')
   const [categories, setCategories] = useState<RAGCategory[]>([])
   const [contextChats, setContextChats] = useState<ContextChat[]>([])
-  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [ownAttachments, setOwnAttachments] = useState<Attachment[]>([])
+  const attachments = draft?.attachments ?? ownAttachments
+  const setAttachments = draft?.onChange ?? setOwnAttachments
   const [fileError, setFileError] = useState<string>()
   const [placed, setPlaced] = useState<PlacedDocumentMention[]>([])
   const [caret, setCaret] = useState(0)
   const [dismissedAt, setDismissedAt] = useState<number | null>(null)
   const box = useRef<HTMLTextAreaElement>(null)
+  const focusRequest = draft?.focusRequest ?? 0
+  useEffect(() => {
+    if (focusRequest > 0) box.current?.focus()
+  }, [focusRequest])
   const skills = useQuery({
     queryKey: ['skills'],
     queryFn: ({ signal }) => listSkills(signal),

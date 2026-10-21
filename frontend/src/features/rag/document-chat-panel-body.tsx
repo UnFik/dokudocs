@@ -15,6 +15,7 @@ import {
 } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
 import { announceAnswer } from './chat-notify'
+import type { ChatPanelState } from './chat-panel-context'
 import { ChatPanelHeader } from './chat-panel-header'
 import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
@@ -31,6 +32,7 @@ export default function PanelBody({
   conversations,
   listKey,
   onRunning,
+  draft,
   onClose,
 }: {
   documentID: string
@@ -39,6 +41,8 @@ export default function PanelBody({
   listKey: unknown[]
   /** Reports the chat being answered, or nothing once the answer is in. */
   onRunning: (conversationID: string | undefined) => void
+  /** Text added from the page for the next question. */
+  draft: ChatPanelState['draft']
   onClose: () => void
 }) {
   const queryClient = useQueryClient()
@@ -229,6 +233,7 @@ export default function PanelBody({
                 chats={(chats ?? [])
                   .filter((chat) => chat.id !== selected.id && !chat.archivedAt)
                   .map((chat) => ({ id: chat.id, title: chat.title }))}
+                draft={draft}
                 onAsk={(question, extras) =>
                   void run.ask(question, undefined, extras)
                 }
