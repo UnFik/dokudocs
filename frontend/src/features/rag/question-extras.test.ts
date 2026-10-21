@@ -3,6 +3,7 @@ import {
   MAX_ATTACHMENT_CHARS,
   MAX_FILES,
   readAttachments,
+  wireAttachments,
 } from './question-extras'
 
 const file = (name: string, text: string) =>
@@ -62,5 +63,21 @@ describe('readAttachments', () => {
     const result = await readAttachments([file('notes.txt', 'a')], have)
     expect(result.attachments).toEqual(have)
     expect(result.error).toBeUndefined()
+  })
+})
+
+describe('wireAttachments', () => {
+  it('leaves a picked text file as it is', () => {
+    const have = [{ name: 'notes.txt', text: 'a' }]
+    expect(wireAttachments(have)).toEqual(have)
+  })
+
+  it('gives a selection a text file name the server takes', () => {
+    expect(
+      wireAttachments([
+        { name: 'Hello world · L3', text: 'a' },
+        { name: 'and/or · L9', text: 'b' },
+      ]).map((file) => file.name)
+    ).toEqual(['Hello world · L3.md', 'and or · L9.md'])
   })
 })
