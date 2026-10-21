@@ -20,6 +20,8 @@ export function InlineField({
   placeholder,
   multiline = false,
   type = 'text',
+  label,
+  className,
 }: {
   id: string
   value: string
@@ -28,6 +30,10 @@ export function InlineField({
   placeholder?: string
   multiline?: boolean
   type?: 'text' | 'url'
+  /** Names the field when no <label> does, as the title of a panel. */
+  label?: string
+  /** Type of the text, so a title can be larger than a field. */
+  className?: string
 }) {
   const [editing, setEditing] = useState(false)
   const start = useRef(value)
@@ -49,7 +55,8 @@ export function InlineField({
   const display = cn(
     textClass,
     multiline ? 'line-clamp-2 py-1.5 whitespace-pre-line' : 'truncate py-[7px]',
-    value ? '' : 'text-muted-foreground'
+    value ? '' : 'text-muted-foreground',
+    className
   )
   const shown = value || placeholder || ''
 
@@ -67,7 +74,10 @@ export function InlineField({
         id={id}
         type='button'
         // The field's label and its value, so a screen reader hears both.
-        aria-labelledby={`${id}-label ${id}`}
+        aria-label={
+          label ? `${label}: ${value || placeholder || ''}` : undefined
+        }
+        aria-labelledby={label ? undefined : `${id}-label ${id}`}
         title={value || undefined}
         className={cn(
           display,
@@ -101,6 +111,7 @@ export function InlineField({
   }
   const shared = {
     id,
+    'aria-label': label,
     ref: field,
     value,
     placeholder,
@@ -118,7 +129,7 @@ export function InlineField({
       {...shared}
       type={type}
       onChange={(e) => onChange(e.target.value)}
-      className='h-8 text-[12.5px]'
+      className={cn('h-8 text-[12.5px]', className)}
     />
   )
 }

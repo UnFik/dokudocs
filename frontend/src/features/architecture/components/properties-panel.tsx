@@ -16,6 +16,7 @@ import { minSize } from '../lib/layout'
 import type { Selection } from './architecture-canvas'
 import { CatalogIcon } from './catalog-icon'
 import { InlineField } from './inline-field'
+import { RepositoryJump } from './repository-jump'
 import { SystemConnections } from './system-connections'
 
 const fieldLabel = 'font-mono text-[11px] text-muted-foreground'
@@ -188,22 +189,19 @@ function SystemProperties({
           subkind={entry?.subkind ?? 'job'}
           size={24}
         />
-        <div className='min-w-0'>
+        <div className='min-w-0 flex-1'>
           <p className='font-mono text-[11px] text-muted-foreground'>system</p>
-          <h2 className='truncate text-sm font-semibold'>
-            {node.name || 'Untitled'}
-          </h2>
+          <InlineField
+            id='architecture-name'
+            label='name'
+            value={node.name}
+            canEdit={canEdit}
+            placeholder='Untitled'
+            className='text-sm font-semibold'
+            onChange={(name) => set({ name })}
+          />
         </div>
       </div>
-      <Field id='architecture-name' label='name'>
-        <InlineField
-          id='architecture-name'
-          value={node.name}
-          canEdit={canEdit}
-          placeholder='Untitled'
-          onChange={(name) => set({ name })}
-        />
-      </Field>
       <Field id='architecture-type' label='type'>
         <CatalogSelect
           id='architecture-type'
@@ -272,14 +270,23 @@ function SystemProperties({
         />
       </Field>
       <Field id='architecture-repo' label='repository URL'>
-        <InlineField
-          id='architecture-repo'
-          type='url'
-          value={node.repoUrl ?? ''}
-          canEdit={canEdit}
-          placeholder='https://'
-          onChange={(repoUrl) => set({ repoUrl: repoUrl || null })}
-        />
+        <div className='flex items-center gap-1.5'>
+          <div className='min-w-0 flex-1'>
+            <InlineField
+              id='architecture-repo'
+              type='url'
+              value={node.repoUrl ?? ''}
+              canEdit={canEdit}
+              placeholder='https://'
+              onChange={(repoUrl) => set({ repoUrl: repoUrl || null })}
+            />
+          </div>
+          <RepositoryJump
+            url={node.repoUrl ?? ''}
+            name={node.name}
+            className='inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[4px] border border-input bg-card px-2 text-xs font-medium hover:border-signal hover:text-signal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal'
+          />
+        </div>
       </Field>
       <SystemConnections
         canvas={props.canvas}

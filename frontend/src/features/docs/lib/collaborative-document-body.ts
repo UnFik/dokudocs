@@ -76,6 +76,7 @@ export async function mountCollaborativeDocumentBody(
     onCommentPositions?: (positions: Record<string, number | null>) => void
     onCommentClick?: (id: string) => void
     onCommentRequest?: () => void
+    onAddToChatRequest?: () => void
   }
 ) {
   const room = `${input.workspaceID}.${input.documentID}`
@@ -150,6 +151,7 @@ export async function mountCollaborativeDocumentBody(
       onCommentPositions: input.onCommentPositions,
       onCommentClick: input.onCommentClick,
       onCommentRequest: input.onCommentRequest,
+      onAddToChatRequest: input.onAddToChatRequest,
       onSelectionChange: (selection: DocumentBodySelection | null) =>
         session.setCursor(selection),
     })
