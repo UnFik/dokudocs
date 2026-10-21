@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { announceAnswer } from './chat-notify'
 import { ChatPanelContext, useDocumentChatPanel } from './chat-panel-context'
 import { readChatPreferences } from './chat-preferences'
+import type { Attachment } from './question-extras'
+import { addSelection } from './selection-context'
 
 // The chat itself (Markdown, previews, history) loads when the panel opens, so a
 // document page only carries the button.
@@ -81,6 +83,18 @@ export function DocumentChatProvider({
   const unread =
     conversations.data?.filter((chat) => chat.unread && !chat.archivedAt)
       .length ?? 0
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [focusRequest, setFocusRequest] = useState(0)
+  const openChat = () => {
+    setOpen(true)
+    setFocusRequest((n) => n + 1)
+  }
+  const addToChat = (selection: Attachment) => {
+    const result = addSelection(attachments, selection)
+    setAttachments(result.attachments)
+    openChat()
+    return result.error
+  }
   return (
     <ChatPanelContext.Provider
       value={{
@@ -93,6 +107,9 @@ export function DocumentChatProvider({
         conversations,
         listKey,
         onRunning: setAwaiting,
+        draft: { attachments, onChange: setAttachments, focusRequest },
+        addToChat,
+        openChat,
       }}
     >
       {children}
@@ -154,6 +171,7 @@ export function DocumentChatColumn() {
           conversations={chat.conversations}
           listKey={chat.listKey}
           onRunning={chat.onRunning}
+          draft={chat.draft}
           onClose={() => chat.setOpen(false)}
         />
       </Suspense>

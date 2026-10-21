@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import '@/styles/index.css'
 import { jsonResponse, testSession } from '@/test-utils/auth'
@@ -184,6 +185,72 @@ it('offers skills when the question starts with a slash', async () => {
   await userEvent.type(box, 'for the login change')
   await userEvent.click(screen.getByRole('button', { name: 'Send' }))
   expect(asked).toEqual(['/write-adr for the login change'])
+})
+
+function DraftedAsk({
+  asked,
+  start,
+}: {
+  asked: { question: string; files: string[] }[]
+  start: { name: string; text: string }[]
+}) {
+  const [attachments, onChange] = useState(start)
+  const [focusRequest, setFocusRequest] = useState(0)
+  return (
+    <>
+      <button type='button' onClick={() => setFocusRequest((n) => n + 1)}>
+        Ask for focus
+      </button>
+      <AskForm
+        id='q'
+        scope='document'
+        pending={false}
+        placeholder='Ask'
+        onAsk={(question, extras) =>
+          asked.push({
+            question,
+            files: extras.attachments.map((file) => file.text),
+          })
+        }
+        language='en'
+        onLanguage={() => {}}
+        draft={{ attachments, onChange, focusRequest }}
+      />
+    </>
+  )
+}
+
+it('shows the selections kept for the question, lets one go and sends the rest', async () => {
+  const asked: { question: string; files: string[] }[] = []
+  const screen = await mount(
+    <DraftedAsk
+      asked={asked}
+      start={[
+        { name: 'Hello · L3', text: 'Hello' },
+        { name: 'Bye · L9', text: 'Bye' },
+      ]}
+    />
+  )
+  await expect.element(screen.getByText('Hello · L3')).toBeVisible()
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Remove file Hello · L3' })
+  )
+  expect(screen.getByText('Hello · L3').elements()).toHaveLength(0)
+  await userEvent.fill(
+    screen.getByRole('textbox', { name: 'Ask a question' }),
+    'What is this?'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+  expect(asked).toEqual([{ question: 'What is this?', files: ['Bye'] }])
+  expect(screen.getByText('Bye · L9').elements()).toHaveLength(0)
+})
+
+it('moves focus to the question box when asked to', async () => {
+  const screen = await mount(<DraftedAsk asked={[]} start={[]} />)
+  await userEvent.click(screen.getByRole('button', { name: 'Ask for focus' }))
+  await expect
+    .element(screen.getByRole('textbox', { name: 'Ask a question' }))
+    .toHaveFocus()
 })
 
 it('says plainly when an approved action never recorded how it ended', async () => {

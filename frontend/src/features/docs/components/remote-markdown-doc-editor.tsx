@@ -23,7 +23,11 @@ import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
 import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
 import { useCurrentProfile } from '@/features/auth/hooks/use-current-profile'
-import { useChatPanelSibling } from '@/features/rag/chat-panel-context'
+import {
+  useChatPanelSibling,
+  useDocumentChatPanel,
+} from '@/features/rag/chat-panel-context'
+import { selectionAttachment } from '@/features/rag/selection-context'
 import { assetObjectURL, uploadDocumentAsset } from '../lib/assets'
 import { decodeBase64, encodeBase64 } from '../lib/collab-encoding'
 import {
@@ -584,6 +588,22 @@ function CollaborativeMarkdownBody({
   useEffect(() => {
     startCommentRef.current = startComment
   })
+  // With a selection it joins the question in the chat; without one the chat just opens.
+  const chat = useDocumentChatPanel()
+  const addToChat = () => {
+    if (!chat) return
+    const text = sessionRef.current?.editor.getSelectedText() ?? ''
+    if (!text.trim()) {
+      chat.openChat()
+      return
+    }
+    const problem = chat.addToChat(selectionAttachment(markdown, text))
+    if (problem) toast.error(problem, { id: 'add-to-chat' })
+  }
+  const addToChatRef = useRef(addToChat)
+  useEffect(() => {
+    addToChatRef.current = addToChat
+  })
   const [history, setHistory] = useState<EditorHistoryState>({
     canUndo: false,
     canRedo: false,
@@ -723,6 +743,7 @@ function CollaborativeMarkdownBody({
       },
       onReloaded,
       onCommentRequest: () => startCommentRef.current(),
+      onAddToChatRequest: () => addToChatRef.current(),
       onCommentClick: (id) => {
         setFocusedCommentID(id)
         setFocusedSuggestionID(null)
@@ -1025,6 +1046,7 @@ function CollaborativeMarkdownBody({
             inline={inline}
             linkRequest={linkRequest}
             onComment={canEdit || canSuggest ? startComment : undefined}
+            onAddToChat={chat ? addToChat : undefined}
             onSetHeading={(level) => {
               sessionRef.current?.editor.setHeading(level)
               sessionRef.current?.editor.focus()
