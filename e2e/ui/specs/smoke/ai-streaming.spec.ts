@@ -183,6 +183,9 @@ test('@smoke: a document named with @ is read, and shows as a link in the chat',
   await box.click()
   await page.keyboard.type('What does @Vault runbook')
   await page.getByRole('button', { name: new RegExp(documentTitle) }).click()
+  // The composer puts the caret after the mention on the next frame; typing before that lands in the wrong place.
+  await expect(box).toHaveValue(new RegExp(`@${documentTitle} $`))
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   await page.keyboard.type(`say about the ${codeword} vault?`)
   const started = page.waitForResponse(
     (response) => response.request().method() === 'POST' && /\/runs$/.test(new URL(response.url()).pathname),
