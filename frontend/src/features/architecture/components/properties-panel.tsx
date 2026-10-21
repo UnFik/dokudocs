@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import type * as Y from 'yjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { resizeElement, toLayoutNodes } from '../lib/canvas-actions'
 import { updateConnection, updateNode } from '../lib/canvas-doc'
 import type { ArchitectureJSON, ArchitectureNode } from '../lib/canvas-model'
@@ -16,6 +15,7 @@ import {
 import { minSize } from '../lib/layout'
 import type { Selection } from './architecture-canvas'
 import { CatalogIcon } from './catalog-icon'
+import { InlineField } from './inline-field'
 import { SystemConnections } from './system-connections'
 
 const fieldLabel = 'font-mono text-[11px] text-muted-foreground'
@@ -33,7 +33,7 @@ function Field({
 }) {
   return (
     <div className='flex flex-col gap-1'>
-      <label htmlFor={id} className={fieldLabel}>
+      <label id={`${id}-label`} htmlFor={id} className={fieldLabel}>
         {label}
       </label>
       {children}
@@ -196,12 +196,12 @@ function SystemProperties({
         </div>
       </div>
       <Field id='architecture-name' label='name'>
-        <Input
+        <InlineField
           id='architecture-name'
           value={node.name}
-          disabled={!canEdit}
-          onChange={(e) => set({ name: e.target.value })}
-          className='h-8 text-[12.5px]'
+          canEdit={canEdit}
+          placeholder='Untitled'
+          onChange={(name) => set({ name })}
         />
       </Field>
       <Field id='architecture-type' label='type'>
@@ -262,23 +262,23 @@ function SystemProperties({
         </span>
       </div>
       <Field id='architecture-description' label='description'>
-        <Textarea
+        <InlineField
           id='architecture-description'
           value={node.description}
-          disabled={!canEdit}
-          onChange={(e) => set({ description: e.target.value })}
-          className='min-h-16 text-[12.5px]'
+          canEdit={canEdit}
+          multiline
+          placeholder='Add a description'
+          onChange={(description) => set({ description })}
         />
       </Field>
       <Field id='architecture-repo' label='repository URL'>
-        <Input
+        <InlineField
           id='architecture-repo'
           type='url'
           value={node.repoUrl ?? ''}
-          disabled={!canEdit}
+          canEdit={canEdit}
           placeholder='https://'
-          onChange={(e) => set({ repoUrl: e.target.value || null })}
-          className='h-8 text-[12.5px]'
+          onChange={(repoUrl) => set({ repoUrl: repoUrl || null })}
         />
       </Field>
       <SystemConnections
