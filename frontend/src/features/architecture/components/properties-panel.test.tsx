@@ -4,7 +4,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { page, userEvent } from 'vitest/browser'
 import * as Y from 'yjs'
-import { addContainer, addSystem, readCanvas } from '../lib/canvas-doc'
+import {
+  addContainer,
+  addSystem,
+  readCanvas,
+  updateNode,
+} from '../lib/canvas-doc'
 import { PropertiesPanel } from './properties-panel'
 
 describe('the properties panel with several elements selected', () => {
@@ -117,5 +122,66 @@ describe('the properties panel for a Host', () => {
     await mount()
     await page.getByLabelText('Width').fill('40')
     await expect.element(page.getByText(/Not smaller than/)).toBeVisible()
+  })
+})
+
+describe('the properties panel for a System with a repository', () => {
+  function mountSystem(repoUrl: string | null, canEdit: boolean) {
+    const doc = new Y.Doc()
+    const api = addSystem(doc, {
+      catalog: 'golang',
+      name: 'API',
+      x: 0,
+      y: 0,
+      parentId: null,
+    })
+    updateNode(doc, api, { repoUrl })
+    return render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PropertiesPanel
+          doc={doc}
+          canvas={readCanvas(doc)}
+          catalog={[]}
+          selection={[{ kind: 'node', id: api }]}
+          canEdit={canEdit}
+          workspaceID='w'
+          projectID={null}
+          onDelete={vi.fn()}
+          onGesture={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+  }
+  const jump = () =>
+    page.getByRole('button', { name: 'Open the repository of API' })
+
+  it('offers the jump beside the address, to someone who may edit and to a viewer', async () => {
+    for (const canEdit of [true, false]) {
+      const view = await mountSystem('https://github.com/acme/api', canEdit)
+      await expect.element(jump()).toBeVisible()
+      await view.unmount()
+    }
+  })
+
+  it('confirms before opening the address in a new tab', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    await mountSystem('https://github.com/acme/api', false)
+    await jump().click()
+    expect(open).not.toHaveBeenCalled()
+    await page.getByRole('button', { name: 'Open repository' }).click()
+    expect(open).toHaveBeenCalledWith(
+      'https://github.com/acme/api',
+      '_blank',
+      'noopener,noreferrer'
+    )
+    open.mockRestore()
+  })
+
+  it('has no jump while the address is empty or not a web address', async () => {
+    for (const url of [null, 'javascript:alert(1)']) {
+      const view = await mountSystem(url, true)
+      await expect.element(jump()).not.toBeInTheDocument()
+      await view.unmount()
+    }
   })
 })
