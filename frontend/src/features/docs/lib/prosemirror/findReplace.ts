@@ -179,10 +179,13 @@ class FindPanel {
 
   private build() {
     const { replaceRow } = this.find_state
+    const anchor = document.createElement('div')
+    anchor.className = 'dd-find-anchor'
     const root = document.createElement('div')
     root.className = 'dd-find'
     root.setAttribute('role', 'search')
     root.setAttribute('aria-label', 'Find in page')
+    anchor.append(root)
 
     const button = (label: string, text: string, onClick: () => void) => {
       const element = document.createElement('button')
@@ -243,7 +246,7 @@ class FindPanel {
       )
     }
     root.append(button('Close find', '×', () => this.close()))
-    return root
+    return anchor
   }
 
   update() {
@@ -258,7 +261,7 @@ class FindPanel {
       this.root = this.build()
       const host = this.view.dom.parentElement ?? document.body
       host.classList.add('dd-host')
-      host.append(this.root)
+      host.prepend(this.root)
       this.find.value = find.query
       this.find.focus()
     }

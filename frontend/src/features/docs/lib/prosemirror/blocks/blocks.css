@@ -403,12 +403,17 @@
   break-after: page;
 }
 
-/* Find and replace: the panel in a corner of the page, and the marks on matches. */
+/* Find and replace: the panel stays in the top corner while the page scrolls, and the marks on matches. */
+.dd-find-anchor {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  height: 0;
+}
 .dd-find {
   position: absolute;
-  top: 8px;
+  top: 0;
   right: 8px;
-  z-index: 20;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
