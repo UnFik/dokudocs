@@ -166,6 +166,8 @@ export function createDocumentBodyEditor(
     onCommentClick?: (id: string) => void
     /** The user asked to comment on the selection (Ctrl or Cmd with Alt and M). */
     onCommentRequest?: () => void
+    /** The user asked to add the selection to the chat (Ctrl or Cmd with Alt and L). */
+    onAddToChatRequest?: () => void
     /** Fires when the local selection moves; null when the editor loses focus. */
     onSelectionChange?: (selection: DocumentBodySelection | null) => void
   } = {}
@@ -379,6 +381,10 @@ export function createDocumentBodyEditor(
           u: () => runInlineMark('underline'),
           'Alt-m': () => {
             options.onCommentRequest?.()
+            return true
+          },
+          'Alt-l': () => {
+            options.onAddToChatRequest?.()
             return true
           },
           // Links the selected text; with a caret it falls through to page search.
@@ -1379,6 +1385,13 @@ export function createDocumentBodyEditor(
           message: 'A comment can cover text inside one paragraph at a time.',
         }
       }
+    },
+    /** The selected words as they read, one block to a line; empty with only a caret. */
+    getSelectedText: () => {
+      const selection = selectionNow(view)
+      return selection.empty
+        ? ''
+        : state.doc.textBetween(selection.from, selection.to, '\n')
     },
     getHistory: readHistory,
     getInlineState: () => readInlineState(view),

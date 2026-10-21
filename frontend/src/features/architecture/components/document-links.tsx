@@ -21,6 +21,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { DocTypeBadge } from '@/features/docs/components/doc-type-badge'
+import { DocumentCard } from '@/features/rag/markdown/document-references'
 
 const LINKABLE_TYPES = DOCUMENT_TYPES.filter(
   ({ value }) => value !== 'architecture'
@@ -33,14 +34,6 @@ export function useLinkableDocuments(workspaceID: string) {
     enabled: Boolean(workspaceID),
     staleTime: 30_000,
   })
-}
-
-function excerpt(content: string) {
-  const text = content
-    .replace(/[#>*_`|[\]()-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return text.length > 280 ? `${text.slice(0, 280)}…` : text
 }
 
 /**
@@ -65,8 +58,6 @@ export function DocumentLinks({
     () => new Map((documents.data ?? []).map((d) => [d.id, d])),
     [documents.data]
   )
-  const [previewID, setPreviewID] = useState<string | null>(null)
-  const preview = previewID ? byID.get(previewID) : undefined
 
   return (
     <section
@@ -138,21 +129,23 @@ export function DocumentLinks({
               ) : document ? (
                 <>
                   <DocTypeBadge type={document.type} />
-                  <button
-                    type='button'
-                    className='flex-1 truncate text-left hover:underline focus-visible:outline-2 focus-visible:outline-signal'
-                    aria-pressed={previewID === id}
-                    onClick={() => setPreviewID(previewID === id ? null : id)}
+                  <DocumentCard
+                    hit={{
+                      id,
+                      title: document.title,
+                      projectName: document.projectName ?? '',
+                      type: document.type,
+                    }}
+                    workspaceID={workspaceID}
                   >
-                    {document.title}
-                  </button>
-                  <Link
-                    to='/docs/$docId'
-                    params={{ docId: id }}
-                    className='text-xs text-signal hover:underline'
-                  >
-                    Open
-                  </Link>
+                    <Link
+                      to='/docs/$docId'
+                      params={{ docId: id }}
+                      className='flex-1 truncate text-left hover:underline focus-visible:outline-2 focus-visible:outline-signal'
+                    >
+                      {document.title}
+                    </Link>
+                  </DocumentCard>
                 </>
               ) : (
                 <span className='flex-1 truncate text-muted-foreground'>
@@ -174,17 +167,6 @@ export function DocumentLinks({
           )
         })}
       </ul>
-      {preview && (
-        <div
-          className='rounded-[6px] border border-border bg-muted/40 p-2 text-xs'
-          aria-label={`Preview of ${preview.title}`}
-        >
-          <p className='mb-1 font-medium'>{preview.title}</p>
-          <p className='text-muted-foreground'>
-            {excerpt(preview.content) || 'This document is empty.'}
-          </p>
-        </div>
-      )}
     </section>
   )
 }

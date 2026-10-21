@@ -9,6 +9,7 @@ import {
   addContainer,
   addSystem,
   readCanvas,
+  updateNode,
 } from '../lib/canvas-doc'
 import { PropertiesPanel } from './properties-panel'
 
@@ -123,6 +124,66 @@ describe('the properties panel for a Host', () => {
   })
 })
 
+describe('the properties panel for a System with a repository', () => {
+  function mountSystem(repoUrl: string | null, canEdit: boolean) {
+    const doc = new Y.Doc()
+    const api = addSystem(doc, {
+      catalog: 'golang',
+      name: 'API',
+      x: 0,
+      y: 0,
+      parentId: null,
+    })
+    updateNode(doc, api, { repoUrl })
+    return render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PropertiesPanel
+          doc={doc}
+          canvas={readCanvas(doc)}
+          catalog={[]}
+          selection={[{ kind: 'node', id: api }]}
+          canEdit={canEdit}
+          onSelect={vi.fn()}
+          onDelete={vi.fn()}
+          onGesture={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+  }
+  const jump = () =>
+    page.getByRole('button', { name: 'Open the repository of API' })
+
+  it('offers the jump beside the address, to someone who may edit and to a viewer', async () => {
+    for (const canEdit of [true, false]) {
+      const view = await mountSystem('https://github.com/acme/api', canEdit)
+      await expect.element(jump()).toBeVisible()
+      await view.unmount()
+    }
+  })
+
+  it('confirms before opening the address in a new tab', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    await mountSystem('https://github.com/acme/api', false)
+    await jump().click()
+    expect(open).not.toHaveBeenCalled()
+    await page.getByRole('button', { name: 'Open repository' }).click()
+    expect(open).toHaveBeenCalledWith(
+      'https://github.com/acme/api',
+      '_blank',
+      'noopener,noreferrer'
+    )
+    open.mockRestore()
+  })
+
+  it('has no jump while the address is empty or not a web address', async () => {
+    for (const url of [null, 'javascript:alert(1)']) {
+      const view = await mountSystem(url, true)
+      await expect.element(jump()).not.toBeInTheDocument()
+      await view.unmount()
+    }
+  })
+})
+
 function mountSystem(selected: 'api' | 'db' = 'api') {
   const doc = new Y.Doc()
   const host = addContainer(doc, {
@@ -195,6 +256,19 @@ describe('the properties panel for a System', () => {
     expect(
       heading.compareDocumentPosition(remove) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+  })
+
+  it('shows the name once, as the title, and renames from it', async () => {
+    const { doc, api, mount } = mountSystem()
+    await mount()
+    const title = page.getByRole('button', { name: 'name: API' })
+    await expect.element(title).toBeVisible()
+    expect(
+      document.querySelectorAll('label[for="architecture-name"]')
+    ).toHaveLength(0)
+    await userEvent.click(title)
+    await userEvent.type(page.getByRole('textbox', { name: 'name' }), '2')
+    expect(readCanvas(doc).nodes.find((n) => n.id === api)?.name).toBe('API2')
   })
 
   it('no longer holds the linked documents, they have their own tab', async () => {
