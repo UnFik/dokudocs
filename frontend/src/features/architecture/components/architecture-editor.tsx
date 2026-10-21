@@ -43,6 +43,7 @@ import {
   type PaletteItem,
 } from '../lib/canvas-actions'
 import { createUndo, removeElement, updateConnection } from '../lib/canvas-doc'
+import { linkedElement } from '../lib/canvas-links'
 import { architectureLimits } from '../lib/canvas-model'
 import { confirmationFor, type Selected } from '../lib/canvas-selection'
 import { protocolFamilies, suggestedProtocols } from '../lib/catalog'
@@ -55,6 +56,7 @@ import { ArchitectureVersions } from './architecture-versions'
 import { CatalogPalette } from './catalog-palette'
 import { CatalogRequests } from './catalog-requests'
 import { CommentPins } from './comment-pins'
+import { DocumentsPanel } from './documents-panel'
 import {
   CommentsPanel,
   CommentsTabLabel,
@@ -65,6 +67,8 @@ import { PanelResizer } from './panel-resizer'
 import { PropertiesPanel } from './properties-panel'
 
 const WARN_AT = 0.8
+const INSPECTOR_TABS = ['properties', 'documents', 'comments'] as const
+type InspectorTab = (typeof INSPECTOR_TABS)[number]
 
 export function ArchitectureDocEditor(props: {
   document: DocumentItem
@@ -155,9 +159,8 @@ function Editor({
     }
   }
   const [showResolved, setShowResolved] = useState(false)
-  const [inspectorTab, setInspectorTab] = useState<'properties' | 'comments'>(
-    'properties'
-  )
+  const linked = linkedElement(session.canvas, selection)?.links ?? []
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('properties')
   const [protocolFor, setProtocolFor] = useState<{
     id: string
     x: number
@@ -736,15 +739,21 @@ function Editor({
                   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')
                     return
                   event.preventDefault()
+                  const step = event.key === 'ArrowRight' ? 1 : -1
                   const next =
-                    inspectorTab === 'properties' ? 'comments' : 'properties'
+                    INSPECTOR_TABS[
+                      (INSPECTOR_TABS.indexOf(inspectorTab) +
+                        step +
+                        INSPECTOR_TABS.length) %
+                        INSPECTOR_TABS.length
+                    ]!
                   setInspectorTab(next)
                   window.document
                     .getElementById(`inspector-tab-${next}`)
                     ?.focus()
                 }}
               >
-                {(['properties', 'comments'] as const).map((tab) => (
+                {INSPECTOR_TABS.map((tab) => (
                   <button
                     key={tab}
                     id={`inspector-tab-${tab}`}
@@ -755,7 +764,7 @@ function Editor({
                     tabIndex={inspectorTab === tab ? 0 : -1}
                     onClick={() => setInspectorTab(tab)}
                     className={cn(
-                      'inline-flex h-7 items-center gap-1.5 rounded-[4px] px-2 text-xs focus-visible:outline-2 focus-visible:outline-signal',
+                      'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[4px] px-2 text-xs whitespace-nowrap focus-visible:outline-2 focus-visible:outline-signal',
                       inspectorTab === tab
                         ? 'bg-accent font-medium'
                         : 'text-muted-foreground hover:text-foreground'
@@ -763,6 +772,15 @@ function Editor({
                   >
                     {tab === 'properties' ? (
                       'Properties'
+                    ) : tab === 'documents' ? (
+                      <>
+                        Documents
+                        {linked.length > 0 && (
+                          <span className='rounded-[2px] border border-border bg-muted px-1 font-mono text-[11px] tabular-nums'>
+                            {linked.length}
+                          </span>
+                        )}
+                      </>
                     ) : (
                       <CommentsTabLabel
                         workspaceID={workspaceID}
@@ -787,10 +805,24 @@ function Editor({
                   catalog={catalog.data ?? []}
                   selection={selection}
                   canEdit={canEdit}
-                  workspaceID={workspaceID}
-                  projectID={doc.projectId ?? null}
+                  onSelect={select}
                   onDelete={remove}
                   onGesture={gesture}
+                />
+              </div>
+            ) : inspectorTab === 'documents' ? (
+              <div
+                id='architecture-documents'
+                role='tabpanel'
+                aria-labelledby='inspector-tab-documents'
+              >
+                <DocumentsPanel
+                  doc={session.doc}
+                  canvas={session.canvas}
+                  selection={selection}
+                  canEdit={canEdit}
+                  workspaceID={workspaceID}
+                  projectID={doc.projectId ?? null}
                 />
               </div>
             ) : (

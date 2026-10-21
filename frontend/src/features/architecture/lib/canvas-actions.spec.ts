@@ -5,6 +5,7 @@ import {
   containerAt,
   dropElement,
   fitElement,
+  planDrop,
   resizeElement,
   takeOutElement,
   toLayoutNodes,
@@ -136,46 +137,170 @@ describe('adding from the palette', () => {
 })
 
 describe('dropping an element after a drag', () => {
-  it('moves a top-level System into the slot of the Host it is dropped on', () => {
+  const api = (doc: Y.Doc, parentId: string | null, x = 600, y = 600) =>
+    addSystem(doc, { catalog: 'golang', name: 'API', x, y, parentId })
+  const node = (doc: Y.Doc, id: string) =>
+    readCanvas(doc).nodes.find((n) => n.id === id)!
+
+  it('moves a top-level System into the Host its centre is over', () => {
     const { doc, vps } = vpsCanvas()
-    const api = addSystem(doc, {
-      catalog: 'golang',
-      name: 'API',
-      x: 600,
-      y: 600,
-      parentId: null,
-    })
-    dropElement(
-      doc,
-      readCanvas(doc),
-      api,
-      { x: 130, y: 140 },
-      { x: 120, y: 140 }
-    )
-    expect(readCanvas(doc).nodes.find((n) => n.id === api)).toMatchObject({
-      parentId: vps,
-      x: 14,
-      y: 32,
-    })
+    const id = api(doc, null)
+    // 132×50 at (60, 120): the centre (126, 145) is inside the Host at (100,100) 320×206, the left edge is not.
+    dropElement(doc, readCanvas(doc), id, { x: 60, y: 120 })
+    expect(node(doc, id)).toMatchObject({ parentId: vps, x: 14, y: 32 })
   })
 
-  it('keeps an element inside its Host, clamped to the padding, and grows the Host', () => {
+  it('leaves a System out when only its edge overlaps the Host', () => {
+    const { doc } = vpsCanvas()
+    const id = api(doc, null)
+    // The box spans x -20..112 and only its right end reaches the Host (x 100..420); its centre (46) does not.
+    dropElement(doc, readCanvas(doc), id, { x: -20, y: 120 })
+    expect(node(doc, id)).toMatchObject({ parentId: null, x: -20, y: 120 })
+  })
+
+  it('keeps an element inside its Host while its centre is inside, clamped to the padding, and grows the Host', () => {
     const { doc, vps } = vpsCanvas()
+    const id = api(doc, vps, 14, 32)
+    dropElement(doc, readCanvas(doc), id, { x: -50, y: 150 })
+    // The centre (-50+66, 150+25) = (16, 175) is still inside the Host (x 0..320, y 0..206 relative).
+    expect(node(doc, id)).toMatchObject({ parentId: vps, x: 14, y: 150 })
+    dropElement(doc, readCanvas(doc), id, { x: 200, y: 180 })
+    expect(node(doc, vps).h).toBeGreaterThan(206)
+  })
+
+  it('lets an element leave its Host when its centre goes outside', () => {
+    const { doc, vps } = vpsCanvas()
+    const id = api(doc, vps, 14, 32)
+    // Relative to the Host at (100,100): (-90, 40) is abs (10, 140), centre (76, 165), left of the Host.
+    dropElement(doc, readCanvas(doc), id, { x: -90, y: 40 })
+    expect(node(doc, id)).toMatchObject({ parentId: null, x: 10, y: 140 })
+    expect(node(doc, vps)).toMatchObject({ x: 100, y: 100, w: 320, h: 206 })
+  })
+
+  it('moves an element straight into another Host when it leaves one over the other', () => {
+    const { doc, vps } = vpsCanvas()
+    const other = addContainer(doc, {
+      kind: 'host',
+      catalog: 'vps',
+      name: 'VPS-2',
+      x: 500,
+      y: 100,
+      w: 320,
+      h: 206,
+      parentId: null,
+    })
+    const id = api(doc, vps, 14, 32)
+    // Relative (440, 40) is abs (540, 140): centre (606, 165), inside VPS-2.
+    dropElement(doc, readCanvas(doc), id, { x: 440, y: 40 })
+    expect(node(doc, id)).toMatchObject({ parentId: other, x: 14, y: 32 })
+  })
+})
+
+describe('dropping across nested containers', () => {
+  // A Host at (100,100) 400×400 holding a Group at (14,32) 220×140, so abs (114,132)..(334,272).
+  function nested() {
+    const doc = new Y.Doc()
+    const host = addContainer(doc, {
+      kind: 'host',
+      catalog: 'vps',
+      name: 'VPS-1',
+      x: 100,
+      y: 100,
+      w: 400,
+      h: 400,
+      parentId: null,
+    })
+    const group = addContainer(doc, {
+      kind: 'group',
+      catalog: null,
+      name: 'Workers',
+      x: 14,
+      y: 32,
+      w: 220,
+      h: 140,
+      parentId: host,
+    })
+    const node = (id: string) => readCanvas(doc).nodes.find((n) => n.id === id)!
+    return { doc, host, group, node }
+  }
+
+  it('moves a System from the Host into the Group inside it when its centre is over the Group', () => {
+    const { doc, host, group, node } = nested()
     const api = addSystem(doc, {
+      catalog: 'golang',
+      name: 'API',
+      x: 250,
+      y: 200,
+      parentId: host,
+    })
+    // Relative to the Host (40, 60) is abs (140, 160): centre (206, 185), inside the Group.
+    expect(planDrop(readCanvas(doc), api, { x: 40, y: 60 })).toMatchObject({
+      stays: false,
+      container: group,
+      leaves: null,
+    })
+    dropElement(doc, readCanvas(doc), api, { x: 40, y: 60 })
+    expect(node(api)).toMatchObject({ parentId: group, x: 14, y: 32 })
+  })
+
+  it('moves a System from the Group back to the Host when its centre is over the Host only', () => {
+    const { doc, host, group, node } = nested()
+    const api = addSystem(doc, {
+      catalog: 'golang',
+      name: 'API',
+      x: 14,
+      y: 32,
+      parentId: group,
+    })
+    // Relative to the Group (220, 143) is abs (334, 275): centre (400, 300), inside the Host, outside the Group.
+    expect(planDrop(readCanvas(doc), api, { x: 220, y: 143 })).toMatchObject({
+      stays: false,
+      container: host,
+      leaves: group,
+    })
+    dropElement(doc, readCanvas(doc), api, { x: 220, y: 143 })
+    expect(node(api).parentId).toBe(host)
+  })
+
+  it('keeps a System in the Group while its centre is inside it', () => {
+    const { doc, group, node } = nested()
+    const api = addSystem(doc, {
+      catalog: 'golang',
+      name: 'API',
+      x: 14,
+      y: 32,
+      parentId: group,
+    })
+    expect(planDrop(readCanvas(doc), api, { x: 40, y: 50 })).toMatchObject({
+      stays: true,
+      container: group,
+    })
+    dropElement(doc, readCanvas(doc), api, { x: 40, y: 50 })
+    expect(node(api)).toMatchObject({ parentId: group, x: 40, y: 50 })
+  })
+})
+
+describe('where a drag would land, before it is dropped', () => {
+  it('says whether the element leaves, and which container it would enter', () => {
+    const { doc, vps } = vpsCanvas()
+    const id = addSystem(doc, {
       catalog: 'golang',
       name: 'API',
       x: 14,
       y: 32,
       parentId: vps,
     })
-    dropElement(doc, readCanvas(doc), api, { x: -50, y: 300 }, { x: 0, y: 0 })
     const canvas = readCanvas(doc)
-    expect(canvas.nodes.find((n) => n.id === api)).toMatchObject({
-      parentId: vps,
-      x: 14,
-      y: 300,
+    expect(planDrop(canvas, id, { x: 20, y: 40 })).toMatchObject({
+      stays: true,
+      container: vps,
+      leaves: null,
     })
-    expect(canvas.nodes.find((n) => n.id === vps)!.h).toBe(364)
+    expect(planDrop(canvas, id, { x: -90, y: 40 })).toMatchObject({
+      stays: false,
+      container: null,
+      leaves: vps,
+    })
   })
 })
 
