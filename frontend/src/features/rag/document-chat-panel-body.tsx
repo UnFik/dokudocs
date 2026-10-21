@@ -21,6 +21,7 @@ import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { ConversationHistory } from './conversation-history'
 import { downloadConversation } from './download-conversation'
+import { readEditorContext } from './editor-source'
 import { CurrentDocument } from './markdown/document-references'
 import type { QuestionExtras } from './question-extras'
 import { useChatRun } from './use-chat-run'
@@ -259,8 +260,13 @@ export default function PanelBody({
                   .map((chat) => ({ id: chat.id, title: chat.title }))}
                 draft={draft}
                 onAsk={(question, extras) => {
-                  if (selected) return void run.ask(question, undefined, extras)
-                  firstQuestion.current = { question, extras }
+                  const withContext = {
+                    ...extras,
+                    editorContext: readEditorContext(documentID),
+                  }
+                  if (selected)
+                    return void run.ask(question, undefined, withContext)
+                  firstQuestion.current = { question, extras: withContext }
                   create.mutate()
                 }}
                 onStop={() => void run.stop()}

@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"backend/internal/domain/model"
@@ -186,5 +187,57 @@ func TestMentionedSourcesComeFirstSoTheyAreNotCutOff(t *testing.T) {
 	}
 	if len(answers.got.Sources) == 0 || answers.got.Sources[0].ChunkID != mentionedChunk.ChunkID {
 		t.Errorf("first source = %+v, want the mentioned chunk", answers.got.Sources)
+	}
+}
+
+func editorFor(doc uuid.UUID, diagnostics int) *EditorInput {
+	in := &EditorInput{DocumentID: doc, Kind: "dbml", Cursor: model.EditorPosition{Line: 2, Column: 1}}
+	for range diagnostics {
+		in.Diagnostics = append(in.Diagnostics, model.EditorDiagnostic{Line: 2, Column: 1, EndLine: 2, EndColumn: 5, Severity: "error", Message: "Invalid column definition or missing type"})
+	}
+	in.Excerpt = model.EditorExcerpt{FromLine: 1, ToLine: 3, Text: "Table t {\n  id\n}"}
+	return in
+}
+
+func TestEditorStateIsAcceptedOnlyForTheDocumentOfTheConversation(t *testing.T) {
+	doc := uuid.New()
+	repo := &docChatRepo{documentID: doc}
+	usecase := NewChatUseCase(repo, nil, unconfiguredEmbedder{})
+	prepare := func(editor *EditorInput) (model.QuestionExtras, error) {
+		return usecase.PrepareExtras(context.Background(), uuid.New(), uuid.New(), uuid.New(), ExtrasInput{Editor: editor})
+	}
+
+	extras, err := prepare(editorFor(doc, 2))
+	if err != nil || extras.Editor == nil || len(extras.Editor.Diagnostics) != 2 || extras.Editor.Kind != "dbml" {
+		t.Fatalf("PrepareExtras() = %+v, %v", extras.Editor, err)
+	}
+	if extras, err = prepare(nil); err != nil || extras.Editor != nil {
+		t.Fatalf("no editor state = %+v, %v", extras.Editor, err)
+	}
+	for name, editor := range map[string]*EditorInput{
+		"another document": editorFor(uuid.New(), 1),
+		"too many errors":  editorFor(doc, MaxEditorDiagnostics+1),
+		"an unknown kind":  func() *EditorInput { e := editorFor(doc, 1); e.Kind = "markdown"; return e }(),
+		"a huge excerpt": func() *EditorInput {
+			e := editorFor(doc, 1)
+			e.Excerpt.Text = strings.Repeat("x", MaxEditorExcerptRunes+1)
+			return e
+		}(),
+		"a huge message": func() *EditorInput {
+			e := editorFor(doc, 1)
+			e.Diagnostics[0].Message = strings.Repeat("x", MaxEditorMessageRunes+1)
+			return e
+		}(),
+		"a bad severity":  func() *EditorInput { e := editorFor(doc, 1); e.Diagnostics[0].Severity = "fatal"; return e }(),
+		"a negative line": func() *EditorInput { e := editorFor(doc, 1); e.Diagnostics[0].Line = 0; return e }(),
+	} {
+		if _, err := prepare(editor); !errors.Is(err, ErrInvalidChatRequest) {
+			t.Errorf("%s: err = %v, want ErrInvalidChatRequest", name, err)
+		}
+	}
+
+	workspaceChat := NewChatUseCase(&chatRepo{}, nil, unconfiguredEmbedder{})
+	if _, err := workspaceChat.PrepareExtras(context.Background(), uuid.New(), uuid.New(), uuid.New(), ExtrasInput{Editor: editorFor(doc, 1)}); !errors.Is(err, ErrInvalidChatRequest) {
+		t.Errorf("editor state on a workspace chat: err = %v", err)
 	}
 }

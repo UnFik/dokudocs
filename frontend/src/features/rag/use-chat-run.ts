@@ -7,7 +7,11 @@ import {
   type AIRun,
   type AIRunEvent,
 } from '@/lib/ai-runs'
-import { noExtras, type QuestionExtras } from './question-extras'
+import {
+  noExtras,
+  wireAttachments,
+  type QuestionExtras,
+} from './question-extras'
 
 export type ToolProgress = {
   name: string
@@ -227,7 +231,8 @@ export function useChatRun({
             publicLinkTokens,
             categoryIds: extras.categoryIds,
             contextChatIds: extras.contextChatIds,
-            attachments: extras.attachments,
+            attachments: wireAttachments(extras.attachments),
+            editorContext: extras.editorContext,
           },
           key
         )

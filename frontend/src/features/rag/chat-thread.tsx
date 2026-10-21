@@ -654,6 +654,8 @@ export function AskForm({
     attachments: Attachment[]
     onChange: (attachments: Attachment[]) => void
     focusRequest: number
+    /** A question the page puts in the box; a new `id` replaces what is typed. */
+    prefill?: { text: string; id: number }
   }
 }) {
   const [question, setQuestion] = useState('')
@@ -669,8 +671,16 @@ export function AskForm({
   const box = useRef<HTMLTextAreaElement>(null)
   const focusRequest = draft?.focusRequest ?? 0
   useEffect(() => {
-    if (focusRequest > 0) box.current?.focus()
+    if (focusRequest > 0) box.current?.focus({ preventScroll: true })
   }, [focusRequest])
+  const prefill = draft?.prefill
+  useEffect(() => {
+    if (!prefill || prefill.id === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuestion(prefill.text)
+    setPlaced([])
+    setCaret(prefill.text.length)
+  }, [prefill])
   const skills = useQuery({
     queryKey: ['skills'],
     queryFn: ({ signal }) => listSkills(signal),
@@ -732,7 +742,7 @@ export function AskForm({
   const placeCaret = (position: number) => {
     setCaret(position)
     requestAnimationFrame(() => {
-      box.current?.focus()
+      box.current?.focus({ preventScroll: true })
       box.current?.setSelectionRange(position, position)
     })
   }

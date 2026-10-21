@@ -1,3 +1,5 @@
+import type { EditorContext } from './editor-context'
+
 export type Attachment = { name: string; text: string }
 
 /** What one question carries besides its text; the server checks every part again. */
@@ -5,6 +7,8 @@ export type QuestionExtras = {
   categoryIds: string[]
   contextChatIds: string[]
   attachments: Attachment[]
+  /** What the open DBML or Mermaid editor shows; only a document chat has it. */
+  editorContext?: EditorContext
 }
 
 export const noExtras: QuestionExtras = {
@@ -20,6 +24,19 @@ export const MAX_ATTACHMENT_CHARS = 200_000
 
 const TEXT_FILE = /\.(txt|md|markdown|csv|tsv|json|log)$/i
 export const FILE_ACCEPT = '.txt,.md,.markdown,.csv,.tsv,.json,.log'
+
+/**
+ * The names as the server takes them: a picked file passes as it is, a name
+ * made from a selection ("Hello · L3") has no file type and may hold a slash,
+ * so it becomes a text file name.
+ */
+export function wireAttachments(attachments: Attachment[]): Attachment[] {
+  return attachments.map((file) => {
+    if (TEXT_FILE.test(file.name) && !/[/\\]/.test(file.name)) return file
+    const stem = file.name.replace(/[/\\]/g, ' ').slice(0, 100).trim()
+    return { ...file, name: `${stem || 'selection'}.md` }
+  })
+}
 
 /**
  * Reads files the User picked as text, on top of the ones already attached.
