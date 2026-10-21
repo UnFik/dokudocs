@@ -106,20 +106,31 @@ it('shows the answer as it is written, saves it only when done, and offers Stop'
   const screen = await mount()
   await userEvent.click(screen.getByRole('button', { name: 'Ask AI' }))
   await expect
-    .element(screen.getByText('No chats about this document yet.'))
+    .element(screen.getByRole('textbox', { name: 'Ask a question' }))
     .toBeVisible()
-  await userEvent.click(screen.getByRole('button', { name: 'New chat' }))
+  expect(
+    fetch.mock.calls.some(
+      ([url, init]) => key(url, init) === 'POST /api/v1/rag/conversations'
+    )
+  ).toBe(false)
+  await userEvent.fill(
+    screen.getByRole('textbox', { name: 'Ask a question' }),
+    'Summarize'
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Send' }))
+  await vi.waitFor(() =>
+    expect(
+      fetch.mock.calls.some(
+        ([url, init]) => key(url, init) === 'POST /api/v1/rag/conversations'
+      )
+    ).toBe(true)
+  )
   const [, createInit] = fetch.mock.calls.find(
     ([url, init]) => key(url, init) === 'POST /api/v1/rag/conversations'
   )!
   expect(JSON.parse(String(createInit?.body))).toEqual({
     documentId: documentID,
   })
-  await userEvent.fill(
-    screen.getByRole('textbox', { name: 'Ask a question' }),
-    'Summarize'
-  )
-  await userEvent.click(screen.getByRole('button', { name: 'Send' }))
 
   // Text shows before the server has finished, as a draft.
   stream.send(sseFrame(1, 'status', { phase: 'answering' }))
