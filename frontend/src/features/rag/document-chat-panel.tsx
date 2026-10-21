@@ -156,7 +156,7 @@ export function DocumentChatColumn() {
     <aside
       id='ask-ai-panel'
       aria-label={`AI chat about ${chat.title}`}
-      className='fixed inset-0 z-50 flex flex-col bg-background sm:static sm:z-auto sm:w-96 sm:shrink-0 sm:border-l sm:border-border'
+      className='fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-background sm:static sm:z-auto sm:w-96 sm:shrink-0 sm:border-l sm:border-border'
     >
       <Suspense
         fallback={
