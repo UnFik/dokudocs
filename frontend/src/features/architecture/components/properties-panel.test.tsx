@@ -206,21 +206,11 @@ describe('the properties panel for a System', () => {
       .not.toBeInTheDocument()
   })
 
-  it('takes the System out of its Host', async () => {
-    const { doc, api, onGesture, mount } = mountSystem()
-    await mount()
-    await userEvent.click(
-      page.getByRole('button', { name: 'Take out of Docker host' })
-    )
-    expect(onGesture).toHaveBeenCalled()
-    expect(readCanvas(doc).nodes.find((n) => n.id === api)?.parentId).toBeNull()
-  })
-
-  it('offers no Take out to a System at the top level, and none to a viewer', async () => {
-    const { mount } = mountSystem('db')
+  it('leaves Take out to the toolbar over the System', async () => {
+    const { mount } = mountSystem()
     await mount()
     await expect
-      .element(page.getByRole('button', { name: /Take out of/ }))
+      .element(page.getByRole('button', { name: /Take out/ }))
       .not.toBeInTheDocument()
   })
 })

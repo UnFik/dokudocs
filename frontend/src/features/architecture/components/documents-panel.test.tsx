@@ -5,7 +5,12 @@ import { render } from 'vitest-browser-react'
 import { page } from 'vitest/browser'
 import * as Y from 'yjs'
 import { useAuthStore } from '@/stores/auth-store'
-import { addConnection, addSystem, readCanvas } from '../lib/canvas-doc'
+import {
+  addConnection,
+  addSystem,
+  readCanvas,
+  updateNode,
+} from '../lib/canvas-doc'
 import { DocumentsPanel } from './documents-panel'
 
 beforeEach(() => {
@@ -85,6 +90,20 @@ describe('the Documents tab', () => {
     await expect
       .element(page.getByRole('button', { name: /Link a document/ }))
       .toBeVisible()
+  })
+
+  it('puts Link and New above the linked documents', async () => {
+    const { doc, api } = build()
+    updateNode(doc, api, { links: ['d1'] })
+    await mount(doc, [{ kind: 'node', id: api }])
+    await expect.element(page.getByText('documents · 1')).toBeVisible()
+    const link = page.getByRole('button', { name: /Link a document/ }).element()
+    const create = page.getByRole('button', { name: /New document/ }).element()
+    const list = document.querySelector('ul')!
+    for (const button of [link, create])
+      expect(
+        button.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
   })
 
   it('names a Connection by its two ends', async () => {

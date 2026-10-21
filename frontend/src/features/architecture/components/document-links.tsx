@@ -79,6 +79,20 @@ export function DocumentLinks({
       >
         documents · <span className='tabular-nums'>{links.length}</span>
       </h3>
+      {canEdit && (
+        <div className='flex flex-wrap gap-1.5'>
+          <LinkExisting
+            documents={documents.data ?? []}
+            links={links}
+            onPick={(id) => onChange([...links, id])}
+          />
+          <CreateAndLink
+            workspaceID={workspaceID}
+            projectID={projectID}
+            onCreated={(document) => onChange([...links, document.id])}
+          />
+        </div>
+      )}
       {documents.isPending && links.length > 0 && (
         <p className='text-xs text-muted-foreground'>
           Loading linked documents…
@@ -108,7 +122,7 @@ export function DocumentLinks({
           return (
             <li
               key={id}
-              className='flex min-h-8 items-center gap-2 border-t border-border py-1 text-[12.5px] last:border-b'
+              className='flex min-h-8 items-center gap-2 border-t border-border px-1 py-1 text-[12.5px] transition-colors last:border-b hover:bg-accent hover:text-accent-foreground'
             >
               {locked ? (
                 <>
@@ -169,20 +183,6 @@ export function DocumentLinks({
           <p className='text-muted-foreground'>
             {excerpt(preview.content) || 'This document is empty.'}
           </p>
-        </div>
-      )}
-      {canEdit && (
-        <div className='flex flex-wrap gap-1.5'>
-          <LinkExisting
-            documents={documents.data ?? []}
-            links={links}
-            onPick={(id) => onChange([...links, id])}
-          />
-          <CreateAndLink
-            workspaceID={workspaceID}
-            projectID={projectID}
-            onCreated={(document) => onChange([...links, document.id])}
-          />
         </div>
       )}
     </section>
