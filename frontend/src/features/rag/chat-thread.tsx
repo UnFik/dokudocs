@@ -669,7 +669,7 @@ export function AskForm({
   const box = useRef<HTMLTextAreaElement>(null)
   const focusRequest = draft?.focusRequest ?? 0
   useEffect(() => {
-    if (focusRequest > 0) box.current?.focus()
+    if (focusRequest > 0) box.current?.focus({ preventScroll: true })
   }, [focusRequest])
   const skills = useQuery({
     queryKey: ['skills'],
@@ -732,7 +732,7 @@ export function AskForm({
   const placeCaret = (position: number) => {
     setCaret(position)
     requestAnimationFrame(() => {
-      box.current?.focus()
+      box.current?.focus({ preventScroll: true })
       box.current?.setSelectionRange(position, position)
     })
   }
