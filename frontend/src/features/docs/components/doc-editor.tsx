@@ -226,7 +226,7 @@ export function DocEditor() {
         workspaceID={workspaceID}
         title={documentQuery.data.title}
       >
-        <div className='flex h-screen w-full'>
+        <div className='flex h-screen w-full overflow-hidden'>
           <div className='min-w-0 flex-1'>{remoteEditor}</div>
           <DocumentChatColumn />
         </div>
