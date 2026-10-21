@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { apiFetch, apiStream, ApiError } from '@/lib/api-client'
 import { workspaceHeaders } from '@/lib/domain-api'
+import type { EditorContext } from '@/features/rag/editor-context'
 
 export const aiRunSchema = z.object({
   id: z.string().uuid(),
@@ -40,6 +41,7 @@ export async function startChatRun(
     categoryIds?: string[]
     contextChatIds?: string[]
     attachments?: { name: string; text: string }[]
+    editorContext?: EditorContext
   },
   idempotencyKey: string
 ): Promise<AIRun> {

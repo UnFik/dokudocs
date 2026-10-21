@@ -23,6 +23,8 @@ export interface ChatPanelState {
     attachments: Attachment[]
     onChange: (attachments: Attachment[]) => void
     focusRequest: number
+    /** A question put in the box by the page (Fix with AI); a new `id` replaces what is typed. */
+    prefill: { text: string; id: number }
   }
   /**
    * Adds text taken from the page to the next question, opens the column and

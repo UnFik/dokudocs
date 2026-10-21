@@ -21,6 +21,7 @@ import { ChatScroller } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { ConversationHistory } from './conversation-history'
 import { downloadConversation } from './download-conversation'
+import { readEditorContext } from './editor-source'
 import { CurrentDocument } from './markdown/document-references'
 import { useChatRun } from './use-chat-run'
 import { useConversationHistory } from './use-conversation-history'
@@ -235,7 +236,10 @@ export default function PanelBody({
                   .map((chat) => ({ id: chat.id, title: chat.title }))}
                 draft={draft}
                 onAsk={(question, extras) =>
-                  void run.ask(question, undefined, extras)
+                  void run.ask(question, undefined, {
+                    ...extras,
+                    editorContext: readEditorContext(documentID),
+                  })
                 }
                 onStop={() => void run.stop()}
                 language={language}

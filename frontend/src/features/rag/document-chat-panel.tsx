@@ -1,4 +1,11 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { MessageSquareText } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
@@ -7,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { announceAnswer } from './chat-notify'
 import { ChatPanelContext, useDocumentChatPanel } from './chat-panel-context'
 import { readChatPreferences } from './chat-preferences'
+import { onFixRequest } from './editor-source'
 import type { Attachment } from './question-extras'
 import { addSelection } from './selection-context'
 
@@ -50,10 +58,13 @@ export function DocumentChatProvider({
 }) {
   const userID = useAuthStore((state) => state.auth.user?.id ?? '')
   const [open, setOpenState] = useState(() => readOpen(userID))
-  const setOpen = (next: boolean) => {
-    setOpenState(next)
-    writeOpen(userID, next)
-  }
+  const setOpen = useCallback(
+    (next: boolean) => {
+      setOpenState(next)
+      writeOpen(userID, next)
+    },
+    [userID]
+  )
   // The chat whose answer was still being written when the panel was shut.
   const [awaiting, setAwaiting] = useState<string>()
   const listKey = ['rag-document-conversations', userID, documentID]
@@ -85,10 +96,20 @@ export function DocumentChatProvider({
       .length ?? 0
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [focusRequest, setFocusRequest] = useState(0)
+  const [prefill, setPrefill] = useState({ text: '', id: 0 })
   const openChat = () => {
     setOpen(true)
     setFocusRequest((n) => n + 1)
   }
+  useEffect(
+    () =>
+      onFixRequest(documentID, (text) => {
+        setPrefill((was) => ({ text, id: was.id + 1 }))
+        setOpen(true)
+        setFocusRequest((n) => n + 1)
+      }),
+    [documentID, setOpen]
+  )
   const addToChat = (selection: Attachment) => {
     const result = addSelection(attachments, selection)
     setAttachments(result.attachments)
@@ -107,7 +128,7 @@ export function DocumentChatProvider({
         conversations,
         listKey,
         onRunning: setAwaiting,
-        draft: { attachments, onChange: setAttachments, focusRequest },
+        draft: { attachments, onChange: setAttachments, focusRequest, prefill },
         addToChat,
         openChat,
       }}

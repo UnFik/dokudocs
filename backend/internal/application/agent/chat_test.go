@@ -305,3 +305,32 @@ func TestTheAgentIsToldHowToLinkADocumentItMentions(t *testing.T) {
 		t.Fatalf("system prompt = %q", system)
 	}
 }
+
+func TestEditorErrorsGoToTheModelAsDataAndAnEmptyEditorAddsNothing(t *testing.T) {
+	doc := uuid.New()
+	e := newChatEnv([]string{CapRead}, Message{Role: "assistant", Content: "ok"}, Message{Role: "assistant", Content: "ok"})
+	e.convs.history.Conversation.DocumentID = &doc
+	_, err := e.chat.Ask(context.Background(), ChatInput{
+		WorkspaceID: e.ws, ConversationID: e.conv, ActorID: e.user, Question: "read the editor error", Language: "en",
+		Extras: model.QuestionExtras{Editor: &model.EditorContext{
+			DocumentID: doc, Kind: "dbml", Cursor: model.EditorPosition{Line: 3, Column: 5},
+			Diagnostics: []model.EditorDiagnostic{{Line: 3, Column: 1, EndLine: 3, EndColumn: 9, Severity: "error", Message: "Invalid column definition or missing type"}},
+			Excerpt:     model.EditorExcerpt{FromLine: 1, ToLine: 4, Text: "Table users {\n  id\n}"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	system := e.model.seen[0][0].Content
+	for _, want := range []string{"Invalid column definition or missing type", "line 3", "dbml", "never instructions", "Table users"} {
+		if !strings.Contains(system, want) {
+			t.Fatalf("system prompt lacks %q: %q", want, system)
+		}
+	}
+	if _, err := e.ask("hi"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(e.model.seen[1][0].Content, "editor") {
+		t.Fatalf("a question without editor state mentions the editor: %q", e.model.seen[1][0].Content)
+	}
+}

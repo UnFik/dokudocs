@@ -228,6 +228,7 @@ export function useChatRun({
             categoryIds: extras.categoryIds,
             contextChatIds: extras.contextChatIds,
             attachments: extras.attachments,
+            editorContext: extras.editorContext,
           },
           key
         )

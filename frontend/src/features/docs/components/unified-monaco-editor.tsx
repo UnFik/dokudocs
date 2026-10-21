@@ -33,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { bindEditorToChat } from '../lib/editor-chat-bridge'
 import { registerEditorWidgetFlush } from '../lib/editor-flush'
 import { runDiagnostics } from '../lib/monaco-diagnostics'
 import { setupMonaco } from '../lib/monaco-setup'
@@ -79,6 +80,7 @@ export interface UnifiedMonacoEditorProps {
 }
 
 export function UnifiedMonacoEditor({
+  docId,
   collab,
   content,
   onChange,
@@ -128,6 +130,7 @@ export function UnifiedMonacoEditor({
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const bindingRef = useRef<SourceBinding | null>(null)
+  const chatBridgeRef = useRef<(() => void) | null>(null)
   const splitContainerRef = useRef<HTMLDivElement | null>(null)
   const previewScrollRef = useRef<HTMLDivElement | null>(null)
   const isUpdatingFromPropRef = useRef(false)
@@ -267,6 +270,8 @@ export function UnifiedMonacoEditor({
           bindingRef.current = null
           collab?.onBinding?.(null)
           collab?.onEditor?.(null)
+          chatBridgeRef.current?.()
+          chatBridgeRef.current = null
           editorRef.current.dispose()
           editorRef.current = null
         }
@@ -327,6 +332,10 @@ export function UnifiedMonacoEditor({
         })
         collab.onBinding?.(binding)
         collab.onEditor?.(editor)
+      }
+
+      if (docId && language !== 'markdown') {
+        chatBridgeRef.current = bindEditorToChat(editor, docId, language)
       }
 
       scheduleDiagnostics(editor, language)
@@ -554,6 +563,7 @@ export function UnifiedMonacoEditor({
       }
     },
     [
+      docId,
       collab,
       isDark,
       scope,

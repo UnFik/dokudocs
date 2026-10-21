@@ -654,6 +654,8 @@ export function AskForm({
     attachments: Attachment[]
     onChange: (attachments: Attachment[]) => void
     focusRequest: number
+    /** A question the page puts in the box; a new `id` replaces what is typed. */
+    prefill?: { text: string; id: number }
   }
 }) {
   const [question, setQuestion] = useState('')
@@ -671,6 +673,14 @@ export function AskForm({
   useEffect(() => {
     if (focusRequest > 0) box.current?.focus()
   }, [focusRequest])
+  const prefill = draft?.prefill
+  useEffect(() => {
+    if (!prefill || prefill.id === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuestion(prefill.text)
+    setPlaced([])
+    setCaret(prefill.text.length)
+  }, [prefill])
   const skills = useQuery({
     queryKey: ['skills'],
     queryFn: ({ signal }) => listSkills(signal),
