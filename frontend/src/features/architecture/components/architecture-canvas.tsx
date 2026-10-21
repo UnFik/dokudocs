@@ -35,12 +35,14 @@ import {
   dropElement,
   fitElement,
   landingFor,
+  planDrop,
   resizeElement,
   takeOutElement,
   toLayoutNodes,
   type PaletteItem,
 } from '../lib/canvas-actions'
 import { addConnection, applyPatches } from '../lib/canvas-doc'
+import { focusOf, type Focus } from '../lib/canvas-links'
 import type { ArchitectureJSON, ArchitectureNode } from '../lib/canvas-model'
 import {
   elementsInBox,
@@ -92,6 +94,8 @@ export type Selection = Selected[]
 const noSelection: Selection = []
 
 const LOCK_KEY = 'architecture-canvas-lock'
+/** Above the Systems (10), so the Connections of the selected System and their labels are never hidden under a node. */
+const LINKED_EDGE_Z = 30
 
 // The lock is a convenience on this device; without storage it lasts until reload.
 function readLock() {
@@ -114,15 +118,6 @@ const coarsePointer = () =>
   typeof window !== 'undefined' &&
   window.matchMedia?.('(pointer: coarse)').matches &&
   !window.matchMedia?.('(pointer: fine)').matches
-
-/** Screen point of a drag event from a mouse or a touch. */
-function screenPoint(event: MouseEvent | TouchEvent) {
-  if ('changedTouches' in event) {
-    const touch = event.changedTouches[0]
-    return { x: touch?.clientX ?? 0, y: touch?.clientY ?? 0 }
-  }
-  return { x: event.clientX, y: event.clientY }
-}
 
 function sortParentsFirst(nodes: ArchitectureNode[]) {
   const byID = new Map(nodes.map((n) => [n.id, n]))
@@ -168,19 +163,32 @@ function toFlowNodes(
   }))
 }
 
-function toFlowEdges(canvas: ArchitectureJSON, selection: Selection): Edge[] {
+function toFlowEdges(
+  canvas: ArchitectureJSON,
+  selection: Selection,
+  focus: Focus | null
+): Edge[] {
   const selected = new Set(selection.map((s) => s.id))
-  return canvas.connections.map((c) => ({
-    id: c.id,
-    source: c.source,
-    target: c.target,
-    type: 'connection',
-    data: { connection: c },
-    selected: selected.has(c.id),
-    markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-    ariaLabel: `Connection over ${c.protocol}`,
-    zIndex: 5,
-  }))
+  return canvas.connections.map((c) => {
+    const linked = focus?.edges.has(c.id) ?? false
+    return {
+      id: c.id,
+      source: c.source,
+      target: c.target,
+      type: 'connection',
+      data: { connection: c },
+      selected: selected.has(c.id),
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        width: 16,
+        height: 16,
+        ...(linked ? { color: 'var(--signal)' } : {}),
+      },
+      ariaLabel: `Connection over ${c.protocol}`,
+      // The Connections of the selected System draw above every System, not under them.
+      zIndex: linked ? LINKED_EDGE_Z : 5,
+    }
+  })
 }
 
 export type ArchitectureCanvasProps = {
@@ -252,6 +260,8 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     toFlowNodes(canvas, selection, editable)
   )
   const [slot, setSlot] = useState<Rect | null>(null)
+  // The container a dragged element is about to leave, to mark it.
+  const [leaving, setLeaving] = useState<string | null>(null)
   const dragging = useRef(new Set<string>())
   const lastWrite = useRef(0)
   const lastPointer = useRef({ x: 0, y: 0 })
@@ -278,9 +288,10 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     })
   }, [canvas, selection, editable])
 
+  const focus = useMemo(() => focusOf(canvas, selection), [canvas, selection])
   const edges = useMemo(
-    () => toFlowEdges(canvas, selection),
-    [canvas, selection]
+    () => toFlowEdges(canvas, selection, focus),
+    [canvas, selection, focus]
   )
   const displayNodes = useMemo(
     () =>
@@ -330,6 +341,9 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       containers,
       peerSelections,
       erasing,
+      focus,
+      leaving,
+      onDelete: (id) => props.onDelete([{ kind: 'node', id }]),
       minSizeOf: (id) => minSize(toLayoutNodes(canvas), id),
       shouldResize: (id, params) =>
         boxHoldsChildren(canvas, id, {
@@ -393,6 +407,8 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       containers,
       peerSelections,
       erasing,
+      focus,
+      leaving,
       canvas,
       doc,
       props.catalog,
@@ -407,10 +423,13 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       const kept = changes
         .filter((c) => c.type !== 'select' && c.type !== 'remove')
         .map((c) =>
-          c.type === 'position' && c.position && parents.get(c.id)
+          c.type === 'position' &&
+          c.position &&
+          parents.get(c.id) &&
+          dragging.current.size > 1
             ? {
                 ...c,
-                // Inside a container an element stops at the padding; it can only leave with "Take out".
+                // Elements moved together stop at the padding of their container; one dragged alone may leave it.
                 position: {
                   x: Math.max(PAD, c.position.x),
                   y: Math.max(LABEL, c.position.y),
@@ -431,10 +450,11 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     []
   )
 
-  /** Where a dragged element is written: inside a container it stops at the padding. */
+  /** Where a dragged element is written: elements moved together stop at the padding of their container. */
   const patchOf = useCallback(
-    (node: Node) => {
-      const inside = canvas.nodes.find((n) => n.id === node.id)?.parentId
+    (node: Node, clamp = true) => {
+      const inside =
+        clamp && canvas.nodes.find((n) => n.id === node.id)?.parentId
       return {
         id: node.id,
         x: Math.round(
@@ -449,41 +469,46 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   )
 
   const onNodeDrag = useCallback(
-    (event: MouseEvent | TouchEvent, node: Node, moving: Node[]) => {
+    (_event: MouseEvent | TouchEvent, node: Node, moving: Node[]) => {
       if (!doc) return
-      const pointer = flow.screenToFlowPosition(screenPoint(event))
-      const element = canvas.nodes.find((n) => n.id === node.id)
-      // Only one element at a time drops into a container.
-      if (element && !element.parentId && moving.length === 1) {
-        const landing = landingFor(canvas, element.kind, pointer, element.id)
-        setSlot(landing.container ? landing.rect : null)
+      // Only one element at a time drops into a container, decided by its centre.
+      if (moving.length === 1) {
+        const plan = planDrop(canvas, node.id, node.position)
+        setSlot(plan?.container && plan.rect ? plan.rect : null)
+        setLeaving(plan?.leaves ?? null)
       }
       // Others see the elements move; at most one write every 50 ms.
       const now = performance.now()
       if (now - lastWrite.current > 50) {
         lastWrite.current = now
-        applyPatches(doc, moving.map(patchOf))
+        applyPatches(
+          doc,
+          moving.map((n) => patchOf(n, moving.length > 1))
+        )
       }
     },
-    [doc, canvas, flow, patchOf]
+    [doc, canvas, patchOf]
   )
 
   const onNodeDragStop = useCallback(
-    (event: MouseEvent | TouchEvent, node: Node, moving: Node[]) => {
+    (_event: MouseEvent | TouchEvent, node: Node, moving: Node[]) => {
       dragging.current = new Set()
       setSlot(null)
+      setLeaving(null)
       if (!doc) return
       if (moving.length > 1) {
         // Several elements move together and each stays in its own container.
-        applyPatches(doc, moving.map(patchOf))
+        applyPatches(
+          doc,
+          moving.map((n) => patchOf(n))
+        )
       } else {
-        const pointer = flow.screenToFlowPosition(screenPoint(event))
-        dropElement(doc, canvas, node.id, node.position, pointer)
+        dropElement(doc, canvas, node.id, node.position)
       }
       props.onGesture()
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [doc, canvas, flow, patchOf]
+    [doc, canvas, patchOf]
   )
 
   /** A click on an element, by tool: select, erase or comment. */
