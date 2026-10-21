@@ -1,3 +1,5 @@
+import type { EditorContext } from './editor-context'
+
 export type Attachment = { name: string; text: string }
 
 /** What one question carries besides its text; the server checks every part again. */
@@ -5,6 +7,8 @@ export type QuestionExtras = {
   categoryIds: string[]
   contextChatIds: string[]
   attachments: Attachment[]
+  /** What the open DBML or Mermaid editor shows; only a document chat has it. */
+  editorContext?: EditorContext
 }
 
 export const noExtras: QuestionExtras = {
