@@ -209,6 +209,28 @@ describe('SelectionToolbar blocks', () => {
   })
 })
 
+describe('SelectionToolbar add to chat', () => {
+  it('offers an Add to chat icon that sends the selection to the chat', async () => {
+    const onAddToChat = vi.fn()
+    const view = await render(
+      <SelectionToolbar {...selectionProps({ onAddToChat })} />
+    )
+    const button = view.getByRole('button', { name: 'Add to chat' })
+    await expect
+      .element(button)
+      .toHaveAttribute('title', 'Add to chat (Ctrl+Alt+L)')
+    await button.click()
+    expect(onAddToChat).toHaveBeenCalledOnce()
+  })
+
+  it('has no Add to chat icon on a page without a chat', async () => {
+    const view = await render(<SelectionToolbar {...selectionProps()} />)
+    expect(
+      view.getByRole('button', { name: 'Add to chat' }).elements()
+    ).toHaveLength(0)
+  })
+})
+
 describe('SelectionToolbar comment', () => {
   it('offers an Add comment icon that starts a comment on the selection', async () => {
     const onComment = vi.fn()

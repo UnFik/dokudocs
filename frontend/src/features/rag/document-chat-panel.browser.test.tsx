@@ -5,7 +5,12 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import { userEvent } from 'vitest/browser'
 import { useAuthStore } from '@/stores/auth-store'
-import { DocumentChatPanel } from './document-chat-panel'
+import { useDocumentChatPanel } from './chat-panel-context'
+import {
+  DocumentChatColumn,
+  DocumentChatPanel,
+  DocumentChatProvider,
+} from './document-chat-panel'
 
 const workspaceID = '149a8d07-8490-43ed-98fa-ebaa91b05e90'
 const documentID = 'b1f973dd-b554-4540-95c0-4697726ad6e1'
@@ -252,6 +257,91 @@ it('picks up an answer already being written when the panel opens', async () => 
   await expect.element(screen.getByText('Already writ')).toBeVisible()
   await expect
     .element(screen.getByRole('button', { name: 'Stop' }))
+    .toBeVisible()
+})
+
+function EditorStandIn() {
+  const chat = useDocumentChatPanel()
+  return (
+    <>
+      <button
+        type='button'
+        onClick={() => chat?.addToChat({ name: 'Hello · L3', text: 'Hello' })}
+      >
+        Add selection
+      </button>
+      <button type='button' onClick={() => chat?.openChat()}>
+        Open chat
+      </button>
+    </>
+  )
+}
+
+function mountWithEditor() {
+  useAuthStore.getState().auth.setSession(testSession())
+  return render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <DocumentChatProvider
+        documentID={documentID}
+        workspaceID={workspaceID}
+        title='Spec'
+      >
+        <EditorStandIn />
+        <DocumentChatColumn />
+      </DocumentChatProvider>
+    </QueryClientProvider>
+  )
+}
+
+function stubChatWithOneConversation() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, init?: RequestInit) => {
+      const route = key(url, init)
+      if (route === `GET /api/v1/rag/documents/${documentID}/conversations`)
+        return Promise.resolve(jsonResponse([conversation]))
+      if (route === `GET /api/v1/rag/conversations/${conversationID}`)
+        return Promise.resolve(
+          jsonResponse({ conversation, messages: [], actions: [] })
+        )
+      if (route === `GET /api/v1/rag/conversations/${conversationID}/runs`)
+        return Promise.resolve(jsonResponse(null))
+      if (route === 'GET /api/v1/skills')
+        return Promise.resolve(jsonResponse({ skills: [] }))
+      return Promise.resolve(jsonResponse({ title: 'not found' }, 404))
+    })
+  )
+}
+
+it('opens the chat with the added selection kept for the question and the box focused', async () => {
+  stubChatWithOneConversation()
+  const screen = await mountWithEditor()
+  await userEvent.click(screen.getByRole('button', { name: 'Add selection' }))
+  await expect.element(screen.getByText('Hello · L3')).toBeVisible()
+  await expect
+    .element(screen.getByRole('textbox', { name: 'Ask a question' }))
+    .toHaveFocus()
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Remove file Hello · L3' })
+  )
+  expect(screen.getByText('Hello · L3').elements()).toHaveLength(0)
+})
+
+it('opens the chat without touching what is kept when nothing is selected', async () => {
+  stubChatWithOneConversation()
+  const screen = await mountWithEditor()
+  await userEvent.click(screen.getByRole('button', { name: 'Open chat' }))
+  await expect
+    .element(screen.getByRole('textbox', { name: 'Ask a question' }))
+    .toHaveFocus()
+  expect(screen.getByText('Hello · L3').elements()).toHaveLength(0)
+  await userEvent.click(screen.getByRole('button', { name: 'Open chat' }))
+  await expect
+    .element(screen.getByRole('textbox', { name: 'Ask a question' }))
     .toBeVisible()
 })
 

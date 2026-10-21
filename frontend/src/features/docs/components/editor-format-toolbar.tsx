@@ -12,6 +12,7 @@ import {
   ListOrdered,
   ListTodo,
   MessageSquarePlus,
+  MessageSquareText,
   Quote,
   Redo2,
   Highlighter,
@@ -137,6 +138,7 @@ export function SelectionToolbar({
   onRemoveLink,
   linkRequest,
   onComment,
+  onAddToChat,
   onSetHeading,
   onWrapBlock,
 }: {
@@ -148,6 +150,8 @@ export function SelectionToolbar({
   linkRequest: number
   /** Starts a comment on the selected text; omitted when the reader cannot comment. */
   onComment?: () => void
+  /** Adds the selected text to the question in the chat; omitted on a page without a chat. */
+  onAddToChat?: () => void
   /** Sets the heading level of the line; 0 turns a heading back into text. */
   onSetHeading: (level: 0 | 1 | 2 | 3) => void
   /** Wraps the line in a list, quote or toggle; omitted where a mode cannot do it. */
@@ -282,6 +286,19 @@ export function SelectionToolbar({
           >
             <Link2 />
           </Button>
+          {onAddToChat ? (
+            <Button
+              size='icon'
+              variant='ghost'
+              className={buttonSize}
+              aria-label='Add to chat'
+              title='Add to chat (Ctrl+Alt+L)'
+              onMouseDown={keepSelection}
+              onClick={onAddToChat}
+            >
+              <MessageSquareText />
+            </Button>
+          ) : null}
           {onComment ? (
             <Button
               size='icon'
