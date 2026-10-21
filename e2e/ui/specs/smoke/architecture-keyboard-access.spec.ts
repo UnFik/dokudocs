@@ -71,7 +71,8 @@ test("@live @smoke: keyboard editing, undo, and a commenter's read-only canvas",
   await expect(commenter.getByText("You can view this canvas but not change it.")).toBeVisible();
   const theirRedis = commenter.locator(".react-flow__node-system").filter({ hasText: "Redis" });
   await theirRedis.click();
-  await expect(commenter.getByLabel("name").first()).toBeDisabled();
+  await expect(commenter.locator("#architecture-name")).toHaveText("Redis");
+  await expect(commenter.getByRole("button", { name: /^name:/ })).toHaveCount(0);
   await commenter.getByRole("tab", { name: /^Comments/ }).click();
   const theirProperties = commenter.locator("#architecture-comments");
   await theirProperties.getByLabel("New comment on Redis").fill("Is this the session store?");

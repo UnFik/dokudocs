@@ -55,6 +55,7 @@ test("@live @smoke: Used in, versions with pinned documents, take out and fit", 
   await page.goto(`/docs/${canvasID}`);
   await expect(page.getByText("Editing together")).toBeVisible({ timeout: 20000 });
   await page.locator(".react-flow__node-system").filter({ hasText: "Backend Order" }).click();
+  await page.getByRole("button", { name: /^name:/ }).click();
   await page.getByLabel("name").first().fill("Backend Order API");
   await page.waitForTimeout(1500);
 
