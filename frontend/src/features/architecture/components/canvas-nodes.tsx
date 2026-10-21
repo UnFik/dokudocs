@@ -14,8 +14,9 @@ import {
   type NodeProps,
   type ResizeParams,
 } from '@xyflow/react'
-import { FileText, LogOut, Maximize2 } from 'lucide-react'
+import { FileText, LogOut, Maximize2, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { Focus } from '../lib/canvas-links'
 import type {
   ArchitectureConnection,
   ArchitectureNode,
@@ -37,6 +38,11 @@ export type CanvasContextValue = {
   onResize: (id: string, params: ResizeParams) => void
   onResizeEnd: (id: string, params: ResizeParams) => void
   takeOut: (id: string) => void
+  /** What stands out while one System is selected, or null. */
+  focus: Focus | null
+  /** The container a dragged element is about to leave. */
+  leaving: string | null
+  onDelete: (id: string) => void
   /** Whether the container holds something and is not already as small as it can be around it. */
   canFit: (id: string) => boolean
   fit: (id: string) => void
@@ -103,7 +109,7 @@ function EraseMark({ id }: { id: string }) {
 const toolbarButton =
   'nodrag inline-flex h-7 items-center gap-1.5 rounded-[4px] border border-input bg-card px-2 text-xs font-medium shadow-sm hover:border-signal hover:text-signal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal'
 
-/** Floats above the selected element: Fit to contents for a container, Take out when it sits inside one. */
+/** Floats above the selected element: Fit to contents for a container, Take out when it sits inside one, Delete for a System. */
 function ElementToolbar({
   id,
   element,
@@ -113,10 +119,11 @@ function ElementToolbar({
   element: ArchitectureNode
   selected: boolean
 }) {
-  const { readOnly, containers, takeOut, canFit, fit } = useCanvas()
+  const { readOnly, containers, takeOut, canFit, fit, onDelete } = useCanvas()
   const parent = element.parentId ? containers.get(element.parentId) : undefined
   const fitting = selected && element.kind !== 'system' && canFit(id)
-  if (readOnly || (!parent && !fitting)) return null
+  const deletable = element.kind === 'system'
+  if (readOnly || (!parent && !fitting && !deletable)) return null
   return (
     <NodeToolbar
       isVisible={selected}
@@ -143,20 +150,38 @@ function ElementToolbar({
           Take out
         </button>
       )}
+      {deletable && (
+        <button
+          type='button'
+          className={cn(
+            toolbarButton,
+            'text-destructive hover:border-destructive hover:text-destructive'
+          )}
+          aria-label={`Delete ${element.name || 'this system'}`}
+          onClick={() => onDelete(id)}
+        >
+          <Trash2 className='size-3.5' strokeWidth={1.5} aria-hidden />
+          Delete system
+        </button>
+      )}
     </NodeToolbar>
   )
 }
 
 export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
-  const { readOnly, catalog } = useCanvas()
+  const { readOnly, catalog, focus } = useCanvas()
   const element = data.element
   const entry = element.catalog ? catalog.get(element.catalog) : undefined
   const external = entry?.subkind === 'external'
+  const linked = Boolean(focus?.nodes.has(id)) && !selected
+  const dimmed = focus !== null && !focus.nodes.has(id)
   return (
     <div
       className={cn(
-        'relative flex h-[50px] w-[132px] items-center gap-2 rounded-[6px] border bg-card px-2 text-left',
+        'relative flex h-[50px] w-[132px] items-center gap-2 rounded-[6px] border bg-card px-2 text-left transition-opacity',
         external ? 'border-dashed border-input' : 'border-input',
+        linked && 'border-signal',
+        dimmed && 'opacity-40',
         selected && 'border-signal ring-1 ring-signal'
       )}
       data-element={id}
@@ -208,8 +233,15 @@ function ContainerNode({
   selected,
   kind,
 }: NodeProps<ElementNode> & { kind: 'host' | 'group' }) {
-  const { readOnly, catalog, minSizeOf, shouldResize, onResize, onResizeEnd } =
-    useCanvas()
+  const {
+    readOnly,
+    catalog,
+    leaving,
+    minSizeOf,
+    shouldResize,
+    onResize,
+    onResizeEnd,
+  } = useCanvas()
   const element = data.element
   const entry = element.catalog ? catalog.get(element.catalog) : undefined
   const min = minSizeOf(id)
@@ -220,7 +252,10 @@ function ContainerNode({
         kind === 'group'
           ? 'border-dotted border-input'
           : 'border-dashed border-input bg-muted/40',
-        selected && 'border-solid border-signal'
+        selected && 'border-solid border-signal',
+        // A dragged element is about to leave this container.
+        leaving === id &&
+          'border-warn outline-2 outline-offset-2 outline-warn outline-dashed'
       )}
       data-element={id}
     >
@@ -305,10 +340,15 @@ function facingSide(node: InternalNode, other: InternalNode) {
     : { x: a.x + w / 2, y: a.y, position: Position.Top }
 }
 
+/** Above the Systems and the linked edges drawn over them. */
+const LINKED_LABEL_Z = 40
+
 export function ConnectionEdge(
   props: EdgeProps & { data?: { connection: ArchitectureConnection } }
 ) {
-  const { familyOf, peerSelections, erasing } = useCanvas()
+  const { familyOf, peerSelections, erasing, focus } = useCanvas()
+  const linked = Boolean(focus?.edges.has(props.id))
+  const dimmed = focus !== null && !linked
   const connection = props.data?.connection
   const sourceNode = useInternalNode(props.source)
   const targetNode = useInternalNode(props.target)
@@ -336,7 +376,7 @@ export function ConnectionEdge(
   const stroke =
     erasing === props.id
       ? 'var(--destructive)'
-      : props.selected
+      : props.selected || linked
         ? 'var(--signal)'
         : (peer?.color ?? 'var(--muted-foreground)')
   return (
@@ -346,18 +386,27 @@ export function ConnectionEdge(
         path={path}
         markerEnd={props.markerEnd}
         interactionWidth={16}
-        style={{ stroke, strokeWidth: 1.5, ...familyStyle[family] }}
+        style={{
+          stroke,
+          strokeWidth: 1.5,
+          ...familyStyle[family],
+          ...(linked ? { strokeWidth: 2.25, opacity: 1 } : {}),
+          ...(dimmed ? { opacity: 0.15 } : {}),
+        }}
       />
       <EdgeLabelRenderer>
         <div
           className={cn(
             'nodrag nopan pointer-events-none absolute rounded-[2px] border bg-card px-1.5 py-0.5 font-mono text-[10px] whitespace-nowrap',
-            props.selected
-              ? 'border-signal text-signal'
-              : 'border-border text-muted-foreground'
+            props.selected || linked
+              ? 'border-signal text-foreground'
+              : 'border-border text-muted-foreground',
+            dimmed && 'opacity-15'
           )}
           style={{
             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            // The label layer sits under the nodes; a linked label lifts above them.
+            ...(linked ? { zIndex: LINKED_LABEL_Z } : {}),
           }}
         >
           {connection

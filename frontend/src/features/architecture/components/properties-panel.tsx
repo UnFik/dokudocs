@@ -3,7 +3,11 @@ import type * as Y from 'yjs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { resizeElement, toLayoutNodes } from '../lib/canvas-actions'
+import {
+  resizeElement,
+  takeOutElement,
+  toLayoutNodes,
+} from '../lib/canvas-actions'
 import { updateConnection, updateNode } from '../lib/canvas-doc'
 import type { ArchitectureJSON, ArchitectureNode } from '../lib/canvas-model'
 import type { Selected } from '../lib/canvas-selection'
@@ -16,7 +20,7 @@ import {
 import { minSize } from '../lib/layout'
 import type { Selection } from './architecture-canvas'
 import { CatalogIcon } from './catalog-icon'
-import { DocumentLinks } from './document-links'
+import { SystemConnections } from './system-connections'
 
 const fieldLabel = 'font-mono text-[11px] text-muted-foreground'
 const selectClass =
@@ -96,9 +100,9 @@ export type PropertiesPanelProps = {
   catalog: CatalogEntry[]
   selection: Selection
   canEdit: boolean
-  workspaceID: string
-  projectID: string | null
   onDelete: (elements: Selected[]) => void
+  /** Selects other elements, to walk from a System to the ones it connects to. */
+  onSelect: (selection: Selection) => void
   onGesture: () => void
 }
 
@@ -178,6 +182,7 @@ function SystemProperties({
   const { doc, canEdit, catalog } = props
   const entry = catalog.find((e) => e.slug === node.catalog)
   const { host, group } = runsOn(node, byID)
+  const parent = node.parentId ? byID.get(node.parentId) : undefined
   const set = (fields: Parameters<typeof updateNode>[2]) =>
     doc && updateNode(doc, node.id, fields)
   return (
@@ -261,6 +266,20 @@ function SystemProperties({
           )}
         </span>
       </div>
+      {canEdit && parent && (
+        <Button
+          size='sm'
+          variant='outline'
+          className='self-start'
+          onClick={() => {
+            if (!doc) return
+            props.onGesture()
+            takeOutElement(doc, props.canvas, node.id)
+          }}
+        >
+          Take out of {parent.name || 'its container'}
+        </Button>
+      )}
       <Field id='architecture-description' label='description'>
         <Textarea
           id='architecture-description'
@@ -281,12 +300,10 @@ function SystemProperties({
           className='h-8 text-[12.5px]'
         />
       </Field>
-      <DocumentLinks
-        workspaceID={props.workspaceID}
-        projectID={props.projectID}
-        links={node.links}
-        canEdit={canEdit}
-        onChange={(links) => set({ links })}
+      <SystemConnections
+        canvas={props.canvas}
+        systemID={node.id}
+        onSelect={props.onSelect}
       />
       {canEdit && <DeleteButton {...props} node={node} />}
     </div>
@@ -350,13 +367,6 @@ function ConnectionProperties({
           className='h-8 text-[12.5px]'
         />
       </Field>
-      <DocumentLinks
-        workspaceID={props.workspaceID}
-        projectID={props.projectID}
-        links={connection.links}
-        canEdit={canEdit}
-        onChange={(links) => set({ links })}
-      />
       {canEdit && (
         <Button
           size='sm'

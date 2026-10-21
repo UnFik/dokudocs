@@ -198,46 +198,86 @@ function applyLocal(
   }
 }
 
+const centreOf = (r: Rect): Point => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 })
 /**
- * Settles an element where a drag ended. Inside a container it stays inside,
- * clamped to the padding, and the container grows. At the top level, dropped on
- * a container, it goes into that container's slot (or band); elsewhere it stays.
- * `position` is relative to the element's current parent; `pointer` is on the canvas.
+ * Where a dragged element would land, decided by its centre and not by the
+ * pointer: the innermost Host or Group under the centre takes it. It stays when
+ * that is the container it is already in, and otherwise moves there, which may
+ * be a Group inside its container, another container, or the top level.
+ * `position` is relative to the element's current parent.
+ */
+export function planDrop(
+  canvas: ArchitectureJSON,
+  id: string,
+  position: Point
+) {
+  const node = canvas.nodes.find((n) => n.id === id)
+  if (!node) return null
+  const moved = applyLocal(canvas, [{ id, x: position.x, y: position.y }])
+  const centre = centreOf(absoluteRect(toLayoutNodes(moved), id))
+  const container = containerAt(moved, centre, id)
+  if (container === node.parentId)
+    return { moved, centre, stays: true, container, rect: null, leaves: null }
+  const { rect } = landingFor(moved, node.kind, centre, id)
+  // The container it is leaving, unless it only goes down into something inside it.
+  const byID = new Map(canvas.nodes.map((n) => [n.id, n]))
+  let inside = false
+  for (let at = container; at && !inside; at = byID.get(at)?.parentId ?? null)
+    inside = at === node.parentId
+  return {
+    moved,
+    centre,
+    stays: false,
+    container,
+    rect,
+    leaves: inside ? null : node.parentId,
+  }
+}
+
+/**
+ * Settles an element where a drag ended. It stays where it is, clamped to the
+ * padding of its container (which grows), while the container under its centre
+ * is its own. Otherwise it moves into the container under its centre (its slot,
+ * or band), or to the top level where it was dropped.
  */
 export function dropElement(
   doc: Y.Doc,
   canvas: ArchitectureJSON,
   id: string,
-  position: Point,
-  pointer: Point
+  position: Point
 ) {
   const node = canvas.nodes.find((n) => n.id === id)
-  if (!node) return
+  const plan = planDrop(canvas, id, position)
+  if (!node || !plan) return
   let patches: Patch[]
-  if (node.parentId) {
+  if (plan.stays) {
     patches = [
-      {
-        id,
-        x: Math.max(PAD, Math.round(position.x)),
-        y: Math.max(LABEL, Math.round(position.y)),
-      },
+      node.parentId
+        ? {
+            id,
+            x: Math.max(PAD, Math.round(position.x)),
+            y: Math.max(LABEL, Math.round(position.y)),
+          }
+        : { id, x: Math.round(position.x), y: Math.round(position.y) },
     ]
-    const after = applyLocal(canvas, patches)
-    patches = [...patches, ...growToFit(toLayoutNodes(after), node.parentId)]
-  } else {
-    const moved = applyLocal(canvas, [{ id, x: position.x, y: position.y }])
-    const { container, rect } = landingFor(moved, node.kind, pointer, id)
-    if (!container) {
-      patches = [{ id, x: Math.round(position.x), y: Math.round(position.y) }]
-    } else {
-      // Children keep their place relative to the element that moves with them.
-      patches = placeInside(toLayoutNodes(moved), id, container, {
-        x: rect.x,
-        y: rect.y,
-      })
-      const after = applyLocal(moved, patches)
-      patches = [...patches, ...growToFit(toLayoutNodes(after), container)]
+    if (node.parentId) {
+      const after = applyLocal(canvas, patches)
+      patches = [...patches, ...growToFit(toLayoutNodes(after), node.parentId)]
     }
+  } else if (plan.container && plan.rect) {
+    // Children keep their place relative to the element that moves with them.
+    patches = placeInside(toLayoutNodes(plan.moved), id, plan.container, {
+      x: plan.rect.x,
+      y: plan.rect.y,
+    })
+    const after = applyLocal(plan.moved, patches)
+    patches = [...patches, ...growToFit(toLayoutNodes(after), plan.container)]
+  } else {
+    const at = absoluteRect(toLayoutNodes(plan.moved), id)
+    patches = placeInside(toLayoutNodes(plan.moved), id, null, {
+      x: Math.round(at.x),
+      y: Math.round(at.y),
+    })
   }
   applyPatches(doc, patches)
 }
