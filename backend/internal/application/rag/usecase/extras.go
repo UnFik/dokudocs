@@ -21,6 +21,10 @@ const (
 	maxAttachmentName = 120
 	// MaxAttachmentRunes is the text of all attachments of one question together.
 	MaxAttachmentRunes = 200_000
+	// Limits on the editor state of a question.
+	MaxEditorDiagnostics  = 20
+	MaxEditorMessageRunes = 500
+	MaxEditorExcerptRunes = 8000
 	// contextMessageRunes cuts each message of a chat brought in as context.
 	contextMessageRunes = 1500
 )
@@ -37,11 +41,21 @@ type AttachmentInput struct {
 	Text string
 }
 
+// EditorInput is what a DBML or Mermaid editor showed when the question was sent.
+type EditorInput struct {
+	DocumentID  uuid.UUID
+	Kind        string
+	Cursor      model.EditorPosition
+	Diagnostics []model.EditorDiagnostic
+	Excerpt     model.EditorExcerpt
+}
+
 // ExtrasInput is what a question names besides its text, before it is checked.
 type ExtrasInput struct {
 	CategoryIDs    []uuid.UUID
 	ContextChatIDs []uuid.UUID
 	Attachments    []AttachmentInput
+	Editor         *EditorInput
 }
 
 // Categories lists the categories the User may narrow a question to.
@@ -93,6 +107,13 @@ func (u *ChatUseCase) PrepareExtras(ctx context.Context, workspaceID, actorID, c
 		}
 		extras.ContextChats = found
 	}
+	if in.Editor != nil {
+		editor, err := u.prepareEditor(ctx, actorID, conversationID, *in.Editor)
+		if err != nil {
+			return extras, err
+		}
+		extras.Editor = &editor
+	}
 	total := 0
 	for _, file := range in.Attachments {
 		name := strings.TrimSpace(file.Name)
@@ -104,6 +125,29 @@ func (u *ChatUseCase) PrepareExtras(ctx context.Context, workspaceID, actorID, c
 		extras.Attachments = append(extras.Attachments, model.QuestionAttachment{ID: uuid.New(), Name: name, Text: file.Text})
 	}
 	return extras, nil
+}
+
+// prepareEditor accepts the editor state only for the document the chat is
+// about, and only within the limits; the text is the browser's, so it stays data.
+func (u *ChatUseCase) prepareEditor(ctx context.Context, actorID, conversationID uuid.UUID, in EditorInput) (model.EditorContext, error) {
+	if (in.Kind != "dbml" && in.Kind != "mermaid") || len(in.Diagnostics) > MaxEditorDiagnostics ||
+		utf8.RuneCountInString(in.Excerpt.Text) > MaxEditorExcerptRunes || in.Cursor.Line < 1 || in.Cursor.Column < 1 {
+		return model.EditorContext{}, ErrInvalidChatRequest
+	}
+	for _, d := range in.Diagnostics {
+		if (d.Severity != "error" && d.Severity != "warning") || utf8.RuneCountInString(d.Message) > MaxEditorMessageRunes ||
+			d.Line < 1 || d.Column < 1 || d.EndLine < d.Line {
+			return model.EditorContext{}, ErrInvalidChatRequest
+		}
+	}
+	history, err := u.repository.GetRAGConversation(ctx, conversationID, actorID)
+	if err != nil {
+		return model.EditorContext{}, err
+	}
+	if history.Conversation.DocumentID == nil || *history.Conversation.DocumentID != in.DocumentID {
+		return model.EditorContext{}, ErrInvalidChatRequest
+	}
+	return model.EditorContext{DocumentID: in.DocumentID, Kind: in.Kind, Cursor: in.Cursor, Diagnostics: in.Diagnostics, Excerpt: in.Excerpt}, nil
 }
 
 func unique(ids []uuid.UUID) []uuid.UUID {

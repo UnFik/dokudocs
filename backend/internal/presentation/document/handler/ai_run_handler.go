@@ -59,6 +59,9 @@ func (h *RAGChatHandler) startRun(r *http.Request, actorID, workspaceID, convers
 	for _, file := range extras.Attachments {
 		_, _ = fmt.Fprintf(sum, "\x00%s\x00%s", file.Name, file.Text)
 	}
+	if extras.Editor != nil {
+		_, _ = fmt.Fprintf(sum, "\x00%v", *extras.Editor)
+	}
 	return h.runs.Start(r.Context(), airuns.Start{
 		OwnerID: actorID, WorkspaceID: &workspaceID, ConversationID: &conversationID, Kind: "chat",
 		IdempotencyKey: key, Fingerprint: hex.EncodeToString(sum.Sum(nil)), Deadline: time.Now().Add(h.timeout),

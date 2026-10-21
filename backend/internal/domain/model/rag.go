@@ -129,11 +129,45 @@ type ContextChat struct {
 	Messages []ContextMessage `json:"messages"`
 }
 
+// EditorPosition is a line and column in a source editor, both 1-based.
+type EditorPosition struct {
+	Line   int `json:"line"`
+	Column int `json:"column"`
+}
+
+// EditorDiagnostic is one error or warning the source editor shows.
+type EditorDiagnostic struct {
+	Line      int    `json:"line"`
+	Column    int    `json:"column"`
+	EndLine   int    `json:"endLine"`
+	EndColumn int    `json:"endColumn"`
+	Severity  string `json:"severity"`
+	Message   string `json:"message"`
+}
+
+// EditorExcerpt is the text of the lines around the errors.
+type EditorExcerpt struct {
+	FromLine int    `json:"fromLine"`
+	ToLine   int    `json:"toLine"`
+	Text     string `json:"text"`
+}
+
+// EditorContext is what a DBML or Mermaid editor showed when the question was
+// sent. The browser validates the source, so the server only checks and relays it.
+type EditorContext struct {
+	DocumentID  uuid.UUID
+	Kind        string
+	Cursor      EditorPosition
+	Diagnostics []EditorDiagnostic
+	Excerpt     EditorExcerpt
+}
+
 // QuestionExtras is what a question carries besides its text, already checked.
 type QuestionExtras struct {
 	CategoryIDs  []uuid.UUID
 	ContextChats []ContextChat
 	Attachments  []QuestionAttachment
+	Editor       *EditorContext
 }
 
 // Annotate adds the names of the attached files under a question, so the saved
