@@ -317,6 +317,14 @@ type askRequest struct {
 		Name string `json:"name"`
 		Text string `json:"text"`
 	} `json:"attachments"`
+	// EditorContext is what the DBML or Mermaid editor showed when the question was sent.
+	EditorContext *struct {
+		DocumentID  string                   `json:"documentId"`
+		Kind        string                   `json:"kind"`
+		Cursor      model.EditorPosition     `json:"cursor"`
+		Diagnostics []model.EditorDiagnostic `json:"diagnostics"`
+		Excerpt     model.EditorExcerpt      `json:"excerpt"`
+	} `json:"editorContext"`
 }
 
 // extras checks the categories, chats and files a question carries.
@@ -344,8 +352,16 @@ func (h *RAGChatHandler) extras(ctx context.Context, actorID, workspaceID, conve
 	for i, file := range request.Attachments {
 		files[i] = appchat.AttachmentInput{Name: file.Name, Text: file.Text}
 	}
+	var editor *appchat.EditorInput
+	if sent := request.EditorContext; sent != nil {
+		documentID, err := uuid.Parse(sent.DocumentID)
+		if err != nil {
+			return model.QuestionExtras{}, appchat.ErrInvalidChatRequest
+		}
+		editor = &appchat.EditorInput{DocumentID: documentID, Kind: sent.Kind, Cursor: sent.Cursor, Diagnostics: sent.Diagnostics, Excerpt: sent.Excerpt}
+	}
 	return h.service.PrepareExtras(ctx, workspaceID, actorID, conversationID, appchat.ExtrasInput{
-		CategoryIDs: categories, ContextChatIDs: chats, Attachments: files,
+		CategoryIDs: categories, ContextChatIDs: chats, Attachments: files, Editor: editor,
 	})
 }
 

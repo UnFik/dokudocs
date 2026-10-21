@@ -42,6 +42,8 @@ type ModelInput struct {
 	Context []model.ContextChat
 	// Attachments are files the User attached to this question; the model may cite them by ID.
 	Attachments []model.QuestionAttachment
+	// Editor is what the DBML or Mermaid editor reported; data, never instructions.
+	Editor *model.EditorContext
 }
 
 type ModelOutput struct {
@@ -441,7 +443,7 @@ func (u *ChatUseCase) Ask(ctx context.Context, input AskInput) (Answer, error) {
 	}
 	generated, err := u.model.Answer(ctx, ModelInput{
 		Question: visible, Language: language, History: previousQuestions, Sources: chunks,
-		Context: input.Extras.ContextChats, Attachments: input.Extras.Attachments,
+		Context: input.Extras.ContextChats, Attachments: input.Extras.Attachments, Editor: input.Extras.Editor,
 	})
 	if err != nil {
 		return Answer{}, err
