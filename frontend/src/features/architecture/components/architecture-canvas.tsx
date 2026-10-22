@@ -347,7 +347,10 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       focus,
       leaving,
       onDelete: (id) => props.onDelete([{ kind: 'node', id }]),
-      openDocuments: () => props.onOpenDocuments?.(),
+      openDocuments: (id) => {
+        props.onSelect([{ kind: 'node', id }])
+        props.onOpenDocuments?.()
+      },
       minSizeOf: (id) => minSize(toLayoutNodes(canvas), id),
       shouldResize: (id, params) =>
         boxHoldsChildren(canvas, id, {

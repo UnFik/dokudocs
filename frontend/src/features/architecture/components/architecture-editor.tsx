@@ -584,7 +584,13 @@ function Editor({
             readOnly={readOnly}
             canComment={canComment}
             selection={selection}
-            onSelect={select}
+            onSelect={(next) => {
+              select(next)
+              // Clicking an element on the canvas shows its properties, not its documents.
+              setInspectorTab((tab) =>
+                tab === 'documents' ? 'properties' : tab
+              )
+            }}
             onOpenDocuments={() => setInspectorTab('documents')}
             peers={session.peers}
             onPointer={(point) => {

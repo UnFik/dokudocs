@@ -46,7 +46,7 @@ export type CanvasContextValue = {
   leaving: string | null
   onDelete: (id: string) => void
   /** Show the linked documents of the selected element in the side panel. */
-  openDocuments: () => void
+  openDocuments: (id: string) => void
   /** Whether the container holds something and is not already as small as it can be around it. */
   canFit: (id: string) => boolean
   fit: (id: string) => void
@@ -222,7 +222,11 @@ export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
           type='button'
           className='nodrag nopan absolute -top-2 -right-2 inline-flex cursor-pointer items-center gap-0.5 rounded-[2px] border border-border bg-card px-1 font-mono text-[10px] text-muted-foreground hover:border-signal hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal'
           title={`${element.links.length} linked document${element.links.length === 1 ? '' : 's'}`}
-          onClick={openDocuments}
+          onClick={(event) => {
+            // The badge selects and opens on its own; the click is not a plain selection.
+            event.stopPropagation()
+            openDocuments(id)
+          }}
         >
           <FileText className='size-2.5' aria-hidden /> {element.links.length}
         </button>

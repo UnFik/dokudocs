@@ -146,8 +146,13 @@ describe('the linked-documents badge on a System', () => {
       expect(found).not.toBeNull()
       return found!
     })
+    const order: string[] = []
+    onSelect.mockImplementation(() => order.push('select'))
+    onOpenDocuments.mockImplementation(() => order.push('documents'))
     badge.click()
     await vi.waitFor(() => expect(onOpenDocuments).toHaveBeenCalledTimes(1))
     expect(onSelect).toHaveBeenLastCalledWith([{ kind: 'node', id: api }])
+    // The editor shows properties on every plain selection, so the tab must open last.
+    expect(order[order.length - 1]).toBe('documents')
   })
 })
