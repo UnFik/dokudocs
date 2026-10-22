@@ -74,7 +74,6 @@ function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
         <Link
           to={item.url}
           preload='intent'
-          preloadDelay={0}
           onClick={() => setOpenMobile(false)}
         >
           {item.icon && <item.icon />}
@@ -120,7 +119,6 @@ function SidebarMenuCollapsible({
                   <Link
                     to={subItem.url}
                     preload='intent'
-                    preloadDelay={0}
                     onClick={() => setOpenMobile(false)}
                   >
                     {subItem.icon && <subItem.icon />}
@@ -168,7 +166,6 @@ function SidebarMenuCollapsedDropdown({
               <Link
                 to={sub.url}
                 preload='intent'
-                preloadDelay={0}
                 className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
               >
                 {sub.icon && <sub.icon />}
