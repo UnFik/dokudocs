@@ -60,7 +60,7 @@ func (h *Handler) StartRun(w http.ResponseWriter, r *http.Request) {
 	}
 	input := body.input()
 	if err := h.service.Validate(r.Context(), id, p, input); err != nil {
-		fail(w, err)
+		fail(w, r, err)
 		return
 	}
 	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
@@ -132,7 +132,7 @@ func (h *Handler) LatestRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.service.Authorize(r.Context(), id); err != nil {
-		fail(w, err)
+		fail(w, r, err)
 		return
 	}
 	run, err := h.runs.LatestBySubject(r.Context(), id, []string{"test", "save"}, p)
@@ -163,7 +163,7 @@ func (h *Handler) ProgressEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	overview, err := h.service.Overview(r.Context(), id)
 	if err != nil {
-		fail(w, err)
+		fail(w, r, err)
 		return
 	}
 	stream := sse.Open(w)
