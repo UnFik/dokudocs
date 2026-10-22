@@ -77,6 +77,7 @@ import {
   type CanvasContextValue,
   type PeerMark,
 } from './canvas-nodes'
+import { CanvasNotice } from './canvas-notice'
 import { CanvasToolbar } from './canvas-toolbar'
 import { paletteDrag } from './palette-drag'
 
@@ -200,6 +201,8 @@ export type ArchitectureCanvasProps = {
   canComment: boolean
   selection: Selection
   onSelect: (selection: Selection) => void
+  /** A linked-documents badge was clicked: show the Documents tab. */
+  onOpenDocuments?: () => void
   peers: Peer[]
   onPointer: (point: { x: number; y: number } | null) => void
   /** A Connection was just drawn; `screen` is where the pointer let go. */
@@ -344,6 +347,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       focus,
       leaving,
       onDelete: (id) => props.onDelete([{ kind: 'node', id }]),
+      openDocuments: () => props.onOpenDocuments?.(),
       minSizeOf: (id) => minSize(toLayoutNodes(canvas), id),
       shouldResize: (id, params) =>
         boxHoldsChildren(canvas, id, {
@@ -865,16 +869,21 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
           />
           <Controls showInteractive={false} position='bottom-left' />
           <Panel position='bottom-center'>
-            <CanvasToolbar
-              tools={tools}
-              active={active}
-              onTool={setTool}
-              lock={
-                readOnly
-                  ? undefined
-                  : { locked: isLocked, onToggle: toggleLock }
-              }
-            />
+            <div className='relative'>
+              <CanvasToolbar
+                tools={tools}
+                active={active}
+                onTool={setTool}
+                lock={
+                  readOnly
+                    ? undefined
+                    : { locked: isLocked, onToggle: toggleLock }
+                }
+              />
+              <div className='absolute top-1/2 left-full ml-2 -translate-y-1/2'>
+                <CanvasNotice />
+              </div>
+            </div>
           </Panel>
           <ViewportPortal>
             {props.peers

@@ -1,0 +1,52 @@
+/* The check pops in, its stroke draws, and a ring fades out. */
+.canvas-notice {
+  animation: canvas-notice-in 300ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.canvas-notice path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: canvas-notice-draw 450ms 120ms ease-out forwards;
+}
+.canvas-notice::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  pointer-events: none;
+  animation: canvas-notice-ring 700ms ease-out both;
+}
+@keyframes canvas-notice-in {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+@keyframes canvas-notice-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes canvas-notice-ring {
+  from {
+    transform: scale(0.8);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-notice,
+  .canvas-notice::after {
+    animation: none;
+  }
+  .canvas-notice::after {
+    display: none;
+  }
+  .canvas-notice path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
