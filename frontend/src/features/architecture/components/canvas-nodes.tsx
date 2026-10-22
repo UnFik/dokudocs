@@ -45,6 +45,8 @@ export type CanvasContextValue = {
   /** The container a dragged element is about to leave. */
   leaving: string | null
   onDelete: (id: string) => void
+  /** Show the linked documents of the selected element in the side panel. */
+  openDocuments: () => void
   /** Whether the container holds something and is not already as small as it can be around it. */
   canFit: (id: string) => boolean
   fit: (id: string) => void
@@ -182,7 +184,7 @@ function ElementToolbar({
 }
 
 export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
-  const { readOnly, catalog, focus } = useCanvas()
+  const { readOnly, catalog, focus, openDocuments } = useCanvas()
   const element = data.element
   const entry = element.catalog ? catalog.get(element.catalog) : undefined
   const external = entry?.subkind === 'external'
@@ -216,12 +218,14 @@ export function SystemNode({ id, data, selected }: NodeProps<ElementNode>) {
         </span>
       </span>
       {element.links.length > 0 && (
-        <span
-          className='absolute -top-2 -right-2 inline-flex items-center gap-0.5 rounded-[2px] border border-border bg-card px-1 font-mono text-[10px] text-muted-foreground'
+        <button
+          type='button'
+          className='nodrag nopan absolute -top-2 -right-2 inline-flex cursor-pointer items-center gap-0.5 rounded-[2px] border border-border bg-card px-1 font-mono text-[10px] text-muted-foreground hover:border-signal hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-signal'
           title={`${element.links.length} linked document${element.links.length === 1 ? '' : 's'}`}
+          onClick={openDocuments}
         >
           <FileText className='size-2.5' aria-hidden /> {element.links.length}
-        </span>
+        </button>
       )}
       <Handle
         type='target'

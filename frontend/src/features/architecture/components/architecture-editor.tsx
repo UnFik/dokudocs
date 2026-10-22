@@ -585,6 +585,7 @@ function Editor({
             canComment={canComment}
             selection={selection}
             onSelect={select}
+            onOpenDocuments={() => setInspectorTab('documents')}
             peers={session.peers}
             onPointer={(point) => {
               // Others see the pointer move; at most one update every 50 ms.

@@ -5,13 +5,13 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
 import * as Y from 'yjs'
-import { addContainer, addSystem, readCanvas, removeElement } from '../lib/canvas-doc'
+import { addContainer, addSystem, readCanvas, removeElement, updateNode } from '../lib/canvas-doc'
 import type { ArchitectureJSON } from '../lib/canvas-model'
 import { ArchitectureCanvas } from './architecture-canvas'
 
 // The canvas as the editor drives it: the Yjs state is the record and every
 // change to it re-renders the canvas, as a drag does every 50 ms.
-function Harness({ doc }: { doc: Y.Doc }) {
+function Harness({ doc, onSelect = vi.fn(), onOpenDocuments }: { doc: Y.Doc; onSelect?: (s: unknown) => void; onOpenDocuments?: () => void }) {
   const [canvas, setCanvas] = useState<ArchitectureJSON>(() => readCanvas(doc))
   useEffect(() => {
     const update = () => setCanvas(readCanvas(doc))
@@ -27,7 +27,8 @@ function Harness({ doc }: { doc: Y.Doc }) {
         readOnly={false}
         selection={[]}
         canComment
-        onSelect={vi.fn()}
+        onSelect={onSelect}
+        onOpenDocuments={onOpenDocuments}
         peers={[]}
         onPointer={vi.fn()}
         onConnected={vi.fn()}
@@ -123,5 +124,30 @@ describe('deleting on the canvas', () => {
       const left = [...document.querySelectorAll('.react-flow__node')]
       expect(left.map((n) => n.textContent)).toEqual([expect.stringContaining('Cache')])
     })
+  })
+})
+
+describe('the linked-documents badge on a System', () => {
+  it('selects the System and opens the Documents tab when it is clicked', async () => {
+    const doc = new Y.Doc()
+    const api = addSystem(doc, { catalog: 'golang', name: 'API', x: 100, y: 100, parentId: null })
+    updateNode(doc, api, { links: ['d1', 'd2'] })
+    const onSelect = vi.fn()
+    const onOpenDocuments = vi.fn()
+    await render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ReactFlowProvider>
+          <Harness doc={doc} onSelect={onSelect} onOpenDocuments={onOpenDocuments} />
+        </ReactFlowProvider>
+      </QueryClientProvider>
+    )
+    const badge = await vi.waitFor(() => {
+      const found = document.querySelector<HTMLElement>('button[title="2 linked documents"]')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    badge.click()
+    await vi.waitFor(() => expect(onOpenDocuments).toHaveBeenCalledTimes(1))
+    expect(onSelect).toHaveBeenLastCalledWith([{ kind: 'node', id: api }])
   })
 })

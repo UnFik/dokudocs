@@ -201,6 +201,8 @@ export type ArchitectureCanvasProps = {
   canComment: boolean
   selection: Selection
   onSelect: (selection: Selection) => void
+  /** A linked-documents badge was clicked: show the Documents tab. */
+  onOpenDocuments?: () => void
   peers: Peer[]
   onPointer: (point: { x: number; y: number } | null) => void
   /** A Connection was just drawn; `screen` is where the pointer let go. */
@@ -345,6 +347,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       focus,
       leaving,
       onDelete: (id) => props.onDelete([{ kind: 'node', id }]),
+      openDocuments: () => props.onOpenDocuments?.(),
       minSizeOf: (id) => minSize(toLayoutNodes(canvas), id),
       shouldResize: (id, params) =>
         boxHoldsChildren(canvas, id, {
