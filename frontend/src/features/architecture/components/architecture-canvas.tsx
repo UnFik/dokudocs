@@ -77,6 +77,7 @@ import {
   type CanvasContextValue,
   type PeerMark,
 } from './canvas-nodes'
+import { CanvasNotice } from './canvas-notice'
 import { CanvasToolbar } from './canvas-toolbar'
 import { paletteDrag } from './palette-drag'
 
@@ -865,16 +866,21 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
           />
           <Controls showInteractive={false} position='bottom-left' />
           <Panel position='bottom-center'>
-            <CanvasToolbar
-              tools={tools}
-              active={active}
-              onTool={setTool}
-              lock={
-                readOnly
-                  ? undefined
-                  : { locked: isLocked, onToggle: toggleLock }
-              }
-            />
+            <div className='relative'>
+              <CanvasToolbar
+                tools={tools}
+                active={active}
+                onTool={setTool}
+                lock={
+                  readOnly
+                    ? undefined
+                    : { locked: isLocked, onToggle: toggleLock }
+                }
+              />
+              <div className='absolute top-1/2 left-full ml-2 -translate-y-1/2'>
+                <CanvasNotice />
+              </div>
+            </div>
           </Panel>
           <ViewportPortal>
             {props.peers

@@ -30,6 +30,7 @@ import {
 } from '../api/architecture-api'
 import { diffCanvases, mergeForDiff } from '../lib/canvas-diff'
 import type { ArchitectureJSON } from '../lib/canvas-model'
+import { showCanvasNotice } from '../lib/canvas-notice'
 import {
   ArchitecturePreview,
   DiffLegend,
@@ -123,7 +124,7 @@ export function ArchitectureVersions({
       await refresh()
       const pinned = version.pins.filter((p) => p.revisionId).length
       const missed = version.pins.length - pinned
-      toast.success(
+      showCanvasNotice(
         `Version “${version.label}” tagged with ${pinned} linked document${pinned === 1 ? '' : 's'} frozen${missed ? `; ${missed} you cannot open stay unfrozen` : ''}.`
       )
     },
@@ -145,7 +146,7 @@ export function ArchitectureVersions({
     onSuccess: async (_r, version) => {
       await onRestored()
       await refresh()
-      toast.success(
+      showCanvasNotice(
         `Canvas restored to “${version.label}”. Linked documents keep their own history.`
       )
     },
@@ -182,7 +183,7 @@ export function ArchitectureVersions({
     onSuccess: async () => {
       setSelectedID(null)
       await refresh()
-      toast.success(
+      showCanvasNotice(
         'Version deleted. The revisions it made stay in each document’s history.'
       )
     },

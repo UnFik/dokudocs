@@ -45,6 +45,7 @@ import {
 import { createUndo, removeElement, updateConnection } from '../lib/canvas-doc'
 import { linkedElement } from '../lib/canvas-links'
 import { architectureLimits } from '../lib/canvas-model'
+import { showCanvasNotice } from '../lib/canvas-notice'
 import { confirmationFor, type Selected } from '../lib/canvas-selection'
 import { protocolFamilies, suggestedProtocols } from '../lib/catalog'
 import type { PinAnchor } from '../lib/comment-pins'
@@ -317,7 +318,7 @@ function Editor({
     const inside = removed.nodes - named
     const others =
       inside > 0 ? ` and ${inside} element${inside > 1 ? 's' : ''} inside` : ''
-    toast.success(
+    showCanvasNotice(
       `${name}${others} deleted.${removed.linkedDocuments ? ` ${removed.linkedDocuments} linked document${removed.linkedDocuments === 1 ? '' : 's'} stay in the project; only the links went.` : ''}`
     )
   }
@@ -361,7 +362,7 @@ function Editor({
       await queryClient.invalidateQueries({
         queryKey: ['document-revisions', workspaceID, doc.id],
       })
-      toast.success('Canvas restored from the revision')
+      showCanvasNotice('Canvas restored from the revision')
     },
     onError: (error) => toast.error(error.message),
   })
