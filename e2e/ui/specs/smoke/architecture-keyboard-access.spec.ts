@@ -48,6 +48,8 @@ test("@live @smoke: keyboard editing, undo, and a commenter's read-only canvas",
   await redis.click();
   await page.keyboard.press("Delete");
   await expect(redis).toHaveCount(0);
+  // The notice is a check beside the tool bar; pointing at it reads the message.
+  await page.getByRole("button", { name: "Done" }).hover();
   await expect(page.getByText(/Redis deleted/)).toBeVisible();
   await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
   await page.keyboard.press("Control+z");
