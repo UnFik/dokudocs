@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   useMutation,
   useQueryClient,
@@ -23,6 +23,7 @@ import { ConversationHistory } from './conversation-history'
 import { downloadConversation } from './download-conversation'
 import { readEditorContext } from './editor-source'
 import { CurrentDocument } from './markdown/document-references'
+import type { QuestionExtras } from './question-extras'
 import { useChatRun } from './use-chat-run'
 import { useConversationHistory } from './use-conversation-history'
 import { usePanelOptions } from './use-panel-options'
@@ -68,9 +69,20 @@ export default function PanelBody({
   } = useConversationHistory(userID, selected?.id)
   const refreshList = () => queryClient.invalidateQueries({ queryKey: listKey })
 
+  // The first question in a document without chats makes the chat; until then
+  // the panel is an empty chat ready for typing.
+  const firstQuestion = useRef<{
+    chatID?: string
+    question: string
+    extras: QuestionExtras
+  }>(undefined)
   const create = useMutation({
     mutationFn: () => createDocumentRAGConversation(workspaceID, documentID),
+    onError: () => {
+      firstQuestion.current = undefined
+    },
     onSuccess: async (conversation) => {
+      if (firstQuestion.current) firstQuestion.current.chatID = conversation.id
       setSelectedID(conversation.id)
       setView('chat')
       await refreshList()
@@ -109,6 +121,15 @@ export default function PanelBody({
       )
     },
   })
+
+  useEffect(() => {
+    const first = firstQuestion.current
+    if (first && selected?.id === first.chatID) {
+      firstQuestion.current = undefined
+      void run.ask(first.question, undefined, first.extras)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id])
 
   useEffect(() => {
     onRunning(run.busy ? selected?.id : undefined)
@@ -191,10 +212,11 @@ export default function PanelBody({
                   Could not load the chats about this document.
                 </p>
               ) : !selected ? (
-                <p className='text-sm text-muted-foreground'>
-                  No chats about this document yet. Start one to ask what it
-                  says or to have the assistant suggest changes.
-                </p>
+                create.isPending ? null : (
+                  <p className='text-sm text-muted-foreground'>
+                    Ask about this document. Type / to use a skill.
+                  </p>
+                )
               ) : historyError ? (
                 <p role='alert' className='text-sm text-destructive'>
                   Could not load this chat.
@@ -223,24 +245,30 @@ export default function PanelBody({
                 </p>
               ) : null}
             </ChatScroller>
-            {selected ? (
+            {!conversations.isPending && !conversations.isError ? (
               <AskForm
                 id='document-question'
                 scope='document'
                 workspaceID={workspaceID}
-                pending={run.busy}
+                pending={run.busy || create.isPending}
                 error={run.error}
                 placeholder='Ask about this document…'
                 chats={(chats ?? [])
-                  .filter((chat) => chat.id !== selected.id && !chat.archivedAt)
+                  .filter(
+                    (chat) => chat.id !== selected?.id && !chat.archivedAt
+                  )
                   .map((chat) => ({ id: chat.id, title: chat.title }))}
                 draft={draft}
-                onAsk={(question, extras) =>
-                  void run.ask(question, undefined, {
+                onAsk={(question, extras) => {
+                  const withContext = {
                     ...extras,
                     editorContext: readEditorContext(documentID),
-                  })
-                }
+                  }
+                  if (selected)
+                    return void run.ask(question, undefined, withContext)
+                  firstQuestion.current = { question, extras: withContext }
+                  create.mutate()
+                }}
                 onStop={() => void run.stop()}
                 language={language}
                 onLanguage={setLanguage}
