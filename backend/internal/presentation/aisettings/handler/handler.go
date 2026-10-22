@@ -3,6 +3,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -53,7 +54,7 @@ func purpose(w http.ResponseWriter, r *http.Request) (string, bool) {
 	return "", false
 }
 
-func fail(w http.ResponseWriter, err error) {
+func fail(w http.ResponseWriter, r *http.Request, err error) {
 	var connection *aisettings.ConnectionError
 	switch {
 	case errors.Is(err, aisettings.ErrForbidden):
@@ -63,6 +64,7 @@ func fail(w http.ResponseWriter, err error) {
 	case errors.As(err, &connection):
 		response.ErrorWithCode(w, http.StatusUnprocessableEntity, "connection_failed", "The connection test failed: "+connection.Message)
 	default:
+		slog.ErrorContext(r.Context(), "ai settings request failed", "method", r.Method, "path", r.URL.Path, "error", err)
 		response.Error(w, http.StatusInternalServerError, "the AI settings could not be read or saved; try again")
 	}
 }
@@ -82,7 +84,7 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 	}
 	overview, err := h.service.Overview(r.Context(), id)
 	if err != nil {
-		fail(w, err)
+		fail(w, r, err)
 		return
 	}
 	_ = response.Data(w, http.StatusOK, overview)
@@ -112,7 +114,7 @@ func (h *Handler) Save(w http.ResponseWriter, r *http.Request) {
 	}
 	overview, err := h.service.Save(r.Context(), id, p, body.input())
 	if err != nil {
-		fail(w, err)
+		fail(w, r, err)
 		return
 	}
 	_ = response.Data(w, http.StatusOK, overview)
@@ -139,7 +141,7 @@ func (h *Handler) Test(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.service.Test(r.Context(), id, p, body.input()); err != nil {
-		fail(w, err)
+		fail(w, r, err)
 		return
 	}
 	_ = response.Data(w, http.StatusOK, map[string]bool{"ok": true})
@@ -166,7 +168,7 @@ func (h *Handler) Changes(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := h.service.Changes(r.Context(), id, 50)
 	if err != nil {
-		fail(w, err)
+		fail(w, r, err)
 		return
 	}
 	out := make([]changeView, len(list))
