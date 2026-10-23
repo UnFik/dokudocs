@@ -9,6 +9,7 @@ import { RemoteMarkdownDocEditor } from './remote-markdown-doc-editor'
 
 const body = vi.hoisted(() => ({
   onStatus: undefined as ((status: CollabStatus) => void) | undefined,
+  host: undefined as HTMLElement | undefined,
   mount: undefined as (() => Promise<unknown>) | undefined,
 }))
 
@@ -35,9 +36,10 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 vi.mock('../lib/collaborative-document-body', () => ({
   mountCollaborativeDocumentBody: (
-    _mount: HTMLElement,
+    mount: HTMLElement,
     input: { onStatus: (status: CollabStatus) => void }
   ) => {
+    body.host = mount
     body.onStatus = input.onStatus
     return body.mount!()
   },
@@ -98,6 +100,7 @@ beforeEach(() => {
     vi.fn(() => new Promise<Response>(() => {}))
   )
   body.onStatus = undefined
+  body.host = undefined
   body.mount = async () => fakeSession()
 })
 
@@ -158,4 +161,19 @@ it('drops the skeleton and shows the error when the session cannot start', async
     .element(screen.getByRole('alert'))
     .toHaveTextContent('Collaboration failed')
   expect(screen.container.querySelector('[aria-busy="true"]')).toBeNull()
+})
+
+it('keeps the class the editor plugins put on the body host once the document is synced', async () => {
+  const screen = await renderEditor()
+  await vi.waitFor(() => expect(body.host).toBeDefined())
+  // The block handle, the + button and the table controls position themselves against
+  // this element, so it has to stay `position: relative`; without it they sit against
+  // the page and stretch it to the height of the document.
+  body.host!.classList.add('dd-host')
+  body.onStatus!('ready')
+
+  await expect
+    .poll(() => screen.container.querySelector('[aria-busy="true"]'))
+    .toBeNull()
+  expect(body.host!.classList.contains('dd-host')).toBe(true)
 })

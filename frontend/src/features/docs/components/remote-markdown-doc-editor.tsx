@@ -1038,7 +1038,13 @@ function CollaborativeMarkdownBody({
           {awaitingSync ? (
             <DocBodySkeleton label='Loading document content' />
           ) : null}
-          <div ref={mountRef} className={awaitingSync ? 'hidden' : undefined} />
+          {/* dd-host is the class the editor plugins put here (position: relative, where the
+              block handle and the table controls anchor). React owns this className, so it has
+              to carry it, or the next render strips it and those overlays anchor to the page. */}
+          <div
+            ref={mountRef}
+            className={awaitingSync ? 'dd-host hidden' : 'dd-host'}
+          />
         </div>
         {showSource ? <MarkdownSource markdown={markdown} /> : null}
         {(mode === 'edit' && canEdit) || mode === 'suggest' ? (
