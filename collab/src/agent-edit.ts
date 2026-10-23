@@ -12,6 +12,7 @@ export type MarkdownOperation =
   | { type: 'append'; text: string }
   | { type: 'insert_before_heading'; heading: string; text: string }
   | { type: 'replace_section'; heading: string; text: string }
+  | { type: 'replace_range'; from: string; to?: string; text: string }
   | { type: 'delete_section'; heading: string }
 
 export type SourceOperation =
@@ -112,7 +113,23 @@ function closesFence(fence: Fence, line: string): boolean {
  * as create_document in the backend, so both ways of writing read the same.
  */
 export function blocksOf(text: string): TextBlock[] {
-  const blocks: TextBlock[] = []
+  return parseBlocks(text, false) as TextBlock[]
+}
+
+type ParsedBlock = TextBlock | { type: 'atx_heading'; text: string; level: number }
+
+const headingLine = /^(#{1,6})[ \t]+(.+?)[ \t#]*$/
+
+/**
+ * Like blocksOf, and a line that starts with one to six # and a space is a heading of that
+ * level. It rewrites existing text, where the Agent turns plain lines into headings and code.
+ */
+export function richBlocksOf(text: string): ParsedBlock[] {
+  return parseBlocks(text, true)
+}
+
+function parseBlocks(text: string, withHeadings: boolean): ParsedBlock[] {
+  const blocks: ParsedBlock[] = []
   let paragraph: string[] = []
   const flush = () => {
     if (paragraph.length) blocks.push({ type: 'paragraph', text: paragraph.join(' ') })
@@ -129,7 +146,11 @@ export function blocksOf(text: string): TextBlock[] {
       continue
     }
     const line = lines[i]!.trim()
-    if (line === '') flush()
+    const heading = withHeadings ? headingLine.exec(line) : null
+    if (heading) {
+      flush()
+      blocks.push({ type: 'atx_heading', text: heading[2]!, level: heading[1]!.length })
+    } else if (line === '') flush()
     else paragraph.push(line)
   }
   flush()
@@ -165,6 +186,19 @@ function headingLevel(block: JSONNode): number {
   }
 }
 
+/** The text of a line without the Markdown mark read_document puts in front of it. */
+const withoutMarkdownMarks = (value: string) => value.replace(/^\s*(?:#{1,6}[ \t]+|>[ \t]*|[-*+][ \t]+|\d+[.)][ \t]+)/, '')
+
+/** A block only proposed by a suggestion is not part of the document yet: reading and matching skip it. */
+function proposed(block: JSONNode): boolean {
+  try {
+    const suggestion = (JSON.parse(String(block.attrs?.bodyAttributes ?? '{}')) as { suggestion?: { kind?: string } }).suggestion
+    return suggestion?.kind === 'insert'
+  } catch {
+    return false
+  }
+}
+
 const squash = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase()
 
 function replaceText(blocks: JSONNode[], operation: { find: string; replace: string }, options: EditOptions, ids: string[]) {
@@ -173,6 +207,7 @@ function replaceText(blocks: JSONNode[], operation: { find: string; replace: str
   const matches: { run: JSONNode; index: number; section: string; codeAt?: number }[] = []
   let section = 'the start of the document'
   blocks.forEach((block, codeAt) => {
+    if (proposed(block)) return
     if (headings.has(block.type)) section = `the section "${plain(block).trim()}"`
     if (block.type === 'code_block') {
       const codeText = canonical(block)
@@ -188,6 +223,12 @@ function replaceText(blocks: JSONNode[], operation: { find: string; replace: str
   if (matches.length === 0) {
     const crossing = blocks.some((block) => canonical(block).includes(operation.find))
     const similar = blocks.find((block) => squash(canonical(block)).includes(squash(operation.find)))
+    const unmarked = withoutMarkdownMarks(operation.find)
+    const marked = unmarked !== operation.find && blocks.some((block) => canonical(block).includes(unmarked))
+    if (marked)
+      throw new AgentEditError(
+        `"${operation.find}" starts with Markdown syntax (a list number, bullet, # or >) that read_document shows but the text does not hold; use "${unmarked}" without it`
+      )
     throw new AgentEditError(
       crossing
         ? `"${operation.find}" spans differently formatted text; use a shorter piece that sits inside one formatting`
@@ -272,7 +313,7 @@ function spliceRun(nodes: JSONNode[], start: number, length: number, replacement
 
 function findHeading(blocks: JSONNode[], name: string): number {
   const wanted = name.trim().toLowerCase()
-  const found = blocks.flatMap((block, index) => (headings.has(block.type) && plain(block).trim().toLowerCase() === wanted ? [index] : []))
+  const found = blocks.flatMap((block, index) => (headings.has(block.type) && !proposed(block) && plain(block).trim().toLowerCase() === wanted ? [index] : []))
   if (found.length === 0) throw new AgentEditError(`there is no heading "${name}"`)
   if (found.length > 1) throw new AgentEditError(`the heading "${name}" appears ${found.length} times`)
   return found[0]!
@@ -305,6 +346,37 @@ function removeBlocks(blocks: JSONNode[], from: number, to: number, options: Edi
     attributes.suggestion = { kind: 'delete', id, author: options.author }
     block.attrs = { ...block.attrs, bodyAttributes: JSON.stringify(attributes) }
   }
+}
+
+/**
+ * The block that holds `snippet`, so a range can start or end at it. A snippet of several lines
+ * counts by its first line when it starts a range and by its last when it ends one, and spacing,
+ * capitals and a leading list number or # mark do not matter. A start must be in one block; an
+ * end is the first block at or after the start that holds it.
+ */
+function blockHolding(blocks: JSONNode[], snippet: string, role: string, after = 0): number {
+  const lines = (snippet ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  if (lines.length === 0) throw new AgentEditError(`replace_range needs ${role}, a piece of text copied exactly from read_document`)
+  const line = withoutMarkdownMarks(role === 'to' ? lines[lines.length - 1]! : lines[0]!).trim()
+  const holds = (block: JSONNode) => (textBlocks.has(block.type) || block.type === 'code_block') && !proposed(block)
+  const search = (matches: (text: string) => boolean) => blocks.flatMap((block, index) => (index >= after && holds(block) && matches(canonical(block)) ? [index] : []))
+  let found = search((text) => text.includes(line))
+  if (found.length === 0) found = search((text) => squash(text).includes(squash(line)))
+  if (found.length === 0) {
+    const where = role === 'to' ? ' at or after the block that holds from' : ''
+    throw new AgentEditError(`${role} "${snippet}" was not found in one block${where}; copy a line from read_document and put one line in ${role}`)
+  }
+  if (found.length > 1 && role !== 'to') throw new AgentEditError(`${role} "${snippet}" appears in ${found.length} blocks; include more of the line so it appears once`)
+  return found[0]!
+}
+
+/** The blocks from the one that holds `from` to the one that holds `to` (or `from` alone). */
+function findRange(blocks: JSONNode[], from: string, to: string | undefined): [number, number] {
+  const start = blockHolding(blocks, from, 'from')
+  if (!to?.trim()) return [start, start]
+  const end = blockHolding(blocks, to, 'to', start)
+  if (end - start >= 400) throw new AgentEditError('replace_range covers more than 400 blocks; replace it in smaller ranges')
+  return [start, end]
 }
 
 const textBlocksOf = (text: string | undefined, name: string) => {
@@ -362,6 +434,16 @@ export function applyMarkdownOperations(json: unknown, operations: MarkdownOpera
         blocks.splice(insertAt, 0, ...newBlocks(fresh, options, suggestionIDs))
         break
       }
+      case 'replace_range': {
+        const fresh = richBlocksOf(operation.text ?? '')
+        if (fresh.length === 0) throw new AgentEditError('replace_range needs text')
+        const [from, to] = findRange(blocks, operation.from, operation.to)
+        removeBlocks(blocks, from, to + 1, options, suggestionIDs)
+        // In suggest mode the old blocks stay, so the new ones go after them.
+        const insertAt = options.mode === 'direct' ? from : to + 1
+        blocks.splice(insertAt, 0, ...newBlocks(fresh, options, suggestionIDs))
+        break
+      }
       case 'delete_section': {
         const at = findHeading(blocks, operation.heading ?? '')
         const [, to] = sectionBody(blocks, at)
@@ -370,7 +452,7 @@ export function applyMarkdownOperations(json: unknown, operations: MarkdownOpera
       }
       default:
         throw new AgentEditError(
-          `unknown operation ${JSON.stringify((operation as { type?: unknown })?.type)}; use replace_text, insert_after_heading, insert_before_heading, append_section, append, replace_section or delete_section`
+          `unknown operation ${JSON.stringify((operation as { type?: unknown })?.type)}; use replace_text, insert_after_heading, insert_before_heading, append_section, append, replace_section, replace_range or delete_section`
         )
     }
   }
