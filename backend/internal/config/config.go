@@ -34,7 +34,10 @@ type Config struct {
 	// AllowPrivateAIHosts lets a Superadmin point the AI provider at a private or local address.
 	AllowPrivateAIHosts bool
 	RAGRequestTimeout   time.Duration
-	PublicAppURL        string
+	// AIRunTimeout is how long one chat run may work before it is stopped: a long document
+	// takes many model steps, so it is longer than a single request.
+	AIRunTimeout time.Duration
+	PublicAppURL string
 	// ContentOrigin is the separate origin that serves HTML documents to sandboxed frames
 	// (for example https://usercontent.example.com, ADR 0052). HTML documents stay
 	// closed while it is empty.
@@ -114,6 +117,7 @@ func LoadConfig() (Config, error) {
 		RAGEmbeddingModel:       embeddingModel,
 		RAGAnswerModel:          answerModel,
 		RAGRequestTimeout:       env.GetDuration("RAG_REQUEST_TIMEOUT", 120*time.Second),
+		AIRunTimeout:            env.GetDuration("AI_RUN_TIMEOUT", 30*time.Minute),
 		AISettingsEncryptionKey: strings.TrimSpace(env.GetString("AI_SETTINGS_ENCRYPTION_KEY", "")),
 		AllowPrivateAIHosts:     env.GetBool("AI_ALLOW_PRIVATE_HOSTS", false),
 		PublicAppURL:            env.GetString("PUBLIC_APP_URL", "http://localhost:5173"),
