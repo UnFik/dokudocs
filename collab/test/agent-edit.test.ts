@@ -263,6 +263,14 @@ describe('range edits that are copied loosely', () => {
     expect(toMarkdown(json)).toBe('## Ganti\n\nInterceptor connectx\n')
   })
 
+  it('can start and end at the lines of a list', () => {
+    const item = (id: string, value: string) => ({ type: 'list_item', attrs: { nodeID: id, bodyAttributes: '{}', bodyContent: '' }, content: [paragraph(`${id}-p`, value)] })
+    const list = (id: string, ...items: J[]) => ({ type: 'order_list', attrs: { nodeID: id, bodyAttributes: '{"start":1}', bodyContent: '' }, content: items })
+    const withList = doc(paragraph('t', 'Judul'), list('l1', item('i1', 'Kontrak: proto/options.proto')), list('l2', item('i2', 'Domain: role_binding.go')), paragraph('e', 'Akhir'))
+    const { json } = applyMarkdownOperations(withList, [{ type: 'replace_range', from: '1. Kontrak: proto/options.proto', to: 'Domain: role_binding.go', text: '## Bagian 1' }], direct)
+    expect(toMarkdown(json)).toBe('Judul\n\n## Bagian 1\n\nAkhir\n')
+  })
+
   it('ends at the first block after the start that holds the end, even when the same line comes again later', () => {
     const { json } = applyMarkdownOperations(lines(), [{ type: 'replace_range', from: 'Traefik', to: 'Interceptor connectx', text: '## Ganti' }], direct)
     expect(toMarkdown(json)).toBe('## Ganti\n\nPenutup\n\nInterceptor connectx\n')

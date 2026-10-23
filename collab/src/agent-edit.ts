@@ -358,7 +358,8 @@ function blockHolding(blocks: JSONNode[], snippet: string, role: string, after =
   const lines = (snippet ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
   if (lines.length === 0) throw new AgentEditError(`replace_range needs ${role}, a piece of text copied exactly from read_document`)
   const line = withoutMarkdownMarks(role === 'to' ? lines[lines.length - 1]! : lines[0]!).trim()
-  const holds = (block: JSONNode) => (textBlocks.has(block.type) || block.type === 'code_block') && !proposed(block)
+  // Any top-level block can bound a range: a list or a table counts by the text inside it.
+  const holds = (block: JSONNode) => !proposed(block)
   const search = (matches: (text: string) => boolean) => blocks.flatMap((block, index) => (index >= after && holds(block) && matches(canonical(block)) ? [index] : []))
   let found = search((text) => text.includes(line))
   if (found.length === 0) found = search((text) => squash(text).includes(squash(line)))
