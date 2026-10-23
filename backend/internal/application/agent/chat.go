@@ -273,6 +273,11 @@ func (c *ChatService) ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 			ending = EdgeStopped
 			break
 		}
+		if timeIsShort(ctx) {
+			answer.Text = state.stoppedForTime()
+			ending = EdgeStopped
+			break
+		}
 		if step > 0 && carry == "" {
 			// The prose that came before a tool call is not part of the answer.
 			if err := airuns.Emit(ctx, "text_reset", struct{}{}); err != nil {

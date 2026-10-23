@@ -163,7 +163,7 @@ func (s *ContentService) Read(ctx context.Context, actor Actor, workspaceID, doc
 
 // DocumentType says what kind of document it is, for deciding whether chat asks first.
 var (
-	markdownOperations = []string{"replace_text", "insert_after_heading", "insert_before_heading", "append_section", "append", "replace_section", "delete_section"}
+	markdownOperations = []string{"replace_text", "insert_after_heading", "insert_before_heading", "append_section", "append", "replace_section", "replace_range", "delete_section"}
 	sourceOperations   = []string{"replace_text", "replace_all", "append"}
 
 	// operationFields are what each operation needs, so a call that lacks one is refused
@@ -175,6 +175,7 @@ var (
 		"append_section":        {"heading"},
 		"append":                {"text"},
 		"replace_section":       {"heading", "text"},
+		"replace_range":         {"from", "text"},
 		"delete_section":        {"heading"},
 		"replace_all":           {"text"},
 	}
@@ -185,6 +186,7 @@ var (
 		"append_section":        `{"type":"append_section","heading":"Rollback","level":2,"text":"Restore the backup."}`,
 		"append":                `{"type":"append","text":"More text at the end."}`,
 		"replace_section":       `{"type":"replace_section","heading":"Deploy","text":"The new body of the section."}`,
+		"replace_range":         `{"type":"replace_range","from":"first words of the first line","to":"last words of the last line","text":"## A heading\n\nA paragraph."}`,
 		"delete_section":        `{"type":"delete_section","heading":"Rollback"}`,
 		"replace_all":           `{"type":"replace_all","text":"the whole source"}`,
 	}

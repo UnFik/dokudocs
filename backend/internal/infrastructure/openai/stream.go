@@ -270,7 +270,7 @@ func streamPostOnce(ctx context.Context, client *http.Client, url, key string, p
 		return nil
 	}
 	if err := readSSE(res.Body, process); err != nil && !errors.Is(err, streamFinished) {
-		return nil, res.StatusCode, fmt.Errorf("%w: invalid provider stream", appchat.ErrRAGProviderUnavailable)
+		return nil, res.StatusCode, fmt.Errorf("%w: invalid provider stream: %v", appchat.ErrRAGProviderUnavailable, err)
 	}
 	if !complete || !ended {
 		return nil, res.StatusCode, fmt.Errorf("%w: provider stream ended before completion", appchat.ErrRAGProviderUnavailable)

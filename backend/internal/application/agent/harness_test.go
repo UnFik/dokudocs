@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	appchat "backend/internal/application/rag/usecase"
 	"backend/internal/domain/model"
@@ -137,19 +138,42 @@ func TestTheSameCallOverAndOverStopsTheRun(t *testing.T) {
 	}
 }
 
-func TestOldLargeToolResultsAreReplacedByAStubButRecentOnesStay(t *testing.T) {
-	big := strings.Repeat("x", staleResultBytes+10)
-	messages := []Message{{Role: "system", Content: "s"}, {Role: "tool", Content: big}}
+func TestOldLargeToolResultsAreReplacedByAStubOnceTheyAddUpToTheBudget(t *testing.T) {
+	big := strings.Repeat("x", keptResultBytes/3)
+	messages := []Message{{Role: "system", Content: "s"}}
+	for range 4 {
+		messages = append(messages, Message{Role: "tool", Content: big}, Message{Role: "assistant", Content: "a"})
+	}
 	for range recentMessages {
 		messages = append(messages, Message{Role: "user", Content: "u"})
 	}
 	messages = append(messages, Message{Role: "tool", Content: big})
 	out := compactMessages(messages)
-	if strings.Contains(out[1].Content, "xxx") || !strings.Contains(out[len(out)-1].Content, "xxx") {
-		t.Fatalf("compactMessages() kept %d / %d bytes", len(out[1].Content), len(out[len(out)-1].Content))
+	whole := 0
+	for _, m := range out {
+		if m.Role == "tool" && strings.Contains(m.Content, "xxx") {
+			whole++
+		}
+	}
+	// The newest result and the two before it fit the budget; the oldest two are stubs.
+	if whole != 3 || strings.Contains(out[1].Content, "xxx") || strings.Contains(out[3].Content, "xxx") || !strings.Contains(out[len(out)-1].Content, "xxx") {
+		t.Fatalf("compactMessages() kept %d large results whole", whole)
 	}
 	if len(messages[1].Content) != len(big) {
 		t.Fatal("the original conversation was changed")
+	}
+}
+
+func TestSmallToolResultsAndTheLastMessagesAreNeverStubbed(t *testing.T) {
+	small := strings.Repeat("y", staleResultBytes)
+	huge := strings.Repeat("z", keptResultBytes+1)
+	messages := []Message{{Role: "tool", Content: small}, {Role: "tool", Content: huge}}
+	for range recentMessages - 1 {
+		messages = append(messages, Message{Role: "user", Content: "u"})
+	}
+	out := compactMessages(messages)
+	if out[0].Content != small || out[1].Content != huge {
+		t.Fatal("a small result or one among the recent messages was replaced")
 	}
 }
 
@@ -193,5 +217,37 @@ func TestACutOffResultTellsTheModelHowToAskForLess(t *testing.T) {
 	text, truncated := envelope(strings.Repeat("a", 500), 100)
 	if !truncated || !strings.Contains(text, "offset") {
 		t.Fatalf("envelope() = %q", text)
+	}
+}
+
+func TestAReadCanStartAtTheLineThatHoldsSomeText(t *testing.T) {
+	text := "alpha\nbeta line\ngamma\n"
+	if at, note := startOffset(text, "beta", 0); at != 6 || note != "" {
+		t.Fatalf("startOffset() = %d, %q", at, note)
+	}
+	if at, note := startOffset(text, "nowhere", 3); at != 3 || note == "" {
+		t.Fatalf("a missing start_at gave %d, %q", at, note)
+	}
+	if at, _ := startOffset("é\nz", "z", 0); at != 2 {
+		t.Fatalf("an offset counts characters, not bytes: %d", at)
+	}
+	var out readOutput
+	at, _ := startOffset(text, "gamma", 0)
+	out.window(text, at, 100, false, true)
+	if out.Content != "gamma\n" {
+		t.Fatalf("the part starts at %q", out.Content)
+	}
+}
+
+func TestARunShortOfTimeStopsWithAnAnswerInsteadOfFailing(t *testing.T) {
+	e := newChatEnv([]string{CapRead}, Message{Role: "assistant", Content: "never asked"})
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	answer, err := e.chat.Ask(ctx, ChatInput{WorkspaceID: e.ws, ConversationID: e.conv, ActorID: e.user, Question: "format everything", Language: "en"})
+	if err != nil || !strings.Contains(answer.Text, "running out of time") || !strings.Contains(answer.Text, "continue") {
+		t.Fatalf("Ask() = %+v, %v", answer, err)
+	}
+	if len(e.model.seen) != 0 {
+		t.Fatalf("the model was asked %d times with no time left", len(e.model.seen))
 	}
 }
