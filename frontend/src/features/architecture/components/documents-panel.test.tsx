@@ -67,6 +67,7 @@ const mount = (
         canEdit={canEdit}
         workspaceID='w'
         projectID={null}
+        documentID='a'
       />
     </QueryClientProvider>
   )

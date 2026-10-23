@@ -16,6 +16,8 @@ import { DocumentLinks } from './document-links'
 const workspaceID = '149a8d07-8490-43ed-98fa-ebaa91b05e90'
 const runbook = '3f2a9c1e-5b7d-4e8a-9c3b-1a2b3c4d5e6f'
 const secret = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d'
+const canvas = '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f'
+const internals = '5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b'
 const now = '2026-10-13T00:00:00Z'
 
 const runbookRow = {
@@ -33,15 +35,24 @@ const runbookRow = {
   updatedAt: now,
 }
 
+const canvasRow = {
+  ...runbookRow,
+  id: canvas,
+  title: 'Platform overview',
+  type: 'architecture',
+  content: '',
+}
+const internalsRow = { ...canvasRow, id: internals, title: 'Order internals' }
+
 afterEach(() => vi.unstubAllGlobals())
 
-async function show(links: string[]) {
+async function show(links: string[], canEdit = false) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input))
       if (url.pathname === '/api/v1/documents')
-        return jsonResponse([runbookRow])
+        return jsonResponse([runbookRow, canvasRow, internalsRow])
       if (url.pathname === `/api/v1/documents/${runbook}`)
         return jsonResponse(runbookRow)
       return jsonResponse({ title: 'not found' }, 404)
@@ -55,8 +66,9 @@ async function show(links: string[]) {
       <DocumentLinks
         workspaceID={workspaceID}
         projectID={null}
+        architectureID={canvas}
         links={links}
-        canEdit={false}
+        canEdit={canEdit}
         onChange={vi.fn()}
       />
     ),
@@ -111,6 +123,30 @@ describe('the documents linked to an element', () => {
     await expect
       .element(page.getByRole('img', { name: 'Preview of Runbook' }))
       .toBeVisible()
+  })
+
+  it('offers another Architecture to link, but never the canvas itself', async () => {
+    await show([], true)
+    await userEvent.click(
+      page.getByRole('button', { name: 'Link a document…' })
+    )
+    await expect
+      .element(page.getByRole('option', { name: /Order internals/ }))
+      .toBeVisible()
+    await expect
+      .element(page.getByRole('option', { name: /Runbook/ }))
+      .toBeVisible()
+    await expect
+      .element(page.getByRole('option', { name: /Platform overview/ }))
+      .not.toBeInTheDocument()
+  })
+
+  it('offers Architecture when starting a new document to link', async () => {
+    await show([], true)
+    await userEvent.click(page.getByRole('button', { name: 'New document…' }))
+    await expect
+      .element(page.getByRole('option', { name: 'Architecture' }))
+      .toBeInTheDocument()
   })
 
   it('gives a document the person cannot open no link and no card', async () => {

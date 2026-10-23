@@ -13,6 +13,7 @@ export function DocumentsPanel({
   canEdit,
   workspaceID,
   projectID,
+  documentID,
 }: {
   doc: Y.Doc | null
   canvas: ArchitectureJSON
@@ -20,6 +21,8 @@ export function DocumentsPanel({
   canEdit: boolean
   workspaceID: string
   projectID: string | null
+  /** The Architecture document this canvas is. */
+  documentID: string
 }) {
   const element = linkedElement(canvas, selection)
   if (!element) {
@@ -45,6 +48,7 @@ export function DocumentsPanel({
       <DocumentLinks
         workspaceID={workspaceID}
         projectID={projectID}
+        architectureID={documentID}
         links={element.links}
         canEdit={canEdit}
         onChange={set}

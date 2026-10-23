@@ -29,8 +29,9 @@ type canvasLinks struct {
 }
 
 // projectArchitectureLinks replaces the link rows of a canvas with what its JSON
-// names now. Links to documents outside the workspace, or to anything but
-// Markdown, DBML and Mermaid, are dropped, so a crafted update cannot plant one.
+// names now. Links to documents outside the workspace, to anything but Markdown,
+// DBML, Mermaid and Architecture, or to the canvas itself, are dropped, so a
+// crafted update cannot plant one.
 func projectArchitectureLinks(ctx context.Context, tx database.Queryer, workspaceID, architectureID uuid.UUID, content json.RawMessage) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM architecture_document_links WHERE architecture_id = $1`, architectureID); err != nil {
 		return err
@@ -66,7 +67,7 @@ func projectArchitectureLinks(ctx context.Context, tx database.Queryer, workspac
 		INSERT INTO architecture_document_links (architecture_id, element_id, element_kind, element_name, document_id)
 		SELECT $1, l.element, l.kind, l.label, d.id
 		FROM unnest($3::text[], $4::text[], $5::text[], $6::uuid[]) AS l(element, kind, label, document)
-		JOIN documents d ON d.id = l.document AND d.workspace_id = $2 AND d.type IN ('markdown', 'dbdiagram', 'mermaid')
+		JOIN documents d ON d.id = l.document AND d.workspace_id = $2 AND d.type IN ('markdown', 'dbdiagram', 'mermaid', 'architecture') AND d.id <> $1
 		ON CONFLICT DO NOTHING
 	`, architectureID, workspaceID, pgArray(elements), pgArray(kinds), pgArray(labels), pgArray(documents))
 	return err

@@ -3,8 +3,9 @@ import { Link } from '@tanstack/react-router'
 import { listArchitectureUses } from '../api/architecture-api'
 
 /**
- * "Used in" on a Markdown, DBML or Mermaid page: the canvases whose elements link
- * here, each opening the canvas on that element. Nothing shows when there are none.
+ * "Used in" on a Markdown, DBML, Mermaid or Architecture page: the canvases whose
+ * elements link here, each opening the canvas on that element. Nothing shows when
+ * there are none.
  */
 const isUUID = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
