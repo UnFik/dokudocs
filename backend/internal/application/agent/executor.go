@@ -251,7 +251,7 @@ type Message struct {
 const (
 	// DefaultOutputTokens is how much one model step may write. A tool call that carries
 	// the text of a document needs far more than a short answer does.
-	DefaultOutputTokens = 8000
+	DefaultOutputTokens = 16000
 	// MaxOutputTokens is the most a retry after a cut-off step may ask for.
 	MaxOutputTokens = 32000
 )

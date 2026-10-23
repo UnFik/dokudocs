@@ -27,11 +27,37 @@ func TestACutOffToolCallIsNeverRunWithEmptyArgumentsAndTheModelIsToldWhy(t *test
 	}
 }
 
-func TestACutOffAnswerSaysSo(t *testing.T) {
-	e := newChatEnv([]string{CapRead}, Message{Role: "assistant", Content: "part one", Truncated: true})
+func TestACutOffAnswerIsContinuedUntilItIsWhole(t *testing.T) {
+	e := newChatEnv([]string{CapRead},
+		Message{Role: "assistant", Content: "part one, ", Truncated: true},
+		Message{Role: "assistant", Content: "part two, ", Truncated: true},
+		Message{Role: "assistant", Content: "part three."})
 	answer, err := e.ask("write everything")
-	if err != nil || !strings.HasPrefix(answer.Text, "part one") || !strings.Contains(answer.Text, "cut off") {
+	if err != nil || answer.Text != "part one, part two, part three." {
 		t.Fatalf("Ask() = %+v, %v", answer, err)
+	}
+	if len(e.model.seen) != 3 {
+		t.Fatalf("the model was asked %d times, want 3", len(e.model.seen))
+	}
+	third := e.model.seen[2]
+	ask, cut := third[len(third)-1], third[len(third)-2]
+	if ask.Role != "user" || ask.Content != continuePrompt || cut.Role != "assistant" || cut.Content != "part two, " {
+		t.Fatalf("the model was given %+v then %+v", cut, ask)
+	}
+}
+
+func TestAnAnswerThatKeepsBeingCutOffSaysSoAfterTheContinuationsRunOut(t *testing.T) {
+	replies := make([]Message, 0, maxContinuations+1)
+	for range maxContinuations + 1 {
+		replies = append(replies, Message{Role: "assistant", Content: "x", Truncated: true})
+	}
+	e := newChatEnv([]string{CapRead}, replies...)
+	answer, err := e.ask("write everything")
+	if err != nil || !strings.HasPrefix(answer.Text, strings.Repeat("x", maxContinuations+1)) || !strings.Contains(answer.Text, "cut off") {
+		t.Fatalf("Ask() = %+v, %v", answer, err)
+	}
+	if len(e.model.seen) != maxContinuations+1 {
+		t.Fatalf("the model was asked %d times, want %d", len(e.model.seen), maxContinuations+1)
 	}
 }
 
