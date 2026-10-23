@@ -629,18 +629,22 @@ for (const key of ["Control+Delete", "Control+Backspace"]) {
     const diagnose = watch(page);
     const { editor } = await openDocument(page, threeParagraphs);
     await diagnose(async () => {
-      await editor.locator("p").filter({ hasText: "Beta" }).click();
-      await page.keyboard.press("Home");
-      await page.keyboard.press("Shift+End");
-      await expect
-        .poll(() => page.evaluate(() => window.getSelection()?.toString()))
-        .toBe("Beta");
+      await expect(async () => {
+        await editor.locator("p").filter({ hasText: "Beta" }).click();
+        await settleSelection(page, { collapsed: true });
+        await page.keyboard.press("Home");
+        await page.keyboard.press("Shift+End");
+        expect(
+          await page.evaluate(() => window.getSelection()?.toString()),
+        ).toBe("Beta");
+      }).toPass({ timeout: 15_000 });
       await editorHasSelection(page);
       await page.keyboard.press("Backspace");
       await expect(editor.locator("p")).toHaveCount(3);
       await expect(editor.locator("p").nth(1)).toHaveText("");
       // The caret is put back next to the empty line; click into it.
       await editor.locator("p").nth(1).click();
+      await settleSelection(page, { collapsed: true });
       await page.keyboard.press(key);
       await expect(editor.locator("p")).toHaveCount(2);
       await expect(editor).toContainText("Alpha");
