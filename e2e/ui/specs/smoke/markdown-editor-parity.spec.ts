@@ -1,7 +1,12 @@
 import { inDocumentOrder } from "../../helpers/document-order";
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
+import {
+  createdDocumentID,
+  documentPayload,
+  settleSelection,
+  storedNodes,
+} from "../../helpers/markdown-document";
 
 // Gate G7 (#36): two clients edit tables through the toolbar, converge, and the
 // server projection matches. A second case covers inline marks, nested lists and
@@ -238,8 +243,20 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
   await expect(secondPage.getByRole("status")).toContainText("Synced");
 
   // Client one types bold and italic runs with the keyboard shortcuts.
-  await page.getByText("Start", { exact: true }).click();
-  await page.keyboard.press("End");
+  // The click lands mid-word; End must have moved the caret past "Start" before typing,
+  // or the marks split the word and the "/" below lands in front of its tail.
+  await expect(async () => {
+    await page.getByText("Start", { exact: true }).click();
+    await settleSelection(page, { collapsed: true });
+    await page.keyboard.press("End");
+    expect(
+      await page.evaluate(() => {
+        const selection = window.getSelection();
+        return selection?.anchorNode?.textContent?.slice(0, selection.anchorOffset);
+      }),
+    ).toBe("Start");
+  }).toPass({ timeout: 15_000 });
+  await settleSelection(page, { collapsed: true });
   await page.keyboard.type(" ");
   await page.keyboard.press("ControlOrMeta+b");
   await page.keyboard.type("bold");
