@@ -30,6 +30,11 @@ const (
 	staleResultBytes = 1500
 	// historyMessages is how many earlier messages are sent whole; older ones are shortened.
 	historyMessages = 20
+	// maxContinuations is how many times an answer cut off at the output limit is continued
+	// before the User is told it was cut off.
+	maxContinuations = 4
+	// continuePrompt asks the model to carry on from where the output limit stopped it.
+	continuePrompt = "Your last message was cut off at the output limit. Continue exactly where it stopped, without repeating anything and without a greeting or an apology."
 	// stepAttempts is how many times one model step may be tried.
 	stepAttempts = 3
 )

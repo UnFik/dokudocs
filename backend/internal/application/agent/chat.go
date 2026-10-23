@@ -263,13 +263,17 @@ func (c *ChatService) ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 		edge = EdgeSimple
 	}
 	ending := EdgeAnswer
+	// carry is the text of answers cut off at the output limit, kept to be continued; it is
+	// already on the User's screen, so a continuation must not reset it.
+	var carry string
+	continuations := 0
 	for step := 0; ; step++ {
 		if limit := state.stepLimit(); step >= limit {
 			answer.Text = state.stoppedText(limit)
 			ending = EdgeStopped
 			break
 		}
-		if step > 0 {
+		if step > 0 && carry == "" {
 			// The prose that came before a tool call is not part of the answer.
 			if err := airuns.Emit(ctx, "text_reset", struct{}{}); err != nil {
 				return ChatAnswer{}, err
@@ -288,12 +292,25 @@ func (c *ChatService) ask(ctx context.Context, input ChatInput) (ChatAnswer, err
 			return ChatAnswer{}, err
 		}
 		if len(reply.ToolCalls) == 0 {
-			answer.Text = strings.TrimSpace(reply.Content)
+			if reply.Truncated && continuations < maxContinuations && step+1 < state.stepLimit() {
+				carry += reply.Content
+				continuations++
+				messages = append(messages,
+					Message{Role: "assistant", Content: reply.Content},
+					Message{Role: "user", Content: continuePrompt})
+				continue
+			}
+			answer.Text = strings.TrimSpace(carry + reply.Content)
 			if reply.Truncated {
 				slog.WarnContext(ctx, "agent answer cut off at the output limit", "conversation_id", input.ConversationID, "step", step+1)
 				answer.Text += "\n\n(This answer was cut off because it was too long. Ask me to continue, or for one part at a time.)"
 			}
 			break
+		}
+		if carry != "" {
+			// A continuation that turns into a tool call: the earlier prose is not the answer.
+			_ = airuns.Emit(ctx, "text_reset", struct{}{})
+			carry = ""
 		}
 		messages = append(messages, reply)
 		for _, tc := range reply.ToolCalls {
