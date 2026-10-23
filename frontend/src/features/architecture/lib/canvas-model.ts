@@ -130,6 +130,46 @@ export function architectureToJSON(doc: Y.Doc): ArchitectureJSON {
   }
 }
 
+function sameElement<T extends object>(a: T, b: T) {
+  for (const key of Object.keys(b) as (keyof T)[]) {
+    const x = a[key]
+    const y = b[key]
+    if (Array.isArray(x) && Array.isArray(y)) {
+      if (x.length !== y.length || x.some((v, i) => v !== y[i])) return false
+    } else if (x !== y) return false
+  }
+  return true
+}
+
+/**
+ * `next` with the element objects of `previous` wherever an element did not
+ * change, and `previous` itself when nothing did: React then draws again only
+ * what changed.
+ */
+export function reuseUnchanged(
+  previous: ArchitectureJSON,
+  next: ArchitectureJSON
+): ArchitectureJSON {
+  let changed =
+    previous.nodes.length !== next.nodes.length ||
+    previous.connections.length !== next.connections.length
+  const reuse = <T extends { id: string }>(old: T[], fresh: T[]) => {
+    const byID = new Map(old.map((x) => [x.id, x]))
+    return fresh.map((x, i) => {
+      const kept = byID.get(x.id)
+      if (kept && sameElement(kept, x)) {
+        if (old[i] !== kept) changed = true
+        return kept
+      }
+      changed = true
+      return x
+    })
+  }
+  const nodes = reuse(previous.nodes, next.nodes)
+  const connections = reuse(previous.connections, next.connections)
+  return changed ? { version: 1, nodes, connections } : previous
+}
+
 // Every rebuild uses this client id and the same insertion order, so building twice
 // gives the same operations (same rule as `seedFromJSON` for Markdown).
 const seedClientID = 0x5eed

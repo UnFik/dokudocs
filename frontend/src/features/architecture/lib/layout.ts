@@ -234,6 +234,35 @@ export function minSize(nodes: LayoutNode[], containerID: string) {
   }
 }
 
+/** `minSize` of every Host and Group, by id, walking the canvas once. */
+export function minSizes(nodes: LayoutNode[]) {
+  const map = byID(nodes)
+  const absolute = new Map<string, Rect>()
+  const rectOf = (n: LayoutNode): Rect => {
+    let rect = absolute.get(n.id)
+    if (!rect) {
+      const parent = n.parentId ? map.get(n.parentId) : undefined
+      const at = parent ? rectOf(parent) : { x: 0, y: 0 }
+      rect = { x: at.x + n.x, y: at.y + n.y, ...size(n) }
+      absolute.set(n.id, rect)
+    }
+    return rect
+  }
+  const sizes = new Map<string, { w: number; h: number }>()
+  for (const n of nodes)
+    if (n.kind !== 'system') sizes.set(n.id, { ...MIN_CONTAINER })
+  for (const n of nodes) {
+    const parent = n.parentId ? map.get(n.parentId) : undefined
+    const min = parent && sizes.get(parent.id)
+    if (!parent || !min) continue
+    const box = rectOf(parent)
+    const kid = rectOf(n)
+    min.w = Math.max(min.w, kid.x + kid.w + PAD - box.x)
+    min.h = Math.max(min.h, kid.y + kid.h + PAD - box.y)
+  }
+  return sizes
+}
+
 /** Whether a container is already the box around its children. */
 export function fitsContents(nodes: LayoutNode[], containerID: string) {
   return fitToContents(nodes, containerID).length === 0

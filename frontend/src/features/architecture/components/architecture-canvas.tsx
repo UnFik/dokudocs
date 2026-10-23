@@ -61,7 +61,7 @@ import { anchorAt, type PinAnchor } from '../lib/comment-pins'
 import {
   fitsContents,
   LABEL,
-  minSize,
+  minSizes,
   PAD,
   type Point,
   type Rect,
@@ -142,12 +142,25 @@ function toFlowNodes(
   editable: boolean
 ): Node[] {
   const selected = new Set(selection.map((s) => s.id))
+  const layout = toLayoutNodes(canvas)
+  const mins = minSizes(layout)
   return sortParentsFirst(canvas.nodes).map((n) => ({
     id: n.id,
     type: n.kind,
     position: { x: n.x, y: n.y },
     parentId: n.parentId ?? undefined,
-    data: { element: n },
+    data:
+      n.kind === 'system'
+        ? { element: n }
+        : {
+            element: n,
+            min: mins.get(n.id),
+            // Only a selected container shows Fit to contents.
+            canFit:
+              selected.has(n.id) &&
+              layout.some((c) => c.parentId === n.id) &&
+              !fitsContents(layout, n.id),
+          },
     selected: selected.has(n.id),
     draggable: editable,
     connectable: editable && n.kind === 'system',
@@ -162,6 +175,30 @@ function toFlowNodes(
         }),
     ariaLabel: `${n.kind} ${n.name}`,
   }))
+}
+
+type NodeData = {
+  element: ArchitectureNode
+  min?: { w: number; h: number }
+  canFit?: boolean
+}
+
+/** Whether React Flow would draw the node the same: then the old object is kept and the node is not drawn again. */
+function sameNode(a: Node, b: Node) {
+  const x = a.data as NodeData
+  const y = b.data as NodeData
+  return (
+    x.element === y.element &&
+    x.min?.w === y.min?.w &&
+    x.min?.h === y.min?.h &&
+    x.canFit === y.canFit &&
+    a.selected === b.selected &&
+    a.draggable === b.draggable &&
+    a.connectable === b.connectable &&
+    a.parentId === b.parentId &&
+    a.position.x === b.position.x &&
+    a.position.y === b.position.y
+  )
 }
 
 function toFlowEdges(
@@ -223,6 +260,12 @@ export type ArchitectureCanvasProps = {
 
 export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   const { doc, canvas, readOnly } = props
+  // The callbacks on the context read the canvas here, so a change to it does not
+  // give every node a new context.
+  const latest = useRef(canvas)
+  useEffect(() => {
+    latest.current = canvas
+  })
   const flow = useReactFlow()
   const catalogIndex = useMemo(
     () => new Map((props.catalog ?? []).map((e) => [e.slug, e])),
@@ -269,8 +312,13 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
   const lastWrite = useRef(0)
   const lastPointer = useRef({ x: 0, y: 0 })
 
+  const drawnSelection = useRef(selection)
   // The Yjs state is the record; local node state only runs ahead of it during a drag or resize.
   useEffect(() => {
+    // React Flow keeps its own idea of what is selected on a node object it was
+    // given before; a new selection gives every node a new object.
+    const reselected = drawnSelection.current !== selection
+    drawnSelection.current = selection
     setNodes((current) => {
       const held = new Map(current.map((n) => [n.id, n]))
       // Merge into the nodes React Flow already measured: a node without its
@@ -279,23 +327,55 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       return toFlowNodes(canvas, selection, editable).map((n) => {
         const previous = held.get(n.id)
         if (!previous) return n
+        const moving = dragging.current.has(n.id)
+        if (
+          !reselected &&
+          sameNode(previous, moving ? { ...n, position: previous.position } : n)
+        )
+          return previous
         return {
           ...previous,
           ...n,
           measured: previous.measured,
           dragging: previous.dragging,
           // Elements being dragged follow the pointer, not the echo of their own writes.
-          position: dragging.current.has(n.id) ? previous.position : n.position,
+          position: moving ? previous.position : n.position,
         }
       })
     })
   }, [canvas, selection, editable])
 
-  const focus = useMemo(() => focusOf(canvas, selection), [canvas, selection])
-  const edges = useMemo(
-    () => toFlowEdges(canvas, selection, focus),
-    [canvas, selection, focus]
-  )
+  const found = useMemo(() => focusOf(canvas, selection), [canvas, selection])
+  // The same focus while the same elements stand out, so the nodes keep their context.
+  const focusKey = found ? `${[...found.nodes]}|${[...found.edges]}` : ''
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const focus = useMemo(() => found, [focusKey])
+  // Edges that did not change keep their objects, so React Flow does not draw
+  // them again; the edges of the last render are kept to compare with.
+  const [drawn, setDrawn] = useState(() => ({
+    canvas,
+    selection,
+    focus,
+    edges: toFlowEdges(canvas, selection, focus),
+  }))
+  let edges = drawn.edges
+  if (
+    drawn.canvas !== canvas ||
+    drawn.selection !== selection ||
+    drawn.focus !== focus
+  ) {
+    const old = new Map(drawn.edges.map((e) => [e.id, e]))
+    edges = toFlowEdges(canvas, selection, focus).map((e) => {
+      const kept = old.get(e.id)
+      return kept &&
+        kept.data?.connection === e.data?.connection &&
+        kept.selected === e.selected &&
+        kept.zIndex === e.zIndex
+        ? kept
+        : e
+    })
+    setDrawn({ canvas, selection, focus, edges })
+  }
   const displayNodes = useMemo(
     () =>
       slot
@@ -317,25 +397,34 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     [nodes, slot]
   )
 
+  const containerList = canvas.nodes.filter((n) => n.kind !== 'system')
+  const containersKey = containerList.map((n) => `${n.id}:${n.name}`).join()
   const containers = useMemo(
-    () =>
-      new Map(
-        canvas.nodes.filter((n) => n.kind !== 'system').map((n) => [n.id, n])
-      ),
-    [canvas]
+    () => new Map(containerList.map((n) => [n.id, n])),
+    // Only the ids and names are read from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [containersKey]
   )
-  const peerSelections = useMemo(() => {
-    const map = new Map<string, PeerMark[]>()
-    for (const peer of props.peers)
-      peer.selection.forEach((id, index) =>
-        map.set(id, [
-          ...(map.get(id) ?? []),
-          // The name tag goes on the first element each person selected.
-          { name: peer.name, color: peer.color, named: index === 0 },
-        ])
-      )
-    return map
-  }, [props.peers])
+  // Pointers move all the time; only who has what selected reaches the nodes.
+  const peersKey = props.peers
+    .map((p) => `${p.name}|${p.color}|${p.selection.join()}`)
+    .join('\n')
+  const peerSelections = useMemo(
+    () => {
+      const map = new Map<string, PeerMark[]>()
+      for (const peer of props.peers)
+        peer.selection.forEach((id, index) =>
+          map.set(id, [
+            ...(map.get(id) ?? []),
+            // The name tag goes on the first element each person selected.
+            { name: peer.name, color: peer.color, named: index === 0 },
+          ])
+        )
+      return map
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [peersKey]
+  )
 
   const context: CanvasContextValue = useMemo(
     () => ({
@@ -348,9 +437,8 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       leaving,
       onDelete: (id) => props.onDelete([{ kind: 'node', id }]),
       openDocuments: () => props.onOpenDocuments?.(),
-      minSizeOf: (id) => minSize(toLayoutNodes(canvas), id),
       shouldResize: (id, params) =>
-        boxHoldsChildren(canvas, id, {
+        boxHoldsChildren(latest.current, id, {
           x: params.x,
           y: params.y,
           w: params.width,
@@ -358,6 +446,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
         }),
       onResize: (id, params) => {
         // Keep the children still on screen while the top-left corner moves.
+        const canvas = latest.current
         const node = canvas.nodes.find((n) => n.id === id)
         if (!node) return
         const dx = params.x - node.x
@@ -376,7 +465,7 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       onResizeEnd: (id, params: ResizeParams) => {
         if (!doc) return
         props.onGesture()
-        resizeElement(doc, canvas, id, {
+        resizeElement(doc, latest.current, id, {
           x: params.x,
           y: params.y,
           w: params.width,
@@ -387,19 +476,13 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       takeOut: (id) => {
         if (!doc) return
         props.onGesture()
-        takeOutElement(doc, canvas, id)
+        takeOutElement(doc, latest.current, id)
         props.onGesture()
-      },
-      canFit: (id) => {
-        const layout = toLayoutNodes(canvas)
-        return (
-          layout.some((n) => n.parentId === id) && !fitsContents(layout, id)
-        )
       },
       fit: (id) => {
         if (!doc) return
         props.onGesture()
-        fitElement(doc, canvas, id)
+        fitElement(doc, latest.current, id)
         props.onGesture()
       },
       familyOf: (protocol) => familyOf(props.catalog, protocol),
@@ -413,7 +496,6 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
       erasing,
       focus,
       leaving,
-      canvas,
       doc,
       props.catalog,
     ]
@@ -544,6 +626,34 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
     }
     props.onSelect(event.shiftKey ? toggled(selection, item) : [item])
   }
+
+  // React Flow hands these to every node and edge, which are drawn again when
+  // one changes: they stay the same functions and call the latest handlers.
+  const pointerHandlers = useRef({
+    clickWith,
+    erase: (id: string) => active === 'eraser' && setErasing(id),
+  })
+  useEffect(() => {
+    pointerHandlers.current = {
+      clickWith,
+      erase: (id: string) => active === 'eraser' && setErasing(id),
+    }
+  })
+  const flowHandlers = useMemo(
+    () => ({
+      onNodeClick: (event: ReactMouseEvent, node: Node) =>
+        node.id !== '__slot' &&
+        pointerHandlers.current.clickWith(event, { kind: 'node', id: node.id }),
+      onEdgeClick: (event: ReactMouseEvent, edge: Edge) =>
+        pointerHandlers.current.clickWith(event, { kind: 'edge', id: edge.id }),
+      onNodeMouseEnter: (_: ReactMouseEvent, node: Node) =>
+        pointerHandlers.current.erase(node.id),
+      onEdgeMouseEnter: (_: ReactMouseEvent, edge: Edge) =>
+        pointerHandlers.current.erase(edge.id),
+      onMouseLeave: () => setErasing(null),
+    }),
+    []
+  )
 
   // The selection box: React Flow draws it; what it takes follows our rules.
   const store = useStoreApi()
@@ -819,21 +929,12 @@ export function ArchitectureCanvas(props: ArchitectureCanvasProps) {
           onNodeDragStop={onNodeDragStop}
           onConnect={onConnect}
           isValidConnection={isValidConnection}
-          onNodeClick={(event, node) =>
-            node.id !== '__slot' &&
-            clickWith(event, { kind: 'node', id: node.id })
-          }
-          onEdgeClick={(event, edge) =>
-            clickWith(event, { kind: 'edge', id: edge.id })
-          }
-          onNodeMouseEnter={(_, node) =>
-            active === 'eraser' && setErasing(node.id)
-          }
-          onNodeMouseLeave={() => setErasing(null)}
-          onEdgeMouseEnter={(_, edge) =>
-            active === 'eraser' && setErasing(edge.id)
-          }
-          onEdgeMouseLeave={() => setErasing(null)}
+          onNodeClick={flowHandlers.onNodeClick}
+          onEdgeClick={flowHandlers.onEdgeClick}
+          onNodeMouseEnter={flowHandlers.onNodeMouseEnter}
+          onNodeMouseLeave={flowHandlers.onMouseLeave}
+          onEdgeMouseEnter={flowHandlers.onEdgeMouseEnter}
+          onEdgeMouseLeave={flowHandlers.onMouseLeave}
           onPaneClick={() => active === 'cursor' && props.onSelect([])}
           onSelectionStart={() => {
             boxed.current = ''
