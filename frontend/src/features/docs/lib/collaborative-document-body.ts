@@ -1,5 +1,6 @@
 import { registerOpenDocument } from './collab-registry'
 import {
+  dropStaleLocalCopy,
   openCollabSession,
   type CollabAccess,
   type CollabStatus,
@@ -45,6 +46,8 @@ export async function mountCollaborativeDocumentBody(
   input: {
     documentID: string
     workspaceID: string
+    /** The record the document holds now; a copy made for another one is dropped before opening. */
+    record?: string
     userID: string
     userName?: string
     token: string | (() => string)
@@ -79,6 +82,7 @@ export async function mountCollaborativeDocumentBody(
     onAddToChatRequest?: () => void
   }
 ) {
+  await dropStaleLocalCopy(input.workspaceID, input.documentID, input.record)
   const room = `${input.workspaceID}.${input.documentID}`
   const forceReadOnly = input.readOnly ?? false
   const known = cachedAccess(room)
