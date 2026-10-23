@@ -8,7 +8,7 @@ import {
   type PresenceUser,
 } from '@/features/docs/lib/collab-session'
 import { readCanvas } from '../lib/canvas-doc'
-import type { ArchitectureJSON } from '../lib/canvas-model'
+import { reuseUnchanged, type ArchitectureJSON } from '../lib/canvas-model'
 
 /** Someone else in the room: what they have selected and where their pointer is on the canvas. */
 export type Peer = {
@@ -22,6 +22,52 @@ export type Peer = {
 }
 
 type Session = ReturnType<typeof openCollabSession>
+
+const samePeer = (a: Peer, b: Peer) =>
+  a.clientID === b.clientID &&
+  a.userID === b.userID &&
+  a.name === b.name &&
+  a.color === b.color &&
+  a.pointer?.x === b.pointer?.x &&
+  a.pointer?.y === b.pointer?.y &&
+  a.selection.length === b.selection.length &&
+  a.selection.every((id, i) => id === b.selection[i])
+
+/**
+ * The other people in the room from the awareness states, or `previous` itself
+ * when nothing about them changed (this person's own pointer moves often).
+ */
+export function peersFrom(
+  states: Map<number, Record<string, unknown>>,
+  ownClientID: number,
+  previous: Peer[]
+): Peer[] {
+  const next: Peer[] = []
+  for (const [clientID, state] of states) {
+    if (clientID === ownClientID) continue
+    const user = state.user as
+      | { userID?: string; name?: string; color?: string }
+      | undefined
+    if (!user?.userID) continue
+    next.push({
+      clientID,
+      userID: user.userID,
+      name: user.name ?? 'Someone',
+      color: user.color ?? 'currentColor',
+      // A list since several elements can be selected; one id from older clients.
+      selection: Array.isArray(state.selection)
+        ? state.selection.filter((id): id is string => typeof id === 'string')
+        : typeof state.selection === 'string'
+          ? [state.selection]
+          : [],
+      pointer: (state.pointer as Peer['pointer']) ?? null,
+    })
+  }
+  return next.length === previous.length &&
+    next.every((p, i) => samePeer(p, previous[i]!))
+    ? previous
+    : next
+}
 
 const emptyCanvas: ArchitectureJSON = { version: 1, nodes: [], connections: [] }
 
@@ -82,7 +128,12 @@ export function useArchitectureSession(input: {
     let frame = 0
     const publish = () => {
       cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => setCanvas(readCanvas(session.ydoc)))
+      // Elements that did not change keep their objects, so they are not drawn again.
+      frame = requestAnimationFrame(() =>
+        setCanvas((current) =>
+          reuseUnchanged(current, readCanvas(session.ydoc))
+        )
+      )
     }
     session.ydoc.on('update', publish)
     void session.loaded.then(() => {
@@ -96,32 +147,17 @@ export function useArchitectureSession(input: {
       setSynced(true)
       publish()
     })
+    let peers: Peer[] = []
     const readPeers = () => {
       const awareness = session.awareness
       if (!awareness) return
-      const next: Peer[] = []
-      for (const [clientID, state] of awareness.getStates()) {
-        if (clientID === session.ydoc.clientID) continue
-        const user = state.user as
-          | { userID?: string; name?: string; color?: string }
-          | undefined
-        if (!user?.userID) continue
-        next.push({
-          clientID,
-          userID: user.userID,
-          name: user.name ?? 'Someone',
-          color: user.color ?? 'currentColor',
-          // A list since several elements can be selected; one id from older clients.
-          selection: Array.isArray(state.selection)
-            ? state.selection.filter(
-                (id): id is string => typeof id === 'string'
-              )
-            : typeof state.selection === 'string'
-              ? [state.selection]
-              : [],
-          pointer: (state.pointer as Peer['pointer']) ?? null,
-        })
-      }
+      const next = peersFrom(
+        awareness.getStates(),
+        session.ydoc.clientID,
+        peers
+      )
+      if (next === peers) return
+      peers = next
       setPeers(next)
     }
     session.awareness?.on('change', readPeers)
