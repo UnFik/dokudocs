@@ -72,6 +72,46 @@ export function clearLocalCopy(
   })
 }
 
+const recordKey = (workspaceID: string, documentID: string) =>
+  `dokudocs:record:${roomName(workspaceID, documentID)}`
+
+/**
+ * Drops this device's copy of a Markdown document when a restore replaced its record while the
+ * device was closed or offline. A restore builds the body again with the same ids, so the old
+ * copy, with its edits and the text it deleted, would merge into the restored body and could
+ * empty it. The device remembers the record it last opened; a different one, or none, means the
+ * copy cannot be trusted, and everything synced is read from the server again. Resolves to
+ * whether a copy was dropped.
+ */
+export async function dropStaleLocalCopy(
+  workspaceID: string,
+  documentID: string,
+  record: string | undefined
+) {
+  if (!record) return false
+  const key = recordKey(workspaceID, documentID)
+  try {
+    if (window.localStorage.getItem(key) === record) return false
+  } catch {
+    return false
+  }
+  let dropped = false
+  try {
+    if (await hasLocalCopy(workspaceID, documentID)) {
+      await clearLocalCopy(workspaceID, documentID)
+      dropped = true
+    }
+  } catch {
+    // Without a way to look, the copy stays as it was.
+  }
+  try {
+    window.localStorage.setItem(key, record)
+  } catch {
+    // The record is only remembered to tell a stale copy next time.
+  }
+  return dropped
+}
+
 /** Whether this device holds a copy of the document, so it can open without a connection. */
 export async function hasLocalCopy(
   workspaceID: string,

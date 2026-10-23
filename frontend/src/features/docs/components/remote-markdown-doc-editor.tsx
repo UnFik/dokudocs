@@ -216,6 +216,7 @@ export function RemoteMarkdownDocEditor({
         followedUser={followedUser}
         key={`${document.id}:${sessionNonce}`}
         documentID={document.id}
+        record={document.replacementId}
         workspaceID={workspaceID}
         userID={userID}
         offline={offline}
@@ -277,6 +278,7 @@ export function RemoteMarkdownDocEditor({
 function CollaborativeMarkdownBody({
   followedUser,
   documentID,
+  record,
   workspaceID,
   userID,
   offline,
@@ -296,6 +298,7 @@ function CollaborativeMarkdownBody({
 }: {
   followedUser: string | null
   documentID: string
+  record?: string
   workspaceID: string
   userID: string
   offline: boolean
@@ -656,6 +659,7 @@ function CollaborativeMarkdownBody({
 
     void mountCollaborativeDocumentBody(mount, {
       documentID,
+      record,
       workspaceID,
       userID,
       userName: profileNameRef.current,
