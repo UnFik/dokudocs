@@ -22,6 +22,7 @@ import type {
   ArchitectureNode,
 } from '../lib/canvas-model'
 import type { CatalogEntry } from '../lib/catalog'
+import { MIN_CONTAINER } from '../lib/layout'
 import { isWebAddress } from '../lib/web-address'
 import { CatalogIcon } from './catalog-icon'
 import { RepositoryJump } from './repository-jump'
@@ -35,7 +36,6 @@ export type CanvasContextValue = {
   peerSelections: Map<string, PeerMark[]>
   /** The element the Eraser would remove on click. */
   erasing: string | null
-  minSizeOf: (id: string) => { w: number; h: number }
   shouldResize: (id: string, params: ResizeParams) => boolean
   onResize: (id: string, params: ResizeParams) => void
   onResizeEnd: (id: string, params: ResizeParams) => void
@@ -47,8 +47,6 @@ export type CanvasContextValue = {
   onDelete: (id: string) => void
   /** Show the linked documents of the selected element in the side panel. */
   openDocuments: () => void
-  /** Whether the container holds something and is not already as small as it can be around it. */
-  canFit: (id: string) => boolean
   fit: (id: string) => void
   familyOf: (protocol: string) => string
 }
@@ -67,7 +65,13 @@ function useCanvas() {
 }
 
 export type ElementNode = Node<
-  { element: ArchitectureNode },
+  {
+    element: ArchitectureNode
+    /** Of a Host or Group: the smallest size it may be resized to. */
+    min?: { w: number; h: number }
+    /** Of a selected Host or Group: it holds something and is not already as small as it can be around it. */
+    canFit?: boolean
+  },
   'host' | 'group' | 'system'
 >
 export type SlotNode = Node<Record<string, never>, 'slot'>
@@ -118,15 +122,18 @@ function ElementToolbar({
   id,
   element,
   selected,
+  canFit = false,
 }: {
   id: string
   element: ArchitectureNode
   selected: boolean
+  canFit?: boolean
 }) {
-  const { readOnly, containers, takeOut, canFit, fit, onDelete } = useCanvas()
+  const { readOnly, containers, takeOut, fit, onDelete } = useCanvas()
+  // A tool bar on every element would subscribe each one to the canvas store.
+  if (!selected) return null
   const parent = element.parentId ? containers.get(element.parentId) : undefined
-  const fitting =
-    !readOnly && selected && element.kind !== 'system' && canFit(id)
+  const fitting = !readOnly && element.kind !== 'system' && canFit
   const takingOut = !readOnly && Boolean(parent)
   const deletable = !readOnly && element.kind === 'system'
   const repoUrl = element.kind === 'system' ? (element.repoUrl ?? '') : ''
@@ -250,18 +257,11 @@ function ContainerNode({
   selected,
   kind,
 }: NodeProps<ElementNode> & { kind: 'host' | 'group' }) {
-  const {
-    readOnly,
-    catalog,
-    leaving,
-    minSizeOf,
-    shouldResize,
-    onResize,
-    onResizeEnd,
-  } = useCanvas()
+  const { readOnly, catalog, leaving, shouldResize, onResize, onResizeEnd } =
+    useCanvas()
   const element = data.element
   const entry = element.catalog ? catalog.get(element.catalog) : undefined
-  const min = minSizeOf(id)
+  const min = data.min ?? MIN_CONTAINER
   return (
     <div
       className={cn(
@@ -278,7 +278,12 @@ function ContainerNode({
     >
       <PeerOutline id={id} />
       <EraseMark id={id} />
-      <ElementToolbar id={id} element={element} selected={Boolean(selected)} />
+      <ElementToolbar
+        id={id}
+        element={element}
+        selected={Boolean(selected)}
+        canFit={data.canFit}
+      />
       {!readOnly && (
         <NodeResizer
           isVisible={Boolean(selected)}
