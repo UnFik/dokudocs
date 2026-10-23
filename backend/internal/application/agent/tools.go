@@ -272,16 +272,18 @@ func DokudocsTools(d ToolDeps) []Tool {
 				"An Architecture document comes back as its canvas in JSON (every node and connection with its id and place); change it with edit_architecture, passing this version.",
 			Parameters: object([]string{"workspace_id", "document_id"}, map[string]any{
 				"workspace_id": pWorkspace, "document_id": pDocument,
-				"offset":  map[string]any{"type": "integer", "minimum": 0, "description": "Character to start reading at; use nextOffset from the previous part."},
-				"limit":   map[string]any{"type": "integer", "minimum": 1, "maximum": maxReadWindow, "description": "Characters to read at most."},
-				"outline": map[string]any{"type": "boolean", "description": "Only the outline of headings with their offsets, no text."},
+				"offset":   map[string]any{"type": "integer", "minimum": 0, "description": "Character to start reading at; use nextOffset from the previous part."},
+				"start_at": map[string]any{"type": "string", "description": "Start reading at the line that holds this text, copied from an earlier read. Use it instead of offset after an edit, which moves the offsets."},
+				"limit":    map[string]any{"type": "integer", "minimum": 1, "maximum": maxReadWindow, "description": "Characters to read at most."},
+				"outline":  map[string]any{"type": "boolean", "description": "Only the outline of headings with their offsets, no text."},
 			}),
 			Run: func(ctx context.Context, actor Actor, args json.RawMessage) (any, error) {
 				a, err := parse[struct {
 					wsDoc
-					Offset  int  `json:"offset"`
-					Limit   int  `json:"limit"`
-					Outline bool `json:"outline"`
+					Offset  int    `json:"offset"`
+					StartAt string `json:"start_at"`
+					Limit   int    `json:"limit"`
+					Outline bool   `json:"outline"`
 				}](args)
 				if err != nil {
 					return nil, err
@@ -311,7 +313,9 @@ func DokudocsTools(d ToolDeps) []Tool {
 					out.Content = live.Text
 					return out, nil
 				}
-				out.window(live.Text, a.Offset, a.Limit, a.Outline, meta.Type == "markdown")
+				offset, note := startOffset(live.Text, a.StartAt, a.Offset)
+				out.window(live.Text, offset, a.Limit, a.Outline, meta.Type == "markdown")
+				out.Hint = note + out.Hint
 				return out, nil
 			},
 		},
@@ -568,7 +572,8 @@ func DokudocsTools(d ToolDeps) []Tool {
 			Description: "Change what a Markdown, DBML or Mermaid document says with targeted operations, using the version from read_document. " +
 				"Markdown operations: replace_text {find, replace} (find must appear once; copy it exactly from read_document), " +
 				"insert_after_heading {heading, text}, insert_before_heading {heading, text}, append_section {heading, level, text}, append {text} (paragraphs and code blocks at the end), " +
-				"replace_section {heading, text} (replaces the body under a heading, up to the next heading of the same or higher level, and keeps the heading), delete_section {heading}. " +
+				"replace_section {heading, text} (replaces the body under a heading, up to the next heading of the same or higher level, and keeps the heading), delete_section {heading}, " +
+				"replace_range {from, to, text} (replaces the blocks from the one that holds from through the one that holds to, or the single block of from, with text; from and to are each a piece of one line copied from read_document, WITHOUT its list number, bullet or # mark; text may start a line with # to make a heading and may hold fenced code. Use it to reformat plain lines into headings and code blocks, one part of the document at a time). " +
 				"Separate paragraphs in text with a blank line. Put code in a fenced block (```json, then the code, then ```): its lines are kept exactly, and replace_text can change text inside a code block. Lists and tables stay as plain paragraph text. Prefer one operation per section and about 300 to 400 words of text per call; send long text in several calls, each with the version the previous one returned. " +
 				"DBML, Mermaid and html operations: replace_text {find, replace}, replace_all {text}, append {text}. An html document is changed from MCP only; the page is rewritten after a named version is saved. " +
 				"From a Dokudocs chat, Markdown changes become suggestions for the User to review. The result gives the new version to use for the next call.",
@@ -577,10 +582,12 @@ func DokudocsTools(d ToolDeps) []Tool {
 				"operations": map[string]any{"type": "array", "items": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"type":    map[string]any{"type": "string", "enum": []string{"replace_text", "insert_after_heading", "insert_before_heading", "append_section", "append", "replace_section", "delete_section", "replace_all"}},
+						"type":    map[string]any{"type": "string", "enum": []string{"replace_text", "insert_after_heading", "insert_before_heading", "append_section", "append", "replace_section", "replace_range", "delete_section", "replace_all"}},
 						"find":    map[string]any{"type": "string"},
 						"replace": map[string]any{"type": "string"},
 						"heading": map[string]any{"type": "string"},
+						"from":    map[string]any{"type": "string"},
+						"to":      map[string]any{"type": "string"},
 						"level":   map[string]any{"type": "integer"},
 						"text":    map[string]any{"type": "string"},
 					},

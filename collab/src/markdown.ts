@@ -160,8 +160,14 @@ function block(node: JSONNode): string {
   }
 }
 
+/** A block only proposed by a suggestion is not part of the document yet, like proposed text. */
+function proposed(node: JSONNode): boolean {
+  const suggestion = attributesOf(node).suggestion as { kind?: unknown } | undefined
+  return suggestion?.kind === 'insert'
+}
+
 function blocks(nodes: JSONNode[] = [], separator: string): string {
-  return nodes.map(block).join(separator)
+  return nodes.filter((node) => !proposed(node)).map(block).join(separator)
 }
 
 /** The Markdown of a document's JSON; empty for a document with no blocks. */

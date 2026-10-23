@@ -21,13 +21,15 @@ const (
 	maxAnswerSteps = 10
 	// maxWorkSteps bounds a question that writes or keeps a plan: long documents are
 	// written one section at a time.
-	maxWorkSteps = 30
+	maxWorkSteps = 60
 	// maxIdenticalCalls is how many times the same call may run before the Agent is told to stop.
 	maxIdenticalCalls = 3
 	// recentMessages are the last messages of a run whose tool results stay whole.
 	recentMessages = 8
 	// staleResultBytes is the size above which an old tool result is replaced by a stub.
 	staleResultBytes = 1500
+	// keptResultBytes is how much of the newest large tool results stays whole, however old.
+	keptResultBytes = 80000
 	// historyMessages is how many earlier messages are sent whole; older ones are shortened.
 	historyMessages = 20
 	// maxContinuations is how many times an answer cut off at the output limit is continued
@@ -171,7 +173,24 @@ func (s *runState) repeated(tc ToolCall) int {
 
 // stoppedText is what the User reads when the step limit ends the run.
 func (s *runState) stoppedText(limit int) string {
-	text := fmt.Sprintf("I stopped after %d steps.", limit)
+	return s.stoppedSummary(fmt.Sprintf("I stopped after %d steps.", limit))
+}
+
+// outOfTime is how much of the run's time must be left to start another model step: a
+// step can take most of a minute, and the answer still has to be saved.
+const outOfTime = 90 * time.Second
+
+// timeIsShort reports whether the run's deadline is too close for another step.
+func timeIsShort(ctx context.Context) bool {
+	deadline, ok := ctx.Deadline()
+	return ok && time.Until(deadline) < outOfTime
+}
+
+func (s *runState) stoppedForTime() string {
+	return s.stoppedSummary("I stopped because this run was running out of time.")
+}
+
+func (s *runState) stoppedSummary(text string) string {
 	if len(s.plan) > 0 {
 		done := 0
 		var left []string
@@ -196,19 +215,28 @@ const harnessPrompt = `
 When the request is clear, do it now. Do not ask the User to confirm a request that already says what to change and where. The system shows the User every change to review before it counts, so you never need to ask for permission.
 Ask with ask_user only when something you cannot find out changes the result, and ask one specific question with a default.
 For a long document, write it in parts. Creating a document waits for the User to approve it, so put the first sections (up to about 1500 words) in create_document, and when more is left, say so and add the rest one section per call with append_section once the User says to continue. In an existing document, add or change one section per call with append_section, replace_section or insert_after_heading, about 300 to 400 words each. Keep a plan with plan_update when there are more than three parts.
+To fix the formatting of an existing document, work from the top one part at a time, about 6000 characters: read a part with read_document (limit 6000), rewrite it with one replace_range, then read the next part with start_at set to words from the first line you have not changed yet. An edit moves every offset after it, so do not use offset after an edit. In replace_range, write the part again with # headings, fenced code for diagrams and aligned text, and plain paragraphs; set from and to to words copied from the lines at the start and end of the part, without any list number, bullet or # mark that read_document shows in front of them. Mark each part done in plan_update.
 Read a long document in parts too: read_document returns an outline and a window of text; pass offset to read on. Edit with small, exact operations; never rewrite a whole document to change a part of it.
 If a tool returns an error, read it, fix the call and try again before you tell the User. If your reply is cut off, send less in each call.`
 
 // compactMessages returns the conversation with old, large tool results replaced by a
-// short stub: the model has used them, and a stale document read cannot be edited from.
+// short stub: the model has used them. The newest results stay whole until they add up to
+// keptResultBytes, so a document read in parts is not read again after every edit; the
+// last recentMessages messages always stay whole.
 func compactMessages(messages []Message) []Message {
 	out := make([]Message, len(messages))
 	copy(out, messages)
 	keepFrom := len(out) - recentMessages
-	for i := range out {
-		if i < keepFrom && out[i].Role == "tool" && len(out[i].Content) > staleResultBytes {
-			out[i].Content = `{"note":"An earlier tool result was removed to save space. Call the tool again if you still need it."}`
+	kept := 0
+	for i := len(out) - 1; i >= 0; i-- {
+		if out[i].Role != "tool" || len(out[i].Content) <= staleResultBytes {
+			continue
 		}
+		if i >= keepFrom || kept+len(out[i].Content) <= keptResultBytes {
+			kept += len(out[i].Content)
+			continue
+		}
+		out[i].Content = `{"note":"An earlier tool result was removed to save space. Call the tool again if you still need it."}`
 	}
 	return out
 }

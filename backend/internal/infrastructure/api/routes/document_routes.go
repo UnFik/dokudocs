@@ -38,7 +38,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 	suggestionHandler := dochandler.NewSuggestionHandler(suggestionService)
 	ragChat := dochandler.NewRAGChatHandler(appchat.NewChatUseCase(bodyRepository, c.RAGAnswerModel, c.RAGEmbeddingModel)).
 		WithAgent(kit.chat, kit.ready, kit.actions).
-		WithRuns(aiRuns(c), cfg.RAGRequestTimeout).
+		WithRuns(aiRuns(c), cfg.AIRunTimeout).
 		WithLimits(aiusage.NewLimits(aiusagerepo.NewStore(c.DB)))
 	commentUseCase := appdoc.NewCommentUseCase(bodyRepository).
 		WithDeliverer(notification.NewMentionDeliverer(c.Mailer, c.Push, cfg.PublicAppURL))

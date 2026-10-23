@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -76,10 +77,24 @@ func (o *readOutput) window(text string, offset, limit int, outlineOnly, markdow
 	if end < total {
 		next := end
 		o.NextOffset, o.Truncated = &next, true
-		o.Hint = fmt.Sprintf("Showing characters %d to %d of %d. Call read_document again with offset %d for the next part; the version stays the same.", offset, end, total, end)
+		o.Hint = fmt.Sprintf("Showing characters %d to %d of %d. If you are changing the document, make this part's changes now with one edit_document_content call, before you read on; with several parts, call plan_update first. An edit moves the offsets after it, so after one read on with start_at, set to words from the first line you have not changed. Without an edit, call read_document again with offset %d for the next part; the version stays the same.", offset, end, total, end)
 	} else if offset == 0 {
 		o.Outline = nil
 	}
+}
+
+// startOffset is where a read begins: the line that holds the first startAt, which stays right
+// while edits above it move the offsets; without startAt, the offset the call gave.
+func startOffset(text, startAt string, offset int) (int, string) {
+	if strings.TrimSpace(startAt) == "" {
+		return offset, ""
+	}
+	at := strings.Index(text, startAt)
+	if at < 0 {
+		return offset, "start_at was not found in the document, so this part starts at offset. "
+	}
+	lineStart := strings.LastIndex(text[:at], "\n") + 1
+	return utf8.RuneCountInString(text[:lineStart]), ""
 }
 
 // outline lists the headings of Markdown text, ignoring lines inside code fences.

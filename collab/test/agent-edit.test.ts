@@ -178,3 +178,101 @@ describe('section edits', () => {
     expect(() => applyMarkdownOperations(sections(), [{ type: 'append', text: '  ' }], direct)).toThrow(/append needs text/)
   })
 })
+
+describe('range edits', () => {
+  const flat = () =>
+    doc(
+      paragraph('t', 'Lapis Sekarang Setelah'),
+      paragraph('a', 'Traefik (ingress) 1 tujuan'),
+      paragraph('b', 'Interceptor connectx dipasang di 1 binary'),
+      paragraph('c', 'Jadi fungsi gateway tidak hilang.')
+    )
+  const direct = { mode: 'direct', author: ME, newID: ids } as const
+
+  it('turns plain paragraphs into a heading and a code block', () => {
+    const { json } = applyMarkdownOperations(
+      flat(),
+      [{ type: 'replace_range', from: 'Traefik (ingress)', to: 'dipasang di 1 binary', text: '## Perbandingan layer\n\n```text\nTraefik   1 tujuan\nInterceptor   1 binary\n```' }],
+      direct
+    )
+    const markdown = toMarkdown(json)
+    expect(markdown).toContain('## Perbandingan layer')
+    expect(markdown).toContain('```text\nTraefik   1 tujuan\nInterceptor   1 binary\n```')
+    expect(markdown).toContain('Lapis Sekarang Setelah')
+    expect(markdown).toContain('Jadi fungsi gateway tidak hilang.')
+    expect(markdown).not.toContain('Traefik (ingress)')
+  })
+
+  it('replaces one block when only from is given', () => {
+    const { json } = applyMarkdownOperations(flat(), [{ type: 'replace_range', from: 'Lapis Sekarang', text: '# Arsitektur' }], direct)
+    expect(toMarkdown(json)).toContain('# Arsitektur')
+    expect(toMarkdown(json)).not.toContain('Lapis Sekarang')
+  })
+
+  it('proposes a range replacement as suggestions that pass the suggester check', () => {
+    const before = flat()
+    const { json, suggestionIDs } = applyMarkdownOperations(before, [{ type: 'replace_range', from: 'Traefik', to: 'Interceptor', text: '## Layer' }], { mode: 'suggest', author: ME, newID: ids })
+    expect(suggestionIDs.length).toBeGreaterThan(0)
+    expect(validateSuggesterChange(before, json, ME)).toEqual({ ok: true })
+  })
+
+  it('says what is wrong when an end is missing, ambiguous or before the start', () => {
+    const twice = doc(paragraph('a', 'same'), paragraph('b', 'same'))
+    expect(() => applyMarkdownOperations(twice, [{ type: 'replace_range', from: 'same', text: 'x' }], direct)).toThrow(/2 blocks/)
+    expect(() => applyMarkdownOperations(flat(), [{ type: 'replace_range', from: 'nowhere', text: 'x' }], direct)).toThrow(/not found/)
+    expect(() => applyMarkdownOperations(flat(), [{ type: 'replace_range', from: 'Interceptor', to: 'Traefik', text: 'x' }], direct)).toThrow(/to "Traefik" was not found in one block at or after the block that holds from/)
+    expect(() => applyMarkdownOperations(flat(), [{ type: 'replace_range', from: 'Traefik', text: '' }], direct)).toThrow(/needs text/)
+  })
+})
+
+describe('blocks that a suggestion only proposes', () => {
+  const flat = () => doc(paragraph('a', 'Traefik (ingress) 1 tujuan'), paragraph('b', 'Jadi fungsi gateway tidak hilang.'))
+  const suggest = { mode: 'suggest', author: ME, newID: ids } as const
+
+  it('are not read as part of the document, so the old lines are found once', () => {
+    const { json } = applyMarkdownOperations(flat(), [{ type: 'replace_range', from: 'Traefik', text: '```text\nTraefik (ingress) 1 tujuan\n```' }], suggest)
+    expect(toMarkdown(json)).toBe('Traefik (ingress) 1 tujuan\n\nJadi fungsi gateway tidak hilang.\n')
+    // The proposed code block holds the same line; it must not make the range ambiguous.
+    const again = applyMarkdownOperations(json, [{ type: 'replace_range', from: 'Jadi fungsi', to: 'tidak hilang.', text: '## Penutup' }], suggest)
+    expect(again.suggestionIDs.length).toBeGreaterThan(0)
+    expect(() => applyMarkdownOperations(json, [{ type: 'replace_text', find: 'Traefik (ingress)', replace: 'x' }], suggest)).not.toThrow()
+  })
+})
+
+describe('replace_text with Markdown syntax', () => {
+  it('tells the Agent that a list number or heading mark is not part of the text', () => {
+    const list = doc(paragraph('a', 'Kontrak: proto/nice/options.proto'))
+    expect(() => applyMarkdownOperations(list, [{ type: 'replace_text', find: '1. Kontrak: proto/nice/options.proto', replace: 'x' }], { mode: 'direct', author: ME, newID: ids })).toThrow(
+      /use "Kontrak: proto\/nice\/options.proto" without it/
+    )
+  })
+})
+
+describe('range edits that are copied loosely', () => {
+  const lines = () =>
+    doc(
+      paragraph('a', 'Traefik   (ingress)  1 tujuan'),
+      paragraph('b', 'Interceptor connectx'),
+      paragraph('c', 'Penutup'),
+      paragraph('d', 'Interceptor connectx')
+    )
+  const direct = { mode: 'direct', author: ME, newID: ids } as const
+
+  it('starts at the first line and ends at the last line of what was copied, whatever the spacing', () => {
+    const { json } = applyMarkdownOperations(lines(), [{ type: 'replace_range', from: '1. traefik (ingress)\nInterceptor connectx', to: 'Interceptor connectx\nPenutup', text: '## Ganti' }], direct)
+    expect(toMarkdown(json)).toBe('## Ganti\n\nInterceptor connectx\n')
+  })
+
+  it('can start and end at the lines of a list', () => {
+    const item = (id: string, value: string) => ({ type: 'list_item', attrs: { nodeID: id, bodyAttributes: '{}', bodyContent: '' }, content: [paragraph(`${id}-p`, value)] })
+    const list = (id: string, ...items: J[]) => ({ type: 'order_list', attrs: { nodeID: id, bodyAttributes: '{"start":1}', bodyContent: '' }, content: items })
+    const withList = doc(paragraph('t', 'Judul'), list('l1', item('i1', 'Kontrak: proto/options.proto')), list('l2', item('i2', 'Domain: role_binding.go')), paragraph('e', 'Akhir'))
+    const { json } = applyMarkdownOperations(withList, [{ type: 'replace_range', from: '1. Kontrak: proto/options.proto', to: 'Domain: role_binding.go', text: '## Bagian 1' }], direct)
+    expect(toMarkdown(json)).toBe('Judul\n\n## Bagian 1\n\nAkhir\n')
+  })
+
+  it('ends at the first block after the start that holds the end, even when the same line comes again later', () => {
+    const { json } = applyMarkdownOperations(lines(), [{ type: 'replace_range', from: 'Traefik', to: 'Interceptor connectx', text: '## Ganti' }], direct)
+    expect(toMarkdown(json)).toBe('## Ganti\n\nPenutup\n\nInterceptor connectx\n')
+  })
+})
