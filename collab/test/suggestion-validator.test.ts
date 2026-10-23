@@ -26,6 +26,12 @@ describe('a suggester’s change', () => {
     expect(validateSuggesterChange(base(), after, ME)).toEqual({ ok: true })
   })
 
+  it('may be written by an account whose id has no UUID version, like the seeded dev admin', () => {
+    const seeded = '00000000-0000-0000-0000-000000000001'
+    const after = doc(paragraph('p', run('r', text('hello'), text(' world', [insertMark(seeded)]))))
+    expect(validateSuggesterChange(base(), after, seeded)).toEqual({ ok: true })
+  })
+
   it('may mark text for deletion without removing it', () => {
     const after = doc(paragraph('p', run('r', text('hel'), text('lo', [deleteMark()]))))
     expect(validateSuggesterChange(base(), after, ME)).toEqual({ ok: true })
