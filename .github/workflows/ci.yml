@@ -117,10 +117,11 @@ jobs:
         working-directory: frontend
         run: bun run test:perf
 
-      - name: Write the benchmark table to the job summary
+      - name: Write the benchmark table to the log and the job summary
         if: always()
+        shell: bash
         working-directory: frontend
-        run: bun scripts/canvas-perf-summary.ts perf-results.json >> "$GITHUB_STEP_SUMMARY"
+        run: bun scripts/canvas-perf-summary.ts perf-results.json | tee -a "$GITHUB_STEP_SUMMARY"
 
   e2e-smoke:
     if: github.event_name == 'pull_request'
