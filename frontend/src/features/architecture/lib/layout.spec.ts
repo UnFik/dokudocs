@@ -5,6 +5,7 @@ import {
   fitToContents,
   growToFit,
   minSize,
+  minSizes,
   placeInside,
   slotFor,
   takeOut,
@@ -178,6 +179,31 @@ describe('resizing by hand', () => {
       w: 160,
       h: 90,
     })
+  })
+})
+
+describe('the smallest size of every container at once', () => {
+  it('gives each container the box its contents need, or 160 x 90 when empty', () => {
+    const sizes = minSizes([
+      host(),
+      system('api', 'vps', 162, 32),
+      host({ id: 'empty', x: 600 }),
+      system('db', null, 0, 400),
+    ])
+    expect(Object.fromEntries(sizes)).toEqual({
+      vps: { w: 308, h: 96 },
+      empty: { w: 160, h: 90 },
+    })
+  })
+
+  it('measures a Host inside a Host from where it sits', () => {
+    const sizes = minSizes([
+      host({ w: 600, h: 400 }),
+      host({ id: 'k8s', parentId: 'vps', x: 14, y: 32, w: 400, h: 300 }),
+      system('api', 'k8s', 14, 32),
+    ])
+    expect(sizes.get('vps')).toEqual({ w: 428, h: 346 })
+    expect(sizes.get('k8s')).toEqual({ w: 160, h: 96 })
   })
 })
 
