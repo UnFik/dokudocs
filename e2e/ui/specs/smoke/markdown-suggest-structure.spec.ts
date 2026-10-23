@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { createdDocumentID, documentPayload, storedNodes } from "../../helpers/markdown-document";
+import {
+  createdDocumentID,
+  documentPayload,
+  settleSelection,
+  storedNodes,
+} from "../../helpers/markdown-document";
 import { joinWorkspace } from "../../../support/workspace-invites";
 
 test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste are suggestions the owner accepts or rejects", async ({
@@ -163,8 +168,18 @@ test("@live @smoke @suggeststructure: a commenter's Enter and multi-line paste a
     };
 
     // Enter at the end of the paragraph, then typing: one Add, in place for both.
-    await commenterEditor.getByText("Original phrase").click();
-    await commenter.keyboard.press("End");
+    await expect(async () => {
+      await commenterEditor.getByText("Original phrase").click();
+      await settleSelection(commenter, { collapsed: true });
+      await commenter.keyboard.press("End");
+      expect(
+        await commenter.evaluate(() => {
+          const selection = window.getSelection();
+          return selection?.anchorNode?.textContent?.slice(0, selection.anchorOffset);
+        }),
+      ).toBe("Original phrase");
+    }).toPass({ timeout: 15_000 });
+    await settleSelection(commenter, { collapsed: true });
     await commenter.keyboard.press("Enter");
     await commenter.keyboard.type("Second line");
     await expect(ownerCards).toContainText('Add: “Second line”');
