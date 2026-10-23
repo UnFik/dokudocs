@@ -176,16 +176,23 @@ func TestCatalogSlugsAreCheckedAndAWrongOneComesBackWithSuggestions(t *testing.T
 
 func TestLinkingNeedsADocumentTheUserCanReadInThisWorkspace(t *testing.T) {
 	e := newCanvasEnv(collaboration.RoomAccess{CanRead: true, CanEdit: true})
-	readable, hidden, elsewhere := uuid.New(), uuid.New(), uuid.New()
+	readable, canvas, hidden, elsewhere := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	e.svc.heads = linkHeads{own: e.rooms, self: e.doc, other: map[uuid.UUID]collaboration.RoomHead{
 		readable: {DocumentType: "markdown", Access: map[uuid.UUID]collaboration.RoomAccess{e.user: {CanRead: true}}},
+		canvas:   {DocumentType: "architecture", Access: map[uuid.UUID]collaboration.RoomAccess{e.user: {CanRead: true}}},
 		hidden:   {DocumentType: "markdown", Access: map[uuid.UUID]collaboration.RoomAccess{e.user: {}}},
 	}}
 	link := func(id uuid.UUID) string {
 		return `[{"type":"link_document","id":"api","document_id":"` + id.String() + `"}]`
 	}
-	if _, err := edit(e, chat(e), link(readable)); err != nil {
-		t.Fatalf("a readable document was refused: %v", err)
+	for _, id := range []uuid.UUID{readable, canvas} {
+		if _, err := edit(e, chat(e), link(id)); err != nil {
+			t.Fatalf("readable document %s was refused: %v", id, err)
+		}
+	}
+	e.rooms.edits = nil
+	if _, err := edit(e, chat(e), link(e.doc)); refused(t, err) != "operation 1: you cannot link this canvas to itself; link another document" || len(e.rooms.edits) != 0 {
+		t.Fatalf("self link: error = %v", err)
 	}
 	for _, id := range []uuid.UUID{hidden, elsewhere} {
 		e.rooms.edits = nil

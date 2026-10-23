@@ -5,8 +5,9 @@ import { ChevronRight } from 'lucide-react'
 import { listArchitectureUses } from '../api/architecture-api'
 
 /**
- * "Used in" on a Markdown, DBML or Mermaid page: the canvases whose elements link
- * here, each opening the canvas on that element. Nothing shows when there are none.
+ * "Used in" on a Markdown, DBML, Mermaid or Architecture page: the canvases whose
+ * elements link here, each opening the canvas on that element. Nothing shows when
+ * there are none.
  */
 // Up to this many links show inline; more collapse behind a toggle, closed at first.
 const COLLAPSE_AFTER = 3

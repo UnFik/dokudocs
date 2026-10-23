@@ -51,7 +51,7 @@ A built-in kind a node or Connection can be: a language, framework, database, br
 _Avoid_: Master data, template, preset
 
 **Document link**:
-A reference from a System or a Connection to an existing document (Markdown, DBML or Mermaid). The document stays where it is and keeps its own access; removing the link, the System or Connection that holds it, or the Architecture document never removes the document. One document may be linked from many Systems.
+A reference from a System or a Connection to an existing document (Markdown, DBML, Mermaid, or another Architecture document; never the one that holds it). The document stays where it is and keeps its own access; removing the link, the System or Connection that holds it, or the Architecture document never removes the document. One document may be linked from many Systems.
 _Avoid_: Embed, attachment, child document
 
 **Architecture version**:

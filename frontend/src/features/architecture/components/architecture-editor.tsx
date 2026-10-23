@@ -53,6 +53,7 @@ import { absoluteRect } from '../lib/layout'
 import { panelWidth, type SidePanel } from '../lib/panel-width'
 import { ArchitectureCanvas, type Selection } from './architecture-canvas'
 import { ArchitecturePreview, parseCanvas } from './architecture-preview'
+import { ArchitectureUses } from './architecture-uses'
 import { ArchitectureVersions } from './architecture-versions'
 import { CatalogPalette } from './catalog-palette'
 import { CatalogRequests } from './catalog-requests'
@@ -449,6 +450,11 @@ function Editor({
         onExportPng={() => void exportImage('png')}
         onExportSvg={() => void exportImage('svg')}
       />
+      <ArchitectureUses
+        workspaceID={workspaceID}
+        documentID={doc.id}
+        className='border-b border-border px-4 py-1.5'
+      />
       {session.refused && (
         <div
           role='alert'
@@ -825,6 +831,7 @@ function Editor({
                   canEdit={canEdit}
                   workspaceID={workspaceID}
                   projectID={doc.projectId ?? null}
+                  documentID={doc.id}
                 />
               </div>
             ) : (

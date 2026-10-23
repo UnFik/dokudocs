@@ -15,8 +15,9 @@ import (
 )
 
 // TestStoringACanvasRecordsWhichDocumentsItsElementsLinkTo covers the projection the
-// "Used in" list reads: links are kept only to Markdown, DBML and Mermaid documents
-// of the same workspace, and a later store replaces them.
+// "Used in" list reads: links are kept only to Markdown, DBML, Mermaid and other
+// Architecture documents of the same workspace, never to the canvas itself, and a
+// later store replaces them.
 func TestStoringACanvasRecordsWhichDocumentsItsElementsLinkTo(t *testing.T) {
 	ctx := context.Background()
 	db := openIntegrationDB(t)
@@ -29,10 +30,14 @@ func TestStoringACanvasRecordsWhichDocumentsItsElementsLinkTo(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO documents (id, workspace_id, title, type, content, author_id) VALUES ($1, $2, 'Schema', 'dbdiagram', 'Table a {}', $3)`, other, workspaceID, ownerID); err != nil {
 		t.Fatalf("seed dbml: %v", err)
 	}
+	detail := uuid.New()
+	if _, err := db.ExecContext(ctx, `INSERT INTO documents (id, workspace_id, title, type, content, content_json, author_id) VALUES ($1, $2, 'Order internals', 'architecture', '', '{"version":1,"nodes":[],"connections":[]}'::jsonb, $3)`, detail, workspaceID, ownerID); err != nil {
+		t.Fatalf("seed architecture: %v", err)
+	}
 	_, foreign, foreignOwner, _, _, _ := seedRunDocument(t, ctx, db)
 	_ = foreignOwner
-	canvas := fmt.Sprintf(`{"version":1,"nodes":[{"id":"api","kind":"system","name":"Backend Order","links":["%s","%s","%s","%s"]},{"id":"db","kind":"system","name":"DB","links":[]}],"connections":[{"id":"c1","source":"api","target":"db","protocol":"db-connection","links":["%s"]}]}`,
-		spec, other, foreign, archID, other)
+	canvas := fmt.Sprintf(`{"version":1,"nodes":[{"id":"api","kind":"system","name":"Backend Order","links":["%s","%s","%s","%s","%s"]},{"id":"db","kind":"system","name":"DB","links":[]}],"connections":[{"id":"c1","source":"api","target":"db","protocol":"db-connection","links":["%s"]}]}`,
+		spec, other, detail, foreign, archID, other)
 	store := NewCollabStateStore(database.NewSQLDB(db))
 	if err := store.StoreState(ctx, workspaceID, archID, []byte{1}, json.RawMessage(canvas), "summary", nil); err != nil {
 		t.Fatalf("StoreState(): %v", err)
@@ -53,10 +58,11 @@ func TestStoringACanvasRecordsWhichDocumentsItsElementsLinkTo(t *testing.T) {
 	want := map[string]bool{
 		fmt.Sprintf("api/system/Backend Order/%s", spec):          true,
 		fmt.Sprintf("api/system/Backend Order/%s", other):         true,
+		fmt.Sprintf("api/system/Backend Order/%s", detail):        true,
 		fmt.Sprintf("c1/connection/Backend Order → DB/%s", other): true,
 	}
 	if len(rows) != len(want) {
-		t.Fatalf("links = %v, want %v (no foreign document, no Architecture document)", rows, want)
+		t.Fatalf("links = %v, want %v (no foreign document, no link to the canvas itself)", rows, want)
 	}
 	for key := range want {
 		if !rows[key] {

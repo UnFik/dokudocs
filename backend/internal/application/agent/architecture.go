@@ -185,7 +185,7 @@ func (s *ContentService) EditArchitecture(ctx context.Context, actor Actor, work
 	if err != nil {
 		return EditResult{}, err
 	}
-	found, err := s.checkArchitectureOperations(ctx, actor, workspaceID, parseCanvas(live.Text), ops)
+	found, err := s.checkArchitectureOperations(ctx, actor, workspaceID, documentID, parseCanvas(live.Text), ops)
 	if err != nil {
 		return EditResult{}, err
 	}
@@ -255,13 +255,13 @@ func uncatalogedNext(bare []Uncataloged) string {
 var errStale = &ToolError{Message: "the version is not the document's current one: it changed since you read it, or it is not the exact version read_document returned; read it again and retry with that version"}
 
 // checkArchitectureOperations refuses what only this side can judge: a slug the catalog
-// does not have, and a linked document the User cannot read. The collaboration service
+// does not have, a linked document the User cannot read, and a link to the canvas itself. The collaboration service
 // judges the shape of the canvas itself.
 //
 // A catalog slug the catalog does not have and has nothing close to is not refused: the
 // node is drawn without a catalog entry and reported back, so the Agent can offer the User
 // to request the entry. A slug close to a real one is still refused, as a likely typo.
-func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor Actor, workspaceID uuid.UUID, c canvas, ops []operation) (checked, error) {
+func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor Actor, workspaceID, documentID uuid.UUID, c canvas, ops []operation) (checked, error) {
 	var entries map[string]catalog.Entry
 	var slugs []catalog.Entry
 	if s.catalog != nil {
@@ -351,7 +351,7 @@ func (s *ContentService) checkArchitectureOperations(ctx context.Context, actor 
 			}
 		case "link_document":
 			id := op.text("document_id")
-			if err := s.checkLink(ctx, actor, workspaceID, id); err != nil {
+			if err := s.checkLink(ctx, actor, workspaceID, documentID, id); err != nil {
 				var refusal *ToolError
 				if errors.As(err, &refusal) {
 					return checked{}, fail(i, "%s", refusal.Message)
@@ -491,10 +491,13 @@ func unknownSlug(entries map[string]catalog.Entry, all []catalog.Entry, kind, sl
 	return len(nearSlugs(slug, all, kind)) == 0
 }
 
-func (s *ContentService) checkLink(ctx context.Context, actor Actor, workspaceID uuid.UUID, raw string) error {
+func (s *ContentService) checkLink(ctx context.Context, actor Actor, workspaceID, documentID uuid.UUID, raw string) error {
 	id, err := uuid.Parse(strings.TrimSpace(raw))
 	if err != nil {
 		return &ToolError{Message: fmt.Sprintf("you cannot link %q; it is not a document id", raw)}
+	}
+	if id == documentID {
+		return &ToolError{Message: "you cannot link this canvas to itself; link another document"}
 	}
 	denied := &ToolError{Message: fmt.Sprintf("you cannot link %s; it does not exist in this workspace or you cannot read it", id)}
 	head, err := s.heads.ReadRoomHead(ctx, workspaceID, id, []uuid.UUID{actor.UserID})
@@ -620,7 +623,7 @@ func (s *ContentService) ArchitectureSummary(ctx context.Context, actor Actor, w
 		return "", err
 	}
 	// A change the server would refuse is refused before the User is asked to approve it.
-	found, err := s.checkArchitectureOperations(ctx, actor, workspaceID, parseCanvas(live.Text), ops)
+	found, err := s.checkArchitectureOperations(ctx, actor, workspaceID, documentID, parseCanvas(live.Text), ops)
 	if err != nil {
 		return "", err
 	}

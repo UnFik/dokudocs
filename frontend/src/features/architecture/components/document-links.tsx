@@ -23,10 +23,6 @@ import {
 import { DocTypeBadge } from '@/features/docs/components/doc-type-badge'
 import { DocumentCard } from '@/features/rag/markdown/document-references'
 
-const LINKABLE_TYPES = DOCUMENT_TYPES.filter(
-  ({ value }) => value !== 'architecture'
-)
-
 export function useLinkableDocuments(workspaceID: string) {
   return useQuery({
     queryKey: ['architecture-linkable-documents', workspaceID],
@@ -37,18 +33,21 @@ export function useLinkableDocuments(workspaceID: string) {
 }
 
 /**
- * The documents a System or Connection points at. They are references: removing
- * one here, or the element, never removes the document.
+ * The documents a System or Connection points at, another Architecture among
+ * them. They are references: removing one here, or the element, never removes
+ * the document. The canvas itself is never offered.
  */
 export function DocumentLinks({
   workspaceID,
   projectID,
+  architectureID,
   links,
   canEdit,
   onChange,
 }: {
   workspaceID: string
   projectID: string | null
+  architectureID: string
   links: string[]
   canEdit: boolean
   onChange: (links: string[]) => void
@@ -75,6 +74,7 @@ export function DocumentLinks({
           <LinkExisting
             documents={documents.data ?? []}
             links={links}
+            architectureID={architectureID}
             onPick={(id) => onChange([...links, id])}
           />
           <CreateAndLink
@@ -174,16 +174,19 @@ export function DocumentLinks({
 function LinkExisting({
   documents,
   links,
+  architectureID,
   onPick,
 }: {
   documents: DocumentItem[]
   links: string[]
+  architectureID: string
   onPick: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const choices = documents.filter(
     (d) =>
-      LINKABLE_TYPES.some(({ value }) => value === d.type) &&
+      DOCUMENT_TYPES.some(({ value }) => value === d.type) &&
+      d.id !== architectureID &&
       !links.includes(d.id)
   )
   return (
@@ -198,7 +201,7 @@ function LinkExisting({
           <CommandInput placeholder='Search documents' />
           <CommandList>
             <CommandEmpty>
-              No Markdown, DBML or Mermaid document matches.
+              No Markdown, DBML, Mermaid or Architecture document matches.
             </CommandEmpty>
             <CommandGroup>
               {choices.map((d) => (
@@ -233,8 +236,7 @@ function CreateAndLink({
 }) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
-  const [type, setType] =
-    useState<Exclude<CreatableDocType, 'architecture'>>('markdown')
+  const [type, setType] = useState<CreatableDocType>('markdown')
   const queryClient = useQueryClient()
   const create = useMutation({
     mutationFn: () =>
@@ -248,13 +250,21 @@ function CreateAndLink({
               projectId: projectID,
               isDraft: !projectID,
             }
-          : {
-              title: title.trim(),
-              type,
-              content: '',
-              projectId: projectID,
-              isDraft: !projectID,
-            },
+          : type === 'architecture'
+            ? {
+                // The API starts an empty canvas.
+                title: title.trim(),
+                type: 'architecture',
+                projectId: projectID,
+                isDraft: !projectID,
+              }
+            : {
+                title: title.trim(),
+                type,
+                content: '',
+                projectId: projectID,
+                isDraft: !projectID,
+              },
         crypto.randomUUID()
       ),
     onSuccess: async (document) => {
@@ -307,7 +317,7 @@ function CreateAndLink({
             onChange={(e) => setType(e.target.value as typeof type)}
             className='h-8 rounded-[4px] border border-input bg-card px-2 text-[12.5px] focus-visible:outline-2 focus-visible:outline-signal'
           >
-            {LINKABLE_TYPES.map(({ value, label }) => (
+            {DOCUMENT_TYPES.map(({ value, label }) => (
               <option key={value} value={value}>
                 {label}
               </option>
