@@ -17,6 +17,7 @@
     "test:watch": "vitest --browser.headless",
     "test:ui": "vitest --ui --browser.headless",
     "test:browser": "vitest",
+    "test:perf": "NODE_ENV=production VITE_CANVAS_PERF=1 vitest run --mode production --browser.headless --dangerouslyIgnoreUnhandledErrors --reporter=default --reporter=json --outputFile.json=perf-results.json src/features/architecture/components/architecture-canvas.perf.test.tsx",
     "test:coverage": "vitest run --coverage --browser.headless",
     "test:browser:install": "playwright install chromium --with-deps",
     "test:e2e": "cd .. && make test-e2e-ui",
