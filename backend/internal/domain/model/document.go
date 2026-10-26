@@ -61,6 +61,20 @@ type Document struct {
 	DeletedByUser        *UserAuthor `json:"deletedByUser,omitempty"`
 }
 
+// DocumentPreview is what a hover card shows of a page: enough to recognise it
+// without loading its body.
+type DocumentPreview struct {
+	ID    uuid.UUID `json:"id"`
+	Title string    `json:"title"`
+	Type  string    `json:"type"`
+	// Excerpt is the start of a Markdown page as plain text; empty for other types.
+	Excerpt       string     `json:"excerpt,omitempty"`
+	Thumbnail     string     `json:"thumbnail,omitempty"`
+	ThumbnailDark string     `json:"thumbnailDark,omitempty"`
+	Author        UserAuthor `json:"author"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+}
+
 type DocumentRevision struct {
 	ID            uuid.UUID       `json:"id"`
 	DocumentID    uuid.UUID       `json:"documentId"`

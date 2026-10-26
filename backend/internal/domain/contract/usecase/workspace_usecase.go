@@ -16,6 +16,7 @@ type WorkspaceUseCase interface {
 	UpdateWorkspace(ctx context.Context, input dto.UpdateWorkspaceInput) (data model.Workspace, err error)
 	DeleteWorkspace(ctx context.Context, id uuid.UUID, userID uuid.UUID) (err error)
 	GetMembers(ctx context.Context, workspaceID uuid.UUID, userID uuid.UUID) (data []model.WorkspaceMember, err error)
+	GetMemberProfile(ctx context.Context, workspaceID, actorID, userID uuid.UUID) (data model.MemberProfile, err error)
 	InviteMember(ctx context.Context, input dto.InviteMemberInput) (data model.WorkspaceInvite, err error)
 	ListInvites(ctx context.Context, workspaceID, actorID uuid.UUID) (data []model.WorkspaceInvite, err error)
 	ResendInvite(ctx context.Context, workspaceID, inviteID, actorID uuid.UUID) (data model.WorkspaceInvite, err error)

@@ -37,6 +37,9 @@ func (m *mockWorkspaceService) DeleteWorkspace(ctx context.Context, id uuid.UUID
 func (m *mockWorkspaceService) GetMembers(ctx context.Context, workspaceID, userID uuid.UUID) ([]model.WorkspaceMember, error) {
 	return nil, nil
 }
+func (m *mockWorkspaceService) GetMemberProfile(ctx context.Context, workspaceID, actorID, userID uuid.UUID) (model.MemberProfile, error) {
+	return model.MemberProfile{}, nil
+}
 func (m *mockWorkspaceService) InviteMember(ctx context.Context, input workspacedto.InviteMemberInput) (model.WorkspaceInvite, error) {
 	return model.WorkspaceInvite{}, nil
 }
