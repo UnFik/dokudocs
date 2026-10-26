@@ -1,4 +1,4 @@
-import { DocType } from '@/types/dokudocs'
+import { type DocType } from '@/types/dokudocs'
 import mermaid from 'mermaid'
 import { getAppMermaidConfig } from './mermaid-theme'
 
@@ -840,7 +840,7 @@ function renderFlowchartSvg(content: string, isDark = false): string {
     const px = pos.x - pos.width / 2
     const py = pos.y - pos.height / 2
 
-    let shapeSvg = ''
+    let shapeSvg: string
     if (n.shape === 'capsule') {
       shapeSvg = `<rect width="${pos.width}" height="${pos.height}" rx="21" fill="${nodeBg}" stroke="${strokeColor}" stroke-width="1.8" stroke-opacity="0.85" />`
     } else if (n.shape === 'diamond') {
@@ -1129,7 +1129,9 @@ export function svgToRasterThumbnail(
             resolve(webpData)
             return
           }
-        } catch {}
+        } catch {
+          // Errors are intentionally ignored here.
+        }
 
         const pngData = canvas.toDataURL('image/png')
         resolve(pngData)

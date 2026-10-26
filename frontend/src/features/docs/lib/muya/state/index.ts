@@ -1,8 +1,7 @@
 import type { Doc, JSONOp, JSONOpList, Path } from 'ot-json1'
 import * as json1 from 'ot-json1'
 import type { Muya } from '../muya'
-import type { TDiff } from '../utils'
-import { deepClone } from '../utils'
+import { deepClone, type TDiff } from '../utils'
 import logger from '../utils/logger'
 import { getTOC } from './getTOC'
 import { MarkdownToState } from './markdownToState'
@@ -16,7 +15,6 @@ const debug = logger('jsonState:')
 // happen at every callsite. Concentrate them here so production code never
 // writes `as unknown as Doc` itself.
 export function asDoc(state: TState[] | TState): Doc {
-  // eslint-disable-next-line no-restricted-syntax
   return state as unknown as Doc
 }
 

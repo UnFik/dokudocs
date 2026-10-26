@@ -9,8 +9,7 @@ import { tokenizer } from '../inlineRenderer/lexer'
 import type { Muya } from '../muya'
 import HtmlToMarkdown from '../state/htmlToMarkdown'
 import { MarkdownToState } from '../state/markdownToState'
-import type { TState } from '../state/types'
-import { isAnyListState, isParagraphState } from '../state/types'
+import { isAnyListState, isParagraphState, type TState } from '../state/types'
 import type { Nullable } from '../types'
 import {
   getClipboardImageFile,

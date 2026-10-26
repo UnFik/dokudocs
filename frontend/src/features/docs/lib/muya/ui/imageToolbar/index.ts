@@ -5,8 +5,7 @@ import type { Muya } from '../../index'
 import type { ImageToken } from '../../inlineRenderer/types'
 import { h, patch } from '../../utils/snabbdom'
 import BaseFloat from '../baseFloat'
-import type { Icon } from './config'
-import icons from './config'
+import icons, { type Icon } from './config'
 import './index.css'
 
 const defaultOptions = {

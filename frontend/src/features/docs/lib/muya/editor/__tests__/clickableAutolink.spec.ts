@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Muya as MuyaType } from '../../muya'
-import { Muya } from '../../muya'
+import { Muya, type Muya as MuyaType } from '../../muya'
 
 // #2165 — "make it easy to follow a link". CommonMark autolinks
 // (`<https://x.com>`) and GFM bare-URL autolinks (`https://x.com`) render as

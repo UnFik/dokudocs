@@ -52,9 +52,9 @@ function extractWord(
 
   // Matches all words starting at a good position.
   WORD_DEFINITION.lastIndex = text.lastIndexOf(' ', offset - 1) + 1
-  let match: RegExpExecArray | null = null
+  let match: RegExpExecArray | null
   let left = -1
-  // eslint-disable-next-line no-cond-assign
+
   while ((match = WORD_DEFINITION.exec(text))) {
     if (match && match.index <= offset) {
       if (WORD_DEFINITION.lastIndex > offset) left = match.index
@@ -466,7 +466,7 @@ class Content extends TreeNode {
           event.preventDefault()
           this.muya.editor.history.markInputBoundary('deleteWordForward', null)
           const sub = text.substring(start.offset)
-          let deleteLen = 1
+          let deleteLen: number
           const leadingSpaces = sub.match(/^\s+/)
           if (leadingSpaces) {
             const rest = sub.substring(leadingSpaces[0].length)

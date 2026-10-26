@@ -31,7 +31,7 @@ class TreeNode implements ILinkedNode {
     // `this.constructor` is `Function` in lib.d.ts; subclasses' generated
     // constructors carry the static `blockName` etc., but TS can't see
     // through `Function` to the subclass shape.
-    // eslint-disable-next-line no-restricted-syntax
+
     return this.constructor as unknown as IConstructor<TreeNode>
   }
 
@@ -59,7 +59,7 @@ class TreeNode implements ILinkedNode {
     // `this.isContent()` returns false only when `this` is a Parent
     // subclass — but the base-class type signature is `TreeNode`. The
     // `this as Parent` widening can't be expressed without a cast.
-    // eslint-disable-next-line no-restricted-syntax
+
     let node = this.isContent() ? this.parent : (this as unknown as Parent)
 
     while (node) {
@@ -111,7 +111,7 @@ class TreeNode implements ILinkedNode {
     // Concrete subclasses are always Parent | Content, but the static
     // signature here is TreeNode (Format extends Content via a separate
     // file). Mark the DOM property with the runtime subtype.
-    // eslint-disable-next-line no-restricted-syntax
+
     domNode[BLOCK_DOM_PROPERTY] = this as unknown as Parent | Content
 
     this.domNode = domNode
@@ -244,7 +244,7 @@ class TreeNode implements ILinkedNode {
     // `parent.insertBefore` takes a Parent (the tree's internal linked
     // list operates on Parent), but TreeNode.insertInto is also called
     // from Content subclasses which extend TreeNode, not Parent.
-    // eslint-disable-next-line no-restricted-syntax
+
     parent.insertBefore(this as unknown as Parent, refBlock)
   }
 

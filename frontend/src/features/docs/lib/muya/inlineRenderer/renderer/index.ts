@@ -1,4 +1,3 @@
-/* eslint-disable ts/no-unsafe-declaration-merging */
 import type { VNode } from 'snabbdom';
 import type Format from '../../block/base/format';
 import type { Muya } from '../../index';
@@ -83,10 +82,11 @@ export type TInlineRenderFn = (opts: ISyntaxRenderOptions) => VNode[];
 
 // Declaration-merged with the class below to expose mixin method signatures;
 // must share the class name, so the `I` prefix convention does not apply here.
-// eslint-disable-next-line ts/naming-convention
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type, @typescript-eslint/no-unsafe-declaration-merging -- class and interface merge is how the mixin methods are typed
 interface Renderer extends InlineSyntaxRender {}
 
 @methodMixins(inlineSyntaxRenderer)
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- pairs with the interface above
 class Renderer {
     public loadMathMap: Map<
         string,
@@ -150,7 +150,7 @@ class Renderer {
     // the need for an `(this as any)[name]` escape hatch when the name comes
     // from a runtime string.
     dispatch(name: string, opts: ISyntaxRenderOptions): VNode[] {
-        // eslint-disable-next-line no-restricted-syntax
+         
         const map = this as unknown as Record<string, TInlineRenderFn>;
         return map[name](opts);
     }

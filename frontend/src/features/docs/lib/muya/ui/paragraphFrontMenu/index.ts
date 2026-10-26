@@ -6,13 +6,14 @@ import type AtxHeading from '../../block/commonMark/atxHeading'
 import { ScrollPage } from '../../block/scrollPage'
 import emptyStates from '../../config/emptyStates'
 import type { Muya } from '../../index'
-import type {
-  IBulletListState,
-  IOrderListState,
-  ITaskListState,
-  TState,
+import {
+  type IBulletListState,
+  type IOrderListState,
+  isAnyListState,
+  isAtxHeadingState,
+  type ITaskListState,
+  type TState,
 } from '../../state/types'
-import { isAnyListState, isAtxHeadingState } from '../../state/types'
 import { deepClone, isHTMLElement } from '../../utils'
 import { h, patch } from '../../utils/snabbdom'
 import BaseFloat from '../baseFloat'
@@ -229,7 +230,7 @@ export class ParagraphFrontMenu extends BaseFloat {
       }
 
       case 'delete': {
-        let cursorBlock = null
+        let cursorBlock
         if (block.prev) {
           cursorBlock = block.prev.lastContentInDescendant()
         } else if (block.next) {

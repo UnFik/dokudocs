@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DocumentItem } from '@/types/dokudocs'
+import { type DocumentItem } from '@/types/dokudocs'
 import { Plus, Tag, X } from 'lucide-react'
 import { getCategoryPalette } from '@/lib/category-palette'
 import { getDocCategories } from '@/lib/doc-category-utils'
@@ -40,14 +40,19 @@ export function SetDocCategoryDialog({
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [customInput, setCustomInput] = useState('')
 
-  useEffect(() => {
+  // Reset the form each time the dialog opens. Doing it during render avoids a frame with stale values.
+  const [syncedWith, setSyncedWith] = useState({ open, document })
+  if (syncedWith.open !== open || syncedWith.document !== document) {
+    setSyncedWith({ open, document })
     if (open) {
       setSelectedCategories(getDocCategories(document))
       setCustomInput('')
-    } else {
-      window.document.body.style.pointerEvents = ''
     }
-  }, [open, document])
+  }
+
+  useEffect(() => {
+    if (!open) window.document.body.style.pointerEvents = ''
+  }, [open])
 
   const allVisibleCategories = Array.from(
     new Set([...availableCategories, ...selectedCategories])

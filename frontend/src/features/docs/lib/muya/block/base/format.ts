@@ -16,20 +16,20 @@ import type {
 import Selection, { getCursorReference } from '../../selection'
 import { getTextContent } from '../../selection/dom'
 import type { IContentCursor, IRenderCursor } from '../../selection/types'
-import type {
-  IBulletListState,
-  IListItemState,
-  IOrderListState,
-  IParagraphState,
+import {
+  type IBulletListState,
+  type IListItemState,
+  type IOrderListState,
+  type IParagraphState,
+  isListItemState,
 } from '../../state/types'
-import { isListItemState } from '../../state/types'
 import type { Nullable } from '../../types'
 import { conflict, isHTMLElement, isMouseEvent } from '../../utils'
-import type { IImageInfo } from '../../utils/image'
 import {
   correctImageSrc,
   encodeImageSrc,
   getImageInfo,
+  type IImageInfo,
 } from '../../utils/image'
 import logger from '../../utils/logger'
 import type AtxHeading from '../commonMark/atxHeading'
@@ -395,11 +395,9 @@ class Format extends Content {
     // inline/left/center/right
     const { start, end } = token.range
     const oldText = this.text
-    let imageText = ''
+    let imageText = '<img '
     const attrs = Object.assign({}, token.attrs)
     attrs[attrName] = attrValue
-
-    imageText = '<img '
 
     for (const attr of Object.keys(attrs)) {
       let value = attrs[attr]
@@ -605,7 +603,7 @@ class Format extends Content {
       'inline_code'
     )
 
-    let { needRender, text } = this.autoPair(
+    const autoPaired = this.autoPair(
       event,
       textContent,
       start,
@@ -614,6 +612,8 @@ class Format extends Content {
       isInInlineCode,
       'format'
     )
+    const { text } = autoPaired
+    let { needRender } = autoPaired
 
     if (this._checkNotSameToken(this.text, text)) needRender = true
 
@@ -1447,7 +1447,7 @@ class Format extends Content {
         event.preventDefault()
         this.muya.editor.history.markInputBoundary('deleteWordForward', null)
         const sub = text.substring(start.offset)
-        let deleteLen = 1
+        let deleteLen: number
         const leadingSpaces = sub.match(/^\s+/)
         if (leadingSpaces) {
           const rest = sub.substring(leadingSpaces[0].length)

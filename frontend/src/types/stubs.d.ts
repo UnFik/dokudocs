@@ -1,31 +1,40 @@
 declare module 'vega-lite' {
-  const content: any;
-  export default content;
-  export const version: string;
-  export const compile: any;
-  export const normalize: any;
-  export type Config = any;
-  export type TopLevelSpec = any;
+  const content: unknown
+  export default content
+  export const version: string
+  export const compile: unknown
+  export const normalize: unknown
+  export type Config = unknown
+  export type TopLevelSpec = unknown
 }
 
 declare module 'vega-tooltip' {
-  const content: any;
-  export default content;
-  export const Handler: any;
+  const content: unknown
+  export default content
+  export const Handler: unknown
 }
 
 declare module 'rxjs' {
-  export const fromEvent: any;
-  export const merge: any;
-  export type Observable<T = any> = any;
-  export type Subscription = any;
-  export type Subject<T = any> = any;
-  export type BehaviorSubject<T = any> = any;
+  export interface Subscription {
+    unsubscribe(): void
+  }
+  export interface Observable<T> {
+    subscribe(next: (value: T) => void): Subscription
+  }
+  export function fromEvent<K extends keyof HTMLElementEventMap>(
+    target: EventTarget,
+    eventName: K
+  ): Observable<HTMLElementEventMap[K]>
+  export function fromEvent(
+    target: EventTarget,
+    eventName: string
+  ): Observable<Event>
+  export function merge(...sources: Observable<Event>[]): Observable<Event>
 }
 
 declare module 'seroval' {
-  const content: any;
-  export default content;
-  export const Feature: any;
-  export const createReference: any;
+  const content: unknown
+  export default content
+  export const Feature: unknown
+  export const createReference: unknown
 }

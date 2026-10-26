@@ -91,7 +91,7 @@ class TableCellContent extends Format {
 
     const nextRow = this._findNextRow()
     const { _row: row } = this
-    let cursorBlock = null
+    let cursorBlock
     if (nextRow) {
       cursorBlock = nextRow.firstContentInDescendant()
     } else {
@@ -166,7 +166,7 @@ class TableCellContent extends Format {
 
         cursorBlock?.setCursor(0, 0, true)
       } else {
-        let cursorBlock = null
+        let cursorBlock
         if (tableNextContent) {
           cursorBlock = tableNextContent
         } else {

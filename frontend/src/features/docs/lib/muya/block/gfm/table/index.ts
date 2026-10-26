@@ -141,7 +141,6 @@ class Table extends Parent {
         : (this.firstChild as TableInner).find(offset)
     const state = {
       name: 'table.row',
-      // eslint-disable-next-line unicorn/no-new-array
       children: [...new Array(columnCount)].map((_, i) => {
         return {
           name: 'table.cell',

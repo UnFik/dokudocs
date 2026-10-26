@@ -1,8 +1,7 @@
 import type { Diff } from 'fast-diff'
 import type Content from '../block/base/content'
 import { EVENT_KEYS } from '../config'
-import type { Config } from './dompurify'
-import runSanitize from './dompurify'
+import runSanitize, { type Config } from './dompurify'
 
 interface IUnion {
   start: number
@@ -121,7 +120,7 @@ export function throttle<TArgs extends unknown[], TReturn>(
     // call site always supplies real args; the empty array only flows in
     // when there's nothing pending. TS rejects the single-cast form for an
     // unconstrained `TArgs extends unknown[]`; double-cast at the boundary.
-    // eslint-disable-next-line no-restricted-syntax
+
     result = func.apply(context, pendingArgs ?? ([] as unknown as TArgs))
     if (!timeout) {
       context = null
@@ -133,8 +132,7 @@ export function throttle<TArgs extends unknown[], TReturn>(
     const now = Date.now()
     const remaining = wait - (now - previous)
 
-    // eslint-disable-next-line ts/no-this-alias
-    context = this
+    context = this // eslint-disable-line @typescript-eslint/no-this-alias -- the trailing call runs with the last caller's `this`
     pendingArgs = callArgs
     if (remaining <= 0 || remaining > wait) {
       if (timeout) {

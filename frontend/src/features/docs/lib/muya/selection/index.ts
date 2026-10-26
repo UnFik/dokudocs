@@ -8,8 +8,12 @@ import {
   getCursorYOffset,
   getSelectionStart,
 } from './cursorCoords'
-import type { IAnchorFocusInfo, IImageSelectionData, ISelection } from './types'
-import { SelectionType } from './types'
+import {
+  type IAnchorFocusInfo,
+  type IImageSelectionData,
+  type ISelection,
+  SelectionType,
+} from './types'
 
 class Selection {
   static getCursorYOffset(paragraph: HTMLElement) {

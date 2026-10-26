@@ -26,8 +26,7 @@ function boot(md: string): Muya {
 // happy-dom collapses non-collapsed ranges to {0,0}, so stub getCursor on each
 // formattable leaf to report its full-text range when format() reads it (same
 // workaround formatToggle.spec uses).
-// eslint-disable-next-line ts/no-explicit-any
-function stubFullRange(leaf: any) {
+function stubFullRange(leaf: { text: string; getCursor: unknown }) {
   leaf.getCursor = () => ({
     start: { offset: 0 },
     end: { offset: leaf.text.length },
@@ -131,8 +130,10 @@ describe('cross-block format', () => {
 
 // happy-dom does not track range offsets, so getCursor must report whatever the
 // cached selection currently holds (the per-leaf range _formatLeafInRange sets).
-// eslint-disable-next-line ts/no-explicit-any
-function stubDynamicCursor(muya: Muya, leaf: any) {
+function stubDynamicCursor(
+  muya: Muya,
+  leaf: { text: string; getCursor: unknown }
+) {
   leaf.getCursor = () => {
     const s = muya.editor.selection
     const a = s.anchor?.offset ?? 0
@@ -175,8 +176,7 @@ describe('inline format — selection range & heading markers', () => {
 
   it('skips the leading "# " marker when bolding a heading (same block)', async () => {
     const muya = boot('# Title\n')
-    // eslint-disable-next-line ts/no-explicit-any
-    const c: any = muya.editor.scrollPage!.firstContentInDescendant()! // "# Title"
+    const c = muya.editor.scrollPage!.firstContentInDescendant()! // "# Title"
     muya.editor.activeContentBlock = c
     // muya.format() reads selection.getSelection(); happy-dom collapses the
     // DOM selection, so stub it to the whole-heading range the user dragged.
@@ -190,8 +190,7 @@ describe('inline format — selection range & heading markers', () => {
         isCollapsed: false,
         direction: 'forward',
         type: 'Range',
-        // eslint-disable-next-line ts/no-explicit-any
-      }) as any
+      }) as never
     stubDynamicCursor(muya, c) // Format.format reads getCursor after the clamp
     muya.format('strong')
     await vi.waitFor(() => expect(c.text).toBe('# **Title**')) // marker untouched

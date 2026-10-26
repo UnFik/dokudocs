@@ -48,7 +48,7 @@ export default function inlineMath(
 
   const displayMode = false
   const key = `${math}_${type}`
-  let mathVnode = null
+  let mathVnode
   let previewSelector = `span.${CLASS_NAMES.MU_MATH_RENDER}`
   // Inline math errors stay compact to keep the surrounding text baseline
   // (#4100, inline-math-align); surface the parse reason via the title.

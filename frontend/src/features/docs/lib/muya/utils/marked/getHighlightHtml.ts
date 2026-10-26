@@ -1,6 +1,7 @@
 import { Marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import Prism from 'prismjs'
+import logger from '../logger'
 import cjkEmStrongExtension from './extensions/cjkEmStrong'
 import emojiExtension from './extensions/emoji'
 import footnoteExtension from './extensions/footnote'
@@ -10,6 +11,8 @@ import fm, { frontMatterRender } from './frontMatter'
 import { DEFAULT_OPTIONS } from './options'
 import type { ILexOption } from './types'
 import walkTokens from './walkTokens'
+
+const debug = logger('getHighlightHtml:')
 
 const DIAGRAM_TYPE = [
   'mermaid',
@@ -27,7 +30,7 @@ function highlight(code: string, lang: string) {
 
   const grammar = Prism.languages[lang]
   if (!grammar) {
-    console.warn(`Unable to find grammar for "${lang}".`)
+    debug.warn(`Unable to find grammar for "${lang}".`)
     return code
   }
   return Prism.highlight(code, grammar, lang)

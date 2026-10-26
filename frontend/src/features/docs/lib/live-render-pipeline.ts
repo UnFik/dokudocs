@@ -55,7 +55,7 @@ export class AsyncRenderPipeline<TResult> {
   public schedule(
     renderFn: () => Promise<TResult>,
     onSuccess: (result: TResult, durationMs: number) => void,
-    onError: (error: any) => void,
+    onError: (error: unknown) => void,
     onPending?: () => void
   ): () => void {
     this.cancel()

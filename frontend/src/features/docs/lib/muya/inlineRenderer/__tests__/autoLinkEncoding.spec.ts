@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Muya as MuyaType } from '../../muya'
-import { Muya } from '../../muya'
+import { Muya, type Muya as MuyaType } from '../../muya'
 
 // #3548 — a CommonMark autolink's href is the literal source between `< >`,
 // which the author already percent-encoded (`%20` etc). The renderer used

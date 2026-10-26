@@ -1,4 +1,4 @@
-import { SortField, SortOrder } from '@/types/dokudocs'
+import { type SortField, type SortOrder } from '@/types/dokudocs'
 import { ArrowUpDown, FileQuestion, LayoutGrid, List, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {

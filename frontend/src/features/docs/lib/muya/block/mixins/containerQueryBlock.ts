@@ -1,11 +1,12 @@
-/* eslint-disable ts/no-unsafe-declaration-merging */
 import type Content from '../base/content'
 import type Parent from '../base/parent'
 import type { TBlockPath } from '../types'
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- class and interface merge is how the mixin methods are typed
 interface IContainerQueryBlock {
   find: (p: number) => Parent | Content
 }
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging -- class and interface merge is how the mixin methods are typed
 class IContainerQueryBlock {
   queryBlock(path: TBlockPath) {
     if (

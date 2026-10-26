@@ -1,4 +1,4 @@
-import { DocumentItem } from '@/types/dokudocs'
+import { type DocumentItem } from '@/types/dokudocs'
 
 export function getDocCategories(doc?: Partial<DocumentItem> | null): string[] {
   if (!doc) return []

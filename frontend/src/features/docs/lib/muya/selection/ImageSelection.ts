@@ -6,8 +6,7 @@ import { isHTMLElement, isKeyboardEvent } from '../utils'
 import { getImageInfo, getImageSrc } from '../utils/image'
 import { findContentDOM } from './dom'
 import type Selection from './index'
-import type { IImageSelectionData } from './types'
-import { SelectionType } from './types'
+import { type IImageSelectionData, SelectionType } from './types'
 
 class ImageSelection {
   selected: IImageSelectionData | null = null

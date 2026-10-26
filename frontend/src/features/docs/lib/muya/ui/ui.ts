@@ -21,11 +21,13 @@ export class Ui {
   private _listen() {
     // cache shown float box
     this.muya.eventCenter.subscribe('muya-float', (tool, status) => {
-      status ? this.shownFloat.add(tool) : this.shownFloat.delete(tool)
+      if (status) this.shownFloat.add(tool)
+      else this.shownFloat.delete(tool)
     })
     // cache shown btn
     this.muya.eventCenter.subscribe('muya-float-button', (tool, status) => {
-      status ? this._shownButton.add(tool) : this._shownButton.delete(tool)
+      if (status) this._shownButton.add(tool)
+      else this._shownButton.delete(tool)
     })
   }
 

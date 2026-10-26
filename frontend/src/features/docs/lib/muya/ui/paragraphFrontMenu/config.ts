@@ -2,8 +2,10 @@ import type Parent from '../../block/base/parent'
 import { canTurnInto } from '../../block/blockTransforms'
 import { isOsx } from '../../config'
 import { lucideIcons } from '../../utils/icons'
-import type { IQuickInsertMenuItem } from '../paragraphQuickInsertMenu/config'
-import { MENU_CONFIG } from '../paragraphQuickInsertMenu/config'
+import {
+  type IQuickInsertMenuItem,
+  MENU_CONFIG,
+} from '../paragraphQuickInsertMenu/config'
 
 const ALL_MENU_CONFIG = MENU_CONFIG.reduce(
   (acc, section) => [...acc, ...section.children],

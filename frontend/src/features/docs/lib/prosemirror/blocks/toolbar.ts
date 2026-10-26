@@ -1,5 +1,4 @@
-import { Plugin, PluginKey } from 'prosemirror-state'
-import type { EditorState } from 'prosemirror-state'
+import { type EditorState, Plugin, PluginKey } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import type { Command } from './insertBlock'
 import { isSafeImageSource, insertImage, updateImage } from './mediaCommands'

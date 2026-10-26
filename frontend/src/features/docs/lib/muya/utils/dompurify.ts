@@ -1,5 +1,4 @@
-import type { Config } from 'dompurify'
-import DOMPurify from 'dompurify'
+import DOMPurify, { type Config } from 'dompurify'
 
 const { sanitize, isValidAttribute } = DOMPurify()
 

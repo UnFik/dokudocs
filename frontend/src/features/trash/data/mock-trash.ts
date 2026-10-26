@@ -1,4 +1,4 @@
-import { TrashItem } from '@/types/dokudocs'
+import { type TrashItem } from '@/types/dokudocs'
 
 export const mockTrash: TrashItem[] = [
   {

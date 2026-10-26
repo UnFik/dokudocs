@@ -1,5 +1,11 @@
-import type { Placement, ReferenceElement } from '@floating-ui/dom'
-import { autoUpdate, computePosition, flip, offset } from '@floating-ui/dom'
+import {
+  autoUpdate,
+  computePosition,
+  flip,
+  offset,
+  type Placement,
+  type ReferenceElement,
+} from '@floating-ui/dom'
 import { EVENT_KEYS } from '../../config'
 import type { Muya } from '../../index'
 import { isHTMLElement, isKeyboardEvent, noop } from '../../utils'

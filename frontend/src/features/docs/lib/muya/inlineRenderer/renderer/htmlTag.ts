@@ -170,7 +170,7 @@ export default function htmlTag(
       // ImageToken.attrs is the strict `{ src; title; alt }`. Routing
       // html `<img>` through `image()` is a deliberate runtime contract;
       // express the structural pun in one place.
-      // eslint-disable-next-line no-restricted-syntax
+
       return this.image({
         h,
         cursor,

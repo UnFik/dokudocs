@@ -1,6 +1,5 @@
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state'
-import { Decoration, DecorationSet } from 'prosemirror-view'
-import type { EditorView } from 'prosemirror-view'
+import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view'
 import { moveTopLevelBlock } from './moveBlock'
 
 function topLevelIndexAt(view: EditorView, x: number, y: number) {
@@ -10,7 +9,8 @@ function topLevelIndexAt(view: EditorView, x: number, y: number) {
     found.inside >= 0 ? found.inside : found.pos
   )
   // A block with no text (divider, page break, file, embed) is hit at the edge of the page body itself.
-  if ($pos.depth === 1 && found.inside >= 0 && $pos.nodeAfter) return $pos.index(1)
+  if ($pos.depth === 1 && found.inside >= 0 && $pos.nodeAfter)
+    return $pos.index(1)
   return $pos.depth >= 2 ? $pos.index(1) : null
 }
 

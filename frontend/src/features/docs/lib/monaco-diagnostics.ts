@@ -8,6 +8,20 @@ export enum MarkerSeverity {
   Error = 8,
 }
 
+interface MonacoModel {
+  getValue(): string
+}
+
+interface MonacoLike {
+  editor?: {
+    setModelMarkers?(
+      model: MonacoModel,
+      owner: string,
+      markers: unknown[]
+    ): void
+  }
+}
+
 export interface DiagnosticMarker {
   startLineNumber: number
   startColumn: number
@@ -339,9 +353,16 @@ export async function validateMermaid(
       logLevel: 'fatal',
     })
     await mermaid.parse(trimmed)
-  } catch (err: any) {
+  } catch (err) {
     let line = 1
-    const msgString = String(err?.message || err?.str || err || '')
+    const details = err as
+      | {
+          message?: string
+          str?: string
+          hash?: { line?: number; loc?: { first_line?: number } }
+        }
+      | undefined
+    const msgString = String(details?.message || details?.str || err || '')
 
     const isEnvError =
       msgString.includes('DOMPurify.addHook is not a function') ||
@@ -359,10 +380,10 @@ export async function validateMermaid(
       msgString.match(/:\s*(\d+):/)
     if (lineMatch) {
       line = Math.max(1, parseInt(lineMatch[1], 10))
-    } else if (err?.hash?.loc?.first_line) {
-      line = Math.max(1, err.hash.loc.first_line)
-    } else if (err?.hash?.line) {
-      line = Math.max(1, err.hash.line)
+    } else if (details?.hash?.loc?.first_line) {
+      line = Math.max(1, details.hash.loc.first_line)
+    } else if (details?.hash?.line) {
+      line = Math.max(1, details.hash.line)
     }
 
     let cleanMsg = msgString
@@ -392,9 +413,9 @@ export async function validateMermaid(
 }
 
 export async function runDiagnostics(
-  model: any,
+  model: MonacoModel,
   language: string,
-  monacoInstance?: any
+  monacoInstance?: MonacoLike
 ): Promise<DiagnosticMarker[]> {
   if (!model) return []
   const content = model.getValue()
@@ -417,7 +438,9 @@ export async function runDiagnostics(
 
   const mInstance =
     monacoInstance ||
-    (typeof window !== 'undefined' ? (window as any).monaco : undefined)
+    (typeof window !== 'undefined'
+      ? (window as Window & { monaco?: MonacoLike }).monaco
+      : undefined)
   if (mInstance && mInstance.editor && mInstance.editor.setModelMarkers) {
     mInstance.editor.setModelMarkers(model, language, monacoMarkers)
   }

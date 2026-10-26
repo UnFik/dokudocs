@@ -501,6 +501,8 @@ function CollaborativeMarkdownBody({
       return
     const thread = comments.find((item) => item.id === focusThreadID)
     if (!thread) return
+    // Opening a requested thread is a one-time sync from the focus request into local UI state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFocusedCommentID(focusThreadID)
     setFocusedSuggestionID(null)
     setIsSuggestionsOpen(true)
@@ -645,6 +647,8 @@ function CollaborativeMarkdownBody({
 
   function hideBodyAfterAccessLoss(clearStoredData: boolean) {
     sessionRef.current?.destroy()
+    // The session ref is cleared from an access callback, never during render.
+    // eslint-disable-next-line react-hooks/immutability
     sessionRef.current = null
     mountRef.current?.replaceChildren()
     onMarkdownChange('')

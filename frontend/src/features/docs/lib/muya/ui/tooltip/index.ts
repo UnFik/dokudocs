@@ -1,9 +1,7 @@
-// eslint-disable-next-line ts/ban-ts-comment
-// @ts-nocheck
 import type { Muya } from '../../index'
 import './index.css'
 
-function position(source, ele) {
+function position(source: Element, ele: HTMLElement) {
   const rect = source.getBoundingClientRect()
   const { top, right, height } = rect
 
@@ -17,7 +15,7 @@ class Tooltip {
   private _muya: Muya
   private _cache: WeakMap<HTMLElement, HTMLElement>
 
-  constructor(muya) {
+  constructor(muya: Muya) {
     this._muya = muya
     this._cache = new WeakMap()
     const { domNode, eventCenter } = this._muya
@@ -25,9 +23,9 @@ class Tooltip {
     eventCenter.attachDOMEvent(domNode, 'mouseover', this._mouseOver.bind(this))
   }
 
-  private _mouseOver(event) {
-    const { target } = event
-    const toolTipTarget = target.closest('[data-tooltip]')
+  private _mouseOver(event: Event) {
+    const target = event.target as HTMLElement
+    const toolTipTarget = target.closest<HTMLElement>('[data-tooltip]')
     const { eventCenter } = this._muya
     if (toolTipTarget && !this._cache.has(toolTipTarget)) {
       const tooltip = toolTipTarget.getAttribute('data-tooltip')
@@ -58,11 +56,11 @@ class Tooltip {
     }
   }
 
-  private _mouseLeave(event) {
-    const { target } = event
+  private _mouseLeave(event: { target: EventTarget | null }) {
+    const target = event.target as HTMLElement
     if (this._cache.has(target)) {
       const tooltipEle = this._cache.get(target)
-      tooltipEle.remove()
+      tooltipEle?.remove()
       this._cache.delete(target)
     }
   }

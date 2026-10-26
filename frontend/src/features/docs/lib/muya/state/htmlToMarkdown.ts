@@ -1,5 +1,5 @@
 import { CLASS_NAMES, DEFAULT_TURNDOWN_CONFIG } from '../config'
-import TurndownService, { usePluginsAddRules } from '../utils/turndownService'
+import TurndownService, { addPluginsRules } from '../utils/turndownService'
 import type { ITurnoverOptions } from './types'
 
 // Just because turndown change `\n`(soft line break) to space, So we add `span.ag-soft-line-break` to workaround.
@@ -76,7 +76,7 @@ export default class HtmlToMarkdown {
   generate(html: string): string {
     // turn html to markdown
     const turndownService = new TurndownService(this._options)
-    usePluginsAddRules(turndownService)
+    addPluginsRules(turndownService)
 
     // fix #752, but I don't know why the &nbsp; vanished.
     html = html.replace(/<span>&nbsp;<\/span>/g, String.fromCharCode(160))

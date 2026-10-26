@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { DocumentItem } from '@/types/dokudocs'
+import { useState } from 'react'
+import { type DocumentItem } from '@/types/dokudocs'
 import { Check, FileEdit, Folder, FolderInput, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -35,13 +35,16 @@ export function MoveDocDialog({
   const [searchQuery, setSearchQuery] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  useEffect(() => {
+  // Reset the form each time the dialog opens. Doing it during render avoids a frame with stale values.
+  const [syncedWith, setSyncedWith] = useState({ open, document })
+  if (syncedWith.open !== open || syncedWith.document !== document) {
+    setSyncedWith({ open, document })
     if (open) {
       setSelectedProjectId(document.projectId || null)
       setSearchQuery('')
       setConfirmOpen(false)
     }
-  }, [open, document])
+  }
 
   const availableProjects = (projects || []).filter(
     (p) => p.orgId === activeOrgId

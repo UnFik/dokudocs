@@ -10,7 +10,7 @@ export function matchString(
 
   const SPECIAL_CHAR_REG = /[[\]\\^$.|?*+()/]/g
 
-  let SEARCH_REG = null
+  let SEARCH_REG
   let regStr = value
   let flag = 'g'
 

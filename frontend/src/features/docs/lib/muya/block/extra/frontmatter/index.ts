@@ -49,7 +49,7 @@ class Frontmatter extends Parent {
   set lang(value) {
     this.meta.lang = value
 
-    !!value &&
+    if (value) {
       loadLanguage(value)
         .then((infoList) => {
           if (!Array.isArray(infoList)) return
@@ -64,6 +64,7 @@ class Frontmatter extends Parent {
           // if no parameter provided, will cause error.
           debug.warn(err)
         })
+    }
   }
 
   override get path() {

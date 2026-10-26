@@ -42,7 +42,7 @@ export interface IMuyaOptions {
     }
   }
   readOnly?: boolean
-  getDecorations?: (block: any) => any[]
+  getDecorations?: (block: any) => any[] // eslint-disable-line @typescript-eslint/no-explicit-any
   json?: TState[]
   markdown?: string
   /**

@@ -6,8 +6,7 @@ import { isKeyboardEvent } from '../../utils'
 import { h, patch } from '../../utils/snabbdom'
 import BaseFloat from '../baseFloat'
 import type { IBaseOptions } from '../types'
-import type { FormatToolIcon } from './config'
-import icons from './config'
+import icons, { type FormatToolIcon } from './config'
 import './index.css'
 
 /** Default float options for inline format toolbar */

@@ -23,11 +23,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EditorHistoryState } from '../lib/prosemirror/createDocumentBodyEditor'
-import { normalizeLinkTarget } from '../lib/prosemirror/inlineMarks'
-import type {
-  BlockKind,
-  InlineMarkName,
-  InlineState,
+import {
+  type BlockKind,
+  type InlineMarkName,
+  type InlineState,
+  normalizeLinkTarget,
 } from '../lib/prosemirror/inlineMarks'
 import type { WrapKind } from '../lib/prosemirror/markdownBlockRules'
 

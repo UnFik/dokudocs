@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Muya } from '../../../muya'
-import { Muya as MuyaClass } from '../../../muya'
+import { type Muya, Muya as MuyaClass } from '../../../muya'
 import type Format from '../format'
 
 vi.mock('../../../utils/prism/index', () => ({

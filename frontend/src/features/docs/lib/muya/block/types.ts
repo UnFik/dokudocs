@@ -13,7 +13,7 @@ import type { Muya } from '../muya'
 // like `new (muya: Muya, state: IAtxHeadingState)`.
 export interface IConstructor<T> {
   blockName: string
-  // eslint-disable-next-line ts/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- registry dispatcher, see note above
   create: (muya: Muya, state: any) => any
   new (...args: never[]): T
 }

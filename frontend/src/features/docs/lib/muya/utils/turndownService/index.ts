@@ -1,6 +1,5 @@
 import * as turndownPluginGfm from 'joplin-turndown-plugin-gfm'
-import type { Filter, Node } from 'turndown'
-import TurndownService from 'turndown'
+import TurndownService, { type Filter, type Node } from 'turndown'
 import { identity, isHTMLElement, isHTMLInputElement } from '..'
 
 const DEFAULT_KEEPS: Filter = ['u', 'mark', 'ruby', 'rt', 'sub', 'sup']
@@ -130,7 +129,7 @@ function containsOwnTaskListCheckbox(node: Node) {
   )
 }
 
-export function usePluginsAddRules(turndownService: TurndownService) {
+export function addPluginsRules(turndownService: TurndownService) {
   // Use the gfm plugin
   const { strikethrough, tables } = turndownPluginGfm
   turndownService.use(strikethrough)

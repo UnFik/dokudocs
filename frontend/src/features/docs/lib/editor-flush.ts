@@ -1,5 +1,5 @@
 import {
-  getLocalUserScope,
+  type getLocalUserScope,
   isLocalUserScopeCurrent,
   registerLocalUserFlush,
 } from '@/lib/user-storage'
