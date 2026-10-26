@@ -529,6 +529,124 @@
 .dd-link-title:empty {
   display: none;
 }
+/* What a hover finds out about a page or a person lays out in rows under the basics. */
+.dd-link-thumbnail {
+  order: -1;
+  flex-basis: 100%;
+  max-height: 140px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--muted);
+}
+.dd-link-thumbnail svg {
+  display: block;
+  width: 100%;
+  max-height: 140px;
+}
+/* A page drawn from its Markdown: laid out wide, then shrunk, like a card of the page list. */
+.dd-link-thumbnail {
+  position: relative;
+  height: 140px;
+}
+.dd-link-thumbnail-page {
+  width: 270%;
+  padding: 16px;
+  transform: scale(0.37);
+  transform-origin: top left;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--foreground);
+}
+.dd-link-thumbnail-page h1,
+.dd-link-thumbnail-page h2,
+.dd-link-thumbnail-page h3 {
+  margin: 0 0 8px;
+  font-weight: 700;
+}
+.dd-link-thumbnail-page h1 {
+  font-size: 20px;
+}
+.dd-link-thumbnail-page h2 {
+  font-size: 16px;
+}
+.dd-link-thumbnail-page p,
+.dd-link-thumbnail-page ul,
+.dd-link-thumbnail-page ol,
+.dd-link-thumbnail-page pre {
+  margin: 0 0 6px;
+}
+.dd-link-thumbnail-page pre,
+.dd-link-thumbnail-page code {
+  background: var(--secondary);
+  font-size: 11px;
+}
+.dd-link-thumbnail::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 40px;
+  background: linear-gradient(to top, var(--card), transparent);
+  pointer-events: none;
+}
+.dd-link-avatar {
+  order: -1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--secondary);
+  color: var(--secondary-foreground, var(--foreground));
+  font-size: 12px;
+  font-weight: 600;
+}
+/* A person: the picture beside the name and email, the role and bio under them. */
+.dd-link-card-person {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  width: max-content;
+  max-width: min(260px, calc(100% - 16px));
+}
+.dd-link-card-person .dd-link-avatar {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.dd-link-card-person .dd-link-title,
+.dd-link-card-person .dd-link-address {
+  grid-column: 2;
+}
+.dd-link-card-person .dd-link-excerpt {
+  grid-column: 1 / -1;
+}
+.dd-link-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dd-link-excerpt {
+  flex-basis: 100%;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted-foreground);
+}
+.dd-link-meta,
+.dd-link-role {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.dd-link-meta {
+  flex-basis: 100%;
+}
+.dd-link-role {
+  text-transform: capitalize;
+}
 .dd-link-address {
   min-width: 0;
   overflow: hidden;

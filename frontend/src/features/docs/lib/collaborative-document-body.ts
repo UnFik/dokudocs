@@ -9,14 +9,15 @@ import {
 import type { DocumentBodyNode } from './documentBody'
 import { documentBodyToMarkdown } from './muya/state/documentBodyToMarkdown'
 import { blockEditing } from './prosemirror/blocks'
-import type { UploadedFile } from './prosemirror/blocks/uploads'
 import type { MentionCandidate } from './prosemirror/blocks/triggerMenu'
+import type { UploadedFile } from './prosemirror/blocks/uploads'
 import {
   createDocumentBodyEditor,
   type EditorHistoryState,
   type DocumentBodySelection,
 } from './prosemirror/createDocumentBodyEditor'
 import type { InlineState } from './prosemirror/inlineMarks'
+import type { LinkFeaturesOptions } from './prosemirror/linkFeatures'
 import type { SuggestionCard } from './prosemirror/suggestionCards'
 
 // How long a first open waits for the server before showing an empty body.
@@ -57,6 +58,7 @@ export async function mountCollaborativeDocumentBody(
     smartText?: () => boolean
     maxCharacters?: number
     resolveLinkTitle?: (href: string) => Promise<string | null>
+    resolvePreview?: LinkFeaturesOptions['resolvePreview']
     mentionSource?: (query: string) => Promise<MentionCandidate[]>
     upload?: (file: File) => Promise<UploadedFile>
     resolveAsset?: (src: string) => Promise<string>
@@ -137,6 +139,7 @@ export async function mountCollaborativeDocumentBody(
       smartText: input.smartText,
       maxCharacters: input.maxCharacters,
       resolveLinkTitle: input.resolveLinkTitle,
+      resolvePreview: input.resolvePreview,
       mentionSource: input.mentionSource,
       onHeadingLink: input.onHeadingLink,
       onNavigateToTitle: input.onNavigateToTitle,

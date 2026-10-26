@@ -26,6 +26,7 @@ func addWorkspaceRoutes(f Router, c *container.Container, cfg config.Config) {
 
 	// Workspace Members
 	wsGroup.Get("/{id}/members", workspaceHandler.GetMembers)
+	wsGroup.Get("/{id}/members/{userId}/profile", workspaceHandler.GetMemberProfile)
 	wsGroup.Delete("/{id}/members/{userId}", workspaceHandler.RemoveMember)
 
 	// Invitations: mailed single-use links, bound to the invited email.

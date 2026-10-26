@@ -15,6 +15,8 @@ import {
   listDocumentComments,
   listProjects,
   listWorkspaceMembers,
+  getDocumentHoverPreview,
+  getMemberHoverPreview,
   type CommentAnchor,
   type CommentThread,
   listDocumentBacklinks,
@@ -725,6 +727,10 @@ function CollaborativeMarkdownBody({
             ?.title ?? null
         )
       },
+      resolvePreview: (target) =>
+        target.kind === 'document'
+          ? getDocumentHoverPreview(workspaceID, target.id)
+          : getMemberHoverPreview(workspaceID, target.id),
       onNavigateToTitle: () => titleRef.current?.focus(),
       onHeadingLink: (nodeID) => {
         const link = `${window.location.origin}${window.location.pathname}#node-${nodeID}`

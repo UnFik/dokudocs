@@ -17,6 +17,7 @@ import {
 } from './mediaCommands'
 import { insertTable } from './tableCommands'
 import { requestImageForm } from './toolbar'
+import { requestMention } from './triggerMenu'
 import { requestFilePicker } from './uploads'
 
 export interface BlockItem {
@@ -187,6 +188,13 @@ blockItems.push(
       'attachment',
     ],
     command: requestFilePicker,
+  },
+  {
+    id: 'mention',
+    label: 'Mention',
+    hint: '@',
+    keywords: ['mention', 'at', 'person', 'page', 'project', 'link'],
+    command: requestMention,
   },
   {
     id: 'page-break',

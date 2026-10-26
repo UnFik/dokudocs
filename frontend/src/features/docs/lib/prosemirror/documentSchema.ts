@@ -337,8 +337,9 @@ function nodeDOM(
         ...idAttrs,
         class: 'dd-mention',
         'data-mention-kind': kind,
+        'data-mention-id': id,
         contenteditable: 'false',
-        ...(href ? { href } : {}),
+        ...(href ? { href, target: '_blank', rel: 'noopener noreferrer' } : {}),
       },
       kind === 'person' ? `@${label}` : label,
     ]

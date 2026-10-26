@@ -14,6 +14,7 @@ type DocumentUseCase interface {
 	ListDocuments(ctx context.Context, workspaceID, userID uuid.UUID, filter repository.DocumentFilter) (data []model.Document, err error)
 	SearchDocuments(ctx context.Context, workspaceID, userID uuid.UUID, query string, limit int) (data []model.DocumentSearchHit, err error)
 	GetDocument(ctx context.Context, id, workspaceID, userID uuid.UUID) (data model.Document, err error)
+	GetDocumentPreview(ctx context.Context, id, workspaceID, userID uuid.UUID) (data model.DocumentPreview, err error)
 	GetPublicDocument(ctx context.Context, shareToken string) (data model.Document, err error)
 	CreateDocument(ctx context.Context, input dto.CreateDocumentInput) (data model.Document, err error)
 	UpdateDocument(ctx context.Context, input dto.UpdateDocumentInput) (data model.Document, err error)

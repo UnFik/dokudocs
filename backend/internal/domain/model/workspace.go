@@ -28,6 +28,18 @@ type WorkspaceMember struct {
 	JoinedAt    time.Time `json:"joinedAt"`
 }
 
+// MemberProfile is what a hover card shows of a workspace member to the others.
+// It leaves out what a member keeps private, such as the phone number.
+type MemberProfile struct {
+	UserID    uuid.UUID `json:"userId"`
+	Email     string    `json:"email"`
+	FullName  string    `json:"fullName"`
+	AvatarURL string    `json:"avatarUrl"`
+	Bio       string    `json:"bio"`
+	Role      string    `json:"role"`
+	JoinedAt  time.Time `json:"joinedAt"`
+}
+
 // WorkspaceInvite is an offer to join a workspace, sent to one email address.
 // The link token is never kept here; only its hash is stored.
 type WorkspaceInvite struct {

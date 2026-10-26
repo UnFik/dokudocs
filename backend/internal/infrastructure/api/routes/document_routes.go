@@ -85,6 +85,7 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 	docGroup.Delete("/{id}/architecture-versions/{versionID}", architectureHandler.DeleteVersion)
 	docGroup.Post("/{id}/assets", assetHandler.Upload)
 	docGroup.Get("/{id}/assets/{assetID}", assetHandler.Get)
+	docGroup.Get("/{id}/preview", docHandler.Preview)
 	docGroup.Get("/{id}", docHandler.Get)
 	docGroup.Put("/{id}", docHandler.Update)
 	docGroup.Put("/{id}/thumbnails", docHandler.UpdateThumbnails)

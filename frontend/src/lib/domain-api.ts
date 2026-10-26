@@ -468,6 +468,93 @@ export async function listWorkspaceMembers(
   }))
 }
 
+const documentPreviewSchema = z.object({
+  title: z.string(),
+  type: z.string(),
+  excerpt: z.string().optional(),
+  thumbnail: z.string().optional(),
+  thumbnailDark: z.string().optional(),
+  previewSource: z.string().optional(),
+  author: z.object({ name: z.string().optional() }).optional(),
+  updatedAt: z.string().optional(),
+})
+
+export type DocumentHoverPreview = {
+  kind: 'document'
+  title: string
+  type: string
+  excerpt?: string
+  thumbnail?: string
+  thumbnailDark?: string
+  previewSource?: string
+  authorName?: string
+  updatedAt?: string
+}
+
+export type PersonHoverPreview = {
+  kind: 'person'
+  name: string
+  email: string
+  role: string
+  bio?: string
+  avatarUrl?: string
+}
+
+/** What a hover card shows of a page; fetched only when it is hovered. */
+export async function getDocumentHoverPreview(
+  workspaceId: string,
+  documentId: string,
+  signal?: AbortSignal
+): Promise<DocumentHoverPreview> {
+  const row = documentPreviewSchema.parse(
+    await apiFetch<unknown>(`/api/v1/documents/${documentId}/preview`, {
+      headers: workspaceHeaders(workspaceId),
+      signal,
+    })
+  )
+  return {
+    kind: 'document',
+    title: row.title,
+    type: row.type,
+    excerpt: row.excerpt,
+    thumbnail: row.thumbnail,
+    thumbnailDark: row.thumbnailDark,
+    previewSource: row.previewSource,
+    authorName: row.author?.name,
+    updatedAt: row.updatedAt,
+  }
+}
+
+const memberProfileSchema = z.object({
+  email: z.string(),
+  fullName: z.string().optional().default(''),
+  avatarUrl: z.string().optional().default(''),
+  bio: z.string().optional().default(''),
+  role: z.string(),
+})
+
+/** What a hover card shows of a person in the workspace; fetched only when hovered. */
+export async function getMemberHoverPreview(
+  workspaceId: string,
+  userId: string,
+  signal?: AbortSignal
+): Promise<PersonHoverPreview> {
+  const row = memberProfileSchema.parse(
+    await apiFetch<unknown>(
+      `/api/v1/workspaces/${workspaceId}/members/${userId}/profile`,
+      { signal }
+    )
+  )
+  return {
+    kind: 'person',
+    name: row.fullName || row.email,
+    email: row.email,
+    role: row.role,
+    bio: row.bio || undefined,
+    avatarUrl: row.avatarUrl || undefined,
+  }
+}
+
 const rosterSchema = z.array(
   z.object({
     userId: z.string().min(1),

@@ -39,6 +39,9 @@ func (m *mockWorkspaceRepo) Delete(ctx context.Context, id, actorID uuid.UUID) e
 func (m *mockWorkspaceRepo) GetMembers(ctx context.Context, workspaceID, actorID uuid.UUID) ([]model.WorkspaceMember, error) {
 	return m.members[workspaceID], nil
 }
+func (m *mockWorkspaceRepo) GetMemberProfile(ctx context.Context, workspaceID, userID uuid.UUID) (model.MemberProfile, error) {
+	return model.MemberProfile{}, nil
+}
 func (m *mockWorkspaceRepo) AddMember(ctx context.Context, workspaceID, actorID, userID uuid.UUID, role string) error {
 	m.roles[workspaceID.String()+":"+userID.String()] = role
 	return nil
