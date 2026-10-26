@@ -1,4 +1,4 @@
-import { EditorState } from 'prosemirror-state'
+import { EditorState, Selection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
 import { prepareBodyTransaction } from '../prepareBodyTransaction'
@@ -68,47 +68,60 @@ function press(target: EventTarget, key: string) {
   target.dispatchEvent(event)
   return event
 }
-const input = (host: HTMLElement) =>
-  host.querySelector<HTMLInputElement>('[role="combobox"]')
 const wait = () => new Promise((resolve) => setTimeout(resolve, 20))
-const type = (box: HTMLInputElement, value: string) => {
-  box.value = value
-  box.dispatchEvent(new Event('input', { bubbles: true }))
+/** Types into the page, one character at a time, as the keyboard does. */
+const typeText = (view: EditorView, text: string) => {
+  for (const char of text) view.dispatch(view.state.tr.insertText(char))
 }
+const options = (host: HTMLElement) => [
+  ...host.querySelectorAll<HTMLElement>('.dd-slash [role="option"]'),
+]
+const menuOf = (host: HTMLElement) => host.querySelector('.dd-slash')
+const label = (view: EditorView) => view.dom.getAttribute('aria-label')
 
 describe('@ mention menu', () => {
-  it('opens on @ at the start of a word, without writing the @', () => {
+  it('opens on @ at the start of a word and writes the @ into the page', () => {
     const { view, host } = mount('hello ')
     expect(press(view.dom, '@').defaultPrevented).toBe(true)
-    expect(input(host)?.getAttribute('aria-label')).toBe('Mention')
-    expect(view.state.doc.textContent).toBe('hello ')
+    expect(menuOf(host)).not.toBeNull()
+    expect(label(view)).toBe('Mention')
+    expect(host.querySelector('input')).toBeNull()
+    expect(view.state.doc.textContent).toBe('hello @')
   })
 
   it('does not open inside a word, as in an email address', () => {
     const { view, host } = mount('name')
     expect(press(view.dom, '@').defaultPrevented).toBe(false)
-    expect(input(host)).toBeNull()
+    expect(menuOf(host)).toBeNull()
   })
 
-  it('lists people, pages and projects, narrowed as the person types', async () => {
+  it('lists people, pages and projects, narrowed by what is typed after the @', async () => {
     const { view, host } = mount('')
     press(view.dom, '@')
     await wait()
-    expect(host.querySelectorAll('[role="option"]')).toHaveLength(4)
-    type(input(host)!, 'rin')
+    expect(options(host)).toHaveLength(4)
+    typeText(view, 'rin')
     await wait()
-    expect(
-      [...host.querySelectorAll('[role="option"]')].map((o) => o.textContent)
-    ).toEqual([expect.stringContaining('Rina Putri')])
+    expect(options(host).map((o) => o.textContent)).toEqual([
+      expect.stringContaining('Rina Putri'),
+    ])
+    expect(view.state.doc.textContent).toBe('@rin')
   })
 
-  it('inserts the chosen one as a mention that knows what it points to', async () => {
+  it('searches a name with a space in it', async () => {
+    const { view, host } = mount('')
+    press(view.dom, '@')
+    typeText(view, 'rina p')
+    await wait()
+    expect(options(host)).toHaveLength(1)
+  })
+
+  it('replaces the @ and the query with the chosen mention', async () => {
     const { view, host } = mount('hi ')
     press(view.dom, '@')
+    typeText(view, 'launch')
     await wait()
-    type(input(host)!, 'launch')
-    await wait()
-    press(input(host)!, 'Enter')
+    press(view.dom, 'Enter')
     const mention = bodyOf(view.state.doc).find(
       (node) => node.type === 'mention'
     )!
@@ -117,15 +130,38 @@ describe('@ mention menu', () => {
       id: 'd-1',
       label: 'Launch plan',
     })
-    expect(input(host)).toBeNull()
+    expect(view.state.doc.textContent).not.toContain('@')
+    expect(view.state.doc.textContent).not.toContain('launch')
+    expect(menuOf(host)).toBeNull()
   })
 
-  it('closes on Escape and leaves the page alone', async () => {
+  it('chooses with a click on an option', async () => {
     const { view, host } = mount('')
     press(view.dom, '@')
-    press(input(host)!, 'Escape')
-    expect(input(host)).toBeNull()
-    expect(view.state.doc.textContent).toBe('')
+    await wait()
+    options(host)[3]!.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    )
+    expect(
+      bodyOf(view.state.doc).find((node) => node.type === 'mention')!.attributes
+    ).toMatchObject({ kind: 'project', id: 'p-1' })
+  })
+
+  it('closes on Escape and leaves what was typed in the page', async () => {
+    const { view, host } = mount('')
+    press(view.dom, '@')
+    typeText(view, 'ri')
+    press(view.dom, 'Escape')
+    expect(menuOf(host)).toBeNull()
+    expect(view.state.doc.textContent).toBe('@ri')
+  })
+
+  it('closes when the caret leaves the query', async () => {
+    const { view, host } = mount('')
+    press(view.dom, '@')
+    await wait()
+    view.dispatch(view.state.tr.setSelection(Selection.atStart(view.state.doc)))
+    expect(menuOf(host)).toBeNull()
   })
 
   it('does not open when it is not enabled', () => {
@@ -134,8 +170,8 @@ describe('@ mention menu', () => {
   })
 })
 
-describe('menu scrolling', () => {
-  it('keeps the active option in view as the arrow keys move it', async () => {
+describe('menu keys and scrolling', () => {
+  it('moves the active option with the arrow keys and keeps it in view', async () => {
     const { view, host } = mount('')
     press(view.dom, '@')
     await wait()
@@ -145,41 +181,43 @@ describe('menu scrolling', () => {
       scrolled.push(this)
     }
     try {
-      press(input(host)!, 'ArrowDown')
-      press(input(host)!, 'ArrowDown')
+      expect(press(view.dom, 'ArrowDown').defaultPrevented).toBe(true)
+      press(view.dom, 'ArrowDown')
     } finally {
       Element.prototype.scrollIntoView = original
     }
-    const active = host.querySelector('[aria-selected="true"]')
-    expect(active?.textContent).toContain('Launch plan')
+    expect(host.querySelector('[aria-selected="true"]')?.textContent).toContain(
+      'Launch plan'
+    )
     expect(scrolled.at(-1)?.textContent).toContain('Launch plan')
+    expect(view.dom.getAttribute('aria-activedescendant')).toBe(
+      host.querySelector('[aria-selected="true"]')?.id
+    )
   })
 })
 
 describe('Mention entry in the / menu', () => {
-  const mentionInput = (host: HTMLElement) =>
-    host.querySelector<HTMLInputElement>('input.dd-slash-input')
+  const askForMention = async (view: EditorView) => {
+    press(view.dom, '/')
+    typeText(view, 'mention')
+    press(view.dom, 'Enter')
+    await wait()
+  }
 
   it('opens the mention dropdown with people, pages and projects', async () => {
     const { view, host } = mount('')
-    press(view.dom, '/')
-    for (const key of 'mention') view.dispatch(view.state.tr.insertText(key))
-    press(view.dom, 'Enter')
-    await wait()
-    expect(mentionInput(host)?.getAttribute('aria-label')).toBe('Mention')
-    expect(host.querySelectorAll('[role="option"]')).toHaveLength(4)
-    expect(view.state.doc.textContent).toBe('')
+    await askForMention(view)
+    expect(label(view)).toBe('Mention')
+    expect(options(host)).toHaveLength(4)
+    expect(view.state.doc.textContent).toBe('@')
   })
 
   it('inserts the chosen page as a mention', async () => {
-    const { view, host } = mount('')
-    press(view.dom, '/')
-    for (const key of 'mention') view.dispatch(view.state.tr.insertText(key))
+    const { view } = mount('')
+    await askForMention(view)
+    typeText(view, 'launch')
+    await wait()
     press(view.dom, 'Enter')
-    await wait()
-    type(mentionInput(host)!, 'launch')
-    await wait()
-    press(mentionInput(host)!, 'Enter')
     const mention = bodyOf(view.state.doc).find(
       (node) => node.type === 'mention'
     )!
@@ -188,11 +226,8 @@ describe('Mention entry in the / menu', () => {
 
   it('does nothing when mentions are not enabled', async () => {
     const { view, host } = mount('', false)
-    press(view.dom, '/')
-    for (const key of 'mention') view.dispatch(view.state.tr.insertText(key))
-    press(view.dom, 'Enter')
-    await wait()
-    expect(mentionInput(host)).toBeNull()
+    await askForMention(view)
+    expect(menuOf(host)).toBeNull()
   })
 })
 
@@ -202,39 +237,39 @@ describe('emoji menu', () => {
     expect(filterEmojis('zzzzzzz')).toEqual([])
   })
 
-  it('opens on :, filters and inserts the emoji as text', async () => {
-    const { view, host } = mount('great ')
+  it('opens on :, filters by what is typed and inserts the emoji as text', async () => {
+    const { view } = mount('great ')
     expect(press(view.dom, ':').defaultPrevented).toBe(true)
-    expect(input(host)?.getAttribute('aria-label')).toBe('Emoji')
-    type(input(host)!, 'tada')
+    expect(label(view)).toBe('Emoji')
+    typeText(view, 'tada')
     await wait()
-    press(input(host)!, 'Enter')
+    press(view.dom, 'Enter')
     expect(view.state.doc.textContent).toBe('great 🎉')
   })
 
   it('does not open after a digit, so 10:30 stays text', () => {
     const { view, host } = mount('10')
     expect(press(view.dom, ':').defaultPrevented).toBe(false)
-    expect(input(host)).toBeNull()
+    expect(menuOf(host)).toBeNull()
   })
 })
 
 describe('a menu with nothing to offer', () => {
-  it('gives the typed characters back to the page, so ::: can start a notice', async () => {
+  it('closes and keeps the typed characters, so ::: can start a notice', async () => {
     const { view, host } = mount('')
     press(view.dom, ':')
-    type(input(host)!, '::')
+    typeText(view, '::')
     await wait()
-    expect(input(host)).toBeNull()
+    expect(menuOf(host)).toBeNull()
     expect(view.state.doc.textContent).toBe(':::')
   })
 
   it('keeps open while something still matches', async () => {
     const { view, host } = mount('hello ')
     press(view.dom, '@')
-    type(input(host)!, 'Rin')
+    typeText(view, 'Rin')
     await wait()
-    expect(input(host)).not.toBeNull()
-    expect(view.state.doc.textContent).toBe('hello ')
+    expect(menuOf(host)).not.toBeNull()
+    expect(view.state.doc.textContent).toBe('hello @Rin')
   })
 })

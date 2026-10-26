@@ -64,9 +64,8 @@ test("@live @smoke @features3: / offers Mention, and a mention chip shows a hove
   await editor.locator("p").first().click();
   await page.keyboard.type("/mention");
   await page.keyboard.press("Enter");
-  const menu = page.getByRole("combobox", { name: "Mention" });
-  await expect(menu).toBeFocused();
-  await menu.fill("System");
+  await expect(page.getByRole("combobox", { name: "Mention" })).toBeFocused();
+  await page.keyboard.type("System");
   await page.getByRole("option").first().click();
   const chip = editor.locator(".dd-mention").first();
   await expect(chip).toContainText("@System");
@@ -81,16 +80,15 @@ test("@live @smoke @features3: @ mentions a person and : picks an emoji", async 
   const { editor } = await openMarkdownDocument(page, [""]);
   await editor.locator("p").first().click();
   await page.keyboard.press("@");
-  const menu = page.getByRole("combobox", { name: "Mention" });
-  await expect(menu).toBeFocused();
-  await menu.fill("System");
+  await expect(page.getByRole("combobox", { name: "Mention" })).toBeFocused();
+  await page.keyboard.type("System");
   await page.getByRole("option").first().click();
   await expect(editor.locator(".dd-mention")).toContainText("@System");
 
   await page.keyboard.type(" ");
   await page.keyboard.press(":");
-  const emoji = page.getByRole("combobox", { name: "Emoji" });
-  await emoji.fill("tada");
-  await emoji.press("Enter");
+  await expect(page.getByRole("combobox", { name: "Emoji" })).toBeFocused();
+  await page.keyboard.type("tada");
+  await page.keyboard.press("Enter");
   await expect(editor).toContainText("🎉");
 });

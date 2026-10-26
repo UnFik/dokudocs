@@ -22,71 +22,102 @@ export interface MentionCandidate {
   hint: string
 }
 
+type MenuState = { pos: number } | null
+
 type TriggerConfig<T extends MenuItem> = {
   trigger: string
   label: string
   enabled: () => boolean
   search: (query: string) => T[] | Promise<T[]>
+  /** Runs once the trigger and the query are gone from the page. */
   choose: (view: EditorView, item: T) => void
-  /** A command that asks for the menu without the trigger key being typed. */
-  requestKey?: PluginKey<boolean>
+  /** Also how a command asks for the menu without the trigger key being typed. */
+  key: PluginKey<MenuState>
+}
+
+/**
+ * The trigger and what is typed after it are text of the page, as with the "/"
+ * menu: the menu is open while the caret stays at the end of that text.
+ */
+type MenuSignal = { open: number } | { close: true }
+
+const objectReplacement = '￼'
+
+/** What follows the trigger, or null when the menu should not be showing. */
+function queryAt(state: EditorState, pos: number, trigger: string) {
+  const { selection, doc } = state
+  if (!selection.empty || pos < 0 || selection.from <= pos) return null
+  if (selection.from > doc.content.size) return null
+  if (!doc.resolve(pos).sameParent(selection.$from)) return null
+  const text = doc.textBetween(pos, selection.from, '\n', objectReplacement)
+  if (!text.startsWith(trigger)) return null
+  const query = text.slice(trigger.length)
+  return /[\n￼]/.test(query) ? null : query
 }
 
 let count = 0
 
 class TriggerMenu<T extends MenuItem> {
   private readonly root = document.createElement('div')
-  private readonly input = document.createElement('input')
   private readonly list = document.createElement('ul')
   private items: T[] = []
+  private query: string | null = null
   private active = 0
   private closed = false
   private latest = 0
+  private pos = 0
   private readonly id = `dd-trigger-${++count}`
+  private readonly saved: { role: string | null; label: string | null }
 
   constructor(
     private readonly view: EditorView,
-    private readonly config: TriggerConfig<T>,
-    private readonly onClose: () => void
+    private readonly config: TriggerConfig<T>
   ) {
     this.root.className = 'dd-slash'
-    this.input.className = 'dd-slash-input'
-    this.input.setAttribute('role', 'combobox')
-    this.input.setAttribute('aria-label', config.label)
-    this.input.setAttribute('aria-expanded', 'true')
-    this.input.setAttribute('aria-controls', `${this.id}-list`)
-    this.input.setAttribute('aria-autocomplete', 'list')
-    this.input.placeholder = `${config.label}…`
     this.list.id = `${this.id}-list`
     this.list.setAttribute('role', 'listbox')
     this.list.setAttribute('aria-label', config.label)
-    this.root.append(this.input, this.list)
-    this.input.addEventListener('input', () => void this.refresh())
-    this.input.addEventListener('keydown', (event) => this.onKey(event))
-    this.input.addEventListener('blur', () => this.close(false))
+    this.root.append(this.list)
+    // Keep the caret in the line while the pointer picks an entry.
+    this.root.addEventListener('mousedown', (event) => event.preventDefault())
 
-    const host = view.dom.parentElement ?? document.body
+    const dom = view.dom
+    this.saved = {
+      role: dom.getAttribute('role'),
+      label: dom.getAttribute('aria-label'),
+    }
+    dom.setAttribute('role', 'combobox')
+    dom.setAttribute('aria-label', config.label)
+    dom.setAttribute('aria-expanded', 'true')
+    dom.setAttribute('aria-controls', this.list.id)
+    dom.setAttribute('aria-autocomplete', 'list')
+    const host = dom.parentElement ?? document.body
     host.append(this.root)
-    const caret = view.coordsAtPos(view.state.selection.from)
+  }
+
+  /** Follows the text after the trigger. */
+  update(query: string, pos: number) {
+    this.pos = pos
+    const host = this.view.dom.parentElement ?? document.body
+    const caret = this.view.coordsAtPos(pos)
     const box = host.getBoundingClientRect()
     this.root.style.left = `${Math.max(0, caret.left - box.left)}px`
     this.root.style.top = `${caret.bottom - box.top + 4}px`
-    this.input.focus()
-    void this.refresh()
+    if (query === this.query) return
+    this.query = query
+    void this.refresh(query)
   }
 
-  private async refresh() {
+  private async refresh(query: string) {
     const ticket = ++this.latest
-    const found = await this.config.search(this.input.value)
+    const found = await this.config.search(query)
     if (this.closed || ticket !== this.latest) return
     this.items = found.slice(0, 12)
     this.active = 0
-    // Nothing matches what was typed, so it was not meant for the menu: write it
-    // into the page and carry on typing there (":::" and "@" in an address).
-    if (!this.items.length && this.input.value) {
-      const typed = this.config.trigger + this.input.value
-      this.close(true)
-      this.view.dispatch(this.view.state.tr.insertText(typed))
+    // Nothing matches what was typed, so it was not meant for the menu: it
+    // stays in the page and typing carries on there (":::" and "@" in an address).
+    if (!this.items.length && query) {
+      this.close()
       return
     }
     this.render()
@@ -119,45 +150,77 @@ class TriggerMenu<T extends MenuItem> {
       this.list.append(empty)
     }
     if (this.items[this.active])
-      this.input.setAttribute(
+      this.view.dom.setAttribute(
         'aria-activedescendant',
         `${this.id}-${this.active}`
       )
-    else this.input.removeAttribute('aria-activedescendant')
+    else this.view.dom.removeAttribute('aria-activedescendant')
     this.list.children[this.active]?.scrollIntoView?.({ block: 'nearest' })
   }
 
-  private onKey(event: KeyboardEvent) {
-    if (event.isComposing) return
+  /** Arrow keys, Enter and Escape; true when the key was the menu's. */
+  onKey(event: KeyboardEvent) {
+    if (event.isComposing) return false
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault()
       const total = this.items.length
-      if (!total) return
-      this.active =
-        (this.active + (event.key === 'ArrowDown' ? 1 : total - 1)) % total
-      this.render()
-    } else if (event.key === 'Enter') {
-      event.preventDefault()
-      this.choose(this.active)
-    } else if (event.key === 'Escape') {
-      event.preventDefault()
-      this.close(true)
+      if (total) {
+        this.active =
+          (this.active + (event.key === 'ArrowDown' ? 1 : total - 1)) % total
+        this.render()
+      }
+      return true
     }
+    if (event.key === 'Enter') {
+      this.choose(this.active)
+      return true
+    }
+    if (event.key === 'Escape') {
+      this.close()
+      return true
+    }
+    return false
   }
 
   private choose(index: number) {
     const item = this.items[index]
     if (!item) return
-    this.close(true)
+    const { state } = this.view
+    // The trigger and the query were only a way to ask: take them out of the page.
+    this.view.dispatch(
+      state.tr
+        .delete(this.pos, state.selection.from)
+        .setMeta(this.config.key, { close: true } satisfies MenuSignal)
+    )
+    this.view.focus()
     this.config.choose(this.view, item)
   }
 
-  close(refocus: boolean) {
-    if (this.closed) return
+  /** Closes the menu and leaves what was typed in the page. */
+  private close() {
+    this.view.dispatch(
+      this.view.state.tr.setMeta(this.config.key, {
+        close: true,
+      } satisfies MenuSignal)
+    )
+  }
+
+  destroy() {
     this.closed = true
     this.root.remove()
-    this.onClose()
-    if (refocus) this.view.focus()
+    const dom = this.view.dom
+    for (const name of [
+      'aria-expanded',
+      'aria-controls',
+      'aria-autocomplete',
+      'aria-activedescendant',
+    ])
+      dom.removeAttribute(name)
+    for (const [name, value] of [
+      ['role', this.saved.role],
+      ['aria-label', this.saved.label],
+    ] as const)
+      if (value === null) dom.removeAttribute(name)
+      else dom.setAttribute(name, value)
   }
 }
 
@@ -173,61 +236,88 @@ function atWordStart(view: EditorView) {
 
 function triggerPlugin<T extends MenuItem>(config: TriggerConfig<T>) {
   let menu: TriggerMenu<T> | null = null
-  return new Plugin({
-    key: config.requestKey,
+  return new Plugin<MenuState>({
+    key: config.key,
+    // Read by the command that asks for the menu.
+    enabled: config.enabled,
+    state: {
+      init: () => null,
+      apply(tr, value, _previous, next) {
+        const signal = tr.getMeta(config.key) as MenuSignal | undefined
+        if (signal && 'close' in signal) return null
+        let pos = value?.pos ?? null
+        if (signal) pos = signal.open
+        else if (pos !== null && tr.docChanged) pos = tr.mapping.map(pos, -1)
+        if (pos === null || queryAt(next, pos, config.trigger) === null)
+          return null
+        return { pos }
+      },
+    },
     props: {
       handleKeyDown(view, event) {
+        if (menu && config.key.getState(view.state)) {
+          if (!menu.onKey(event)) return false
+          event.preventDefault()
+          return true
+        }
         if (
           event.key !== config.trigger ||
           event.isComposing ||
           event.altKey ||
           event.ctrlKey ||
           event.metaKey ||
-          menu ||
           !config.enabled() ||
           !atWordStart(view)
         )
           return false
         event.preventDefault()
-        menu = new TriggerMenu(view, config, () => {
-          menu = null
-        })
+        const at = view.state.selection.from
+        view.dispatch(
+          view.state.tr
+            .insertText(config.trigger)
+            .setMeta(config.key, { open: at } satisfies MenuSignal)
+        )
         return true
       },
     },
-    state: {
-      init: () => false,
-      apply: (tr) =>
-        config.requestKey ? !!tr.getMeta(config.requestKey) : false,
-    },
     view: () => ({
       update(view) {
-        if (
-          !menu &&
-          config.requestKey?.getState(view.state) &&
-          view.editable &&
-          config.enabled()
-        )
-          menu = new TriggerMenu(view, config, () => {
-            menu = null
-          })
+        const open = config.key.getState(view.state)
+        const query = open
+          ? queryAt(view.state, open.pos, config.trigger)
+          : null
+        if (open && query !== null) {
+          menu ??= new TriggerMenu(view, config)
+          menu.update(query, open.pos)
+        } else if (menu) {
+          menu.destroy()
+          menu = null
+        }
       },
       destroy() {
-        menu?.close(false)
+        menu?.destroy()
+        menu = null
       },
     }),
   })
 }
 
-const mentionRequest = new PluginKey<boolean>('ddMentionRequest')
+const mentionKey = new PluginKey<MenuState>('ddMentionMenu')
+const emojiKey = new PluginKey<MenuState>('ddEmojiMenu')
 
 /** Opens the mention list at the caret, as `@` does; false where mentions are not offered. */
 export function requestMention(
   state: EditorState,
   dispatch?: (tr: Transaction) => void
 ) {
-  if (!mentionRequest.get(state)) return false
-  dispatch?.(state.tr.setMeta(mentionRequest, true))
+  const plugin = mentionKey.get(state)
+  if (!plugin || !(plugin.spec as { enabled: () => boolean }).enabled())
+    return false
+  dispatch?.(
+    state.tr.insertText('@').setMeta(mentionKey, {
+      open: state.selection.from,
+    } satisfies MenuSignal)
+  )
   return true
 }
 
@@ -239,7 +329,7 @@ export function mentionMenuPlugin(options: {
   return triggerPlugin<MentionCandidate>({
     trigger: '@',
     label: 'Mention',
-    requestKey: mentionRequest,
+    key: mentionKey,
     enabled: options.enabled,
     search: options.search,
     choose(view, item) {
@@ -285,6 +375,7 @@ export function emojiMenuPlugin(enabled: () => boolean) {
   return triggerPlugin<EmojiItem>({
     trigger: ':',
     label: 'Emoji',
+    key: emojiKey,
     enabled,
     search: filterEmojis,
     choose(view, item) {
