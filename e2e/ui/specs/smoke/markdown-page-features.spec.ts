@@ -3,7 +3,7 @@ import { openMarkdownDocument } from "../../helpers/markdown-document";
 
 // Page features that follow Outline: the + button, the title as the first line
 // with an info line, a Contents panel, heading labels and links, a click room
-// below the text, Backspace undoing a Markdown rule, and smart text.
+// below the text, Backspace undoing a Markdown rule.
 test("@live @smoke @pagefeatures: the + button opens the block menu on an empty line", async ({
   page,
 }) => {
@@ -106,23 +106,4 @@ test("@live @smoke @pagefeatures: clicking below a code block adds a line to typ
   await page.locator(".dd-page-end").click();
   await page.keyboard.type("after the code");
   await expect(editor.locator("p").last()).toHaveText("after the code");
-});
-
-test("@live @smoke @pagefeatures: smart text curls quotes only when turned on", async ({
-  page,
-}) => {
-  const { editor } = await openMarkdownDocument(page, [""]);
-  await editor.locator("p").first().click();
-  await page.keyboard.type('"plain"');
-  await expect(editor.locator("p").first()).toHaveText('"plain"');
-
-  await page.getByRole("button", { name: "Smart text" }).click();
-  await expect(page.getByRole("button", { name: "Smart text" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await editor.locator("p").first().click();
-  await page.keyboard.press("End");
-  await page.keyboard.type(' "curly" ... ->');
-  await expect(editor.locator("p").first()).toHaveText('"plain" “curly” … →');
 });

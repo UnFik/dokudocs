@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { ThemeToggleButton } from '@/components/theme-toggle-button'
 import {
   CHAT_COLUMN_OFFSET,
@@ -13,6 +14,11 @@ export function DocumentFloatingControls() {
   const chat = useDocumentChatPanel()
   return (
     <div
+      style={
+        chat?.open
+          ? ({ '--chat-column-width': `${chat.columnWidth}px` } as CSSProperties)
+          : undefined
+      }
       className={`fixed right-4 bottom-4 z-40 flex flex-col items-end gap-2 ${chat?.open ? CHAT_COLUMN_OFFSET : ''}`}
     >
       <ThemeToggleButton className='bg-background' />
