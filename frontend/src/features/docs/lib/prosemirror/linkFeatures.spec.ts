@@ -455,6 +455,9 @@ describe('hover previews, fetched on demand', () => {
     })
     hover(host)
     await wait()
+    const card = host.querySelector<HTMLElement>('.dd-link-card')!
+    // A person's card is laid out compactly, not as one long row.
+    expect(card.classList.contains('dd-link-card-person')).toBe(true)
     const avatar = host.querySelector<HTMLElement>('.dd-link-avatar')!
     expect(avatar.textContent).toBe('SA')
     expect(avatar.querySelector('img')).toBeNull()

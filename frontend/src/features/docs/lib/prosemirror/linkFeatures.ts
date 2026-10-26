@@ -178,6 +178,7 @@ function fillPreview(
       card.append(element('div', 'dd-link-meta', meta.join(' · ')))
     return
   }
+  card.classList.add('dd-link-card-person')
   title.textContent = preview.name
   address.textContent = preview.email ?? 'Person'
   const avatar = element('div', 'dd-link-avatar')

@@ -601,6 +601,28 @@
   font-size: 12px;
   font-weight: 600;
 }
+/* A person: the picture beside the name and email, the role and bio under them. */
+.dd-link-card-person {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: center;
+  width: max-content;
+  max-width: min(260px, calc(100% - 16px));
+}
+.dd-link-card-person .dd-link-avatar {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.dd-link-card-person .dd-link-title,
+.dd-link-card-person .dd-link-address {
+  grid-column: 2;
+}
+.dd-link-card-person .dd-link-role,
+.dd-link-card-person .dd-link-excerpt {
+  grid-column: 1 / -1;
+}
 .dd-link-avatar img {
   width: 100%;
   height: 100%;
