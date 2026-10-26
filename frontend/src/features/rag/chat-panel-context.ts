@@ -3,10 +3,11 @@ import type { UseQueryResult } from '@tanstack/react-query'
 import type { RAGConversation } from '@/lib/domain-api'
 import type { Attachment } from './question-extras'
 
-/** Width of the chat column from `sm` up; below that it covers the page. */
-
-/** Where the page's fixed corner buttons step aside for the open column. */
-export const CHAT_COLUMN_OFFSET = 'sm:right-[25rem]'
+/**
+ * Where the page's fixed corner buttons step aside for the open column: its width
+ * (set on the element as `--chat-column-width`) and 1rem of room.
+ */
+export const CHAT_COLUMN_OFFSET = 'sm:right-[calc(var(--chat-column-width)_+_1rem)]'
 
 export interface ChatPanelState {
   documentID: string
@@ -14,6 +15,9 @@ export interface ChatPanelState {
   title: string
   open: boolean
   setOpen: (open: boolean) => void
+  /** Width of the column in pixels; `commit` is false while the edge is still being dragged. */
+  columnWidth: number
+  setColumnWidth: (width: number, commit: boolean) => void
   unread: number
   conversations: UseQueryResult<RAGConversation[]>
   listKey: unknown[]
