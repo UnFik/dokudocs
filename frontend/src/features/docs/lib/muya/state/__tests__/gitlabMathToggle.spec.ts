@@ -43,9 +43,15 @@ function bootMuya(
   return muya
 }
 
-// eslint-disable-next-line ts/no-explicit-any
-function firstBlock(muya: Muya): any {
-  return muya.getState()[0]
+// Tests read block-only fields (meta, children) that the TState union omits.
+interface LooseState {
+  name: string
+  meta: Record<string, unknown>
+  children: LooseState[]
+}
+
+function firstBlock(muya: Muya): LooseState {
+  return muya.getState()[0] as unknown as LooseState
 }
 
 const MATH_FENCE = '```math\nx^2\n```\n'

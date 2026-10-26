@@ -1,4 +1,4 @@
-import { ProjectItem } from '@/types/dokudocs'
+import { type ProjectItem } from '@/types/dokudocs'
 
 export const mockProjects: ProjectItem[] = [
   {

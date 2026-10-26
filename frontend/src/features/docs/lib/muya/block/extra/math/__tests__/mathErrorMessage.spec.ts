@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { Muya as MuyaType } from '../../../../muya'
-import { Muya } from '../../../../muya'
+import { Muya, type Muya as MuyaType } from '../../../../muya'
 
 // #2220 — "How to debug <Invalid Mathematical Formula>?". The live editor
 // caught KaTeX's parse error and replaced it with an opaque generic message,

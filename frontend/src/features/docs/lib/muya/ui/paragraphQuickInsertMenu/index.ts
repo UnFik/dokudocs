@@ -7,8 +7,11 @@ import { deepClone } from '../../utils'
 import { query } from '../../utils/dom'
 import { h, patch } from '../../utils/snabbdom'
 import BaseScrollFloat from '../baseScrollFloat'
-import type { IQuickInsertMenuItem } from './config'
-import { getLabelFromEvent, MENU_CONFIG } from './config'
+import {
+  getLabelFromEvent,
+  type IQuickInsertMenuItem,
+  MENU_CONFIG,
+} from './config'
 import './index.css'
 
 const checkQuickInsert = (text: string) => /^[/、]\S*$/.test(text)

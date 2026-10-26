@@ -3,8 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Content from '../../block/base/content'
 import type Table from '../../block/gfm/table'
 import { Muya } from '../../muya'
-import type { ISelection } from '../types'
-import { SelectionCaretType, SelectionDirection } from '../types'
+import {
+  type ISelection,
+  SelectionCaretType,
+  SelectionDirection,
+} from '../types'
 
 // `selectAll` escalates through three rules:
 //   1. A frozen rectangular table selection: a partial rectangle (single cell

@@ -22,30 +22,54 @@ declare module '@muyajs/core' {
     githubSlug: string
   }
 
-  export class Muya {
-    static use(plugin: any, options?: Record<string, unknown>): void
-    constructor(element: HTMLElement, options?: Record<string, unknown>)
-    init(): void
-    [key: string]: any
+  export interface IMuyaNode {
+    id: string
+    text?: string
+    isContent(): boolean
   }
 
-  export const CodeBlockLanguageSelector: any
-  export const EmojiSelector: any
-  export const FootnoteTool: any
-  export const ImageEditTool: any
-  export const ImagePathPicker: any
-  export const ImageResizeBar: any
-  export const ImageToolBar: any
-  export const InlineFormatToolbar: any
-  export const LinkTools: any
-  export const ParagraphFrontButton: any
-  export const ParagraphFrontMenu: any
-  export const ParagraphQuickInsertMenu: any
-  export const PreviewToolBar: any
-  export const TableChessboard: any
-  export const TableColumnToolbar: any
-  export const TableDragBar: any
-  export const TableRowColumMenu: any
+  export class Muya {
+    static use(plugin: unknown, options?: Record<string, unknown>): void
+    constructor(element: HTMLElement, options?: Record<string, unknown>)
+    editor: {
+      scrollPage?: {
+        breadthFirstTraverse(visit: (node: IMuyaNode) => void): void
+      }
+    }
+    init(): void
+    getMarkdown(): string
+    replaceContent(content: string): void
+    getTOC(): ITocItem[]
+    getReadOnly(): boolean
+    setReadOnly(readOnly: boolean): void
+    forceUpdateDecorations(): void
+    on(event: string, listener: (...args: never[]) => void): void
+    canUndo(): boolean
+    canRedo(): boolean
+    undo(): void
+    redo(): void
+    selectAll(): void
+    destroy(): void
+    [key: string]: unknown
+  }
+
+  export const CodeBlockLanguageSelector: unknown
+  export const EmojiSelector: unknown
+  export const FootnoteTool: unknown
+  export const ImageEditTool: unknown
+  export const ImagePathPicker: unknown
+  export const ImageResizeBar: unknown
+  export const ImageToolBar: unknown
+  export const InlineFormatToolbar: unknown
+  export const LinkTools: unknown
+  export const ParagraphFrontButton: unknown
+  export const ParagraphFrontMenu: unknown
+  export const ParagraphQuickInsertMenu: unknown
+  export const PreviewToolBar: unknown
+  export const TableChessboard: unknown
+  export const TableColumnToolbar: unknown
+  export const TableDragBar: unknown
+  export const TableRowColumMenu: unknown
 
   export class MarkdownToHtml {
     markdown: string
@@ -59,19 +83,19 @@ declare module '@muyajs/core' {
     }): Promise<string>
   }
 
-  export function renderToStaticHTML(...args: any[]): any
+  export function renderToStaticHTML(...args: unknown[]): unknown
   export function escapeHTML(str: string): string
   export function unescapeHTML(str: string): string
   export function sanitize(
     html: string,
-    config?: any,
+    config?: unknown,
     isInline?: boolean
   ): string
   export function generateGithubSlug(text: string): string
   export function getImageInfo(src: string): {
     isUnknownType: boolean
     src: string
-    [key: string]: any
+    [key: string]: unknown
   }
   export function wordCount(markdown: string): {
     word: number

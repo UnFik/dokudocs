@@ -5,8 +5,7 @@ import type { Muya } from '../../index'
 import { isMouseEvent, throttle } from '../../utils'
 import { h, patch } from '../../utils/snabbdom'
 import BaseFloat from '../baseFloat'
-import type { TableColumnToolIcon } from './config'
-import icons from './config'
+import icons, { type TableColumnToolIcon } from './config'
 import './index.css'
 
 const OFFSET = 27

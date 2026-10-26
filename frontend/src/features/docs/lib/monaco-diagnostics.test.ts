@@ -118,7 +118,9 @@ describe('Monaco Mermaid Diagnostics', () => {
   it('returns empty markers when parse succeeds', async () => {
     const spy = vi
       .spyOn(mermaid, 'parse')
-      .mockResolvedValueOnce({ diagramType: 'flowchart-v2' } as any)
+      .mockResolvedValueOnce({
+        diagramType: 'flowchart-v2',
+      } as unknown as Awaited<ReturnType<typeof mermaid.parse>>)
     const markers = await validateMermaid('graph TD\n A-->B')
     expect(markers.length).toBe(0)
     spy.mockRestore()

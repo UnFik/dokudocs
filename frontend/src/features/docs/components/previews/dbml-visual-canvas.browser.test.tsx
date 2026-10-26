@@ -121,7 +121,6 @@ describe('DbmlVisualCanvas Component', () => {
       targetPosition: { x: 150, y: 120 },
     })
 
-    console.log('After drag transform:', canvasLayer.style.transform)
     expect(canvasLayer.style.transform).toContain('scale(1.15)')
   })
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { DocumentItem } from '@/types/dokudocs'
+import { type DocumentItem } from '@/types/dokudocs'
 import {
   Check,
   Copy,

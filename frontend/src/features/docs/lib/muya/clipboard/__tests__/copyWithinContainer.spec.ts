@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Content from '../../block/base/content'
-import type { Muya } from '../../muya'
-import { Muya as MuyaClass } from '../../muya'
+import { type Muya, Muya as MuyaClass } from '../../muya'
 import { SelectionCaretType, SelectionDirection } from '../../selection/types'
 
 // Copying a multi-leaf selection that stays inside a single list or block-quote

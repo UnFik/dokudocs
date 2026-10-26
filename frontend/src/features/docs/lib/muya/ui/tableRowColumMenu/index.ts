@@ -4,8 +4,7 @@ import type TableInner from '../../block/gfm/table/table'
 import type { Muya } from '../../index'
 import { h, patch } from '../../utils/snabbdom'
 import BaseFloat from '../baseFloat'
-import type { MenuItem } from './config'
-import { toolList } from './config'
+import { type MenuItem, toolList } from './config'
 import './index.css'
 
 const defaultOptions = {
@@ -105,7 +104,7 @@ export class TableRowColumMenu extends BaseFloat {
     const { location, action, target } = item
 
     if (action === 'insert') {
-      let cursorBlock = null
+      let cursorBlock
 
       if (target === 'row') {
         const offset = location === 'previous' ? rowCount : rowCount + 1

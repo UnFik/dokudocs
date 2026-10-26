@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type TableBlock from '../../block/gfm/table'
-import type { Muya } from '../../muya'
-import { Muya as MuyaClass } from '../../muya'
+import { type Muya, Muya as MuyaClass } from '../../muya'
 
 // muyajs parity: Backspace/Delete over a frozen table rect clears the selected
 // cells (no clipboard write, no table deletion). The `keydown` listener is on

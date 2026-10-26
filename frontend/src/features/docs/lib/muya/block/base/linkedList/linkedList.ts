@@ -24,9 +24,8 @@ export class LinkedList<T extends ILinkedNode> {
 
   contains(node: T) {
     const it = this.iterator()
-    let data = null
+    let data: IteratorResult<T>
 
-    // eslint-disable-next-line no-cond-assign
     while ((data = it.next()).done !== true) {
       const { value } = data
       if (value === node) return true

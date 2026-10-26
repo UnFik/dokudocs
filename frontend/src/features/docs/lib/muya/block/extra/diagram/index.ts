@@ -27,7 +27,7 @@ class DiagramBlock extends Parent {
     diagramBlock.appendAttachment(diagramPreview)
     diagramBlock.append(diagramContainer)
 
-    !!lang &&
+    if (lang) {
       loadLanguage(lang)
         .then((infoList) => {
           if (!Array.isArray(infoList)) return
@@ -42,6 +42,7 @@ class DiagramBlock extends Parent {
           // if no parameter provided, will cause error.
           debug.warn(err)
         })
+    }
 
     return diagramBlock
   }

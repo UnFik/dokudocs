@@ -3,8 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Content from '../block/base/content'
 import type Parent from '../block/base/parent'
 import { Muya } from '../muya'
-import type { ITableState, TState } from '../state/types'
-import { isTableState } from '../state/types'
+import { isTableState, type ITableState, type TState } from '../state/types'
 
 // Coverage for the programmatic editing API added for the muyajs ->
 // @muyajs/core desktop migration: createTable / insertImage / setCursor.

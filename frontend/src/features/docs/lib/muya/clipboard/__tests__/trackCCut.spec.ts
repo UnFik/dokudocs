@@ -2,8 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Content from '../../block/base/content'
 import type TableBlock from '../../block/gfm/table'
-import type { Muya } from '../../muya'
-import { Muya as MuyaClass } from '../../muya'
+import { type Muya, Muya as MuyaClass } from '../../muya'
 import { SelectionCaretType, SelectionDirection } from '../../selection/types'
 
 // Track C — Cut (clipboard chain step 2). Ports `packages/muyajs`

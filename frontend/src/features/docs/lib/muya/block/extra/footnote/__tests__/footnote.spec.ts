@@ -4,8 +4,10 @@ import Footnote from '..'
 import type { Muya } from '../../../../muya'
 import { MarkdownToState } from '../../../../state/markdownToState'
 import ExportMarkdown from '../../../../state/stateToMarkdown'
-import type { IFootnoteBlockState } from '../../../../state/types'
-import { isFootnoteBlockState } from '../../../../state/types'
+import {
+  type IFootnoteBlockState,
+  isFootnoteBlockState,
+} from '../../../../state/types'
 import { registerBlocks } from '../../../index'
 import { ScrollPage } from '../../../scrollPage'
 

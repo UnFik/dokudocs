@@ -40,7 +40,7 @@ interface IDropTarget {
 
 function hideGhost(): void {
   const ghost = document.querySelector(`#${GHOST_ID}`)
-  ghost && ghost.remove()
+  ghost?.remove()
 }
 
 // Above-or-below decision relative to the anchor block's vertical midpoint.

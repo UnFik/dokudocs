@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import { EXPORT_DOMPURIFY_CONFIG, PREVIEW_DOMPURIFY_CONFIG } from '../../config'
-import type { Config } from '../dompurify'
-import sanitize, { isValidAttribute } from '../dompurify'
+import sanitize, { type Config, isValidAttribute } from '../dompurify'
 
 // Lock the DOMPurify config to the typed contract so a regression in shape
 // (e.g. ADD_ATTR being dropped or renamed) breaks at compile time, not just

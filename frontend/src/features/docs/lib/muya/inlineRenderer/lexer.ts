@@ -1,9 +1,10 @@
 import escapeCharactersMap from '../config/escapeCharacter'
 import { isLengthEven, union } from '../utils'
-import type { BeginRules, InlineRules } from './rules'
 import {
   beginRules,
+  type BeginRules,
   inlineRules,
+  type InlineRules,
   linkValidateRules,
   validateRules,
 } from './rules'
@@ -664,7 +665,6 @@ function tryHtmlTag(state: ILexState): boolean {
   if (
     htmlTo &&
     !disallowedHtmlTag.test(htmlTo[3]) &&
-    // eslint-disable-next-line no-cond-assign
     (attrs = getAttributes(htmlTo[0]))
   ) {
     const tag = htmlTo[3]

@@ -4,8 +4,7 @@
 // every existing consumer to widen or narrow, which is invasive enough to
 // be its own follow-up. Keep the existing `any[]` here; future work can
 // introduce a typed event map.
-// eslint-disable-next-line ts/no-explicit-any
-export type Listener = (...args: any[]) => void
+export type Listener = (...args: any[]) => void // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export interface IEvent {
   eventId: string

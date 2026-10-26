@@ -1,8 +1,11 @@
 import Format from '../block/base/format'
 import type { Muya } from '../muya'
 import { isClipboardEvent, isKeyboardEvent } from '../utils'
-import type { IClipboardPayload } from './copyData'
-import { getClipboardData, writeClipboardData } from './copyData'
+import {
+  getClipboardData,
+  type IClipboardPayload,
+  writeClipboardData,
+} from './copyData'
 import { cutSelection, deleteTableSelection } from './cut'
 import { pastePlainText, pasteSelection } from './paste'
 import { pasteImageSrc } from './pasteImage'

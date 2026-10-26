@@ -269,7 +269,7 @@ describe('Mermaid Syntax Validation & Error Handling', () => {
     autonumber
     Note over App, `
 
-    let caughtError: any = null
+    let caughtError: unknown = null
     try {
       await mermaid.parse(invalidCode)
     } catch (err) {
@@ -277,7 +277,9 @@ describe('Mermaid Syntax Validation & Error Handling', () => {
     }
 
     expect(caughtError).not.toBeNull()
-    const errorMsg = caughtError?.message || String(caughtError)
+    const errorMsg = String(
+      (caughtError as { message?: string } | null)?.message || caughtError
+    )
     expect(errorMsg).toContain('Parse error')
   })
 

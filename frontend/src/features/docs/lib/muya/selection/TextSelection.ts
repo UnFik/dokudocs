@@ -15,8 +15,14 @@ import {
   getOffsetOfParagraph,
 } from './dom'
 import type Selection from './index'
-import type { IAnchorFocusInfo, INodeOffset, ISelection } from './types'
-import { SelectionCaretType, SelectionDirection, SelectionType } from './types'
+import {
+  type IAnchorFocusInfo,
+  type INodeOffset,
+  type ISelection,
+  SelectionCaretType,
+  SelectionDirection,
+  SelectionType,
+} from './types'
 
 function computeDirection(
   anchorBlock: Content,

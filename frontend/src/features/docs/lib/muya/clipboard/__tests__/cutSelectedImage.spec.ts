@@ -2,8 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Format from '../../block/base/format'
 import type { ImageToken } from '../../inlineRenderer/types'
-import type { Muya } from '../../muya'
-import { Muya as MuyaClass } from '../../muya'
+import { type Muya, Muya as MuyaClass } from '../../muya'
 
 // Cutting a selected inline image removes it from the document (muyajs parity).
 

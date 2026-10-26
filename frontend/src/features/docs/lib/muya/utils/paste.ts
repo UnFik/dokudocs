@@ -300,9 +300,9 @@ export function getCopyTextType(
   pasteType: PasteType
 ) {
   const getTextType = (text: string) => {
-    const match =
-      // eslint-disable-next-line regexp/no-super-linear-backtracking
-      /^<([a-z\d-]+)(?=\s|>).*?>[\s\S]+?<\/[a-z\d-]+>$/i.exec(text.trim())
+    const match = /^<([a-z\d-]+)(?=\s|>).*?>[\s\S]+?<\/[a-z\d-]+>$/i.exec(
+      text.trim()
+    )
     if (match && match[1]) {
       // The regex is case-insensitive, so `<P>` yields `tag = 'P'`;
       // PARAGRAPH_TYPES is all lowercase. Normalize before checking.

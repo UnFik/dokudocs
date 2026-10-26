@@ -5,8 +5,11 @@ import {
   injectStateSentinels,
   locateSentinelOffsets,
 } from '../selection/offsetCursor'
-import type { ISelection } from '../selection/types'
-import { SelectionCaretType, SelectionDirection } from '../selection/types'
+import {
+  type ISelection,
+  SelectionCaretType,
+  SelectionDirection,
+} from '../selection/types'
 
 // PARITY (gap PG2 / Phase G — G7): `getCursorOffset` is the READ inverse of
 // `setCursorByOffset`. It maps the live WYSIWYG block-key caret back to a

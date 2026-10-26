@@ -1,5 +1,4 @@
-import type { Token } from 'marked'
-import { Marked } from 'marked'
+import { Marked, type Token } from 'marked'
 import compatibleTaskList from './compatibleTaskList'
 import footnoteExtension from './extensions/footnote'
 import mathExtension from './extensions/math'

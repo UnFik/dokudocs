@@ -93,7 +93,6 @@ const UNICODE_WHITESPACE_REG = /^\s/
 //   U+20000–U+2A6DF  CJK Unified Ideographs Extension B (D840-D87F DC00-DFFF)
 //
 // Tracking: marktext/marktext#4307.
-// eslint-disable-next-line regexp/no-obscure-range
 const CJK_REG = /[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯ｦ-ﾝ]|[\uD840-\uD87F][\uDC00-\uDFFF]/
 
 // Extract the trailing Unicode code point of `s` as a 1- or 2-char string, or
@@ -194,7 +193,7 @@ export function parseSrcAndTitle(text = '') {
     }
   }
   const rawTitle = text.replace(/^[^ ]+ +/, '')
-  let src = ''
+  let src: string
   const TITLE_REG = /^('|")(.*?)\1$/ // we only support use `'` and `"` to indicate a title now.
   let title = ''
   if (rawTitle && TITLE_REG.test(rawTitle))

@@ -15,7 +15,6 @@ const SELF_CONTAINED_MEDIA = new Set(['video', 'audio'])
 // A single element with an empty body (`<div></div>`), except self-contained
 // media elements whose content lives in attributes (`<video src=...></video>`).
 export function isEmptyHtmlBlock(html: string): boolean {
-  // eslint-disable-next-line regexp/no-super-linear-backtracking, regexp/optimal-quantifier-concatenation
   const match = html.trim().match(/^<([a-z][a-z\d]*)[^>]*>\s*<\/\1>$/)
   return !!match && !SELF_CONTAINED_MEDIA.has(match[1])
 }

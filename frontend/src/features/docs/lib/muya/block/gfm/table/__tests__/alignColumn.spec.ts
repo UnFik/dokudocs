@@ -50,11 +50,13 @@ function bootMuya(markdown: string): Muya {
 
 function findTable(muya: Muya): Table {
   let table: Table | null = null
-  // eslint-disable-next-line ts/no-explicit-any
-  const visit = (block: any) => {
-    if (block.constructor?.blockName === 'table') table = block
-    // eslint-disable-next-line ts/no-explicit-any
-    block.children?.forEach((c: any) => visit(c))
+  const visit = (block: unknown) => {
+    const node = block as {
+      constructor?: { blockName?: string }
+      children?: unknown[]
+    }
+    if (node.constructor?.blockName === 'table') table = block as Table
+    node.children?.forEach((c) => visit(c))
   }
   visit(muya.editor.scrollPage)
   if (!table) throw new Error('no table found')

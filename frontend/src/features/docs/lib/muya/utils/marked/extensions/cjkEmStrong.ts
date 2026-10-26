@@ -57,7 +57,6 @@ const NOT_PUNCT_SPACE = `[^\\s\\p{P}\\p{S}${CJK}${CJK_NON_BMP}]`
 // CJK-widened). The non-capturing groups and lazy quantifiers are marked's own
 // shape — keeping them identical is the whole point, so the regexp/* lints that
 // would "simplify" them are disabled to preserve upstream fidelity.
-/* eslint-disable regexp/no-useless-non-capturing-group, regexp/no-useless-lazy */
 const emStrongLDelim = new RegExp(
   `^(?:\\*+(?:((?!\\*)${PUNCT})|[^\\s*]))|^_+(?:((?!_)${PUNCT})|([^\\s_]))`,
   'u'
@@ -70,7 +69,6 @@ const emStrongRDelimUnd = new RegExp(
   `^[^_*]*?\\*\\*[^_*]*?_[^_*]*?(?=\\*\\*)|[^_]+(?=[^_])|(?!_)${PUNCT}(_+)(?=\\s|$)|${NOT_PUNCT_SPACE}(_+)(?!_)(?=${PUNCT_SPACE}|$)|(?!_)${PUNCT_SPACE}(_+)(?=${NOT_PUNCT_SPACE})|\\s(_+)(?!_)(?=${PUNCT})|(?!_)${PUNCT}(_+)(?!_)(?=${PUNCT})`,
   'gu'
 )
-/* eslint-enable regexp/no-useless-non-capturing-group, regexp/no-useless-lazy */
 // `punctuation` and `unicodeAlphaNumeric` are tested against the single-unit
 // `prevChar`, so they additionally fold in a lone low surrogate (the trailing
 // half of an Ext-B ideograph) — see LOW_SURROGATE above.
@@ -134,7 +132,7 @@ function scanEmphasisRun(
   maskedSrc = maskedSrc.slice(-1 * src.length + lLength)
 
   let match: RegExpExecArray | null
-  // eslint-disable-next-line no-cond-assign
+
   while ((match = endReg.exec(maskedSrc)) != null) {
     rDelim =
       match[1] || match[2] || match[3] || match[4] || match[5] || match[6]

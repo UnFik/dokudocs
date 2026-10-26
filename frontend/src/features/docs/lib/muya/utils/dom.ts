@@ -56,7 +56,7 @@ export function getBlock(
   // `TreeNode.attachDOMNode` stamps onto rendered elements. The DOM types
   // can't express the project-specific property, so the lookup is widened
   // to `Record<string, …>` here once for all callers.
-  // eslint-disable-next-line no-restricted-syntax
+
   const block = (el as unknown as Record<string, Parent | Content | undefined>)[
     BLOCK_DOM_PROPERTY
   ]

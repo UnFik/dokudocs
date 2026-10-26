@@ -146,7 +146,7 @@ function blockKindOf(state: EditorState): BlockKind {
     const wrapper = wrapperKinds[node.type.name]
     if (wrapper) return wrapper
     if (node.type.name === 'atx_heading') {
-      let level = 0
+      let level: number
       try {
         level = Number(JSON.parse(String(node.attrs.bodyAttributes)).level)
       } catch {

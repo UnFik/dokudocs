@@ -73,7 +73,7 @@ export default function footnoteExtension(): MarkedExtension {
           // Marked's `TokenizerThis` is `void` in the public types;
           // the runtime context exposes `lexer` for nested block
           // parsing. Project this context once per hook.
-          // eslint-disable-next-line no-restricted-syntax
+
           const { lexer } = this as unknown as IFootnoteTokenizerThis
           const tokens = cleaned
             ? (lexer.blockTokens(cleaned, []) as Tokens.Generic[])

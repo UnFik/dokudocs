@@ -88,9 +88,7 @@ export async function loadImage(
     // Only bail out when we positively know it is NOT an image. `null`
     // means we couldn't check (e.g. a cross-origin HEAD blocked by CSP);
     // fall through to the actual load, which `img-src` permits (#3837).
-    if (isImage === false)
-      // eslint-disable-next-line prefer-promise-reject-errors
-      return Promise.reject('not an image.')
+    if (isImage === false) return Promise.reject('not an image.')
   }
 
   return new Promise((resolve, reject) => {

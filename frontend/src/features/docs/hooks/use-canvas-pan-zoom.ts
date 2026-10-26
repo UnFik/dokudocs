@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   getLocalUserScope,
   getUserStorage,
@@ -60,12 +60,13 @@ export function useCanvasPanZoom({
   const panRef = useRef<{ x: number; y: number }>(initialPanValue)
   const zoomRef = useRef<number>(initialZoomValue)
 
-  const prevDocIdRef = useRef(docId)
-  if (prevDocIdRef.current !== docId) {
-    prevDocIdRef.current = docId
+  // A document switch resets the layout before paint, never during render.
+  useLayoutEffect(() => {
     panRef.current = initialPanValue
     zoomRef.current = initialZoomValue
-  }
+    // Keyed on docId only: a memo change alone must not reset the user's view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docId])
 
   const canvasLayerNodeRef = useRef<HTMLDivElement | null>(null)
   const zoomBadgeNodeRef = useRef<HTMLSpanElement | null>(null)
@@ -93,7 +94,9 @@ export function useCanvasPanZoom({
   )
 
   const applyCanvasTransformRef = useRef(applyCanvasTransform)
-  applyCanvasTransformRef.current = applyCanvasTransform
+  useLayoutEffect(() => {
+    applyCanvasTransformRef.current = applyCanvasTransform
+  })
 
   const canvasLayerRef = useCallback((node: HTMLDivElement | null) => {
     canvasLayerNodeRef.current = node
@@ -104,6 +107,8 @@ export function useCanvasPanZoom({
     current: HTMLDivElement | null
   }
 
+  // mermaid-preview and dbml-visual-canvas read .current, so the callback ref needs an accessor.
+  // eslint-disable-next-line react-hooks/refs
   Object.defineProperty(canvasLayerRef, 'current', {
     get() {
       return canvasLayerNodeRef.current
@@ -126,6 +131,7 @@ export function useCanvasPanZoom({
     current: HTMLSpanElement | null
   }
 
+  // eslint-disable-next-line react-hooks/refs
   Object.defineProperty(zoomBadgeRef, 'current', {
     get() {
       return zoomBadgeNodeRef.current
@@ -160,7 +166,9 @@ export function useCanvasPanZoom({
   }, [docId, storagePrefix, storage])
 
   const saveLayoutRef = useRef(saveLayout)
-  saveLayoutRef.current = saveLayout
+  useLayoutEffect(() => {
+    saveLayoutRef.current = saveLayout
+  })
 
   const setPanAndZoom = useCallback(
     (nextPan: { x: number; y: number }, nextZoom: number) => {

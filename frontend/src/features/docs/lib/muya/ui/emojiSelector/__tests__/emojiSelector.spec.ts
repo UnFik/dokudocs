@@ -27,7 +27,8 @@ function makeFakeMuya(t: (s: string) => string = (s: string) => s): {
   const shownFloat = new Set()
   // Mirror Ui.listen so `status` flips when the float shows/hides.
   eventCenter.subscribe('muya-float', (tool: unknown, status: boolean) => {
-    status ? shownFloat.add(tool) : shownFloat.delete(tool)
+    if (status) shownFloat.add(tool)
+    else shownFloat.delete(tool)
   })
 
   const muya = {

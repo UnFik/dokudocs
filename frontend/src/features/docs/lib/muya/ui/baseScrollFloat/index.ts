@@ -105,7 +105,7 @@ abstract class BaseScrollFloat extends BaseFloat {
 
   selectItem(item: unknown) {
     const { cb } = this
-    cb && cb(item)
+    cb?.(item)
     // Delay hide to avoid dispatch enter handler
     requestAnimationFrame(this.hide.bind(this))
   }

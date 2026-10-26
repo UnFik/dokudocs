@@ -640,7 +640,9 @@ export function DbmlVisualCanvas({
             return parsed.tablePositions
           }
         }
-      } catch (e) {}
+      } catch {
+        // Errors are intentionally ignored here.
+      }
     }
     return {}
   })
@@ -656,7 +658,9 @@ export function DbmlVisualCanvas({
               return parsed.edgeJoints
             }
           }
-        } catch (e) {}
+        } catch {
+          // Errors are intentionally ignored here.
+        }
       }
       return {}
     }
@@ -803,7 +807,7 @@ export function DbmlVisualCanvas({
           headerColor = colorMatch[1]
         }
 
-        let indexes: TableIndex[] = []
+        const indexes: TableIndex[] = []
         let bodyWithoutIndexes = body
 
         const indexesMatch = body.match(/indexes\s*\{([^}]+)\}/i)
@@ -1018,7 +1022,9 @@ export function DbmlVisualCanvas({
             pan: panRef.current,
           })
         )
-      } catch (e) {}
+      } catch {
+        // Errors are intentionally ignored here.
+      }
     }
   }
 
@@ -1086,7 +1092,9 @@ export function DbmlVisualCanvas({
                 pan: panRef.current,
               })
             )
-          } catch (e) {}
+          } catch {
+            // Errors are intentionally ignored here.
+          }
           return current
         })
       }
@@ -1189,7 +1197,9 @@ export function DbmlVisualCanvas({
                 pan: panRef.current,
               })
             )
-          } catch (e) {}
+          } catch {
+            // Errors are intentionally ignored here.
+          }
           return current
         })
       }
@@ -1257,7 +1267,9 @@ export function DbmlVisualCanvas({
               pan: panRef.current,
             })
           )
-        } catch (err) {}
+        } catch {
+          // Errors are intentionally ignored here.
+        }
       }
       return next
     })
@@ -1288,7 +1300,9 @@ export function DbmlVisualCanvas({
               edgeJoints: next,
             })
           )
-        } catch (err) {}
+        } catch {
+          // Errors are intentionally ignored here.
+        }
       }
       return next
     })

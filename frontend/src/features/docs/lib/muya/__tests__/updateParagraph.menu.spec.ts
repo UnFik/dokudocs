@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type Parent from '../block/base/parent'
 import { Muya } from '../muya'
 
 const bootedHosts: HTMLElement[] = []
@@ -32,8 +33,10 @@ function placeCursorOnLastContent(muya: Muya) {
   last.setCursor(0, 0, true)
   return last
 }
-// eslint-disable-next-line ts/no-explicit-any
-function hasName(state: any[], name: string): boolean {
+function hasName(
+  state: { name?: unknown; children?: unknown }[],
+  name: string
+): boolean {
   return state.some(
     (b) =>
       b.name === name ||
@@ -238,11 +241,11 @@ describe('updateParagraph toggle-off active types', () => {
 
   it('toggling one of several thematic breaks lands the caret in ITS empty paragraph, not another rule', async () => {
     const muya = bootMuya('a\n\n---\n\nb\n\n---\n\nc\n') // two hrs at index 1 and 3
-    // eslint-disable-next-line ts/no-explicit-any
-    const secondHr = (muya.editor.scrollPage!.firstChild as any).next.next.next
+    const secondHr = muya.editor.scrollPage!.firstChild!.next!.next!
+      .next! as Parent
     const hrContent = secondHr.firstContentInDescendant()
     muya.editor.activeContentBlock = hrContent
-    hrContent.setCursor(0, 0, true)
+    hrContent!.setCursor(0, 0, true)
     muya.updateParagraph('hr')
     await vi.waitFor(() => {
       const s = muya.getState()

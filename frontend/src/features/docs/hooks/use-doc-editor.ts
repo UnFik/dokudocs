@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
 import { getDocCategories } from '@/lib/doc-category-utils'
 import {
@@ -56,6 +56,11 @@ export function useDocEditor(docId: string) {
     setProjectId(doc?.projectId ?? null)
     setCategories(getDocCategories(doc))
     setIsDirty(false)
+  }
+
+  // Refs reset after commit, never during render. This runs before the mount
+  // effect so the bump happens before any thumbnail request captures the version.
+  useEffect(() => {
     latestStateRef.current = null
     isDirtyRef.current = false
     thumbnailVersion.current += 1
@@ -63,7 +68,7 @@ export function useDocEditor(docId: string) {
       clearTimeout(saveTimerRef.current)
       saveTimerRef.current = null
     }
-  }
+  }, [docId])
 
   useMountEffect(() => {
     if (!isLocalUserScopeCurrent(scope)) return

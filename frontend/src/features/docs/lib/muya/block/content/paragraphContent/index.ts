@@ -10,17 +10,18 @@ import type {
   Token,
 } from '../../../inlineRenderer/types'
 import type { IRenderCursor } from '../../../selection/types'
-import type {
-  IBlockQuoteState,
-  IBulletListState,
-  IDiagramMeta,
-  IListItemState,
-  IOrderListState,
-  IParagraphState,
-  ITaskListItemState,
-  ITaskListState,
+import {
+  type IBlockQuoteState,
+  type IBulletListState,
+  type IDiagramMeta,
+  type IListItemState,
+  type IOrderListState,
+  type IParagraphState,
+  isListItemState,
+  isTaskListItemState,
+  type ITaskListItemState,
+  type ITaskListState,
 } from '../../../state/types'
-import { isListItemState, isTaskListItemState } from '../../../state/types'
 import type { Nullable } from '../../../types'
 import { isKeyboardEvent, isLengthEven } from '../../../utils'
 import logger from '../../../utils/logger'
@@ -49,7 +50,6 @@ const debug = logger('paragraph:content')
 const HTML_BLOCK_REG = /^<([a-z\d-]+)(?=\s|>)[^<>]*>$/i
 const CODE_BLOCK_REG = /(^ {0,3}`{3,})([^` ]*)/
 const MATH_BLOCK_REG = /^\$\$/
-// eslint-disable-next-line regexp/no-super-linear-backtracking
 const TABLE_BLOCK_REG = /^\|.*?(\\*)\|.*?(\\*)\|/
 
 type BlockConversion =

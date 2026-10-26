@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TrashItem } from '@/types/dokudocs'
+import { type TrashItem } from '@/types/dokudocs'
 import { Folder, RotateCcw, Trash2 } from 'lucide-react'
 import { getCategoryPalette } from '@/lib/category-palette'
 import {

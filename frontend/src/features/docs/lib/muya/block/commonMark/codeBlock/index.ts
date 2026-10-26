@@ -72,7 +72,7 @@ class CodeBlock extends Parent {
 
     // `value` is the full info string; load Prism for its first word only.
     const language = firstWordOfInfo(value)
-    !!language &&
+    if (language) {
       loadLanguage(language)
         .then((infoList) => {
           if (!Array.isArray(infoList)) return
@@ -87,6 +87,7 @@ class CodeBlock extends Parent {
           // if no parameter provided, will cause error.
           debug.warn(err)
         })
+    }
   }
 
   override get path(): TBlockPath {

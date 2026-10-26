@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-/* eslint-disable ts/no-explicit-any */
 import { describe, expect, it, vi } from 'vitest'
 import { ScrollPage } from '../../block/scrollPage'
 import type { Muya } from '../../muya'
@@ -39,20 +38,47 @@ const Clipboard = (await import('../index')).default
 
 interface IRecordedBlock {
   name: string
-  state: any
+  state: StateLike
   _contentText: string
 }
 
-function makeCreatedBlock(state: any): IRecordedBlock & {
-  firstContentInDescendant: () => any
-  lastContentInDescendant: () => any
+interface StateLike {
+  name?: string
+  text?: string
+  meta?: { lang?: string }
+  children?: StateLike[]
+}
+
+interface MockWrapper {
+  blockName: string
+  firstContentInDescendant: () => null
+  getState: () => StateLike
+  remove: ReturnType<typeof vi.fn>
+  parent?: { insertAfter: ReturnType<typeof vi.fn>; children: unknown[] }
+}
+
+interface MockAnchor {
+  blockName: string
+  text: string
+  getCursor: () => { start: { offset: number }; end: { offset: number } }
+  setCursor: ReturnType<typeof vi.fn>
+  getAnchor: () => MockWrapper
+  closestBlock: () => null
+  firstContentInDescendant: () => MockAnchor
+  getState: () => StateLike
+  update: ReturnType<typeof vi.fn>
+}
+
+function makeCreatedBlock(state: StateLike): IRecordedBlock & {
+  firstContentInDescendant: () => unknown
+  lastContentInDescendant: () => unknown
 } {
   const content = {
     text: state.text ?? '',
     setCursor: vi.fn(),
   }
   return {
-    name: state.name,
+    name: state.name ?? '',
     state,
     _contentText: state.text ?? '',
     firstContentInDescendant: () => content,
@@ -65,25 +91,25 @@ function installLoadBlockSpy(created: IRecordedBlock[]) {
     .spyOn(ScrollPage, 'loadBlock')
     .mockImplementation((_name: string) => {
       return {
-        create: (_muya: Muya, state: any) => {
+        create: (_muya: Muya, state: StateLike) => {
           const block = makeCreatedBlock(state)
           created.push(block)
           return block
         },
-      } as any
+      } as never
     })
 }
 
 function makeWrapper(blockName: string) {
-  const children: any[] = []
-  const wrapper: any = {
+  const children: unknown[] = []
+  const wrapper: MockWrapper = {
     blockName,
     firstContentInDescendant: () => null,
     getState: () => ({ name: blockName, text: '' }),
     remove: vi.fn(),
   }
   wrapper.parent = {
-    insertAfter: vi.fn((newBlock: any, _ref: any) => {
+    insertAfter: vi.fn((newBlock: unknown, _ref: unknown) => {
       children.push(newBlock)
     }),
     children,
@@ -94,10 +120,10 @@ function makeWrapper(blockName: string) {
 function makeAnchorBlock(
   blockName: string,
   text: string,
-  wrapper: any,
+  wrapper: MockWrapper,
   cursor = text.length
 ) {
-  const block: any = {
+  const block: MockAnchor = {
     blockName,
     text,
     getCursor: () => ({ start: { offset: cursor }, end: { offset: cursor } }),
@@ -112,11 +138,11 @@ function makeAnchorBlock(
 }
 
 function makeClipboard(
-  anchorBlock: any,
+  anchorBlock: MockAnchor,
   options: Record<string, unknown> = {},
   tableStub: {
     hasSelection: boolean
-    getStateForCopy: () => any
+    getStateForCopy: () => unknown
     clear: ReturnType<typeof vi.fn>
   } = {
     hasSelection: false,
@@ -316,7 +342,7 @@ describe('pasteHandler — block-level HTML becomes a live html-block (sub-item 
 
 describe('pasteHandler — table-cell paste guards (sub-item 4)', () => {
   function makeClipboardWithTableSelection(
-    anchorBlock: any,
+    anchorBlock: MockAnchor,
     hasSelection: boolean,
     isSingleCell: boolean
   ) {

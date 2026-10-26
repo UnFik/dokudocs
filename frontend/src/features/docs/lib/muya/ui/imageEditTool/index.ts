@@ -6,12 +6,14 @@ import type { ImageToken } from '../../inlineRenderer/types'
 import { getUniqueId, isHTMLInputElement, isKeyboardEvent } from '../../utils'
 import { query } from '../../utils/dom'
 import { getImageInfo, getImageSrc } from '../../utils/image'
+import logger from '../../utils/logger'
 import { h, patch } from '../../utils/snabbdom'
 import BaseFloat from '../baseFloat'
-import type { IImagePathSuggestion } from '../imagePicker'
-import { ImagePathPicker } from '../imagePicker'
+import { type IImagePathSuggestion, ImagePathPicker } from '../imagePicker'
 import type { IBaseOptions } from '../types'
 import './index.css'
+
+const debug = logger('imageEditTool:')
 
 /**
  * Image state interface containing source, alt text and title
@@ -450,7 +452,7 @@ export class ImageEditTool extends BaseFloat {
    */
   private async _handleSelectButtonClick() {
     if (!this.options.imagePathPicker) {
-      console.warn('You need to add a imagePathPicker option')
+      debug.warn('You need to add a imagePathPicker option')
       return
     }
 

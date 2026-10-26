@@ -67,7 +67,7 @@ function projectTokens(
       case 'auto_link_extension':
       case 'auto_link': {
         const attributes = { ...inherited }
-        let text = tokensToPlainText([token])
+        const text = tokensToPlainText([token])
         if (token.type === 'auto_link_extension')
           attributes.href = token.url || token.email
         if (token.type === 'auto_link' && token.isLink)

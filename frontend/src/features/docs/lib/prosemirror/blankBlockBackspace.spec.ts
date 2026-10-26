@@ -1,8 +1,7 @@
 import { TextSelection } from 'prosemirror-state'
 import { describe, expect, it } from 'vitest'
-import { mountTestEditor } from './editorTestKit'
 import { bodyBuilder } from './blocks/testSupport'
-import { pressKey } from './editorTestKit'
+import { mountTestEditor, pressKey } from './editorTestKit'
 
 function mountWith(type: string, attributes: Record<string, unknown> = {}) {
   const b = bodyBuilder()
@@ -37,7 +36,9 @@ describe('Backspace on the empty line of a block', () => {
       pressKey(harness.editor.view.dom, 'Backspace')
       await new Promise((resolve) => setTimeout(resolve, 100))
       const names: string[] = []
-      harness.editor.view.state.doc.child(0).forEach((n) => names.push(n.type.name))
+      harness.editor.view.state.doc
+        .child(0)
+        .forEach((n) => names.push(n.type.name))
       expect(names).not.toContain(pmName)
       expect(names).toContain('paragraph')
     } finally {
