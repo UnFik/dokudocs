@@ -125,13 +125,13 @@ export function blockMarkdownRules() {
     // "> ": a quote.
     blockRule(/^>\s$/, (runs) => [createNode('block_quote', {}, [line(runs)])]),
     // "```" or "```lang" and a space: a code block; the rest of the line is its text.
-    blockRule(/^```([a-zA-Z0-9_+-]*)\s$/, (runs, match) => [
-      createNode(
-        'code_block',
-        { type: 'fenced', lang: match[1] ?? '' },
-        runs.map((item) => item.textContent).join('')
-      ),
-    ]),
+    // "```mermaid " is a Mermaid diagram, the same block the "Mermaid diagram" command makes.
+    blockRule(/^```([a-zA-Z0-9_+-]*)\s$/, (runs, match) => {
+      const text = runs.map((item) => item.textContent).join('')
+      if (match[1] === 'mermaid')
+        return [createNode('diagram', { type: 'mermaid', lang: 'yaml' }, text)]
+      return [createNode('code_block', { type: 'fenced', lang: match[1] ?? '' }, text)]
+    }),
     // "---": a separator, with a new line after it for what comes next.
     blockRule(/^---$/, (runs) => [
       nodes.thematic_break!.create({

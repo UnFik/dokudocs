@@ -85,18 +85,31 @@ func (f fence) unindent(line string) string {
 	return line[min(leadingSpaces(line), f.indent):]
 }
 
-func codeBlock(lang, text string) pmNode {
-	attributes, _ := json.Marshal(struct {
-		Type string `json:"type"`
-		Lang string `json:"lang"`
-	}{"fenced", lang})
-	n := block("code_block", string(attributes), "")
-	// The editor keeps the code as text directly in the block, not in a run.
+// textBlock is a block whose text sits directly in it, not in a run, as the editor keeps code and diagrams.
+func textBlock(kind, attributes, text string) pmNode {
+	n := block(kind, attributes, "")
 	n.Content = nil
 	if text != "" {
 		n.Content = []pmNode{{Type: "text", Text: text}}
 	}
 	return n
+}
+
+func codeBlock(lang, text string) pmNode {
+	attributes, _ := json.Marshal(struct {
+		Type string `json:"type"`
+		Lang string `json:"lang"`
+	}{"fenced", lang})
+	return textBlock("code_block", string(attributes), text)
+}
+
+// diagramBlock is a Mermaid diagram, the same node the editor's /mermaid command makes.
+func diagramBlock(text string) pmNode {
+	attributes, _ := json.Marshal(struct {
+		Type string `json:"type"`
+		Lang string `json:"lang"`
+	}{"mermaid", "yaml"})
+	return textBlock("diagram", string(attributes), text)
 }
 
 // MarkdownToContentJSON turns the text the Agent writes into the editor's
@@ -121,7 +134,11 @@ func MarkdownToContentJSON(text string) json.RawMessage {
 			for ; i < len(lines) && !f.closes(lines[i]); i++ {
 				code = append(code, f.unindent(lines[i]))
 			}
-			blocks = append(blocks, codeBlock(f.lang, strings.Join(code, "\n")))
+			if f.lang == "mermaid" {
+				blocks = append(blocks, diagramBlock(strings.Join(code, "\n")))
+			} else {
+				blocks = append(blocks, codeBlock(f.lang, strings.Join(code, "\n")))
+			}
 			continue
 		}
 		line := strings.TrimSpace(lines[i])
