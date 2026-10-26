@@ -1,4 +1,5 @@
 import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import { Plugin } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import { documentBodySchema } from './documentBody'
@@ -52,6 +53,8 @@ export type HoverPreview =
       excerpt?: string
       thumbnail?: string
       thumbnailDark?: string
+      /** What a thumbnail is drawn from when none is stored: Markdown or diagram source. */
+      previewSource?: string
       authorName?: string
       updatedAt?: string
     }
@@ -85,26 +88,85 @@ function element(tag: string, className: string, text?: string) {
   return node
 }
 
+const cleanSvg = (svg: string) =>
+  DOMPurify.sanitize(svg, {
+    USE_PROFILES: { svg: true },
+    ADD_ATTR: ['vector-effect'],
+  })
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]!.toUpperCase())
+    .join('')
+
+/**
+ * A diagram with no stored thumbnail is drawn from its source, as the cards of
+ * the page list do. The drawing code is large, so it is loaded only here.
+ */
+async function drawDiagram(
+  card: HTMLElement,
+  id: string,
+  type: string,
+  source: string,
+  dark: boolean
+) {
+  try {
+    const generator = await import('../doc-thumbnail-generator')
+    const svg =
+      type === 'dbdiagram'
+        ? generator.generateDbmlThumbnail(source, id, dark)
+        : type === 'mermaid'
+          ? generator.generateMermaidThumbnail(source, dark)
+          : null
+    if (!svg || !card.isConnected) return
+    const frame = element('div', 'dd-link-thumbnail')
+    frame.innerHTML = cleanSvg(svg)
+    card.prepend(frame)
+  } catch {
+    // The card stays as it is without a drawing.
+  }
+}
+
 /** Adds what the fetch found to a card that is already showing the basics. */
 function fillPreview(
   card: HTMLElement,
   title: HTMLElement,
   address: HTMLElement,
+  id: string,
   preview: HoverPreview
 ) {
   if (preview.kind === 'document') {
     if (preview.title) title.textContent = preview.title
     const dark = document.documentElement.classList.contains('dark')
     const svg = (dark && preview.thumbnailDark) || preview.thumbnail
+    let drawn = false
     if (svg) {
       const frame = element('div', 'dd-link-thumbnail')
-      frame.innerHTML = DOMPurify.sanitize(svg, {
-        USE_PROFILES: { svg: true },
-        ADD_ATTR: ['vector-effect'],
-      })
+      frame.innerHTML = cleanSvg(svg)
       card.prepend(frame)
+      drawn = true
+    } else if (preview.previewSource && preview.type === 'markdown') {
+      const frame = element('div', 'dd-link-thumbnail')
+      const page = element('div', 'dd-link-thumbnail-page')
+      page.innerHTML = DOMPurify.sanitize(
+        marked.parse(preview.previewSource, {
+          gfm: true,
+          breaks: true,
+          async: false,
+        })
+      )
+      frame.append(page)
+      card.prepend(frame)
+      drawn = true
+    } else if (preview.previewSource) {
+      drawn = true
+      void drawDiagram(card, id, preview.type, preview.previewSource, dark)
     }
-    if (preview.excerpt)
+    // A drawn page already shows its text, so the excerpt is not repeated.
+    if (preview.excerpt && !drawn)
       card.append(element('p', 'dd-link-excerpt', preview.excerpt))
     const meta = [
       preview.authorName,
@@ -118,13 +180,14 @@ function fillPreview(
   }
   title.textContent = preview.name
   address.textContent = preview.email ?? 'Person'
+  const avatar = element('div', 'dd-link-avatar')
   if (preview.avatarUrl) {
-    const avatar = document.createElement('img')
-    avatar.className = 'dd-link-avatar'
-    avatar.alt = ''
-    avatar.src = preview.avatarUrl
-    card.prepend(avatar)
-  }
+    const picture = document.createElement('img')
+    picture.alt = ''
+    picture.src = preview.avatarUrl
+    avatar.append(picture)
+  } else avatar.textContent = initials(preview.name)
+  card.prepend(avatar)
   if (preview.role) card.append(element('span', 'dd-link-role', preview.role))
   if (preview.bio) card.append(element('p', 'dd-link-excerpt', preview.bio))
 }
@@ -338,7 +401,7 @@ class LinkHover {
     if (wanted && this.options.resolvePreview)
       void this.preview(wanted).then((preview) => {
         if (preview && this.card === card)
-          fillPreview(card, title, address, preview)
+          fillPreview(card, title, address, wanted.id, preview)
       })
   }
 

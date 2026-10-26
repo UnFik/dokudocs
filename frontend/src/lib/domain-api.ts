@@ -474,6 +474,7 @@ const documentPreviewSchema = z.object({
   excerpt: z.string().optional(),
   thumbnail: z.string().optional(),
   thumbnailDark: z.string().optional(),
+  previewSource: z.string().optional(),
   author: z.object({ name: z.string().optional() }).optional(),
   updatedAt: z.string().optional(),
 })
@@ -485,6 +486,7 @@ export type DocumentHoverPreview = {
   excerpt?: string
   thumbnail?: string
   thumbnailDark?: string
+  previewSource?: string
   authorName?: string
   updatedAt?: string
 }
@@ -517,6 +519,7 @@ export async function getDocumentHoverPreview(
     excerpt: row.excerpt,
     thumbnail: row.thumbnail,
     thumbnailDark: row.thumbnailDark,
+    previewSource: row.previewSource,
     authorName: row.author?.name,
     updatedAt: row.updatedAt,
   }

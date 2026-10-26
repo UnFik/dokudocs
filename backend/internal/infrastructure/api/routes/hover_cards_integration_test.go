@@ -120,7 +120,8 @@ func TestDocumentPreviewShowsATitleAnExcerptAndTheThumbnail(t *testing.T) {
 			Type      string                `json:"type"`
 			Excerpt   string                `json:"excerpt"`
 			Content   string                `json:"content"`
-			Author    struct{ Name string } `json:"author"`
+			PreviewSource string            `json:"previewSource"`
+			Author   struct{ Name string } `json:"author"`
 			UpdatedAt string                `json:"updatedAt"`
 		} `json:"data"`
 	}
@@ -146,6 +147,7 @@ func TestDocumentPreviewShowsATitleAnExcerptAndTheThumbnail(t *testing.T) {
 		Data struct {
 			Thumbnail string `json:"thumbnail"`
 			Excerpt   string `json:"excerpt"`
+			PreviewSource string `json:"previewSource"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &drawn); err != nil {
@@ -153,6 +155,29 @@ func TestDocumentPreviewShowsATitleAnExcerptAndTheThumbnail(t *testing.T) {
 	}
 	if drawn.Data.Thumbnail != "<svg><rect/></svg>" {
 		t.Errorf("diagram thumbnail = %q", drawn.Data.Thumbnail)
+	}
+	if drawn.Data.PreviewSource != "" {
+		t.Errorf("a drawing with a thumbnail also carries its source: %q", drawn.Data.PreviewSource)
+	}
+	if !strings.HasPrefix(markdown.Data.PreviewSource, "# Launch plan\n\nShip the **new** editor") {
+		t.Errorf("markdown previewSource = %q, want the start of the Markdown as written", markdown.Data.PreviewSource)
+	}
+	if n := len([]rune(markdown.Data.PreviewSource)); n > 1500 {
+		t.Errorf("markdown previewSource has %d characters, want at most 1500", n)
+	}
+
+	bare := world.document(t, "mermaid", "Bare flow", "workspace", "graph TD; A-->B", "")
+	rec = world.get(t, world.readerID, "/api/v1/documents/"+bare.String()+"/preview")
+	var generated struct {
+		Data struct {
+			PreviewSource string `json:"previewSource"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &generated); err != nil {
+		t.Fatalf("decode bare diagram preview: %v", err)
+	}
+	if generated.Data.PreviewSource != "graph TD; A-->B" {
+		t.Errorf("a drawing without a thumbnail carries no source to draw one from: %q", generated.Data.PreviewSource)
 	}
 }
 

@@ -1,6 +1,6 @@
 import { EditorState, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bodyBuilder, bodyOf } from './blocks/testSupport'
 import { documentBodyToProseMirror } from './documentBody'
 import { runStart } from './editorTestKit'
@@ -366,7 +366,7 @@ describe('hover previews, fetched on demand', () => {
     expect(card.textContent).toContain('rina@example.com')
     expect(card.textContent).toContain('owner')
     expect(card.textContent).toContain('Writes the launch plan')
-    expect(card.querySelector('img')?.getAttribute('src')).toBe(
+    expect(card.querySelector('.dd-link-avatar img')?.getAttribute('src')).toBe(
       'https://example.com/rina.png'
     )
   })
@@ -400,6 +400,64 @@ describe('hover previews, fetched on demand', () => {
     const card = host.querySelector<HTMLElement>('.dd-link-card')!
     expect(card.textContent).toContain('Launch plan')
     expect(card.querySelector('a[aria-label="Open link"]')).not.toBeNull()
+  })
+
+  it('draws a page without a stored thumbnail from the start of its Markdown', async () => {
+    const { host } = mount('see ', {
+      mention: page,
+      resolvePreview: async () => ({
+        kind: 'document',
+        title: 'Launch plan',
+        type: 'markdown',
+        excerpt: 'Launch plan Ship it',
+        previewSource:
+          '# Launch plan\n\nShip **it**.<script>alert(1)</script><img src=x onerror=alert(1)>',
+      }),
+    })
+    hover(host)
+    await wait()
+    const thumb = host.querySelector<HTMLElement>('.dd-link-thumbnail')!
+    expect(thumb.querySelector('h1')?.textContent).toBe('Launch plan')
+    expect(thumb.querySelector('strong')?.textContent).toBe('it')
+    expect(thumb.querySelector('script')).toBeNull()
+    expect(thumb.querySelector('[onerror]')).toBeNull()
+    // The thumbnail already shows the text, so the excerpt is not repeated.
+    expect(host.querySelector('.dd-link-excerpt')).toBeNull()
+  })
+
+  it('draws a diagram without a stored thumbnail from its source', async () => {
+    const { host } = mount('see ', {
+      mention: page,
+      resolvePreview: async () => ({
+        kind: 'document',
+        title: 'Schema',
+        type: 'dbdiagram',
+        previewSource: 'Table users {\n  id int [pk]\n  name varchar\n}',
+      }),
+    })
+    hover(host)
+    // The drawing code is loaded on first use, which takes a moment.
+    await vi.waitFor(
+      () => expect(host.querySelector('.dd-link-thumbnail svg')).not.toBeNull(),
+      { timeout: 8000 }
+    )
+  })
+
+  it('gives a person without a picture their initials', async () => {
+    const { host } = mount('see ', {
+      mention: person,
+      resolvePreview: async () => ({
+        kind: 'person',
+        name: 'System Administrator',
+        email: 'admin@example.com',
+        role: 'owner',
+      }),
+    })
+    hover(host)
+    await wait()
+    const avatar = host.querySelector<HTMLElement>('.dd-link-avatar')!
+    expect(avatar.textContent).toBe('SA')
+    expect(avatar.querySelector('img')).toBeNull()
   })
 
   it('does not fill a card the pointer has already left', async () => {

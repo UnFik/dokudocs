@@ -11,7 +11,11 @@ import (
 )
 
 // previewExcerptRunes is how much of a page a hover card shows.
-const previewExcerptRunes = 300
+const (
+	previewExcerptRunes  = 300
+	previewMarkdownRunes = 1500
+	previewDiagramRunes  = 20000
+)
 
 // GetDocumentPreview is what a hover card shows of a page. It is readable by
 // whoever may read the page, and never carries the whole body.
@@ -29,10 +33,25 @@ func (u *useCase) GetDocumentPreview(ctx context.Context, id, workspaceID, userI
 		Author:        doc.Author,
 		UpdatedAt:     doc.UpdatedAt,
 	}
-	if doc.Type == "markdown" {
+	switch doc.Type {
+	case "markdown":
 		data.Excerpt = plainExcerpt(doc.Content, previewExcerptRunes)
+		data.PreviewSource = firstRunes(doc.Content, previewMarkdownRunes)
+	case "mermaid", "dbdiagram":
+		// Without a stored drawing the client draws one, as the cards of the page list do.
+		if data.Thumbnail == "" && len([]rune(doc.Content)) <= previewDiagramRunes {
+			data.PreviewSource = doc.Content
+		}
 	}
 	return data, nil
+}
+
+func firstRunes(text string, limit int) string {
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	return string(runes[:limit])
 }
 
 func firstNonEmpty(values ...string) string {

@@ -68,9 +68,12 @@ type DocumentPreview struct {
 	Title string    `json:"title"`
 	Type  string    `json:"type"`
 	// Excerpt is the start of a Markdown page as plain text; empty for other types.
-	Excerpt       string     `json:"excerpt,omitempty"`
-	Thumbnail     string     `json:"thumbnail,omitempty"`
-	ThumbnailDark string     `json:"thumbnailDark,omitempty"`
+	Excerpt       string `json:"excerpt,omitempty"`
+	Thumbnail     string `json:"thumbnail,omitempty"`
+	ThumbnailDark string `json:"thumbnailDark,omitempty"`
+	// PreviewSource is what the client draws a thumbnail from when none is stored: the
+	// start of a Markdown page, or the whole source of a diagram that fits.
+	PreviewSource string     `json:"previewSource,omitempty"`
 	Author        UserAuthor `json:"author"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 }
