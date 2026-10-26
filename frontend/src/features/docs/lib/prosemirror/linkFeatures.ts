@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { Plugin } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import { documentBodySchema } from './documentBody'
@@ -37,6 +38,95 @@ export type LinkFeaturesOptions = {
   enabled: () => boolean
   /** The title of a page a link goes to, when it is a page of this app. */
   resolveTitle?: (href: string) => Promise<string | null>
+  /** What a hover card shows of a page or a person, fetched when the pointer first rests on it. */
+  resolvePreview?: (target: HoverTarget) => Promise<HoverPreview | null>
+}
+
+export type HoverTarget = { kind: 'document' | 'person'; id: string }
+
+export type HoverPreview =
+  | {
+      kind: 'document'
+      title: string
+      type: string
+      excerpt?: string
+      thumbnail?: string
+      thumbnailDark?: string
+      authorName?: string
+      updatedAt?: string
+    }
+  | {
+      kind: 'person'
+      name: string
+      email?: string
+      role?: string
+      bio?: string
+      avatarUrl?: string
+    }
+
+const previewKeptFor = 60_000
+
+/** Who or what a hovered chip or link is, when a preview can be fetched for it. */
+function previewTarget(target: HTMLElement, href: string): HoverTarget | null {
+  if (target.classList.contains('dd-mention')) {
+    const id = target.dataset.mentionId ?? ''
+    const kind = target.dataset.mentionKind
+    if (id && (kind === 'document' || kind === 'person')) return { kind, id }
+    return null
+  }
+  const page = /^\/docs\/([0-9a-f-]{36})/i.exec(href)?.[1]
+  return page ? { kind: 'document', id: page } : null
+}
+
+function element(tag: string, className: string, text?: string) {
+  const node = document.createElement(tag)
+  node.className = className
+  if (text) node.textContent = text
+  return node
+}
+
+/** Adds what the fetch found to a card that is already showing the basics. */
+function fillPreview(
+  card: HTMLElement,
+  title: HTMLElement,
+  address: HTMLElement,
+  preview: HoverPreview
+) {
+  if (preview.kind === 'document') {
+    if (preview.title) title.textContent = preview.title
+    const dark = document.documentElement.classList.contains('dark')
+    const svg = (dark && preview.thumbnailDark) || preview.thumbnail
+    if (svg) {
+      const frame = element('div', 'dd-link-thumbnail')
+      frame.innerHTML = DOMPurify.sanitize(svg, {
+        USE_PROFILES: { svg: true },
+        ADD_ATTR: ['vector-effect'],
+      })
+      card.prepend(frame)
+    }
+    if (preview.excerpt)
+      card.append(element('p', 'dd-link-excerpt', preview.excerpt))
+    const meta = [
+      preview.authorName,
+      preview.updatedAt
+        ? new Date(preview.updatedAt).toLocaleDateString()
+        : undefined,
+    ].filter(Boolean)
+    if (meta.length)
+      card.append(element('div', 'dd-link-meta', meta.join(' · ')))
+    return
+  }
+  title.textContent = preview.name
+  address.textContent = preview.email ?? 'Person'
+  if (preview.avatarUrl) {
+    const avatar = document.createElement('img')
+    avatar.className = 'dd-link-avatar'
+    avatar.alt = ''
+    avatar.src = preview.avatarUrl
+    card.prepend(avatar)
+  }
+  if (preview.role) card.append(element('span', 'dd-link-role', preview.role))
+  if (preview.bio) card.append(element('p', 'dd-link-excerpt', preview.bio))
 }
 
 const hoverable = '[data-link-href], .dd-mention'
@@ -134,6 +224,10 @@ function showPasteMenu(view: EditorView, from: number, url: string) {
 
 class LinkHover {
   private card: HTMLElement | null = null
+  private readonly previews = new Map<
+    string,
+    { at: number; promise: Promise<HoverPreview | null> }
+  >()
   private hideTimer: ReturnType<typeof setTimeout> | undefined
   private readonly over = (event: MouseEvent) => {
     const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
@@ -239,6 +333,26 @@ class LinkHover {
       void this.options.resolveTitle(href).then((name) => {
         if (name && this.card === card) title.textContent = name
       })
+
+    const wanted = previewTarget(target, href)
+    if (wanted && this.options.resolvePreview)
+      void this.preview(wanted).then((preview) => {
+        if (preview && this.card === card)
+          fillPreview(card, title, address, preview)
+      })
+  }
+
+  /** Fetched when first hovered, then kept for a minute; a failure is tried again next time. */
+  private preview(target: HoverTarget) {
+    const key = `${target.kind}:${target.id}`
+    const kept = this.previews.get(key)
+    if (kept && Date.now() - kept.at < previewKeptFor) return kept.promise
+    const promise = this.options.resolvePreview!(target).catch(() => {
+      this.previews.delete(key)
+      return null
+    })
+    this.previews.set(key, { at: Date.now(), promise })
+    return promise
   }
 
   destroy() {

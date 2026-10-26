@@ -8,6 +8,8 @@ import {
   createRAGConversation,
   createWorkspace,
   deleteRAGConversation,
+  getDocumentHoverPreview,
+  getMemberHoverPreview,
   getPublicDocument,
   getRAGConversation,
   listDocuments,
@@ -400,6 +402,67 @@ describe('Dokudocs domain API adapter', () => {
     ])
     expect(new URL(fetch.mock.calls[0][0]).pathname).toBe(
       `/api/v1/workspaces/${workspaceId}/members`
+    )
+  })
+
+  it('loads what a hover card shows of a page, for the workspace it is read in', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        id: documentId,
+        title: 'Launch plan',
+        type: 'markdown',
+        excerpt: 'Ship the new editor',
+        thumbnail: '<svg/>',
+        author: { id: 'u-1', name: 'Rina Putri', email: '', avatar: '' },
+        updatedAt: '2026-10-20T08:00:00Z',
+      })
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(
+      getDocumentHoverPreview(workspaceId, documentId)
+    ).resolves.toEqual({
+      kind: 'document',
+      title: 'Launch plan',
+      type: 'markdown',
+      excerpt: 'Ship the new editor',
+      thumbnail: '<svg/>',
+      thumbnailDark: undefined,
+      authorName: 'Rina Putri',
+      updatedAt: '2026-10-20T08:00:00Z',
+    })
+    expect(new URL(fetch.mock.calls[0][0]).pathname).toBe(
+      `/api/v1/documents/${documentId}/preview`
+    )
+    expect(
+      new Headers(fetch.mock.calls[0][1].headers).get('X-Workspace-Id')
+    ).toBe(workspaceId)
+  })
+
+  it('loads what a hover card shows of a member', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        userId: 'u-1',
+        email: 'rina@example.com',
+        fullName: 'Rina Putri',
+        avatarUrl: 'https://example.com/rina.png',
+        bio: 'Writes the launch plan',
+        role: 'owner',
+        joinedAt: '2026-10-01T00:00:00Z',
+      })
+    )
+    vi.stubGlobal('fetch', fetch)
+
+    await expect(getMemberHoverPreview(workspaceId, 'u-1')).resolves.toEqual({
+      kind: 'person',
+      name: 'Rina Putri',
+      email: 'rina@example.com',
+      role: 'owner',
+      bio: 'Writes the launch plan',
+      avatarUrl: 'https://example.com/rina.png',
+    })
+    expect(new URL(fetch.mock.calls[0][0]).pathname).toBe(
+      `/api/v1/workspaces/${workspaceId}/members/u-1/profile`
     )
   })
 

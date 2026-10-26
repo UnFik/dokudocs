@@ -529,6 +529,47 @@
 .dd-link-title:empty {
   display: none;
 }
+/* What a hover finds out about a page or a person lays out in rows under the basics. */
+.dd-link-thumbnail {
+  order: -1;
+  flex-basis: 100%;
+  max-height: 140px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--muted);
+}
+.dd-link-thumbnail svg {
+  display: block;
+  width: 100%;
+  max-height: 140px;
+}
+.dd-link-avatar {
+  order: -1;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.dd-link-excerpt {
+  flex-basis: 100%;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted-foreground);
+}
+.dd-link-meta,
+.dd-link-role {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.dd-link-meta {
+  flex-basis: 100%;
+}
+.dd-link-role {
+  text-transform: capitalize;
+}
 .dd-link-address {
   min-width: 0;
   overflow: hidden;

@@ -73,7 +73,9 @@ test("@live @smoke @features3: / offers Mention, and a mention chip shows a hove
   await chip.hover();
   const card = page.locator(".dd-link-card");
   await expect(card).toContainText("System");
-  await expect(card).toContainText("Person");
+  // The profile is fetched on hover: the email replaces the placeholder "Person".
+  await expect(card.locator(".dd-link-address")).not.toHaveText("Person");
+  await expect(card.locator(".dd-link-role")).toBeVisible();
 });
 
 test("@live @smoke @features3: @ mentions a person and : picks an emoji", async ({ page }) => {

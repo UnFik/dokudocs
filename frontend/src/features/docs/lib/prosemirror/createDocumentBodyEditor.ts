@@ -67,7 +67,7 @@ import {
   type InlineState,
 } from './inlineMarks'
 import { joinParagraphs } from './joinParagraphs'
-import { linkFeaturesPlugin } from './linkFeatures'
+import { linkFeaturesPlugin, type LinkFeaturesOptions } from './linkFeatures'
 import {
   blockMarkdownRules,
   wrapLineCommand,
@@ -142,6 +142,8 @@ export function createDocumentBodyEditor(
     mentionSource?: (query: string) => Promise<MentionCandidate[]>
     /** The title of the page a link to this app goes to, shown when the link is hovered. */
     resolveLinkTitle?: (href: string) => Promise<string | null>
+    /** What the card shows of a page or a person, fetched when the pointer first rests on a link or mention. */
+    resolvePreview?: LinkFeaturesOptions['resolvePreview']
     /** The most characters the page may hold; text past it is refused, deleting still works. */
     maxCharacters?: number
     /** Arrow up from the very start of the text: the title is the line above. */
@@ -333,6 +335,7 @@ export function createDocumentBodyEditor(
       linkFeaturesPlugin({
         enabled: () => canEdit() && !suggestMode,
         resolveTitle: options.resolveLinkTitle,
+        resolvePreview: options.resolvePreview,
       }),
       suggestionBlocksPlugin,
       commentsPlugin,
