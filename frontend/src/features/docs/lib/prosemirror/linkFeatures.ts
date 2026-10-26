@@ -39,6 +39,12 @@ export type LinkFeaturesOptions = {
   resolveTitle?: (href: string) => Promise<string | null>
 }
 
+const hoverable = '[data-link-href], .dd-mention'
+
+/** A page or project chip is a link; a person chip is only named. */
+const chipLink = (target: Element | null) =>
+  target?.closest<HTMLAnchorElement>('a.dd-mention[href]') ?? null
+
 /**
  * Pasting a URL over selected text links it; pasting one into an empty spot
  * inserts it as a link with a way to turn it into plain text. Hovering a link
@@ -131,21 +137,30 @@ class LinkHover {
   private hideTimer: ReturnType<typeof setTimeout> | undefined
   private readonly over = (event: MouseEvent) => {
     const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-      '[data-link-href]'
+      hoverable
     )
     if (!target || !this.view.dom.contains(target)) return
     clearTimeout(this.hideTimer)
     this.show(target)
   }
   private readonly out = (event: MouseEvent) => {
-    if ((event.target as HTMLElement | null)?.closest('[data-link-href]'))
+    if ((event.target as HTMLElement | null)?.closest(hoverable))
       this.scheduleHide()
+  }
+
+  // A page or project chip opens in a new tab, whether or not the page can be edited.
+  private readonly click = (event: MouseEvent) => {
+    const chip = chipLink(event.target as Element | null)
+    if (!chip || !this.view.dom.contains(chip)) return
+    event.preventDefault()
+    window.open(chip.getAttribute('href')!, '_blank', 'noopener')
   }
 
   constructor(
     private readonly view: EditorView,
     private readonly options: LinkFeaturesOptions
   ) {
+    view.dom.addEventListener('click', this.click)
     view.dom.addEventListener('mouseover', this.over)
     view.dom.addEventListener('mouseout', this.out)
   }
@@ -161,7 +176,10 @@ class LinkHover {
   }
 
   private show(target: HTMLElement) {
-    const href = target.dataset.linkHref ?? ''
+    const chip = target.classList.contains('dd-mention')
+    const href = chip
+      ? (target.getAttribute('href') ?? '')
+      : (target.dataset.linkHref ?? '')
     this.hide()
     const host = this.view.dom.parentElement ?? document.body
     host.classList.add('dd-host')
@@ -175,6 +193,10 @@ class LinkHover {
     const address = document.createElement('span')
     address.className = 'dd-link-address'
     address.textContent = href
+    if (chip) {
+      title.textContent = (target.textContent ?? '').replace(/^@/, '')
+      if (!href) address.textContent = 'Person'
+    }
     const open = document.createElement('a')
     open.setAttribute('aria-label', 'Open link')
     open.href = href
@@ -204,7 +226,8 @@ class LinkHover {
       copy.dataset.tip = 'Copied'
       setTimeout(() => (copy.dataset.tip = 'Copy link'), 1500)
     })
-    card.append(title, address, open, copy)
+    card.append(title, address)
+    if (href) card.append(open, copy)
     host.append(card)
     this.card = card
     const box = host.getBoundingClientRect()
@@ -220,6 +243,7 @@ class LinkHover {
 
   destroy() {
     clearTimeout(this.hideTimer)
+    this.view.dom.removeEventListener('click', this.click)
     this.view.dom.removeEventListener('mouseover', this.over)
     this.view.dom.removeEventListener('mouseout', this.out)
     this.hide()

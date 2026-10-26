@@ -59,6 +59,24 @@ test("@live @smoke @features3: a pasted link, and its hover card", async ({ page
   await expect(card.getByRole("link", { name: "Open link" })).toHaveAttribute("rel", "noopener noreferrer");
 });
 
+test("@live @smoke @features3: / offers Mention, and a mention chip shows a hover card", async ({ page }) => {
+  const { editor } = await openMarkdownDocument(page, [""]);
+  await editor.locator("p").first().click();
+  await page.keyboard.type("/mention");
+  await page.keyboard.press("Enter");
+  const menu = page.getByRole("combobox", { name: "Mention" });
+  await expect(menu).toBeFocused();
+  await menu.fill("System");
+  await page.getByRole("option").first().click();
+  const chip = editor.locator(".dd-mention").first();
+  await expect(chip).toContainText("@System");
+
+  await chip.hover();
+  const card = page.locator(".dd-link-card");
+  await expect(card).toContainText("System");
+  await expect(card).toContainText("Person");
+});
+
 test("@live @smoke @features3: @ mentions a person and : picks an emoji", async ({ page }) => {
   const { editor } = await openMarkdownDocument(page, [""]);
   await editor.locator("p").first().click();

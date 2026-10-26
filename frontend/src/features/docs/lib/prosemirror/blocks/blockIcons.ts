@@ -5,6 +5,9 @@ const rect = (attrs: string) => `<rect ${attrs}/>`
 const path = (d: string) => `<path d="${d}"/>`
 
 export const blockIcons: Record<string, string> = {
+  mention:
+    '<circle cx="12" cy="12" r="4"/>' +
+    path('M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8'),
   'bullet-list': [
     'M3 5h.01',
     'M3 12h.01',

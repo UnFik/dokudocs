@@ -2,6 +2,7 @@ import { EditorState } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
 import { prepareBodyTransaction } from '../prepareBodyTransaction'
+import { blockMenuPlugin } from './blockMenu'
 import { bodyBuilder, bodyOf, stateFor } from './testSupport'
 import {
   emojiMenuPlugin,
@@ -37,6 +38,7 @@ function mount(text: string, enabled = true) {
       doc: start.doc,
       selection: start.selection,
       plugins: [
+        blockMenuPlugin(),
         mentionMenuPlugin({
           enabled: () => enabled,
           search: async (query) =>
@@ -129,6 +131,68 @@ describe('@ mention menu', () => {
   it('does not open when it is not enabled', () => {
     const { view } = mount('', false)
     expect(press(view.dom, '@').defaultPrevented).toBe(false)
+  })
+})
+
+describe('menu scrolling', () => {
+  it('keeps the active option in view as the arrow keys move it', async () => {
+    const { view, host } = mount('')
+    press(view.dom, '@')
+    await wait()
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function () {
+      scrolled.push(this)
+    }
+    try {
+      press(input(host)!, 'ArrowDown')
+      press(input(host)!, 'ArrowDown')
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+    const active = host.querySelector('[aria-selected="true"]')
+    expect(active?.textContent).toContain('Launch plan')
+    expect(scrolled.at(-1)?.textContent).toContain('Launch plan')
+  })
+})
+
+describe('Mention entry in the / menu', () => {
+  const mentionInput = (host: HTMLElement) =>
+    host.querySelector<HTMLInputElement>('input.dd-slash-input')
+
+  it('opens the mention dropdown with people, pages and projects', async () => {
+    const { view, host } = mount('')
+    press(view.dom, '/')
+    for (const key of 'mention') view.dispatch(view.state.tr.insertText(key))
+    press(view.dom, 'Enter')
+    await wait()
+    expect(mentionInput(host)?.getAttribute('aria-label')).toBe('Mention')
+    expect(host.querySelectorAll('[role="option"]')).toHaveLength(4)
+    expect(view.state.doc.textContent).toBe('')
+  })
+
+  it('inserts the chosen page as a mention', async () => {
+    const { view, host } = mount('')
+    press(view.dom, '/')
+    for (const key of 'mention') view.dispatch(view.state.tr.insertText(key))
+    press(view.dom, 'Enter')
+    await wait()
+    type(mentionInput(host)!, 'launch')
+    await wait()
+    press(mentionInput(host)!, 'Enter')
+    const mention = bodyOf(view.state.doc).find(
+      (node) => node.type === 'mention'
+    )!
+    expect(mention.attributes).toMatchObject({ kind: 'document', id: 'd-1' })
+  })
+
+  it('does nothing when mentions are not enabled', async () => {
+    const { view, host } = mount('', false)
+    press(view.dom, '/')
+    for (const key of 'mention') view.dispatch(view.state.tr.insertText(key))
+    press(view.dom, 'Enter')
+    await wait()
+    expect(mentionInput(host)).toBeNull()
   })
 })
 

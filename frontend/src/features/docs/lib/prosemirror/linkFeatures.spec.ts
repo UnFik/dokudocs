@@ -19,12 +19,14 @@ function mount(
     enabled?: boolean
     resolveTitle?: (href: string) => Promise<string | null>
     linked?: string
+    mention?: { kind: string; id: string; label: string }
   } = {}
 ) {
   const b = bodyBuilder()
   const root = b.add(null, 'document')
   const p = b.add(root, 'paragraph')
   b.add(p, 'run', text, options.linked ? { href: options.linked } : {})
+  if (options.mention) b.add(p, 'mention', '', options.mention)
   const host = document.createElement('div')
   document.body.append(host)
   const view: EditorView = new EditorView(host, {
@@ -180,5 +182,66 @@ describe('hovering a link', () => {
       .dispatchEvent(new MouseEvent('mouseout', { bubbles: true }))
     await new Promise((resolve) => setTimeout(resolve, 400))
     expect(host.querySelector('.dd-link-card')).toBeNull()
+  })
+})
+
+describe('mention chips', () => {
+  const page = {
+    kind: 'document',
+    id: '11111111-1111-4111-8111-111111111111',
+    label: 'Launch plan',
+  }
+  const person = { kind: 'person', id: 'u-1', label: 'Rina Putri' }
+  const chip = (host: HTMLElement) =>
+    host.querySelector<HTMLElement>('.dd-mention')!
+  const hover = (host: HTMLElement) =>
+    chip(host).dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+
+  it('open a page in a new tab when clicked', () => {
+    const { host } = mount('see ', { mention: page })
+    const opened: unknown[][] = []
+    const original = window.open
+    window.open = ((...args: unknown[]) => void opened.push(args)) as never
+    try {
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+      chip(host).dispatchEvent(click)
+      expect(click.defaultPrevented).toBe(true)
+    } finally {
+      window.open = original
+    }
+    expect(opened).toEqual([[`/docs/${page.id}`, '_blank', 'noopener']])
+  })
+
+  it('do nothing on click when they are a person', () => {
+    const { host } = mount('see ', { mention: person })
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+    chip(host).dispatchEvent(click)
+    expect(click.defaultPrevented).toBe(false)
+  })
+
+  it('show a page card with its title, Open and Copy on hover', async () => {
+    const { host } = mount('see ', {
+      mention: page,
+      resolveTitle: async () => 'Launch plan v2',
+    })
+    hover(host)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const card = host.querySelector<HTMLElement>('.dd-link-card')!
+    expect(card.textContent).toContain('Launch plan v2')
+    const open = card.querySelector<HTMLAnchorElement>(
+      'a[aria-label="Open link"]'
+    )!
+    expect(open.getAttribute('href')).toBe(`/docs/${page.id}`)
+    expect(open.getAttribute('target')).toBe('_blank')
+    expect(card.querySelector('button[aria-label="Copy link"]')).not.toBeNull()
+  })
+
+  it('show a person card with the name only on hover', () => {
+    const { host } = mount('see ', { mention: person })
+    hover(host)
+    const card = host.querySelector<HTMLElement>('.dd-link-card')!
+    expect(card.textContent).toContain('Rina Putri')
+    expect(card.textContent).toContain('Person')
+    expect(card.querySelector('a, button')).toBeNull()
   })
 })

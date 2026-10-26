@@ -1,4 +1,9 @@
-import { Plugin } from 'prosemirror-state'
+import {
+  Plugin,
+  PluginKey,
+  type EditorState,
+  type Transaction,
+} from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 import emojis from '../../muya/config/emojis'
 import { documentBodySchema } from '../documentBody'
@@ -23,6 +28,8 @@ type TriggerConfig<T extends MenuItem> = {
   enabled: () => boolean
   search: (query: string) => T[] | Promise<T[]>
   choose: (view: EditorView, item: T) => void
+  /** A command that asks for the menu without the trigger key being typed. */
+  requestKey?: PluginKey<boolean>
 }
 
 let count = 0
@@ -117,6 +124,7 @@ class TriggerMenu<T extends MenuItem> {
         `${this.id}-${this.active}`
       )
     else this.input.removeAttribute('aria-activedescendant')
+    this.list.children[this.active]?.scrollIntoView?.({ block: 'nearest' })
   }
 
   private onKey(event: KeyboardEvent) {
@@ -166,6 +174,7 @@ function atWordStart(view: EditorView) {
 function triggerPlugin<T extends MenuItem>(config: TriggerConfig<T>) {
   let menu: TriggerMenu<T> | null = null
   return new Plugin({
+    key: config.requestKey,
     props: {
       handleKeyDown(view, event) {
         if (
@@ -186,12 +195,40 @@ function triggerPlugin<T extends MenuItem>(config: TriggerConfig<T>) {
         return true
       },
     },
+    state: {
+      init: () => false,
+      apply: (tr) =>
+        config.requestKey ? !!tr.getMeta(config.requestKey) : false,
+    },
     view: () => ({
+      update(view) {
+        if (
+          !menu &&
+          config.requestKey?.getState(view.state) &&
+          view.editable &&
+          config.enabled()
+        )
+          menu = new TriggerMenu(view, config, () => {
+            menu = null
+          })
+      },
       destroy() {
         menu?.close(false)
       },
     }),
   })
+}
+
+const mentionRequest = new PluginKey<boolean>('ddMentionRequest')
+
+/** Opens the mention list at the caret, as `@` does; false where mentions are not offered. */
+export function requestMention(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void
+) {
+  if (!mentionRequest.get(state)) return false
+  dispatch?.(state.tr.setMeta(mentionRequest, true))
+  return true
 }
 
 /** `@` opens a list of people, pages and projects; the choice becomes a mention. */
@@ -202,6 +239,7 @@ export function mentionMenuPlugin(options: {
   return triggerPlugin<MentionCandidate>({
     trigger: '@',
     label: 'Mention',
+    requestKey: mentionRequest,
     enabled: options.enabled,
     search: options.search,
     choose(view, item) {
