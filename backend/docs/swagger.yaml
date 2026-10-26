@@ -65,7 +65,7 @@ definitions:
       title:
         type: string
       type:
-        description: markdown, dbdiagram, mermaid, architecture
+        description: markdown, dbdiagram, mermaid, architecture, html
         type: string
       updatedAt:
         type: string
@@ -94,6 +94,27 @@ definitions:
       user:
         $ref: '#/definitions/backend_internal_domain_model.UserAuthor'
       userId:
+        type: string
+    type: object
+  backend_internal_domain_model.DocumentPreview:
+    properties:
+      author:
+        $ref: '#/definitions/backend_internal_domain_model.UserAuthor'
+      excerpt:
+        description: Excerpt is the start of a Markdown page as plain text; empty
+          for other types.
+        type: string
+      id:
+        type: string
+      thumbnail:
+        type: string
+      thumbnailDark:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+      updatedAt:
         type: string
     type: object
   backend_internal_domain_model.DocumentRestoreResult:
@@ -157,6 +178,23 @@ definitions:
       type:
         type: string
       updatedAt:
+        type: string
+    type: object
+  backend_internal_domain_model.MemberProfile:
+    properties:
+      avatarUrl:
+        type: string
+      bio:
+        type: string
+      email:
+        type: string
+      fullName:
+        type: string
+      joinedAt:
+        type: string
+      role:
+        type: string
+      userId:
         type: string
     type: object
   backend_internal_domain_model.Project:
@@ -1789,6 +1827,58 @@ paths:
       security:
       - BearerAuth: []
       summary: Permanently delete document
+      tags:
+      - Document
+  /documents/{id}/preview:
+    get:
+      description: Title, type, a plain-text excerpt and the thumbnail of a document,
+        without its body
+      parameters:
+      - description: Workspace ID (UUID)
+        in: header
+        name: X-Workspace-Id
+        required: true
+        type: string
+      - description: Document ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.DocumentPreview'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get document preview
       tags:
       - Document
   /documents/{id}/restore:
@@ -4035,6 +4125,58 @@ paths:
       security:
       - BearerAuth: []
       summary: Remove workspace member
+      tags:
+      - Workspace
+  /workspaces/{id}/members/{userId}/profile:
+    get:
+      description: Name, email, avatar, bio, role and join date of a member, for the
+        other members of the workspace
+      parameters:
+      - description: Workspace ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: User ID (UUID)
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/backend_internal_presentation_response.Envelope'
+            - properties:
+                data:
+                  $ref: '#/definitions/backend_internal_domain_model.MemberProfile'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/backend_internal_presentation_response.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get member profile
       tags:
       - Workspace
 securityDefinitions:
