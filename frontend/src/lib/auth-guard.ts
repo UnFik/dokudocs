@@ -18,7 +18,7 @@ export function safeRedirect(value?: string) {
     return '/dashboard'
   const url = new URL(value, window.location.origin)
   if (
-    !/^\/(?:$|dashboard\/?$|account\/?$|projects(?:\/[^/]+)?\/?$|docs\/[^/]+\/?$|drafts\/?$|trash\/?$|users\/?$|settings(?:\/(?:account(?:\/set-password)?|appearance|display|notifications))?\/?$|help-center\/?$)/.test(
+    !/^\/(?:$|dashboard\/?$|account\/?$|projects(?:\/[^/]+)?\/?$|docs\/[^/]+\/?$|drafts\/?$|trash\/?$|users\/?$|settings(?:\/(?:account(?:\/set-password)?|ai|appearance|display|notifications))?\/?$|help-center\/?$|assistant\/?$|platform\/(?:ai|conversations|mcp|skills|usage)\/?$)/.test(
       url.pathname
     )
   )
@@ -68,7 +68,7 @@ export async function requireAuth({
 }) {
   if (!(await restoreSession()))
     throw redirect({
-      to: '/',
+      to: '/sign-in',
       search: { redirect: safeRedirect(location.href) },
       replace: true,
     })

@@ -28,6 +28,7 @@ import {
   useDocumentChatPanel,
 } from '@/features/rag/chat-panel-context'
 import { selectionAttachment } from '@/features/rag/selection-context'
+import { useScrollMemory } from '../hooks/use-scroll-memory'
 import { assetObjectURL, uploadDocumentAsset } from '../lib/assets'
 import { decodeBase64, encodeBase64 } from '../lib/collab-encoding'
 import {
@@ -476,6 +477,12 @@ function CollaborativeMarkdownBody({
     anchor: CommentAnchor
   } | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
+  useScrollMemory(scrollRef, {
+    docId: documentID,
+    userId: userID,
+    ready: sessionReady,
+    restore: !focusThreadID,
+  })
   useEffect(() => {
     if (sessionReady)
       sessionRef.current?.editor.setNumberHeadings(numberHeadings)
