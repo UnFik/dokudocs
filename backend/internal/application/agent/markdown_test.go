@@ -136,3 +136,14 @@ func TestCodeBlocksCarryTheTextDirectlyWithNoRun(t *testing.T) {
 		t.Fatalf("code block attributes: %s", raw)
 	}
 }
+
+func TestMermaidFenceBecomesADiagramBlock(t *testing.T) {
+	raw := MarkdownToContentJSON("```mermaid\nflowchart LR\n  A --> B\n```")
+	blocks := flatten(t, raw)
+	if len(blocks) != 1 || blocks[0].Type != "diagram" || blocks[0].Text != "flowchart LR\n  A --> B" {
+		t.Fatalf("blocks = %+v, raw %s", blocks, raw)
+	}
+	if !strings.Contains(string(raw), `"bodyAttributes":"{\"type\":\"mermaid\",\"lang\":\"yaml\"}"`) {
+		t.Fatalf("diagram attributes: %s", raw)
+	}
+}

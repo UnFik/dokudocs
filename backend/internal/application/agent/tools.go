@@ -384,7 +384,7 @@ func DokudocsTools(d ToolDeps) []Tool {
 		// Documents
 		{
 			Name: "create_document", Capability: CapDocuments, Write: true,
-			Description: "Create a document. For Markdown, text may hold headings (lines starting with #), fenced code blocks (``` or ~~~ with the language after the fence, kept exactly as written, indentation and blank lines included) and paragraphs separated by blank lines; lists and tables stay as plain paragraph text. For DBML or Mermaid it is the source. For html it is the whole page, one self-contained file, at most 1 MiB; html documents can be created from MCP only. " +
+			Description: "Create a document. For Markdown, text may hold headings (lines starting with #), fenced code blocks (``` or ~~~ with the language after the fence, kept exactly as written, indentation and blank lines included; a ```mermaid fence becomes a Mermaid diagram) and paragraphs separated by blank lines; lists and tables stay as plain paragraph text. For DBML or Mermaid it is the source. For html it is the whole page, one self-contained file, at most 1 MiB; html documents can be created from MCP only. " +
 				"For a long Markdown document put the first sections in text (up to about 1500 words) and add the rest with edit_document_content (append_section), about 300 to 400 words per call, after read_document gives the version.",
 			Parameters: object([]string{"workspace_id", "title", "type"}, map[string]any{
 				"workspace_id": pWorkspace, "title": pText("Title."), "type": docTypes, "project_id": pProject, "text": pText("Initial content."),

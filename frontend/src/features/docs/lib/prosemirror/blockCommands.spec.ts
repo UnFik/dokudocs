@@ -134,6 +134,21 @@ describe('heading commands', () => {
     }
   })
 
+  it('turns a typed "```mermaid " fence into a diagram block', () => {
+    const harness = mountTestEditor(paragraphsBody('```mermaid'))
+    try {
+      caret(harness, '```mermaid', 10)
+      typeText(harness, ' ')
+      expect(harness.editor.getBody().find((item) => item.type === 'diagram')).toMatchObject({
+        type: 'diagram',
+        attributes: { type: 'mermaid', lang: 'yaml' },
+      })
+      expect(harness.editor.getBody().some((item) => item.type === 'code-block')).toBe(false)
+    } finally {
+      harness.cleanup()
+    }
+  })
+
   it('turns "# " into an empty heading when it is all the paragraph holds', () => {
     const harness = mountTestEditor(paragraphsBody('#'))
     try {
