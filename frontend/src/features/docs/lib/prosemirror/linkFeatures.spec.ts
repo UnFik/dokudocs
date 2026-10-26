@@ -458,6 +458,11 @@ describe('hover previews, fetched on demand', () => {
     const card = host.querySelector<HTMLElement>('.dd-link-card')!
     // A person's card is laid out compactly, not as one long row.
     expect(card.classList.contains('dd-link-card-person')).toBe(true)
+    // The role sits beside the email, not on a row of its own.
+    expect(card.querySelector('.dd-link-address')?.textContent).toBe(
+      'admin@example.com (owner)'
+    )
+    expect(card.querySelector('.dd-link-address .dd-link-role')).not.toBeNull()
     const avatar = host.querySelector<HTMLElement>('.dd-link-avatar')!
     expect(avatar.textContent).toBe('SA')
     expect(avatar.querySelector('img')).toBeNull()

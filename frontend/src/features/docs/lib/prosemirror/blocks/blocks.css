@@ -619,7 +619,6 @@
 .dd-link-card-person .dd-link-address {
   grid-column: 2;
 }
-.dd-link-card-person .dd-link-role,
 .dd-link-card-person .dd-link-excerpt {
   grid-column: 1 / -1;
 }

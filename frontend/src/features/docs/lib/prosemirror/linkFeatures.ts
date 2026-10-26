@@ -181,6 +181,8 @@ function fillPreview(
   card.classList.add('dd-link-card-person')
   title.textContent = preview.name
   address.textContent = preview.email ?? 'Person'
+  if (preview.role)
+    address.append(' (', element('span', 'dd-link-role', preview.role), ')')
   const avatar = element('div', 'dd-link-avatar')
   if (preview.avatarUrl) {
     const picture = document.createElement('img')
@@ -189,7 +191,6 @@ function fillPreview(
     avatar.append(picture)
   } else avatar.textContent = initials(preview.name)
   card.prepend(avatar)
-  if (preview.role) card.append(element('span', 'dd-link-role', preview.role))
   if (preview.bio) card.append(element('p', 'dd-link-excerpt', preview.bio))
 }
 
