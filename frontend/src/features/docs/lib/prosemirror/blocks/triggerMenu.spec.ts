@@ -1,4 +1,4 @@
-import { EditorState, Selection } from 'prosemirror-state'
+import { EditorState, Selection, TextSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
 import { afterEach, describe, expect, it } from 'vitest'
 import { prepareBodyTransaction } from '../prepareBodyTransaction'
@@ -243,6 +243,22 @@ describe('emoji menu', () => {
     expect(label(view)).toBe('Emoji')
     typeText(view, 'tada')
     await wait()
+    press(view.dom, 'Enter')
+    expect(view.state.doc.textContent).toBe('great 🎉')
+  })
+
+  it('stays open when typing rewrites the line around the trigger', async () => {
+    const { view } = mount('great ')
+    // After the run, as when the caret sits behind a mention chip: each typed
+    // letter then becomes a run of its own and the line is rebuilt.
+    const outside = view.state.selection.from + 1
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, outside))
+    )
+    press(view.dom, ':')
+    typeText(view, 'tada')
+    await wait()
+    expect(label(view)).toBe('Emoji')
     press(view.dom, 'Enter')
     expect(view.state.doc.textContent).toBe('great 🎉')
   })

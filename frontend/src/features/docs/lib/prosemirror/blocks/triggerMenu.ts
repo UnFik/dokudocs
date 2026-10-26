@@ -4,6 +4,7 @@ import {
   type EditorState,
   type Transaction,
 } from 'prosemirror-state'
+import type { ResolvedPos } from 'prosemirror-model'
 import type { EditorView } from 'prosemirror-view'
 import emojis from '../../muya/config/emojis'
 import { documentBodySchema } from '../documentBody'
@@ -22,7 +23,7 @@ export interface MentionCandidate {
   hint: string
 }
 
-type MenuState = { pos: number } | null
+type MenuState = { pos: number; offset: number } | null
 
 type TriggerConfig<T extends MenuItem> = {
   trigger: string
@@ -43,16 +44,59 @@ type MenuSignal = { open: number } | { close: true }
 
 const objectReplacement = '￼'
 
+/**
+ * Where the line of text around a position starts. Text sits in `run` nodes,
+ * and the caret moves between a run and its paragraph as one types, so what
+ * counts is the line, not the node directly around the caret.
+ */
+function lineStart($pos: ResolvedPos) {
+  for (let depth = $pos.depth; depth >= 0; depth--)
+    if ($pos.node(depth).isTextblock) return $pos.start(depth)
+  return null
+}
+
 /** What follows the trigger, or null when the menu should not be showing. */
 function queryAt(state: EditorState, pos: number, trigger: string) {
   const { selection, doc } = state
   if (!selection.empty || pos < 0 || selection.from <= pos) return null
   if (selection.from > doc.content.size) return null
-  if (!doc.resolve(pos).sameParent(selection.$from)) return null
+  const line = lineStart(doc.resolve(pos))
+  if (line === null || line !== lineStart(selection.$from)) return null
   const text = doc.textBetween(pos, selection.from, '\n', objectReplacement)
   if (!text.startsWith(trigger)) return null
   const query = text.slice(trigger.length)
   return /[\n￼]/.test(query) ? null : query
+}
+
+/** How much text of the line comes before a position, as `queryAt` reads it. */
+function offsetOf(doc: EditorState['doc'], pos: number) {
+  const line = lineStart(doc.resolve(pos))
+  if (line === null) return null
+  return doc.textBetween(line, pos, '\n', objectReplacement).length
+}
+
+/** The position that many characters into the line the caret is in. */
+function posAtOffset(state: EditorState, offset: number) {
+  const { doc, selection } = state
+  const line = lineStart(selection.$from)
+  if (line === null) return null
+  const end = selection.from
+  let seen = 0
+  let at: number | null = null
+  doc.nodesBetween(line, end, (node, pos) => {
+    if (at !== null) return false
+    if (node.isText) {
+      const from = Math.max(pos, line)
+      const length = Math.min(pos + node.nodeSize, end) - from
+      if (offset < seen + length) at = from + (offset - seen)
+      seen += length
+    } else if (node.isLeaf) {
+      if (offset === seen) at = pos
+      seen += 1
+    }
+    return at === null
+  })
+  return at
 }
 
 let count = 0
@@ -230,7 +274,9 @@ function atWordStart(view: EditorView) {
   if (!empty || !view.editable) return false
   if ($from.parent.type.spec.code || $from.parent.type.name === 'code_block')
     return false
-  const before = $from.parent.textBetween(0, $from.parentOffset, '', '￼')
+  const line = lineStart($from)
+  if (line === null) return false
+  const before = view.state.doc.textBetween(line, $from.pos, '', '￼')
   return before === '' || /[\s￼]$/.test(before)
 }
 
@@ -242,15 +288,26 @@ function triggerPlugin<T extends MenuItem>(config: TriggerConfig<T>) {
     enabled: config.enabled,
     state: {
       init: () => null,
-      apply(tr, value, _previous, next) {
+      apply(tr, value, previous, next) {
         const signal = tr.getMeta(config.key) as MenuSignal | undefined
         if (signal && 'close' in signal) return null
-        let pos = value?.pos ?? null
-        if (signal) pos = signal.open
-        else if (pos !== null && tr.docChanged) pos = tr.mapping.map(pos, -1)
+        const offset = signal
+          ? offsetOf(previous.doc, signal.open)
+          : (value?.offset ?? null)
+        if (offset === null) return null
+        let pos =
+          !signal && value
+            ? tr.docChanged
+              ? tr.mapping.map(value.pos, -1)
+              : value.pos
+            : null
+        // Typing can rewrite the whole line, which loses the mapped position;
+        // the trigger is then found again by how much text came before it.
+        if (pos === null || queryAt(next, pos, config.trigger) === null)
+          pos = posAtOffset(next, offset)
         if (pos === null || queryAt(next, pos, config.trigger) === null)
           return null
-        return { pos }
+        return { pos, offset: offsetOf(next.doc, pos) ?? offset }
       },
     },
     props: {
