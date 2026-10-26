@@ -70,6 +70,25 @@ describe('session route guards', () => {
       expect(safeRedirect(path)).toBe('/dashboard')
     expect(safeRedirect('/docs/one?mode=edit')).toBe('/docs/one?mode=edit')
   })
+  it('keeps the assistant, platform and AI settings pages as return destinations', () => {
+    for (const path of [
+      '/assistant',
+      '/platform/usage',
+      '/platform/mcp?tab=keys',
+      '/settings/ai',
+    ])
+      expect(safeRedirect(path)).toBe(path)
+  })
+  it('sends a guest on a signed-in page straight to sign-in with the page to return to', async () => {
+    await expect(
+      requireAuth({ location: { href: '/projects/one?view=list#top' } })
+    ).rejects.toMatchObject({
+      options: {
+        to: '/sign-in',
+        search: { redirect: '/projects/one?view=list#top' },
+      },
+    })
+  })
   it('keeps the token of a set-password link through sign-in', () => {
     expect(safeRedirect('/settings/account/set-password?token=abc_-1')).toBe(
       '/settings/account/set-password?token=abc_-1'
