@@ -79,7 +79,22 @@ const node = (type: string, id: string, attributes: Record<string, unknown>, con
   content,
 })
 
-export type TextBlock = { type: 'paragraph'; text: string } | { type: 'code_block'; lang: string; text: string }
+type Align = 'none' | 'left' | 'center' | 'right'
+type ListItem = { checked?: boolean; children: ParsedBlock[] }
+
+/** The blocks a text can hold. Containers (quote, list, notice) hold blocks themselves. */
+export type ParsedBlock =
+  | { type: 'paragraph'; text: string }
+  | { type: 'code_block'; lang: string; text: string }
+  | { type: 'diagram'; text: string }
+  | { type: 'atx_heading'; text: string; level: number }
+  | { type: 'thematic_break' }
+  | { type: 'block_quote'; children: ParsedBlock[] }
+  | { type: 'notice'; variant: string; children: ParsedBlock[] }
+  | { type: 'list'; kind: 'bullet' | 'order' | 'task'; start: number; items: ListItem[] }
+  | { type: 'table'; rows: string[][]; aligns: Align[] }
+
+export type TextBlock = ParsedBlock
 
 type Fence = { char: string; length: number; indent: number; lang: string }
 
@@ -107,16 +122,15 @@ function closesFence(fence: Fence, line: string): boolean {
 }
 
 /**
- * Splits the text an Agent writes into paragraphs and fenced code. Code is kept exactly as
- * written, blank lines and indentation included; other lines are paragraphs that end at a
- * blank line. The same rules, and the same cases (backend/internal/application/agent/testdata),
+ * Splits the text an Agent writes into blocks: fenced code (kept exactly as written, blank
+ * lines and indentation included), quotes, lists, tables, notices and separators; other lines
+ * are paragraphs that end at a blank line. The same rules, and the same cases (backend/internal/application/agent/testdata),
  * as create_document in the backend, so both ways of writing read the same.
  */
 export function blocksOf(text: string): TextBlock[] {
   return parseBlocks(text, false) as TextBlock[]
 }
 
-type ParsedBlock = TextBlock | { type: 'atx_heading'; text: string; level: number }
 
 const headingLine = /^(#{1,6})[ \t]+(.+?)[ \t#]*$/
 
@@ -128,30 +142,166 @@ export function richBlocksOf(text: string): ParsedBlock[] {
   return parseBlocks(text, true)
 }
 
+const thematicBreak = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
+const listMarker = /^( {0,3})([-*+]|\d{1,9}[.)])(?:( +)(.*))?$/
+const quoteLine = /^ {0,3}>/
+const noticeLine = /^:::(info|success|warning|tip)?[ \t]*$/
+const taskItem = /^\[([ xX])\](?:[ \t]+(.*))?$/
+const tableDelimiter = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/
+
+/** The cells of a table row; a pipe after a backslash is text. */
+function splitRow(line: string): string[] {
+  let text = line.trim()
+  if (text.startsWith('|')) text = text.slice(1)
+  if (text.endsWith('|') && !text.endsWith('\\|')) text = text.slice(0, -1)
+  const cells: string[] = []
+  let cell = ''
+  for (let at = 0; at < text.length; at++) {
+    if (text[at] === '\\' && text[at + 1] === '|') {
+      cell += '|'
+      at++
+    } else if (text[at] === '|') {
+      cells.push(cell.trim())
+      cell = ''
+    } else cell += text[at]
+  }
+  cells.push(cell.trim())
+  return cells
+}
+
+const alignOf = (cell: string): Align => {
+  const left = cell.startsWith(':')
+  const right = cell.endsWith(':')
+  return left && right ? 'center' : left ? 'left' : right ? 'right' : 'none'
+}
+
+/** Whether a list marker line may start a list in the middle of a paragraph: a bullet, or a number one, with text. */
+const interrupts = (marker: RegExpExecArray) => (marker[4] ?? '') !== '' && (!/^\d/.test(marker[2]!) || /^0*1[.)]$/.test(marker[2]!))
+
+/** A list starting at `start`; items of one kind (bullet, number, task) make one list, a change of kind starts the next. */
+function parseList(lines: string[], start: number, withHeadings: boolean): { lists: ParsedBlock[]; next: number } {
+  const lists: ParsedBlock[] = []
+  const ordered = /^\d/.test(listMarker.exec(lines[start]!)![2]!)
+  let i = start
+  while (i < lines.length) {
+    const marker = listMarker.exec(lines[i]!)
+    if (!marker || /^\d/.test(marker[2]!) !== ordered || thematicBreak.test(lines[i]!)) break
+    const markerIndent = marker[1]!.length
+    const first = marker[4] ?? ''
+    const spaces = (marker[3] ?? '').length
+    const offset = markerIndent + marker[2]!.length + (first !== '' && spaces <= 4 ? spaces : 1)
+    const itemLines = [first]
+    let j = i + 1
+    while (j < lines.length) {
+      const line = lines[j]!
+      if (line.trim() === '') {
+        let k = j
+        while (k < lines.length && lines[k]!.trim() === '') k++
+        const after = lines[k]
+        const nested = after !== undefined && (indentOf(after) >= offset || (indentOf(after) > markerIndent && listMarker.test(after)))
+        if (!nested) break
+        for (; j < k; j++) itemLines.push('')
+        continue
+      }
+      const indent = indentOf(line)
+      const sibling = listMarker.exec(line)
+      if (indent >= offset) itemLines.push(line.slice(offset))
+      else if (sibling && indent > markerIndent && !thematicBreak.test(line)) itemLines.push(line.slice(indent))
+      else if (
+        !sibling &&
+        itemLines[itemLines.length - 1] !== '' &&
+        !openingFence(line) &&
+        !quoteLine.test(line) &&
+        !thematicBreak.test(line) &&
+        !headingLine.test(line.trim())
+      )
+        itemLines.push(line.trim())
+      else break
+      j++
+    }
+    const task = ordered ? null : taskItem.exec(first)
+    if (task) itemLines[0] = task[2] ?? ''
+    const kind = ordered ? 'order' : task ? 'task' : 'bullet'
+    const item: ListItem = { ...(task ? { checked: task[1]!.toLowerCase() === 'x' } : {}), children: parseLines(itemLines, withHeadings) }
+    const last = lists[lists.length - 1]
+    if (last?.type === 'list' && last.kind === kind) last.items.push(item)
+    else lists.push({ type: 'list', kind, start: kind === 'order' ? Number(/^\d+/.exec(marker[2]!)![0]) : 1, items: [item] })
+    // The list goes on at a sibling item, after blank lines too.
+    let k = j
+    while (k < lines.length && lines[k]!.trim() === '') k++
+    const following = k < lines.length ? listMarker.exec(lines[k]!) : null
+    if (following && following[1]!.length <= markerIndent && /^\d/.test(following[2]!) === ordered) {
+      i = k
+      continue
+    }
+    i = j
+    break
+  }
+  return { lists, next: i }
+}
+
 function parseBlocks(text: string, withHeadings: boolean): ParsedBlock[] {
+  return parseLines(text.replace(/\r\n?/g, '\n').split('\n'), withHeadings)
+}
+
+function parseLines(lines: string[], withHeadings: boolean): ParsedBlock[] {
   const blocks: ParsedBlock[] = []
   let paragraph: string[] = []
   const flush = () => {
     if (paragraph.length) blocks.push({ type: 'paragraph', text: paragraph.join(' ') })
     paragraph = []
   }
-  const lines = text.replace(/\r\n?/g, '\n').split('\n')
   for (let i = 0; i < lines.length; i++) {
-    const fence = openingFence(lines[i]!)
+    const raw = lines[i]!
+    const fence = openingFence(raw)
     if (fence) {
       flush()
       const code: string[] = []
       for (i++; i < lines.length && !closesFence(fence, lines[i]!); i++) code.push(lines[i]!.slice(Math.min(indentOf(lines[i]!), fence.indent)))
-      blocks.push({ type: 'code_block', lang: fence.lang, text: code.join('\n') })
+      blocks.push(fence.lang === 'mermaid' ? { type: 'diagram', text: code.join('\n') } : { type: 'code_block', lang: fence.lang, text: code.join('\n') })
       continue
     }
-    const line = lines[i]!.trim()
+    const line = raw.trim()
     const heading = withHeadings ? headingLine.exec(line) : null
-    if (heading) {
+    if (line === '') flush()
+    else if (heading) {
       flush()
       blocks.push({ type: 'atx_heading', text: heading[2]!, level: heading[1]!.length })
-    } else if (line === '') flush()
-    else paragraph.push(line)
+    } else if (thematicBreak.test(raw)) {
+      flush()
+      blocks.push({ type: 'thematic_break' })
+    } else if (quoteLine.test(raw)) {
+      flush()
+      const quoted: string[] = []
+      for (; i < lines.length && quoteLine.test(lines[i]!); i++) quoted.push(lines[i]!.replace(/^ {0,3}> ?/, ''))
+      i--
+      blocks.push({ type: 'block_quote', children: parseLines(quoted, withHeadings) })
+    } else if (noticeLine.test(line) && lines.slice(i + 1).some((later) => later.trim() === ':::')) {
+      flush()
+      const inner: string[] = []
+      const variant = noticeLine.exec(line)![1] ?? 'info'
+      for (i++; lines[i]!.trim() !== ':::'; i++) inner.push(lines[i]!)
+      blocks.push({ type: 'notice', variant, children: parseLines(inner, withHeadings) })
+    } else if (raw.includes('|') && i + 1 < lines.length && lines[i + 1]!.includes('|') && tableDelimiter.test(lines[i + 1]!) && splitRow(raw).length === splitRow(lines[i + 1]!).length) {
+      flush()
+      const head = splitRow(raw)
+      const rows = [head]
+      const aligns = splitRow(lines[i + 1]!).map(alignOf)
+      for (i += 2; i < lines.length && lines[i]!.trim() !== '' && lines[i]!.includes('|'); i++) {
+        const cells = splitRow(lines[i]!)
+        rows.push(Array.from({ length: head.length }, (_, at) => cells[at] ?? ''))
+      }
+      i--
+      blocks.push({ type: 'table', rows, aligns })
+    } else {
+      const marker = listMarker.exec(raw)
+      if (marker && (paragraph.length === 0 || interrupts(marker))) {
+        flush()
+        const { lists, next } = parseList(lines, i, withHeadings)
+        blocks.push(...lists)
+        i = next - 1
+      } else paragraph.push(line)
+    }
   }
   flush()
   return blocks
@@ -159,21 +309,204 @@ function parseBlocks(text: string, withHeadings: boolean): ParsedBlock[] {
 
 const textNode = (value: string): JSONNode[] => (value ? [{ type: 'text', text: value }] : [])
 
-type NewBlock = { type: 'atx_heading'; text: string; level?: number } | TextBlock
+type Span = { text: string; formats: string[]; href?: string; title?: string }
+
+const markOfFormat: Record<string, string> = {
+  bold: 'strong',
+  italic: 'em',
+  strike: 'strike',
+  code: 'code',
+  underline: 'underline',
+  highlight: 'highlight',
+}
+
+// The leftmost of: `code`, \escape, [label](address "title"), <address>, a bare address,
+// ***both***, **bold**, ~~strike~~, ==highlight==, <u>underline</u>, __bold__, *italic*, _italic_.
+const inlineToken = new RegExp(
+  [
+    '`([^`\\n]+)`',
+    '\\\\([\\\\`*_{}\\[\\]()#+\\-.!|~<>=])',
+    '\\[([^\\]\\n]+)\\]\\(((?:[^()\\s]|\\([^()\\s]*\\))+)(?:\\s+"([^"]*)")?\\)',
+    '<((?:https?://|mailto:)[^>\\s]+)>',
+    '(https?://[^\\s<>]+)',
+    '\\*\\*\\*([^*\\s](?:[^*]*[^*\\s])?)\\*\\*\\*',
+    '\\*\\*([^*\\s](?:[^*]*[^*\\s])?)\\*\\*',
+    '~~([^~\\s](?:[^~]*[^~\\s])?)~~',
+    '==([^=\\s](?:[^=]*[^=\\s])?)==',
+    '<u>([^<\\n]+)</u>',
+    '__([^_\\s](?:[^_]*[^_\\s])?)__',
+    '\\*([^*\\s](?:[^*]*[^*\\s])?)\\*',
+    '_([^_\\s](?:[^_]*[^_\\s])?)_',
+  ].join('|')
+)
+
+/** The editor's normalizeLinkTarget: only these addresses become links. */
+const safeLink = (target: string) => !/[\s<>"]/.test(target) && (/^(https?:|mailto:|tel:|#|\.\.?\/)/i.test(target) || /^\/(?!\/)/.test(target))
+
+const isWord = (char: string | undefined) => char !== undefined && /[\p{L}\p{N}_]/u.test(char)
+
+/** A bare address ends before the punctuation that follows it in a sentence, and before a closing bracket it did not open. */
+function bareAddress(value: string): string {
+  let end = value.length
+  for (;;) {
+    const last = value[end - 1]
+    const opens = value.slice(0, end).split('(').length - 1
+    const closes = value.slice(0, end).split(')').length - 1
+    if (last !== undefined && (/[.,;:!?'"*_~]/.test(last) || (last === ')' && closes > opens))) end--
+    else return value.slice(0, end)
+  }
+}
+
+function spansOf(text: string, formats: string[] = [], href?: string, title?: string): Span[] {
+  const spans: Span[] = []
+  const plain = (value: string, extra: string[] = []) => value && spans.push({ text: value, formats: [...formats, ...extra], href, title })
+  while (text) {
+    const m = inlineToken.exec(text)
+    if (!m) {
+      plain(text)
+      break
+    }
+    let end = m.index + m[0].length
+    const before = text.slice(0, m.index)
+    const inner = (value: string, ...extra: string[]) => spans.push(...spansOf(value, [...formats, ...extra], href, title))
+    if (m[1] !== undefined) {
+      if ((m.index > 0 && text[m.index - 1] === '`') || text[end] === '`') plain(text.slice(0, end))
+      else {
+        plain(before)
+        plain(m[1], ['code'])
+      }
+    } else if (m[2] !== undefined) {
+      plain(before)
+      plain(m[2])
+    } else if (m[3] !== undefined) {
+      // An image, or an address the editor would not link: stays as written.
+      if ((m.index > 0 && text[m.index - 1] === '!') || !safeLink(m[4]!)) plain(text.slice(0, end))
+      else {
+        plain(before)
+        spans.push(...spansOf(m[3], formats, m[4], m[5]))
+      }
+    } else if (m[6] !== undefined) {
+      plain(before)
+      spans.push(...spansOf(m[6], formats, m[6], title))
+    } else if (m[7] !== undefined) {
+      const address = bareAddress(m[7])
+      end = m.index + address.length
+      if (href !== undefined || address.length <= 'https://'.length) plain(text.slice(0, end))
+      else {
+        plain(before)
+        spans.push({ text: address, formats, href: address })
+      }
+    } else if (m[8] !== undefined) {
+      plain(before)
+      inner(m[8], 'bold', 'italic')
+    } else if (m[9] !== undefined) {
+      plain(before)
+      inner(m[9], 'bold')
+    } else if (m[10] !== undefined) {
+      plain(before)
+      inner(m[10], 'strike')
+    } else if (m[11] !== undefined) {
+      plain(before)
+      inner(m[11], 'highlight')
+    } else if (m[12] !== undefined) {
+      plain(before)
+      inner(m[12], 'underline')
+    } else if (m[13] !== undefined || m[15] !== undefined) {
+      // An underscore inside a word (snake_case) is text.
+      if (isWord(text[m.index - 1]) || isWord(text[end])) plain(text.slice(0, end))
+      else {
+        plain(before)
+        inner((m[13] ?? m[15])!, m[13] !== undefined ? 'bold' : 'italic')
+      }
+    } else {
+      plain(before)
+      inner(m[14]!, 'italic')
+    }
+    text = text.slice(end)
+  }
+  return spans
+}
+
+/** Runs for a line of text, one per formatting, as the editor keeps them. The same reading as create_document. */
+function inlineRuns(value: string, newID: () => string): JSONNode[] {
+  const merged: Span[] = []
+  for (const span of spansOf(value)) {
+    const last = merged[merged.length - 1]
+    if (last && last.href === span.href && last.title === span.title && last.formats.join() === span.formats.join()) last.text += span.text
+    else merged.push({ ...span })
+  }
+  if (!merged.length) return [node('run', newID(), {}, [])]
+  return merged.map((span) => {
+    const attributes: Record<string, unknown> = {}
+    const marks: Mark[] = span.formats.map((format) => ({ type: markOfFormat[format]! }))
+    for (const format of span.formats) attributes[format] = true
+    if (span.href) {
+      attributes.href = span.href
+      const link: Mark = { type: 'link', attrs: { href: span.href } }
+      if (span.title) {
+        attributes.linkTitle = span.title
+        link.attrs!.title = span.title
+      }
+      marks.push(link)
+    }
+    return node('run', newID(), attributes, [{ type: 'text', text: span.text, ...(marks.length ? { marks } : {}) }])
+  })
+}
+
+/** A node for a block of text; containers hold their blocks, and always at least one. */
+function buildBlock(item: ParsedBlock, newID: () => string): JSONNode {
+  const children = (blocks: ParsedBlock[]) => (blocks.length ? blocks.map((child) => buildBlock(child, newID)) : [buildBlock({ type: 'paragraph', text: '' }, newID)])
+  switch (item.type) {
+    // The editor keeps code as text directly in the block; most other blocks hold runs.
+    case 'code_block':
+      return node('code_block', newID(), { type: 'fenced', lang: item.lang }, textNode(item.text))
+    case 'diagram':
+      return node('diagram', newID(), { type: 'mermaid', lang: 'yaml' }, textNode(item.text))
+    case 'thematic_break':
+      return { type: 'thematic_break', attrs: { nodeID: newID(), bodyAttributes: '{}', bodyContent: '---' } }
+    case 'atx_heading':
+      return node('atx_heading', newID(), { level: item.level }, inlineRuns(item.text, newID))
+    case 'paragraph':
+      return node('paragraph', newID(), {}, inlineRuns(item.text, newID))
+    case 'block_quote':
+      return node('block_quote', newID(), {}, children(item.children))
+    case 'notice':
+      return node('notice', newID(), { variant: item.variant }, children(item.children))
+    case 'list': {
+      const itemType = item.kind === 'task' ? 'task_list_item' : 'list_item'
+      const attributes = item.kind === 'order' ? { start: item.start, loose: false, delimiter: '.' } : { marker: '-', loose: false }
+      const items = item.items.map((entry) => node(itemType, newID(), item.kind === 'task' ? { checked: entry.checked === true } : {}, children(entry.children)))
+      return node(item.kind === 'order' ? 'order_list' : item.kind === 'task' ? 'task_list' : 'bullet_list', newID(), attributes, items)
+    }
+    case 'table': {
+      const rows = item.rows.map((cells) =>
+        node(
+          'table_row',
+          newID(),
+          {},
+          cells.map((cell, at) => node('table_cell', newID(), { align: item.aligns[at] ?? 'none' }, inlineRuns(cell, newID)))
+        )
+      )
+      return node('table', newID(), {}, rows)
+    }
+  }
+}
+
+type NewBlock = ParsedBlock
 
 /** New blocks; in suggest mode each is a proposed block insertion in the author's name. */
 function newBlocks(items: NewBlock[], options: EditOptions, ids: string[]) {
   return items.map((item) => {
-    const attributes: Record<string, unknown> =
-      item.type === 'atx_heading' ? { level: item.level ?? 2 } : item.type === 'code_block' ? { type: 'fenced', lang: item.lang } : {}
+    const built = buildBlock(item, options.newID)
     if (options.mode === 'suggest') {
       const id = options.newID()
       ids.push(id)
+      // The blocks inside a proposed container are proposed with it.
+      const attributes = JSON.parse(String(built.attrs?.bodyAttributes)) as Record<string, unknown>
       attributes.suggestion = { kind: 'insert', id, author: options.author }
+      built.attrs = { ...built.attrs, bodyAttributes: JSON.stringify(attributes) }
     }
-    // The editor keeps code as text directly in the block; every other block holds a run.
-    if (item.type === 'code_block') return node('code_block', options.newID(), attributes, textNode(item.text))
-    return node(item.type, options.newID(), attributes, [node('run', options.newID(), {}, textNode(item.text))])
+    return built
   })
 }
 

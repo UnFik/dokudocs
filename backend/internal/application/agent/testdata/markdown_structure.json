@@ -1,0 +1,142 @@
+[
+  {
+    "name": "bold, link and code in a paragraph",
+    "input": "Ini **inferensi** dari [kode](https://example.com/a.go), `uji`.",
+    "outline": "paragraph(run(\"Ini \"),run{bold=true}(\"inferensi\"),run(\" dari \"),run{href=https://example.com/a.go}(\"kode\"),run(\", \"),run{code=true}(\"uji\"),run(\".\"))"
+  },
+  {
+    "name": "link with a title and parentheses in the address",
+    "input": "[a](https://en.wikipedia.org/wiki/Go_(game) \"The game\") end",
+    "outline": "paragraph(run{href=https://en.wikipedia.org/wiki/Go_(game),linkTitle=The game}(\"a\"),run(\" end\"))"
+  },
+  {
+    "name": "bold italic, strike, highlight, underline",
+    "input": "***both*** ~~gone~~ ==hi== <u>under</u>",
+    "outline": "paragraph(run{bold=true,italic=true}(\"both\"),run(\" \"),run{strike=true}(\"gone\"),run(\" \"),run{highlight=true}(\"hi\"),run(\" \"),run{underline=true}(\"under\"))"
+  },
+  {
+    "name": "underscore emphasis outside words only",
+    "input": "_em_ and __strong__ but snake_case_name stays",
+    "outline": "paragraph(run{italic=true}(\"em\"),run(\" and \"),run{bold=true}(\"strong\"),run(\" but snake_case_name stays\"))"
+  },
+  {
+    "name": "star emphasis inside a word",
+    "input": "un*believ*able",
+    "outline": "paragraph(run(\"un\"),run{italic=true}(\"believ\"),run(\"able\"))"
+  },
+  {
+    "name": "marks nest inside a link label",
+    "input": "[**bold** label](https://example.com)",
+    "outline": "paragraph(run{bold=true,href=https://example.com}(\"bold\"),run{href=https://example.com}(\" label\"))"
+  },
+  {
+    "name": "autolink and bare address",
+    "input": "See <https://a.com/x> and https://b.com/y). Done.",
+    "outline": "paragraph(run(\"See \"),run{href=https://a.com/x}(\"https://a.com/x\"),run(\" and \"),run{href=https://b.com/y}(\"https://b.com/y\"),run(\"). Done.\"))"
+  },
+  {
+    "name": "escaped marks stay text",
+    "input": "\\*not em\\* and \\[x\\](y)",
+    "outline": "paragraph(run(\"*not em* and [x](y)\"))"
+  },
+  {
+    "name": "images and unsafe links stay text",
+    "input": "![alt](https://e.com/i.png) [bad](javascript:void) [ok](/docs/1)",
+    "outline": "paragraph(run(\"![alt](https://e.com/i.png) [bad](javascript:void) \"),run{href=/docs/1}(\"ok\"))"
+  },
+  {
+    "name": "bullet list",
+    "input": "- one\n- two **b**\n* three",
+    "outline": "bullet_list(list_item(paragraph(run(\"one\"))),list_item(paragraph(run(\"two \"),run{bold=true}(\"b\"))),list_item(paragraph(run(\"three\"))))"
+  },
+  {
+    "name": "numbered list keeps its start",
+    "input": "3. c\n4. d",
+    "outline": "order_list{start=3}(list_item(paragraph(run(\"c\"))),list_item(paragraph(run(\"d\"))))"
+  },
+  {
+    "name": "a list interrupts a paragraph",
+    "input": "Langkah:\n1. a\n2. b",
+    "outline": "paragraph(run(\"Langkah:\"))\norder_list{start=1}(list_item(paragraph(run(\"a\"))),list_item(paragraph(run(\"b\"))))"
+  },
+  {
+    "name": "a number other than one does not interrupt a paragraph",
+    "input": "Tahun\n2024. baik",
+    "outline": "paragraph(run(\"Tahun 2024. baik\"))"
+  },
+  {
+    "name": "task list",
+    "input": "- [ ] todo\n- [x] done\n- plain",
+    "outline": "task_list(task_list_item{checked=false}(paragraph(run(\"todo\"))),task_list_item{checked=true}(paragraph(run(\"done\"))))\nbullet_list(list_item(paragraph(run(\"plain\"))))"
+  },
+  {
+    "name": "nested lists",
+    "input": "- a\n  - b\n    - c\n- d",
+    "outline": "bullet_list(list_item(paragraph(run(\"a\")),bullet_list(list_item(paragraph(run(\"b\")),bullet_list(list_item(paragraph(run(\"c\"))))))),list_item(paragraph(run(\"d\"))))"
+  },
+  {
+    "name": "nested list indented under a number",
+    "input": "1. a\n  - b\n2. c",
+    "outline": "order_list{start=1}(list_item(paragraph(run(\"a\")),bullet_list(list_item(paragraph(run(\"b\"))))),list_item(paragraph(run(\"c\"))))"
+  },
+  {
+    "name": "list item with a second paragraph and code",
+    "input": "- a\n\n  more\n\n  ```js\n  x\n  ```\n- b",
+    "outline": "bullet_list(list_item(paragraph(run(\"a\")),paragraph(run(\"more\")),code_block{lang=js,type=fenced}(\"x\")),list_item(paragraph(run(\"b\"))))"
+  },
+  {
+    "name": "loose list with blank lines between items",
+    "input": "- a\n\n- b",
+    "outline": "bullet_list(list_item(paragraph(run(\"a\"))),list_item(paragraph(run(\"b\"))))"
+  },
+  {
+    "name": "lazy continuation line",
+    "input": "- a\ncontinues\n- b",
+    "outline": "bullet_list(list_item(paragraph(run(\"a continues\"))),list_item(paragraph(run(\"b\"))))"
+  },
+  {
+    "name": "bullets then numbers make two lists",
+    "input": "- a\n1. b",
+    "outline": "bullet_list(list_item(paragraph(run(\"a\"))))\norder_list{start=1}(list_item(paragraph(run(\"b\"))))"
+  },
+  {
+    "name": "block quote",
+    "input": "> one\n> two\n>\n> - x\n\nafter",
+    "outline": "block_quote(paragraph(run(\"one two\")),bullet_list(list_item(paragraph(run(\"x\")))))\nparagraph(run(\"after\"))"
+  },
+  {
+    "name": "notice",
+    "input": ":::tip\nBe careful\n:::\nnext",
+    "outline": "notice{variant=tip}(paragraph(run(\"Be careful\")))\nparagraph(run(\"next\"))"
+  },
+  {
+    "name": "unclosed notice is a paragraph",
+    "input": ":::tip\ntext",
+    "outline": "paragraph(run(\":::tip text\"))"
+  },
+  {
+    "name": "thematic break",
+    "input": "a\n\n---\n\nb\n***\n- - -",
+    "outline": "paragraph(run(\"a\"))\nthematic_break()\nparagraph(run(\"b\"))\nthematic_break()\nthematic_break()"
+  },
+  {
+    "name": "table with alignment",
+    "input": "| A | B | C |\n|:--|:-:|--:|\n| 1 | **2** | x \\| y |\n| 3 |\n\nafter",
+    "outline": "table(table_row(table_cell{align=left}(run(\"A\")),table_cell{align=center}(run(\"B\")),table_cell{align=right}(run(\"C\"))),table_row(table_cell{align=left}(run(\"1\")),table_cell{align=center}(run{bold=true}(\"2\")),table_cell{align=right}(run(\"x | y\"))),table_row(table_cell{align=left}(run(\"3\")),table_cell{align=center}(run()),table_cell{align=right}(run())))\nparagraph(run(\"after\"))"
+  },
+  {
+    "name": "a pipe line without a delimiter row is a paragraph",
+    "input": "a | b\nc | d",
+    "outline": "paragraph(run(\"a | b c | d\"))"
+  },
+  {
+    "name": "mermaid fence",
+    "input": "```mermaid\nflowchart LR\n```",
+    "outline": "diagram{lang=yaml,type=mermaid}(\"flowchart LR\")"
+  },
+  {
+    "name": "fence inside a list item",
+    "input": "- a\n  ```\n  - not a list\n  ```",
+    "outline": "bullet_list(list_item(paragraph(run(\"a\")),code_block{lang=,type=fenced}(\"- not a list\")))"
+  }
+]

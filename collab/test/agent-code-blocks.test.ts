@@ -44,7 +44,7 @@ describe('the shared block cases', () => {
   it('has cases', () => expect(cases.length).toBeGreaterThan(10))
   for (const c of cases)
     it(c.name, () => {
-      const got = blocksOf(c.input).map((item) => ({ type: item.type, lang: item.type === 'code_block' ? item.lang : '', text: item.text }))
+      const got = blocksOf(c.input).map((item) => ({ type: item.type, lang: item.type === 'code_block' ? item.lang : '', text: (item as { text: string }).text }))
       expect(got).toEqual(c.blocks.map((b) => ({ type: b.type, lang: b.type === 'code_block' ? b.lang : '', text: b.text })))
     })
 })
@@ -149,5 +149,59 @@ describe('changing code inside a code block', () => {
     expect(plainOf(codes[1]!)).toBe(JSON_BODY.replace('"a": 1', '"a": 2'))
     expect(blocks.indexOf(codes[1]!)).toBe(blocks.indexOf(codes[0]!) + 1)
     expect(validateSuggesterChange(before, json, ME)).toEqual({ ok: true })
+  })
+})
+
+describe('inline Markdown in new text', () => {
+  it('turns links and marks into formatted runs, as create_document does', () => {
+    const { json } = applyMarkdownOperations(
+      doc(paragraph('p1', 'Start.')),
+      [{ type: 'append', text: 'Ini **inferensi** dari [kode](https://example.com/a.go), `uji`. [bad](javascript:void)' }],
+      direct
+    )
+    const runs = blocksOfDoc(json)[1]!.content as J[]
+    const formatted = runs.filter((r) => attrsOf(r).bold || attrsOf(r).href || attrsOf(r).code)
+    expect(formatted.map((r) => attrsOf(r))).toEqual([{ bold: true }, { href: 'https://example.com/a.go' }, { code: true }])
+    expect(runs[1]!.content[0].marks).toEqual([{ type: 'strong' }])
+    expect(runs[3]!.content[0].marks).toEqual([{ type: 'link', attrs: { href: 'https://example.com/a.go' } }])
+    expect(runs.map(plainOf).join('')).toBe('Ini inferensi dari kode, uji. [bad](javascript:void)')
+  })
+})
+
+describe('the shared structure cases', () => {
+  // The same file runs against create_document in the backend (markdown_test.go): lists,
+  // quotes, tables, notices and inline marks come out as the same nodes either way.
+  const cases = JSON.parse(
+    readFileSync(fileURLToPath(new URL('../../backend/internal/application/agent/testdata/markdown_structure.json', import.meta.url)), 'utf8')
+  ) as { name: string; input: string; outline: string }[]
+  const hidden = new Set(['marker', 'loose', 'delimiter'])
+  const outline = (node: J): string => {
+    if (node.type === 'text') return JSON.stringify(node.text)
+    const attributes = attrsOf(node)
+    const shown = Object.keys(attributes)
+      .sort()
+      .filter((key) => !hidden.has(key))
+      .map((key) => `${key}=${typeof attributes[key] === 'string' ? attributes[key] : JSON.stringify(attributes[key])}`)
+    return `${node.type}${shown.length ? `{${shown.join(',')}}` : ''}(${(node.content ?? []).map(outline).join(',')})`
+  }
+
+  it('has cases', () => expect(cases.length).toBeGreaterThan(20))
+  for (const c of cases)
+    it(c.name, () => {
+      const { json } = applyMarkdownOperations(doc(), [{ type: 'append', text: c.input }], direct)
+      expect(blocksOfDoc(json).map(outline).join('\n')).toBe(c.outline)
+    })
+
+  it('proposes a whole list as one suggestion', () => {
+    const { json } = applyMarkdownOperations(doc(), [{ type: 'append', text: '- a\n- b' }], suggest)
+    const [list] = blocksOfDoc(json)
+    expect(attrsOf(list!).suggestion).toMatchObject({ kind: 'insert', author: ME })
+    expect(list!.content.every((item: J) => attrsOf(item).suggestion === undefined)).toBe(true)
+  })
+
+  it('reads headings inside a quote when headings are read', () => {
+    const { json } = applyMarkdownOperations(doc(paragraph('p', 'x')), [{ type: 'replace_range', from: 'x', to: 'x', text: '> # T\n> text' }], direct)
+    expect(blocksOfDoc(json)[0]!.type).toBe('block_quote')
+    expect(blocksOfDoc(json)[0]!.content[0].type).toBe('atx_heading')
   })
 })
