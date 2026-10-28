@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -145,5 +146,120 @@ func TestMermaidFenceBecomesADiagramBlock(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), `"bodyAttributes":"{\"type\":\"mermaid\",\"lang\":\"yaml\"}"`) {
 		t.Fatalf("diagram attributes: %s", raw)
+	}
+}
+
+func TestInlineMarkdownBecomesMarkedRuns(t *testing.T) {
+	raw := string(MarkdownToContentJSON("Ini **inferensi** dari [kode](https://example.com/a.go), bukan `uji`. ![x](https://e.com/i.png) [bad](javascript:void)"))
+	for _, want := range []string{
+		`"marks":[{"type":"strong"}]`,
+		`"marks":[{"type":"link","attrs":{"href":"https://example.com/a.go"}}]`,
+		`"marks":[{"type":"code"}]`,
+		`"bodyAttributes":"{\"bold\":true}"`,
+		`"bodyAttributes":"{\"href\":\"https://example.com/a.go\"}"`,
+	} {
+		if !strings.Contains(raw, want) {
+			t.Fatalf("missing %s in %s", want, raw)
+		}
+	}
+	if strings.Contains(raw, "**") || strings.Contains(raw, "](https://example.com") {
+		t.Fatalf("delimiters left: %s", raw)
+	}
+	if !strings.Contains(raw, "![x](https://e.com/i.png)") || !strings.Contains(raw, "[bad](javascript:void)") {
+		t.Fatalf("image or unsafe link was rewritten: %s", raw)
+	}
+}
+
+// nodeOutline writes a node and what is under it as type{attributes}(children), the same text
+// collab/test/agent-code-blocks.test.ts builds, so one file checks both converters.
+func nodeOutline(t *testing.T, raw json.RawMessage) string {
+	t.Helper()
+	type node struct {
+		Type    string            `json:"type"`
+		Text    string            `json:"text"`
+		Attrs   map[string]string `json:"attrs"`
+		Content []json.RawMessage `json:"content"`
+	}
+	var write func(raw json.RawMessage) string
+	write = func(raw json.RawMessage) string {
+		var n node
+		if err := json.Unmarshal(raw, &n); err != nil {
+			t.Fatal(err)
+		}
+		if n.Type == "text" {
+			var out strings.Builder
+			enc := json.NewEncoder(&out)
+			enc.SetEscapeHTML(false)
+			_ = enc.Encode(n.Text)
+			return strings.TrimSpace(out.String())
+		}
+		var attributes map[string]any
+		_ = json.Unmarshal([]byte(n.Attrs["bodyAttributes"]), &attributes)
+		keys := []string{}
+		for key := range attributes {
+			if key != "marker" && key != "loose" && key != "delimiter" {
+				keys = append(keys, key)
+			}
+		}
+		sort.Strings(keys)
+		shown := []string{}
+		for _, key := range keys {
+			value, _ := json.Marshal(attributes[key])
+			if text, ok := attributes[key].(string); ok {
+				value = []byte(text)
+			}
+			shown = append(shown, key+"="+string(value))
+		}
+		children := []string{}
+		for _, child := range n.Content {
+			children = append(children, write(child))
+		}
+		out := n.Type
+		if len(shown) > 0 {
+			out += "{" + strings.Join(shown, ",") + "}"
+		}
+		return out + "(" + strings.Join(children, ",") + ")"
+	}
+	var doc struct {
+		Content []struct {
+			Content []json.RawMessage `json:"content"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil || len(doc.Content) == 0 {
+		t.Fatalf("unexpected shape: %s", raw)
+	}
+	lines := []string{}
+	for _, b := range doc.Content[0].Content {
+		lines = append(lines, write(b))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// The same file runs against the collaboration service (collab/test/agent-code-blocks.test.ts).
+func TestMarkdownStructureMatchesTheSharedFixture(t *testing.T) {
+	data, err := os.ReadFile("testdata/markdown_structure.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name    string `json:"name"`
+		Input   string `json:"input"`
+		Outline string `json:"outline"`
+	}
+	if err := json.Unmarshal(data, &cases); err != nil || len(cases) < 20 {
+		t.Fatalf("fixture: %v", err)
+	}
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			if got := nodeOutline(t, MarkdownToContentJSON(c.Input)); got != c.Outline {
+				t.Fatalf("outline\n got %s\nwant %s", got, c.Outline)
+			}
+		})
+	}
+}
+
+func TestHeadingsAreReadInsideAQuote(t *testing.T) {
+	if got := nodeOutline(t, MarkdownToContentJSON("> # T\n> text")); got != `block_quote(atx_heading{level=1}(run("T")),paragraph(run("text")))` {
+		t.Fatalf("got %s", got)
 	}
 }
