@@ -714,7 +714,7 @@ function findRange(blocks: JSONNode[], from: string, to: string | undefined): [n
 }
 
 const textBlocksOf = (text: string | undefined, name: string) => {
-  const blocks = blocksOf(text ?? '')
+  const blocks = richBlocksOf(text ?? '')
   if (blocks.length === 0) throw new AgentEditError(`${name} needs text`)
   return blocks
 }
@@ -743,7 +743,7 @@ export function applyMarkdownOperations(json: unknown, operations: MarkdownOpera
         const level = Math.min(6, Math.max(1, Math.trunc(Number(operation.level ?? 2)) || 2))
         blocks.push(
           ...newBlocks(
-            [{ type: 'atx_heading', text: title, level }, ...blocksOf(operation.text ?? '')],
+            [{ type: 'atx_heading', text: title, level }, ...richBlocksOf(operation.text ?? '')],
             options,
             suggestionIDs
           )
