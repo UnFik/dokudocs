@@ -276,3 +276,28 @@ describe('range edits that are copied loosely', () => {
     expect(toMarkdown(json)).toBe('## Ganti\n\nPenutup\n\nInterceptor connectx\n')
   })
 })
+
+describe('a # line in the text of a section edit', () => {
+  const direct = { mode: 'direct' as const, author: ME, newID: ids }
+  const headingTypes = (json: J) => (json.content[0].content as J[]).filter((b) => b.type === 'atx_heading').map((b) => JSON.parse(b.attrs.bodyAttributes).level)
+
+  it('becomes a heading when it is appended', () => {
+    const { json } = applyMarkdownOperations(base(), [{ type: 'append', text: '### 5.5 Sync\n\nThe body.' }], direct)
+    expect(headingTypes(json)).toEqual([1, 2, 3])
+    expect(toMarkdown(json)).toContain('### 5.5 Sync')
+  })
+
+  it('becomes a heading inside append_section, insert_after_heading and replace_section', () => {
+    const { json } = applyMarkdownOperations(
+      base(),
+      [
+        { type: 'append_section', heading: 'Rollback', level: 2, text: '### 5.5 Sync\n\nThe body.' },
+        { type: 'insert_after_heading', heading: 'Overview', text: '### 1.1 Scope' },
+        { type: 'replace_section', heading: 'Deploy', text: '### 2.1 Steps\n\nPush.' },
+      ],
+      direct
+    )
+    expect(headingTypes(json)).toEqual([1, 3, 2, 3, 2, 3])
+    expect(toMarkdown(json)).not.toMatch(/^[^#\n].*###/m)
+  })
+})
