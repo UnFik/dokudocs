@@ -255,6 +255,46 @@ describe('documentBodyToMarkdown', () => {
     ).toThrow('duplicate sibling order')
   })
 
+  it('normalizes a legacy zero ordered list start to 1', () => {
+    const root: DocumentBodyNode = {
+      nodeID: 'root',
+      parentID: null,
+      siblingOrder: 0,
+      type: 'document',
+      content: '',
+      attributes: {},
+    }
+    const list: DocumentBodyNode = {
+      ...root,
+      nodeID: 'ol',
+      parentID: 'root',
+      type: 'order-list',
+      attributes: { start: 0, loose: false, delimiter: '.' },
+    }
+    const item: DocumentBodyNode = {
+      ...root,
+      nodeID: 'item',
+      parentID: 'ol',
+      type: 'list-item',
+    }
+    const para: DocumentBodyNode = {
+      ...root,
+      nodeID: 'p',
+      parentID: 'item',
+      type: 'paragraph',
+    }
+    const run: DocumentBodyNode = {
+      ...root,
+      nodeID: 'r',
+      parentID: 'p',
+      type: 'run',
+      content: 'a',
+    }
+    expect(documentBodyToMarkdown([root, list, item, para, run])).toContain(
+      '1. a'
+    )
+  })
+
   it('rejects malformed block metadata and nested inline nodes', () => {
     const root: DocumentBodyNode = {
       nodeID: 'root',
@@ -280,9 +320,16 @@ describe('documentBodyToMarkdown', () => {
       content: '',
       attributes: {},
     }
-    expect(() => documentBodyToMarkdown([root, orderedList, listItem])).toThrow(
-      'ordered list start must be a positive integer'
-    )
+    expect(() =>
+      documentBodyToMarkdown([
+        root,
+        {
+          ...orderedList,
+          attributes: { ...orderedList.attributes, start: 'x' },
+        },
+        listItem,
+      ])
+    ).toThrow('missing numeric attribute start')
 
     const paragraph: DocumentBodyNode = {
       ...listItem,
