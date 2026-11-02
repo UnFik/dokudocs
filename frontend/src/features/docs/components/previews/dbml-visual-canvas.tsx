@@ -842,7 +842,7 @@ export function DbmlVisualCanvas({
 
       const tables: ParsedTable[] = []
       const tableRegex =
-        /Table\s+([\w."]+)(?:\s+as\s+([\w."]+))?\s*(?:\[([^\]]*)\])?\s*\{([^}]+)\}/gi
+        /Table\s+([\w."]+)(?:\s+as\s+([\w."]+))?\s*(?:\[([^\]]*)\])?\s*\{((?:[^{}]|\{[^}]*\})+)\}/gi
 
       let match: RegExpExecArray | null
       while ((match = tableRegex.exec(cleanContent)) !== null) {
