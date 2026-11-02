@@ -73,6 +73,27 @@ function walkRuns(nodes: JSONNode[], visit: (run: JSONNode) => void) {
   }
 }
 
+/** Calls `visit` with each list of sibling runs, in order: the runs of one paragraph, heading, table cell or list item. */
+function walkRunGroups(nodes: JSONNode[], visit: (runs: JSONNode[]) => void) {
+  for (const node of nodes) {
+    if (node.type === 'run' || !node.content) continue
+    const runs = node.content.filter((child) => child.type === 'run')
+    if (runs.length) visit(runs)
+    else walkRunGroups(node.content, visit)
+  }
+}
+
+/** What a run's formatting is made of that cannot be cut in the middle: a link, or a child that is not text. */
+function linkOrObject(run: JSONNode): string | undefined {
+  if ((run.content ?? []).some((child) => child.type !== 'text')) return 'an embedded object'
+  try {
+    const attributes = JSON.parse(String(run.attrs?.bodyAttributes ?? '{}')) as { href?: unknown }
+    return attributes.href ? 'a link' : undefined
+  } catch {
+    return undefined
+  }
+}
+
 const node = (type: string, id: string, attributes: Record<string, unknown>, content: JSONNode[]): JSONNode => ({
   type,
   attrs: { nodeID: id, bodyAttributes: JSON.stringify(attributes), bodyContent: '' },
@@ -537,7 +558,7 @@ const squash = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase(
 function replaceText(blocks: JSONNode[], operation: { find: string; replace: string }, options: EditOptions, ids: string[]) {
   if (!operation.find) throw new AgentEditError('replace_text needs the text to find, copied exactly from read_document')
   // A code block holds its text directly, not in runs, so it is searched as a whole.
-  const matches: { run: JSONNode; index: number; section: string; codeAt?: number }[] = []
+  const matches: { run: JSONNode; index: number; section: string; codeAt?: number; parts?: { run: JSONNode; start: number; length: number }[] }[] = []
   let section = 'the start of the document'
   blocks.forEach((block, codeAt) => {
     if (proposed(block)) return
@@ -547,10 +568,23 @@ function replaceText(blocks: JSONNode[], operation: { find: string; replace: str
       for (let at = codeText.indexOf(operation.find); at !== -1; at = codeText.indexOf(operation.find, at + 1)) matches.push({ run: block, index: at, section, codeAt })
       return
     }
-    walkRuns([block], (run) => {
-      const runText = canonical(run)
-      for (let at = runText.indexOf(operation.find); at !== -1; at = runText.indexOf(operation.find, at + 1))
-        matches.push({ run, index: at, section })
+    // The runs of one line are searched as a whole, so a match may cross from one formatting to the next.
+    walkRunGroups([block], (runs) => {
+      const pieces = runs.map((run) => canonical(run))
+      const joined = pieces.join('')
+      for (let at = joined.indexOf(operation.find); at !== -1; at = joined.indexOf(operation.find, at + 1)) {
+        const end = at + operation.find.length
+        const parts: { run: JSONNode; start: number; length: number }[] = []
+        let offset = 0
+        runs.forEach((run, i) => {
+          const from = Math.max(at, offset)
+          const to = Math.min(end, offset + pieces[i]!.length)
+          if (from < to) parts.push({ run, start: from - offset, length: to - from })
+          offset += pieces[i]!.length
+        })
+        if (parts.length === 1) matches.push({ run: parts[0]!.run, index: parts[0]!.start, section })
+        else matches.push({ run: parts[0]!.run, index: parts[0]!.start, section, parts })
+      }
     })
   })
   if (matches.length === 0) {
@@ -564,7 +598,7 @@ function replaceText(blocks: JSONNode[], operation: { find: string; replace: str
       )
     throw new AgentEditError(
       crossing
-        ? `"${operation.find}" spans differently formatted text; use a shorter piece that sits inside one formatting`
+        ? `"${operation.find}" spans more than one line, list item or table cell; use a shorter piece that sits inside one line, or replace_range`
         : similar
           ? `"${operation.find}" was not found, but the same words exist with different spacing or capitals; copy the text exactly from read_document`
           : `"${operation.find}" was not found; the document may have changed, so read it again and copy the text exactly`
@@ -574,8 +608,18 @@ function replaceText(blocks: JSONNode[], operation: { find: string; replace: str
     const where = [...new Set(matches.map((match) => match.section))].slice(0, 4).join(', ')
     throw new AgentEditError(`"${operation.find}" appears ${matches.length} times (in ${where}); include more surrounding text so it appears once`)
   }
-  const { run, index, codeAt } = matches[0]!
-  if (codeAt !== undefined) replaceInCode(blocks, codeAt, index, operation, options, ids)
+  const { run, index, codeAt, parts } = matches[0]!
+  if (parts) {
+    const unsafe = parts.map((part) => linkOrObject(part.run)).find(Boolean)
+    if (unsafe)
+      throw new AgentEditError(`"${operation.find}" crosses ${unsafe}; use a shorter piece that sits inside one formatting, or replace_range`)
+    // One suggestion covers the whole match; the replacement goes where the match starts.
+    const suggestionID = options.mode === 'suggest' ? options.newID() : ''
+    if (suggestionID) ids.push(suggestionID)
+    parts.forEach((part, i) => {
+      part.run.content = spliceRun(part.run.content ?? [], part.start, part.length, i === 0 ? operation.replace : '', options, ids, suggestionID)
+    })
+  } else if (codeAt !== undefined) replaceInCode(blocks, codeAt, index, operation, options, ids)
   else run.content = spliceRun(run.content ?? [], index, operation.find.length, operation.replace, options, ids)
 }
 
@@ -606,9 +650,9 @@ function replaceInCode(blocks: JSONNode[], at: number, index: number, operation:
  * Replaces `length` canonical characters at `start` in a run's text nodes. Direct mode
  * rewrites them; suggest mode marks them deleted and adds the new text as an insertion.
  */
-function spliceRun(nodes: JSONNode[], start: number, length: number, replacement: string, options: EditOptions, ids: string[]): JSONNode[] {
-  const suggestionID = options.mode === 'suggest' ? options.newID() : ''
-  if (suggestionID) ids.push(suggestionID)
+function spliceRun(nodes: JSONNode[], start: number, length: number, replacement: string, options: EditOptions, ids: string[], sharedID?: string): JSONNode[] {
+  const suggestionID = sharedID ?? (options.mode === 'suggest' ? options.newID() : '')
+  if (suggestionID && sharedID === undefined) ids.push(suggestionID)
   const mark = (type: string): Mark => ({ type, attrs: { id: suggestionID, author: options.author } })
   const out: JSONNode[] = []
   let position = 0

@@ -570,7 +570,7 @@ func DokudocsTools(d ToolDeps) []Tool {
 		{
 			Name: "edit_document_content", Capability: CapContent, Write: true, DocumentTool: true,
 			Description: "Change what a Markdown, DBML or Mermaid document says with targeted operations, using the version from read_document. " +
-				"Markdown operations: replace_text {find, replace} (find must appear once; copy it exactly from read_document), " +
+				"Markdown operations: replace_text {find, replace} (find must appear once; copy it exactly from read_document; prefer a short piece of one or two phrases, it may cross bold, italic or code but not a link, so use replace_range for that), " +
 				"insert_after_heading {heading, text}, insert_before_heading {heading, text}, append_section {heading, level, text}, append {text} (paragraphs and code blocks at the end), " +
 				"replace_section {heading, text} (replaces the body under a heading, up to the next heading of the same or higher level, and keeps the heading), delete_section {heading}, " +
 				"replace_range {from, to, text} (replaces the blocks from the one that holds from through the one that holds to, or the single block of from, with text; from and to are each a piece of one line copied from read_document, WITHOUT its list number, bullet or # mark; text may start a line with # to make a heading and may hold fenced code. Use it to reformat plain lines into headings and code blocks, one part of the document at a time). " +
