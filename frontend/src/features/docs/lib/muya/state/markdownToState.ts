@@ -178,7 +178,12 @@ export class MarkdownToState {
             name: 'order-list',
             meta: {
               loose,
-              start: Number.isInteger(start) && start >= 1 ? start : 1,
+              start:
+                typeof start === 'number' &&
+                Number.isInteger(start) &&
+                start >= 1
+                  ? start
+                  : 1,
               delimiter: bulletMarkerOrDelimiter || '.',
             },
             children: [],
