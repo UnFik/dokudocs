@@ -163,3 +163,9 @@
   pointer-events: none;
   font-family: inherit;
 }
+
+/* Monaco's button tooltips (e.g. "(Escape)" on the find widget close button)
+   land on top of the widget's own controls and block editing. */
+.monaco-hover.workbench-hover {
+  display: none !important;
+}
