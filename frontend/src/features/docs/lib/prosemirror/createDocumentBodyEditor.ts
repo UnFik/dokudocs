@@ -77,7 +77,6 @@ import { inlineMarkdownRules, markRuleResetPlugin } from './markdownInputRules'
 import { nodeSuggestionOf } from './nodeSuggestion'
 import { prepareBodyTransaction } from './prepareBodyTransaction'
 import { planSelectionDeletion, textblockAt } from './selectionDeletion'
-import { smartTextRules } from './smartText'
 import { suggestionBlocksPlugin } from './suggestionBlocks'
 import { suggestionCards, type SuggestionCard } from './suggestionCards'
 import {
@@ -134,8 +133,6 @@ export function createDocumentBodyEditor(
   ydoc: Y.Doc,
   options: {
     readOnly?: boolean
-    /** Whether typographic replacements (curly quotes, arrows, ellipsis) apply as the person types. */
-    smartText?: () => boolean
     /** The person asked for a link to a heading (its node ID). */
     onHeadingLink?: (nodeID: string) => void
     /** What `@` offers: people, pages and projects matching what was typed. */
@@ -348,7 +345,6 @@ export function createDocumentBodyEditor(
           headingInputRule,
           ...blockMarkdownRules(),
           ...inlineMarkdownRules,
-          ...smartTextRules(options.smartText ?? (() => false)),
         ],
       }),
       keymap({

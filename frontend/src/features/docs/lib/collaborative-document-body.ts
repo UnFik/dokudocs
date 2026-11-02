@@ -55,7 +55,6 @@ export async function mountCollaborativeDocumentBody(
     focusNodeID?: string
     url?: string
     readOnly?: boolean
-    smartText?: () => boolean
     maxCharacters?: number
     resolveLinkTitle?: (href: string) => Promise<string | null>
     resolvePreview?: LinkFeaturesOptions['resolvePreview']
@@ -136,7 +135,6 @@ export async function mountCollaborativeDocumentBody(
     })
     const editor = createDocumentBodyEditor(mount, session.ydoc, {
       readOnly: forceReadOnly || !access.canEdit,
-      smartText: input.smartText,
       maxCharacters: input.maxCharacters,
       resolveLinkTitle: input.resolveLinkTitle,
       resolvePreview: input.resolvePreview,

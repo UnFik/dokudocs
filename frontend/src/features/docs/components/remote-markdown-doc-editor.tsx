@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DocumentItem, DocumentRevision } from '@/types/dokudocs'
-import { FileCode, ListOrdered, Quote, TableOfContents } from 'lucide-react'
+import { FileCode, ListOrdered, TableOfContents } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { useDokudocsStore } from '@/stores/dokudocs-store'
@@ -21,6 +21,7 @@ import {
   type CommentThread,
   listDocumentBacklinks,
 } from '@/lib/domain-api'
+import { cn } from '@/lib/utils'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { Button } from '@/components/ui/button'
 import { ArchitectureUses } from '@/features/architecture/components/architecture-uses'
@@ -355,10 +356,6 @@ function CollaborativeMarkdownBody({
   const setPreviewMode = useEditorPreferenceStore(
     (state) => state.setPreviewMode
   )
-  const smartText = useEditorPreferenceStore(
-    (state) => state.preferencesByUser[userID || 'guest']?.smartText ?? false
-  )
-  const setSmartText = useEditorPreferenceStore((state) => state.setSmartText)
   const titleRef = useRef<HTMLInputElement>(null)
   const showOutline = useEditorPreferenceStore(
     (state) => state.preferencesByUser[userID || 'guest']?.showOutline ?? false
@@ -453,10 +450,6 @@ function CollaborativeMarkdownBody({
   const setNumberHeadings = useEditorPreferenceStore(
     (state) => state.setNumberHeadings
   )
-  const smartTextRef = useRef(smartText)
-  useEffect(() => {
-    smartTextRef.current = smartText
-  })
   const [status, setStatus] = useState<CollabStatus>('connecting')
   const statusRef = useRef(status)
   const canEdit = access?.canEdit ?? false
@@ -676,7 +669,6 @@ function CollaborativeMarkdownBody({
       workspaceID,
       userID,
       userName: profileNameRef.current,
-      smartText: () => smartTextRef.current,
       maxCharacters,
       upload: (file) => uploadDocumentAsset(workspaceID, documentID, file),
       resolveAsset: (src) => assetObjectURL(workspaceID, src),
@@ -945,17 +937,6 @@ function CollaborativeMarkdownBody({
           >
             <ListOrdered className='size-4' strokeWidth={1.5} />
           </Button>
-          <Button
-            size='icon'
-            variant='ghost'
-            className={toggleButtonClass}
-            aria-label='Smart text'
-            aria-pressed={smartText}
-            title='Smart text: curly quotes, arrows and an ellipsis as you type'
-            onClick={() => setSmartText(userID, !smartText)}
-          >
-            <Quote className='size-4' strokeWidth={1.5} />
-          </Button>
           {/* "Synced" is the normal state and the header already says Saved: keep it for screen readers, show the rest. */}
           <span
             role='status'
@@ -1104,6 +1085,7 @@ function CollaborativeMarkdownBody({
         {showSuggestionPanel ? (
           <SuggestionPanel
             open={isSuggestionsOpen}
+            onToggle={() => setIsSuggestionsOpen((open) => !open)}
             workspaceID={workspaceID}
             documentID={documentID}
             userID={userID}
@@ -1146,6 +1128,7 @@ function CollaborativeMarkdownBody({
 
 function SuggestionPanel({
   open,
+  onToggle,
   workspaceID,
   documentID,
   userID,
@@ -1168,6 +1151,8 @@ function SuggestionPanel({
   onSelectComment,
 }: {
   open: boolean
+  /** Opens or closes the panel from the rail on its edge. */
+  onToggle: () => void
   workspaceID: string
   documentID: string
   userID: string
@@ -1213,6 +1198,23 @@ function SuggestionPanel({
   })
   return (
     <>
+      {/* Like the app sidebar's rail: a strip on the panel's edge that closes it, or opens it
+          from the page's edge when closed. The Comment button under the title is the keyboard way. */}
+      <div className='relative hidden w-0 shrink-0 md:block'>
+        <button
+          type='button'
+          aria-label={open ? 'Close comments' : 'Open comments'}
+          title={open ? 'Close comments' : 'Open comments'}
+          aria-controls='suggestion-panel'
+          aria-expanded={open}
+          tabIndex={-1}
+          onClick={onToggle}
+          className={cn(
+            'absolute inset-y-0 z-20 w-4 -translate-x-1/2 after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 hover:after:bg-border',
+            open ? 'cursor-e-resize' : 'cursor-w-resize'
+          )}
+        />
+      </div>
       {open ? (
         <aside
           id='suggestion-panel'
