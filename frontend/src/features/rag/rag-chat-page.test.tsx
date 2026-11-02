@@ -402,6 +402,35 @@ it('opens at the newest messages and loads older ones on the way up', async () =
   ).toHaveLength(0)
 })
 
+it('offers a button to jump back to the newest message after scrolling up', async () => {
+  const { queryClient } = setup(true, history, pagedHistory)
+  const screen = await render(
+    <QueryClientProvider client={queryClient}>
+      <SidebarProvider>
+        <div
+          style={{ height: '640px', display: 'flex', flexDirection: 'column' }}
+        >
+          <RAGChatPage />
+        </div>
+      </SidebarProvider>
+    </QueryClientProvider>
+  )
+
+  await expect.element(screen.getByText('Message 70')).toBeVisible()
+  const jump = screen.getByRole('button', { name: 'Scroll to latest message' })
+  expect(jump.elements()).toHaveLength(0)
+
+  const log = screen.getByRole('log', { name: 'Messages' }).element()
+  log.scrollTop = 300
+  await expect.element(jump).toBeVisible()
+
+  await jump.click()
+  await vi.waitFor(() =>
+    expect(log.scrollHeight - log.scrollTop - log.clientHeight).toBeLessThan(4)
+  )
+  await vi.waitFor(() => expect(jump.elements()).toHaveLength(0))
+})
+
 it('lets a keyboard User load earlier messages with a button', async () => {
   const { queryClient } = setup(true, history, pagedHistory)
   const screen = await render(

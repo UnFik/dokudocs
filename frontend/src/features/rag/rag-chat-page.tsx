@@ -27,7 +27,7 @@ import { Main } from '@/components/layout/main'
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces'
 import { announceAnswer } from './chat-notify'
 import { ChatPanelHeader } from './chat-panel-header'
-import { ChatScroller } from './chat-scroller'
+import { ChatScroller, sentKey } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { ConversationHistory } from './conversation-history'
 import { downloadConversation } from './download-conversation'
@@ -218,6 +218,7 @@ export function RAGChatPage() {
                   resetKey={history.conversation.id}
                   firstKey={history.messages[0]?.id ?? ''}
                   changeKey={`${history.messages.at(-1)?.id ?? ''}|${run.view.phase}|${run.view.draft.length}|${history.actions?.length ?? 0}`}
+                  sendKey={sentKey(history.messages)}
                   hasOlder={historyQuery.hasOlder}
                   loadingOlder={historyQuery.loadingOlder}
                   onLoadOlder={historyQuery.loadOlder}
