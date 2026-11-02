@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { announceAnswer } from './chat-notify'
 import type { ChatPanelState } from './chat-panel-context'
 import { ChatPanelHeader } from './chat-panel-header'
-import { ChatScroller } from './chat-scroller'
+import { ChatScroller, sentKey } from './chat-scroller'
 import { AskForm, ChatMessages, RunProgress } from './chat-thread'
 import { ConversationHistory } from './conversation-history'
 import { downloadConversation } from './download-conversation'
@@ -199,6 +199,7 @@ export default function PanelBody({
               resetKey={selected?.id ?? ''}
               firstKey={history?.messages[0]?.id ?? ''}
               changeKey={`${history?.messages.at(-1)?.id ?? ''}|${run.view.phase}|${run.view.draft.length}|${history?.actions?.length ?? 0}`}
+              sendKey={sentKey(history?.messages)}
               hasOlder={hasOlder}
               loadingOlder={loadingOlder}
               onLoadOlder={loadOlder}
