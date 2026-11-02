@@ -205,6 +205,7 @@ describe('DbmlVisualCanvas Component', () => {
       expect(distanceToPath(dot)).toBeLessThanOrEqual(1.5)
     }
   })
+
   describe('notes', () => {
     const notesDbml = `
 Table posts [note: 'Blog articles, see https://wiki/posts {draft}'] {
@@ -297,5 +298,32 @@ Table items {
         .element(second.getByLabelText('Table note'))
         .not.toBeInTheDocument()
     })
+  })
+
+  it('shows the indexes and the columns after an indexes block', async () => {
+    const screen = await render(
+      <DbmlVisualCanvas
+        docId='test-doc-indexes'
+        content={`
+Table orders {
+  id int [pk]
+  status varchar
+  created_at timestamp
+
+  indexes {
+    (status, created_at) [name: 'idx_status_created']
+  }
+
+  total int
+}
+`}
+      />
+    )
+
+    await expect.element(screen.getByText('total')).toBeInTheDocument()
+    await expect.element(screen.getByText('Indexes')).toBeInTheDocument()
+    await expect
+      .element(screen.getByText('status, created_at'))
+      .toBeInTheDocument()
   })
 })
