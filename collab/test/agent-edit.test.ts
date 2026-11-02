@@ -276,3 +276,70 @@ describe('range edits that are copied loosely', () => {
     expect(toMarkdown(json)).toBe('## Ganti\n\nPenutup\n\nInterceptor connectx\n')
   })
 })
+
+describe('replace_text across formatting', () => {
+  const direct = { mode: 'direct', author: ME, newID: ids } as const
+  const suggest = { mode: 'suggest', author: ME, newID: ids } as const
+  const styled = (id: string, attributes: J, value: string, marks: J[] = []) => ({
+    type: 'run',
+    attrs: { nodeID: id, bodyAttributes: JSON.stringify(attributes), bodyContent: '' },
+    content: [text(value, marks)],
+  })
+  const runsOf = (json: J): J[] => json.content[0].content[0].content
+  const mixed = () =>
+    doc(
+      block(
+        'paragraph',
+        'p',
+        {},
+        styled('r1', {}, 'Deploy to '),
+        styled('r2', { bold: true }, 'staging', [{ type: 'strong' }]),
+        styled('r3', {}, ' first, then prod.')
+      )
+    )
+
+  it('replaces a match that crosses bold and plain text', () => {
+    const { json } = applyMarkdownOperations(mixed(), [{ type: 'replace_text', find: 'to staging first', replace: 'to prod' }], direct)
+    expect(toMarkdown(json)).toContain('Deploy to prod, then prod.')
+  })
+
+  it('keeps the formatting of the text outside the match', () => {
+    const { json } = applyMarkdownOperations(mixed(), [{ type: 'replace_text', find: 'ging first', replace: 'X' }], direct)
+    const runs = runsOf(json)
+    expect(runs.map((r: J) => r.content.map((t: J) => t.text).join(''))).toEqual(['Deploy to ', 'staX', ', then prod.'])
+    expect(runs[1]!.content[0].marks).toEqual([{ type: 'strong' }])
+  })
+
+  it('puts the replacement in the formatting of the run where the match starts', () => {
+    const { json } = applyMarkdownOperations(mixed(), [{ type: 'replace_text', find: 'staging first', replace: 'live' }], direct)
+    const bold = runsOf(json)[1]!
+    expect(bold.content.map((t: J) => t.text).join('')).toBe('live')
+    expect(bold.content[0].marks).toEqual([{ type: 'strong' }])
+  })
+
+  it('proposes a cross-run change as one suggestion', () => {
+    const { json, suggestionIDs } = applyMarkdownOperations(mixed(), [{ type: 'replace_text', find: 'to staging first', replace: 'to prod' }], suggest)
+    expect(suggestionIDs).toHaveLength(1)
+    const marks = JSON.stringify(json)
+    expect(marks.match(/suggestion_delete/g)).toHaveLength(3)
+    expect(marks.match(/suggestion_insert/g)).toHaveLength(1)
+    expect(new Set(marks.match(/"id":"[^"]+"/g)).size).toBe(1)
+  })
+
+  it('refuses an ambiguous cross-run match', () => {
+    const twice = doc(...(mixed().content[0]!.content as J[]), paragraph('q', 'Deploy to staging first'))
+    expect(() => applyMarkdownOperations(twice, [{ type: 'replace_text', find: 'to staging first', replace: 'x' }], direct)).toThrow(/2 times/)
+  })
+
+  it('refuses a match that crosses a link', () => {
+    const linked = doc(
+      block('paragraph', 'p', {}, styled('r1', {}, 'See the '), styled('r2', { href: 'https://example.com' }, 'guide', [{ type: 'link', attrs: { href: 'https://example.com' } }]))
+    )
+    expect(() => applyMarkdownOperations(linked, [{ type: 'replace_text', find: 'the guide', replace: 'x' }], direct)).toThrow(/crosses a link.*replace_range/)
+  })
+
+  it('does not join runs of different list items or paragraphs', () => {
+    const two = doc(paragraph('a', 'alpha'), paragraph('b', 'beta'))
+    expect(() => applyMarkdownOperations(two, [{ type: 'replace_text', find: 'alphabeta', replace: 'x' }], direct)).toThrow(AgentEditError)
+  })
+})
