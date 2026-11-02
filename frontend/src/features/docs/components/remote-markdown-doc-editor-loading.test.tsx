@@ -177,3 +177,28 @@ it('keeps the class the editor plugins put on the body host once the document is
     .toBeNull()
   expect(body.host!.classList.contains('dd-host')).toBe(true)
 })
+
+it('opens and closes the comments panel from the rail on its edge', async () => {
+  const screen = await renderEditor()
+
+  await screen.getByRole('button', { name: 'Open comments' }).click()
+  await expect
+    .element(screen.getByRole('complementary', { name: 'Review' }))
+    .toBeInTheDocument()
+
+  const rail = screen.getByRole('button', { name: 'Close comments' })
+  await expect.element(rail).toHaveAttribute('aria-expanded', 'true')
+  await rail.click()
+  expect(screen.container.querySelector('#suggestion-panel')).toBeNull()
+  await expect
+    .element(screen.getByRole('button', { name: 'Open comments' }))
+    .toHaveAttribute('aria-expanded', 'false')
+})
+
+it('leaves the comments rail out when offline, where there is no panel', async () => {
+  const screen = await renderEditor(true)
+
+  expect(
+    screen.container.querySelector('button[aria-controls="suggestion-panel"]')
+  ).toBeNull()
+})

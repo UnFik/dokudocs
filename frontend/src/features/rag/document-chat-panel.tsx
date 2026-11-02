@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -12,6 +13,12 @@ import { useAuthStore } from '@/stores/auth-store'
 import { listDocumentRAGConversations } from '@/lib/domain-api'
 import { Button } from '@/components/ui/button'
 import { announceAnswer } from './chat-notify'
+import { ChatColumnResizer } from './chat-column-resizer'
+import {
+  clampChatColumnWidth,
+  readColumnWidth,
+  writeColumnWidth,
+} from './chat-column-width'
 import { ChatPanelContext, useDocumentChatPanel } from './chat-panel-context'
 import { readChatPreferences } from './chat-preferences'
 import { onFixRequest } from './editor-source'
@@ -62,6 +69,18 @@ export function DocumentChatProvider({
     (next: boolean) => {
       setOpenState(next)
       writeOpen(userID, next)
+    },
+    [userID]
+  )
+  const [columnWidth, setColumnWidthState] = useState(() =>
+    readColumnWidth(userID)
+  )
+  // The edge is dragged many times a second; the width is kept only once it settles.
+  const setColumnWidth = useCallback(
+    (width: number, commit: boolean) => {
+      const next = clampChatColumnWidth(width)
+      setColumnWidthState(next)
+      if (commit) writeColumnWidth(userID, next)
     },
     [userID]
   )
@@ -124,6 +143,8 @@ export function DocumentChatProvider({
         title,
         open,
         setOpen,
+        columnWidth,
+        setColumnWidth,
         unread,
         conversations,
         listKey,
@@ -167,8 +188,8 @@ export function AskAIButton() {
 
 /**
  * The chat as the right column of a document, the same for every document type.
- * It sits beside the page and takes its width from it; below `sm` it covers the
- * page instead.
+ * It sits beside the page at the width its left edge was dragged to; below `sm`
+ * it covers the page instead.
  */
 export function DocumentChatColumn() {
   const chat = useDocumentChatPanel()
@@ -177,8 +198,17 @@ export function DocumentChatColumn() {
     <aside
       id='ask-ai-panel'
       aria-label={`AI chat about ${chat.title}`}
-      className='fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-background sm:static sm:z-auto sm:w-96 sm:shrink-0 sm:border-l sm:border-border'
+      style={
+        { '--chat-column-width': `${chat.columnWidth}px` } as CSSProperties
+      }
+      className='fixed inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-background sm:relative sm:z-auto sm:w-[var(--chat-column-width)] sm:shrink-0 sm:border-l sm:border-border'
     >
+      <ChatColumnResizer
+        width={chat.columnWidth}
+        onResize={(width) => chat.setColumnWidth(width, false)}
+        onCommit={(width) => chat.setColumnWidth(width, true)}
+        className='hidden sm:block'
+      />
       <Suspense
         fallback={
           <p role='status' className='p-4 text-sm text-muted-foreground'>
