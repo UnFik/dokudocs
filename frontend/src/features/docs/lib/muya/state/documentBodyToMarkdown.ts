@@ -103,9 +103,9 @@ function toStateBody(
         children: childStates(),
       }
     case 'order-list': {
-      const start = requiredNumber(node.attributes, 'start')
-      if (!Number.isInteger(start) || start < 1)
-        throw new Error('ordered list start must be a positive integer')
+      const rawStart = requiredNumber(node.attributes, 'start')
+      // Documents imported before the importer clamped "0." lists may store 0.
+      const start = Number.isInteger(rawStart) && rawStart >= 1 ? rawStart : 1
       return {
         name: 'order-list',
         meta: {
