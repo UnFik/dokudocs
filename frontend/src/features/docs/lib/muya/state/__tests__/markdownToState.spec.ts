@@ -270,6 +270,14 @@ describe('markdownToState — task list nesting (marktext 23435ce6)', () => {
     expect(states[1].children!.length).toBe(1)
   })
 
+  it('clamps an ordered list starting at 0 to 1 so it can be exported', () => {
+    const states = generate(`0. foo
+1. bar
+`)
+    expect(states[0].name).toBe('order-list')
+    expect(states[0].meta?.start).toBe(1)
+  })
+
   it('does not parse `-foo` (no space) as a list item (marktext 70d49c30)', () => {
     // marktext #832 issuecomment-477719256: `-foo` with no space between
     // the dash and the word was wrongly captured as a list item. A

@@ -178,7 +178,7 @@ export class MarkdownToState {
             name: 'order-list',
             meta: {
               loose,
-              start: /^\d+$/.test(String(start)) ? Number(start) : 1,
+              start: Number.isInteger(start) && start >= 1 ? start : 1,
               delimiter: bulletMarkerOrDelimiter || '.',
             },
             children: [],
