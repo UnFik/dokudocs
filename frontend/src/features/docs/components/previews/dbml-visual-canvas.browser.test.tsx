@@ -205,4 +205,97 @@ describe('DbmlVisualCanvas Component', () => {
       expect(distanceToPath(dot)).toBeLessThanOrEqual(1.5)
     }
   })
+  describe('notes', () => {
+    const notesDbml = `
+Table posts [note: 'Blog articles, see https://wiki/posts {draft}'] {
+  id int [pk]
+  Note {
+    'Written by editors'
+  }
+  title varchar [note: 'Shown in the feed // max 80 chars']
+  body text
+}
+`
+
+    it('shows a note icon on the table and reveals the full text when focused', async () => {
+      const screen = await render(
+        <DbmlVisualCanvas docId='test-doc-table-note' content={notesDbml} />
+      )
+
+      await expect.element(screen.getByText('body')).toBeInTheDocument()
+      screen.getByLabelText('Table note').element().focus()
+
+      await expect
+        .element(screen.getByText('Written by editors'))
+        .toBeInTheDocument()
+    })
+
+    it('reveals a column note that contains slashes', async () => {
+      const screen = await render(
+        <DbmlVisualCanvas docId='test-doc-column-note' content={notesDbml} />
+      )
+
+      screen.getByLabelText('Column note').element().focus()
+
+      await expect
+        .element(screen.getByText('Shown in the feed // max 80 chars'))
+        .toBeInTheDocument()
+    })
+
+    it('shows the project name, database type and note from the toolbar', async () => {
+      const screen = await render(
+        <DbmlVisualCanvas
+          docId='test-doc-project-note'
+          content={`
+Project shop {
+  database_type: 'PostgreSQL'
+  Note: 'Storefront schema // v2'
+}
+
+Table items {
+  id int [pk]
+}
+`}
+        />
+      )
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Project info' })
+      )
+
+      await expect.element(screen.getByText('shop')).toBeVisible()
+      await expect.element(screen.getByText('PostgreSQL')).toBeVisible()
+      await expect
+        .element(screen.getByText('Storefront schema // v2'))
+        .toBeVisible()
+    })
+
+    it('hides every note icon with the Notes toggle and remembers the choice', async () => {
+      switchLocalUser('notes-user')
+      const first = await render(
+        <DbmlVisualCanvas docId='test-doc-notes-toggle' content={notesDbml} />
+      )
+      await expect.element(first.getByLabelText('Table note')).toBeVisible()
+
+      await userEvent.click(first.getByRole('button', { name: 'Hide notes' }))
+
+      await expect
+        .element(first.getByLabelText('Table note'))
+        .not.toBeInTheDocument()
+      await expect
+        .element(first.getByLabelText('Column note'))
+        .not.toBeInTheDocument()
+      await first.unmount()
+
+      const second = await render(
+        <DbmlVisualCanvas docId='test-doc-notes-toggle' content={notesDbml} />
+      )
+      await expect
+        .element(second.getByRole('button', { name: 'Show notes' }))
+        .toBeInTheDocument()
+      await expect
+        .element(second.getByLabelText('Table note'))
+        .not.toBeInTheDocument()
+    })
+  })
 })

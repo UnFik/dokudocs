@@ -4,11 +4,13 @@ import {
   Database,
   FileSpreadsheet,
   Key,
+  Info,
   Layers,
   Link2,
   RotateCcw,
   Search,
   Sparkles,
+  StickyNote,
   Table2,
   ZoomIn,
   ZoomOut,
@@ -27,6 +29,11 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
   Table,
   TableBody,
   TableCell,
@@ -35,6 +42,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useCanvasPanZoom } from '../../hooks/use-canvas-pan-zoom'
+import { maskDbmlNotes, resolveNote } from '../../lib/dbml-notes'
+import { DbmlNoteHint } from './dbml-note-hint'
 
 export interface DbmlVisualCanvasProps {
   docId?: string
@@ -54,6 +63,7 @@ export interface TableColumn {
   isPk: boolean
   isFk: boolean
   isUnique: boolean
+  note?: string
   fkTarget?: {
     table: string
     column: string
@@ -72,8 +82,15 @@ export interface ParsedTable {
   name: string
   alias?: string
   headerColor?: string
+  note?: string
   columns: TableColumn[]
   indexes: TableIndex[]
+}
+
+export interface ParsedProject {
+  name?: string
+  databaseType?: string
+  note?: string
 }
 
 export interface ParsedTableGroup {
@@ -101,6 +118,8 @@ const HEADER_HEIGHT = 42
 const ROW_HEIGHT = 30
 const INDEX_ROW_HEIGHT = 26
 const INDEX_HEADER_HEIGHT = 28
+const TABLE_NOTE_LINE_RE = /^note\s*:/i
+const SHOW_NOTES_KEY = 'dokudocs_dbml_show_notes'
 
 function stripDbmlComments(rawContent: string): string {
   const withoutBlock = rawContent.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -599,12 +618,44 @@ export function calculateAutoLayout(
 
 const DEFAULT_INITIAL_PAN = { x: 60, y: 60 }
 
+function parseDbmlProject(content: string): ParsedProject | undefined {
+  const { text, notes } = maskDbmlNotes(content)
+  const match = stripDbmlComments(text).match(
+    /^[ \t]*Project\b\s*([\w."]*)\s*\{([^}]*)\}/im
+  )
+  if (!match) return undefined
+  const body = match[2]
+  return {
+    name: match[1].replace(/["']/g, '').trim() || undefined,
+    databaseType: body.match(/database_type\s*:\s*['"]([^'"]+)['"]/i)?.[1],
+    note: resolveNote(notes, body),
+  }
+}
+
 export function DbmlVisualCanvas({
   docId,
   content,
   onNavigateToSource,
 }: DbmlVisualCanvasProps) {
   const [storage] = useState(() => getUserStorage(getLocalUserScope()))
+  const [showNotes, setShowNotes] = useState(() => {
+    try {
+      return storage.getItem(SHOW_NOTES_KEY) !== 'false'
+    } catch {
+      return true
+    }
+  })
+  const handleToggleNotes = useCallback(() => {
+    setShowNotes((prev) => {
+      try {
+        storage.setItem(SHOW_NOTES_KEY, String(!prev))
+      } catch {
+        // Preference is only a convenience; keep the in-memory state.
+      }
+      return !prev
+    })
+  }, [storage])
+  const parsedProject = useMemo(() => parseDbmlProject(content), [content])
   const {
     viewportRef,
     canvasLayerRef,
@@ -710,7 +761,8 @@ export function DbmlVisualCanvas({
 
   const { parsedTables, parsedRelations, parsedTableGroups, parsedRecords } =
     useMemo(() => {
-      const cleanContent = stripDbmlComments(content)
+      const { text: maskedContent, notes } = maskDbmlNotes(content)
+      const cleanContent = stripDbmlComments(maskedContent)
       if (!cleanContent.trim()) {
         return {
           parsedTables: [],
@@ -807,6 +859,8 @@ export function DbmlVisualCanvas({
           headerColor = colorMatch[1]
         }
 
+        let tableNote = resolveNote(notes, tableOpts)
+
         const indexes: TableIndex[] = []
         let bodyWithoutIndexes = body
 
@@ -856,10 +910,14 @@ export function DbmlVisualCanvas({
           if (
             !trimmed ||
             trimmed.startsWith('indexes') ||
-            trimmed.startsWith('Note:') ||
             trimmed.startsWith('//')
           )
             return
+
+          if (TABLE_NOTE_LINE_RE.test(trimmed)) {
+            tableNote = resolveNote(notes, trimmed) ?? tableNote
+            return
+          }
 
           const colMatch = trimmed.match(/^([\w."]+)\s+([\w()]+)(.*)$/)
           if (colMatch) {
@@ -918,12 +976,20 @@ export function DbmlVisualCanvas({
               isPk: colOpts.includes('pk') || colOpts.includes('primary key'),
               isFk,
               isUnique: colOpts.includes('unique'),
+              note: resolveNote(notes, colOpts),
               fkTarget,
             })
           }
         })
 
-        tables.push({ name: tableName, alias, headerColor, columns, indexes })
+        tables.push({
+          name: tableName,
+          alias,
+          headerColor,
+          note: tableNote,
+          columns,
+          indexes,
+        })
       }
 
       const parsedRecords: Record<string, ParsedRecordSet> = {}
@@ -1566,6 +1632,52 @@ export function DbmlVisualCanvas({
           <Sparkles className='size-3.5 text-emerald-500' />
           <span>Auto Layout</span>
         </Button>
+        <Button
+          variant='ghost'
+          size='icon'
+          className='size-7'
+          onClick={handleToggleNotes}
+          aria-pressed={showNotes}
+          aria-label={showNotes ? 'Hide notes' : 'Show notes'}
+          title={showNotes ? 'Hide notes' : 'Show notes'}
+        >
+          <StickyNote
+            className={`size-3.5 ${showNotes ? 'text-amber-500' : 'text-muted-foreground'}`}
+          />
+        </Button>
+        {parsedProject && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='size-7'
+                aria-label='Project info'
+                title='Project info'
+              >
+                <Info className='size-3.5 text-muted-foreground' />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align='end'
+              className='w-auto max-w-xs space-y-1 text-xs break-words'
+            >
+              {parsedProject.name && (
+                <div className='font-mono font-semibold'>
+                  {parsedProject.name}
+                </div>
+              )}
+              {parsedProject.databaseType && (
+                <div className='font-mono text-muted-foreground'>
+                  {parsedProject.databaseType}
+                </div>
+              )}
+              {showNotes && parsedProject.note && (
+                <p className='whitespace-pre-wrap'>{parsedProject.note}</p>
+              )}
+            </PopoverContent>
+          </Popover>
+        )}
         <div className='mx-0.5 h-4 w-px bg-border/60' />
         <Button
           variant='ghost'
@@ -2003,6 +2115,17 @@ export function DbmlVisualCanvas({
                       )}
                     </div>
                     <div className='flex shrink-0 items-center gap-1'>
+                      {showNotes && table.note && (
+                        <DbmlNoteHint
+                          label='Table note'
+                          text={table.note}
+                          className={
+                            table.headerColor
+                              ? 'text-white/80 hover:text-white'
+                              : undefined
+                          }
+                        />
+                      )}
                       {recordSet && (
                         <Button
                           variant='ghost'
@@ -2114,6 +2237,12 @@ export function DbmlVisualCanvas({
                           </div>
 
                           <div className='flex shrink-0 items-center gap-1.5 font-mono text-[10px] text-muted-foreground'>
+                            {showNotes && col.note && (
+                              <DbmlNoteHint
+                                label='Column note'
+                                text={col.note}
+                              />
+                            )}
                             <span>{col.type}</span>
                             {col.isPk && (
                               <span className='py-0.2 rounded bg-amber-500/15 px-1 text-[9px] font-bold text-amber-600 dark:text-amber-400'>
