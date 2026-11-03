@@ -6,12 +6,14 @@ import (
 	"backend/internal/application/asset"
 	appauth "backend/internal/application/auth/usecase"
 	appdoc "backend/internal/application/document/usecase"
+	"backend/internal/application/pdfexport"
 	appchat "backend/internal/application/rag/usecase"
 	appws "backend/internal/application/workspace/usecase"
 	"backend/internal/config"
 	"backend/internal/infrastructure/assetstore"
 	"backend/internal/infrastructure/collabclient"
 	"backend/internal/infrastructure/notification"
+	"backend/internal/infrastructure/pdfrender"
 	airunsrepo "backend/internal/infrastructure/repository/airuns"
 	aiusagerepo "backend/internal/infrastructure/repository/aiusage"
 	docrepo "backend/internal/infrastructure/repository/document"
@@ -46,10 +48,17 @@ func addDocumentRoutes(f Router, c *container.Container, cfg config.Config, kit 
 
 	assetHandler := dochandler.NewAssetHandler(newAssetService(c, cfg), cfg.MaxUploadBytes)
 	pageHandler := dochandler.NewPageHandler(newPageService(c, cfg))
+	pdfHandler := dochandler.NewExportPDFHandler(
+		pdfexport.New(docUseCase, pdfrender.New(pdfrender.Config{URL: cfg.PDFRenderURL, Timeout: cfg.PDFRenderTimeout, Concurrency: cfg.PDFRenderConcurrency})),
+		cfg.PDFRenderMaxBytes, cfg.PDFRenderTimeout)
 
 	// Public Shared Documents (No auth required)
 	f.Get("/public/documents/{shareToken}/assets/{assetID}", assetHandler.GetPublic)
 	f.Get("/public/documents/{shareToken}", docHandler.GetPublic)
+
+	// PDF export has its own limit, checked before the sign-in so a flood costs no database work.
+	f.Group("/documents", rateLimit(cfg.RateLimitExportPDFPerMin, cfg), authRequired, workspaceRequired).
+		Post("/{id}/export/pdf", pdfHandler.PDF)
 
 	// Documents group protected by auth and workspace middleware
 	docGroup := f.Group("/documents", authRequired, workspaceRequired)

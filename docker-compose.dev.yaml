@@ -118,6 +118,12 @@ services:
       SHUTDOWN_TIMEOUT: ${SHUTDOWN_TIMEOUT:-10s}
       COLLAB_SERVICE_SECRET: ${COLLAB_SERVICE_SECRET:-dev-collab-secret}
       COLLAB_SERVICE_URL: http://collab:1234
+      # PDF export is off while this is empty: set it empty (not unset) to turn it off.
+      PDF_RENDER_URL: ${PDF_RENDER_URL-http://gotenberg:3000}
+      PDF_RENDER_TIMEOUT: ${PDF_RENDER_TIMEOUT:-30s}
+      PDF_RENDER_MAX_BYTES: ${PDF_RENDER_MAX_BYTES:-8388608}
+      PDF_RENDER_CONCURRENCY: ${PDF_RENDER_CONCURRENCY:-2}
+      RATE_LIMIT_EXPORT_PDF_PER_MIN: ${RATE_LIMIT_EXPORT_PDF_PER_MIN:-6}
     ports:
       - "${API_PORT:-8080}:8080"
     volumes:
@@ -125,6 +131,10 @@ services:
       - assets:/var/lib/dokudocs/assets
       - go_cache:/go/pkg/mod
       - go_build_cache:/root/.cache/go-build
+    # The API reaches the converter on its own network; nothing else is on it.
+    networks:
+      - default
+      - render
     depends_on:
       db:
         condition: service_healthy
@@ -133,6 +143,35 @@ services:
       migrate:
         condition: service_completed_successfully
     command: go run ./cmd/server
+
+  # Prints a document's page to PDF (docs/deployment.md, "PDF export"). Only the API can
+  # reach it: its network has no route out, it publishes no port, and the page it is sent
+  # may load nothing and run nothing. Several layers say the same thing on purpose.
+  gotenberg:
+    image: gotenberg/gotenberg:8.39.0-chromium
+    restart: unless-stopped
+    command:
+      - gotenberg
+      # Longer than PDF_RENDER_TIMEOUT, so the API's own limit answers first.
+      - --api-timeout=40s
+      - --api-body-limit=12MB
+      - --api-disable-download-from=true
+      - --chromium-disable-javascript=true
+      - --chromium-deny-private-ips=true
+      - --chromium-allow-list=^(data:|about:blank|file:///tmp/)
+      - --chromium-max-queue-size=4
+      - --chromium-restart-after=50
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - render
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
 
   collab:
     build:
@@ -175,6 +214,11 @@ services:
       - api
       - collab
     command: sh -c "bun install --frozen-lockfile && exec bun run dev --host"
+
+networks:
+  # No route out: the PDF converter is on this network, and only the API joins it.
+  render:
+    internal: true
 
 # Reuse the volumes created by backend/docker-compose.yaml so existing dev data carries over.
 volumes:
