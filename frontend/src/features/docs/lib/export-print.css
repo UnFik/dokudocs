@@ -1,0 +1,68 @@
+/* The page the PDF service prints. It stands alone: no app theme tokens, because the
+   page is drawn in a browser that has never seen them, and a dark-mode reader still
+   gets a white page. */
+html,
+body {
+  margin: 0;
+  background: #ffffff;
+  color: #1f2328;
+}
+
+.markdown-body {
+  font-size: 11pt;
+  line-height: 1.6;
+}
+
+/* An explicit page break in the document starts a new page. */
+.page-break {
+  height: 0;
+  margin: 0;
+  border: 0;
+  break-after: page;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  break-after: avoid;
+}
+.markdown-body tr,
+.markdown-body img,
+.markdown-body pre {
+  break-inside: avoid;
+}
+.markdown-body img,
+.dd-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Notices: a box with a colored left edge; the variant picks the color. */
+.dd-notice {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border: 1px solid #d0d7de;
+  border-left-width: 4px;
+  border-radius: 4px;
+  background: #f6f8fa;
+  break-inside: avoid;
+}
+.dd-notice-info {
+  border-left-color: #0369a1;
+}
+.dd-notice-success {
+  border-left-color: #15803d;
+}
+.dd-notice-warning {
+  border-left-color: #b45309;
+}
+.dd-notice-tip {
+  border-left-color: #7c3aed;
+}
+
+/* A toggle is printed open, with its title as the heading of what follows. */
+details.dd-toggle > summary {
+  font-weight: 600;
+  list-style: none;
+}

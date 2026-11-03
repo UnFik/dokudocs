@@ -59,6 +59,7 @@ import {
 import { type SuggestionCard } from '../lib/prosemirror/suggestionCards'
 import { shouldSelectDocumentBody } from '../lib/select-all-scope'
 import { slidesOf } from '../lib/slides'
+import { DocumentExportDialog } from './dialogs/document-export-dialog'
 import { PublicShareDialog } from './dialogs/public-share-dialog'
 import { DocumentInfoLine } from './document-info-line'
 import { DocumentInsightsDialog } from './document-insights-dialog'
@@ -116,6 +117,7 @@ export function RemoteMarkdownDocEditor({
   })
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [isExportOpen, setIsExportOpen] = useState(false)
   const revisionsQuery = useQuery({
     queryKey: ['document-revisions', workspaceID, document.id],
     queryFn: ({ signal }) =>
@@ -199,13 +201,8 @@ export function RemoteMarkdownDocEditor({
             : undefined
         }
         isHistoryOpen={isHistoryOpen}
-        onExportCode={
-          !accessUnavailable
-            ? () => {
-                void navigator.clipboard.writeText(markdown)
-                toast.success('Document Markdown copied')
-              }
-            : undefined
+        onOpenExport={
+          !accessUnavailable ? () => setIsExportOpen(true) : undefined
         }
       />
 
@@ -274,6 +271,17 @@ export function RemoteMarkdownDocEditor({
         onOpenChange={setIsShareOpen}
         workspaceID={workspaceID}
         documentID={document.id}
+      />
+      <DocumentExportDialog
+        open={isExportOpen && !accessUnavailable}
+        onOpenChange={setIsExportOpen}
+        context={{
+          documentID: document.id,
+          workspaceID,
+          title: document.title,
+          markdown,
+        }}
+        offline={offline}
       />
     </div>
   )

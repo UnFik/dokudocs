@@ -352,7 +352,7 @@ function ScopedDocEditor({ docId }: { docId: string }) {
         isDirty={isDirty}
         lastSaved={lastSaved}
         onTitleChange={setTitle}
-        onExportDiagram={
+        onOpenExport={
           doc.type === 'mermaid'
             ? () => setIsMermaidExportOpen(true)
             : undefined

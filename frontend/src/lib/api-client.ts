@@ -87,8 +87,15 @@ export async function apiFetch<T = unknown>(
   ) as T
 }
 
-/** A stored file read with the session; images and video cannot send the token themselves. */
-export async function apiBlob(endpoint: string): Promise<Blob> {
+/**
+ * A file read with the session; images and video cannot send the token themselves.
+ * `init` makes it a request with a body, for a file the server builds (a PDF). A
+ * refusal carries the server's own message when it sent one.
+ */
+export async function apiBlob(
+  endpoint: string,
+  init: RequestInit = {}
+): Promise<Blob> {
   const url = new URL(endpoint, window.location.origin)
   if (
     url.origin !== window.location.origin ||
@@ -98,14 +105,35 @@ export async function apiBlob(endpoint: string): Promise<Blob> {
   }
   synchronizeSession()
   const { accessToken } = useAuthStore.getState().auth
-  const headers = new Headers()
+  const headers = new Headers(init.headers)
+  headers.delete('Authorization')
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
   const response = await fetch(url.href, {
+    ...init,
     headers,
     credentials: 'same-origin',
   })
-  if (!response.ok)
-    throw new ApiError(response.status, response.statusText || 'Request failed')
+  if (!response.ok) {
+    let title = ''
+    if (response.headers.get('content-type')?.includes('application/json')) {
+      try {
+        const data: unknown = await response.json()
+        if (
+          data &&
+          typeof data === 'object' &&
+          'title' in data &&
+          typeof data.title === 'string'
+        )
+          title = data.title
+      } catch {
+        /* The status line is enough. */
+      }
+    }
+    throw new ApiError(
+      response.status,
+      title || response.statusText || 'Request failed'
+    )
+  }
   return response.blob()
 }
 

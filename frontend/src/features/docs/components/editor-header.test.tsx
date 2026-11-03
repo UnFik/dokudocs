@@ -5,11 +5,15 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
+import { page } from 'vitest/browser'
 import { EditorHeader } from './editor-header'
 
-async function renderHeader(withPresence: boolean) {
+async function renderHeader(
+  withPresence: boolean,
+  props: Partial<React.ComponentProps<typeof EditorHeader>> = {}
+) {
   const root = createRootRoute()
   const route = createRoute({
     getParentRoute: () => root,
@@ -29,6 +33,7 @@ async function renderHeader(withPresence: boolean) {
           withPresence ? [{ userID: 'u1', name: 'Ada Lovelace' }] : undefined
         }
         currentUserID='u1'
+        {...props}
       />
     ),
   })
@@ -62,5 +67,26 @@ describe('EditorHeader presence', () => {
     expect(
       document.querySelector('[aria-label="People in this document"]')
     ).toBeNull()
+  })
+})
+
+describe('EditorHeader export', () => {
+  it('has no Export button when there is nothing to export', async () => {
+    await renderHeader(false)
+
+    expect(
+      page.getByRole('button', { name: /^Export$/ }).elements()
+    ).toHaveLength(0)
+  })
+
+  it('hands Export to the page, without a menu, when it opens its own dialog', async () => {
+    const onOpenExport = vi.fn()
+    await renderHeader(false, { onOpenExport })
+    ;(
+      page.getByRole('button', { name: /^Export$/ }).element() as HTMLElement
+    ).click()
+
+    expect(onOpenExport).toHaveBeenCalledTimes(1)
+    expect(page.getByRole('menu').elements()).toHaveLength(0)
   })
 })
