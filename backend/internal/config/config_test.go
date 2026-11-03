@@ -273,6 +273,10 @@ func TestLoadConfigReadsTheAISettingsEnvironment(t *testing.T) {
 func TestLoadConfigPDFExportIsOffUntilTheServiceIsNamed(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://example")
 	t.Setenv("JWT_SECRET", "secret")
+	// A machine that runs the converter tests may have these set; defaults are what unset means.
+	for _, name := range []string{"PDF_RENDER_URL", "PDF_RENDER_TIMEOUT", "PDF_RENDER_MAX_BYTES", "PDF_RENDER_CONCURRENCY", "RATE_LIMIT_EXPORT_PDF_PER_MIN"} {
+		t.Setenv(name, "")
+	}
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)

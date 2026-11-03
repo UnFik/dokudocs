@@ -355,10 +355,10 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
       nestedInsideItem: true,
     });
 
-  // Export copies the Markdown rendered from that body.
+  // The source panel's copy button copies the Markdown rendered from that body.
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.getByRole("button", { name: "Export" }).click();
-  await page.getByRole("menuitem", { name: "Copy Raw Code" }).click();
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: "Copy Markdown" }).click();
   const exported = await page.evaluate(() => navigator.clipboard.readText());
   const lines = exported.split("\n").filter((line) => line.trim() !== "");
   expect(lines).toEqual([

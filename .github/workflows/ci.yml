@@ -84,8 +84,8 @@ jobs:
           for port in 3911 3912; do
             curl --retry 30 --retry-delay 1 --retry-connrefused -fsS "http://127.0.0.1:$port/health" > /dev/null
           done
-          echo "PDF_RENDER_URL=http://127.0.0.1:3911" >> "$GITHUB_ENV"
-          echo "PDF_RENDER_UNPROTECTED_URL=http://127.0.0.1:3912" >> "$GITHUB_ENV"
+          echo "PDF_CONVERTER_TEST_URL=http://127.0.0.1:3911" >> "$GITHUB_ENV"
+          echo "PDF_CONVERTER_TEST_UNPROTECTED_URL=http://127.0.0.1:3912" >> "$GITHUB_ENV"
 
       - name: Backend unit and PostgreSQL integration tests
         run: make test-backend

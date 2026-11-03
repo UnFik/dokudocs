@@ -28,7 +28,9 @@ requests per client, and logs size, duration and outcome, never the page.
 stylesheet, a frame and a `<meta http-equiv="refresh">` reached a local listener seven times
 with no protection, and none with the converter's flags or with its network alone. The policy
 alone is not enough: it does not stop the `<meta refresh>` navigation. It stays as a third
-layer for subresources and scripts.
+layer for subresources and scripts. A page that does navigate away is either printed or refused by the converter, depending
+on whether the blocked navigation or the print comes first; nothing reaches the address
+either way. A real document cannot carry one: the renderer's sanitizer removes `<meta>`.
 
 **What it cannot do.** It prints the page the browser sent, so a caller can use it to print
 any HTML they write (to a PDF only they receive), within the limits above. Comments and

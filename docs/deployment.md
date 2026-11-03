@@ -258,7 +258,7 @@ Checks that need a real converter run in CI (`internal/infrastructure/pdfrender`
 hostile page makes no request and runs no script, and a control converter without the
 protections shows that the test would notice if it did. To run them locally, start
 the converter on the host network with the flags from `docker-compose.yaml` and set
-`PDF_RENDER_URL`; the CI step "Start the PDF converter" shows how.
+`PDF_CONVERTER_TEST_URL` (and `PDF_CONVERTER_TEST_UNPROTECTED_URL` for the control); the CI step "Start the PDF converter" shows how.
 
 ## Rolling back
 

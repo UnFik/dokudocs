@@ -21,10 +21,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// These tests need the real PDF service. Set PDF_RENDER_URL to one started with the
+// These tests need the real PDF service. Set PDF_CONVERTER_TEST_URL to one started with the
 // flags in docker-compose.yaml and on the host network, so that it can reach the
 // listeners these tests open: that is what gives "no request arrived" its meaning.
-// PDF_RENDER_UNPROTECTED_URL names a second one with default flags; it is the control
+// PDF_CONVERTER_TEST_UNPROTECTED_URL names a second one with default flags; it is the control
 // that shows the listener does see requests when nothing stops the page.
 
 func realClient(t *testing.T, variable string) *pdfrender.Client {
@@ -69,19 +69,24 @@ func (l *listener) requests() []string {
 	return append([]string(nil), l.seen...)
 }
 
-// hostilePage tries every way a page has of reaching another address.
-func hostilePage(base string) string {
+// subresourcePage tries every way a page has of loading something from another address.
+func subresourcePage(base string) string {
 	return fmt.Sprintf(`<style>body{background:#fff}</style><h1>Quarterly plan</h1>
 <img src="%[1]s/img">
 <link rel="stylesheet" href="%[1]s/css">
 <iframe src="%[1]s/frame"></iframe>
-<meta http-equiv="refresh" content="0;url=%[1]s/refresh">
 <script>new Image().src='%[1]s/script-image'; fetch('%[1]s/script-fetch'); navigator.sendBeacon('%[1]s/script-beacon')</script>
 <img alt="inline" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==">`, base)
 }
 
+// refreshPage tries to send the page itself to another address. That is a navigation,
+// which a page's policy does not stop, so it is the converter's flags that must.
+func refreshPage(base string) string {
+	return fmt.Sprintf(`<h1>Quarterly plan</h1><meta http-equiv="refresh" content="0;url=%s/refresh">`, base)
+}
+
 func TestTheRealConverterPrintsAPageWithAStyleAndADataImage(t *testing.T) {
-	service := pdfexport.New(markdownDocuments{}, realClient(t, "PDF_RENDER_URL"))
+	service := pdfexport.New(markdownDocuments{}, realClient(t, "PDF_CONVERTER_TEST_URL"))
 
 	pdf, err := service.PDF(context.Background(), uuid.New(), uuid.New(), uuid.New(), pdfexport.Request{
 		Title: "Plan",
@@ -96,17 +101,17 @@ func TestTheRealConverterPrintsAPageWithAStyleAndADataImage(t *testing.T) {
 	}
 }
 
-func TestAHostilePageMakesNoRequestAndRunsNoScript(t *testing.T) {
-	service := pdfexport.New(markdownDocuments{}, realClient(t, "PDF_RENDER_URL"))
+func TestAPageThatLoadsFromElsewhereStillPrintsAndMakesNoRequest(t *testing.T) {
+	service := pdfexport.New(markdownDocuments{}, realClient(t, "PDF_CONVERTER_TEST_URL"))
 	reached := newListener(t)
 
 	pdf, err := service.PDF(context.Background(), uuid.New(), uuid.New(), uuid.New(), pdfexport.Request{
 		Title: "Plan",
-		HTML:  hostilePage(reached.URL),
+		HTML:  subresourcePage(reached.URL),
 	})
 
 	if err != nil {
-		t.Fatalf("a hostile page must still print: %v", err)
+		t.Fatalf("a page whose subresources are blocked must still print: %v", err)
 	}
 	if !bytes.HasPrefix(pdf, []byte("%PDF-")) {
 		t.Fatalf("not a PDF: %q", pdf[:min(len(pdf), 12)])
@@ -116,18 +121,35 @@ func TestAHostilePageMakesNoRequestAndRunsNoScript(t *testing.T) {
 	}
 }
 
-// Without this, the test above would pass just as well if the listener could not be
+// Whether the converter prints or refuses a page that tries to navigate away depends
+// on which comes first, the blocked navigation or the print, so either answer is fine.
+// What must hold is that nothing reaches the address.
+func TestAPageThatNavigatesAwayReachesNothing(t *testing.T) {
+	service := pdfexport.New(markdownDocuments{}, realClient(t, "PDF_CONVERTER_TEST_URL"))
+	reached := newListener(t)
+
+	_, _ = service.PDF(context.Background(), uuid.New(), uuid.New(), uuid.New(), pdfexport.Request{
+		Title: "Plan",
+		HTML:  refreshPage(reached.URL),
+	})
+
+	if seen := reached.requests(); len(seen) != 0 {
+		t.Fatalf("the page navigated to the listener: %v", seen)
+	}
+}
+
+// Without this, the two tests above would pass just as well if the listener could not be
 // reached by the service at all. Here nothing stops the page, so it must be seen.
 func TestTheListenerDoesSeeAPageThatNothingStops(t *testing.T) {
-	unprotected := os.Getenv("PDF_RENDER_UNPROTECTED_URL")
+	unprotected := os.Getenv("PDF_CONVERTER_TEST_UNPROTECTED_URL")
 	if unprotected == "" {
-		t.Skip("PDF_RENDER_UNPROTECTED_URL is not set")
+		t.Skip("PDF_CONVERTER_TEST_UNPROTECTED_URL is not set")
 	}
 	reached := newListener(t)
 	var form bytes.Buffer
 	writer := multipart.NewWriter(&form)
 	file, _ := writer.CreateFormFile("files", "index.html")
-	_, _ = file.Write([]byte("<!doctype html><html><body>" + hostilePage(reached.URL) + "</body></html>"))
+	_, _ = file.Write([]byte("<!doctype html><html><body>" + subresourcePage(reached.URL) + refreshPage(reached.URL) + "</body></html>"))
 	_ = writer.Close()
 	request, _ := http.NewRequest(http.MethodPost, strings.TrimRight(unprotected, "/")+"/forms/chromium/convert/html", &form)
 	request.Header.Set("Content-Type", writer.FormDataContentType())
