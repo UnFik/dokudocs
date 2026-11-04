@@ -220,6 +220,46 @@ What the origin needs:
 `docs/html-pages-security.md` lists the checks that must pass on staging before
 `CONTENT_ORIGIN` is set in production.
 
+## PDF export
+
+A Markdown document exports to PDF from the Export dialog (ADR 0053). The browser
+builds the page; the API checks the caller can read the document and sends the page
+to a headless-browser converter, `gotenberg` in `docker-compose.yaml`, and streams the
+PDF back. Markdown and Word files are built in the browser and need none of this.
+
+The converter prints pages that anyone who can read a document can send, so it is
+kept shut in on purpose:
+
+- It is on the `render` network, which is `internal` (no route out) and which only
+  `api` joins. It publishes no port.
+- It runs with JavaScript off, a URL allow-list of `data:` and its own working files,
+  and private addresses refused (flags on its `command:`).
+- The API puts its own Content-Security-Policy first in every page.
+
+The image is pinned (`gotenberg/gotenberg:8.39.0-chromium`, Chromium only, no
+LibreOffice). Change the tag deliberately: the flag names are checked against it. Its
+limit is 1 GB of memory and four queued prints; Chromium restarts every 50 prints.
+
+Settings, all on `api` (defaults in `.env.example`):
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `PDF_RENDER_URL` | `http://gotenberg:3000` | Where the API reaches the converter. **Empty turns PDF export off**; the dialog then says it is unavailable and Markdown and Word still work. |
+| `PDF_RENDER_TIMEOUT` | `30s` | How long one print may take. Keep the converter's `--api-timeout` and nginx's `proxy_read_timeout` for this route above it. |
+| `PDF_RENDER_MAX_BYTES` | `8388608` | The largest request body. nginx's `client_max_body_size` for the route (10m) must stay above it. |
+| `PDF_RENDER_CONCURRENCY` | `2` | Prints at once. More is refused as busy, not queued. |
+| `RATE_LIMIT_EXPORT_PDF_PER_MIN` | `6` | Requests a minute from one client address; `0` turns it off. |
+
+The API does not wait for the converter to start, so a deploy never blocks on it.
+Until it is healthy, PDF export answers "unavailable". If it keeps failing, stop it
+(`docker compose stop gotenberg`): nothing else is affected, and nothing is stored.
+
+Checks that need a real converter run in CI (`internal/infrastructure/pdfrender`): a
+hostile page makes no request and runs no script, and a control converter without the
+protections shows that the test would notice if it did. To run them locally, start
+the converter on the host network with the flags from `docker-compose.yaml` and set
+`PDF_CONVERTER_TEST_URL` (and `PDF_CONVERTER_TEST_UNPROTECTED_URL` for the control); the CI step "Start the PDF converter" shows how.
+
 ## Rolling back
 
 Run the `Deploy` workflow by hand (Actions → Deploy → Run workflow, on `main`)

@@ -269,3 +269,39 @@ func TestLoadConfigReadsTheAISettingsEnvironment(t *testing.T) {
 		t.Fatalf("LoadConfig() = %q, %v, %v", cfg.AISettingsEncryptionKey, cfg.AllowPrivateAIHosts, err)
 	}
 }
+
+func TestLoadConfigPDFExportIsOffUntilTheServiceIsNamed(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	// A machine that runs the converter tests may have these set; defaults are what unset means.
+	for _, name := range []string{"PDF_RENDER_URL", "PDF_RENDER_TIMEOUT", "PDF_RENDER_MAX_BYTES", "PDF_RENDER_CONCURRENCY", "RATE_LIMIT_EXPORT_PDF_PER_MIN"} {
+		t.Setenv(name, "")
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.PDFRenderURL != "" {
+		t.Fatalf("PDFRenderURL = %q, want empty (PDF export off)", cfg.PDFRenderURL)
+	}
+	if cfg.PDFRenderTimeout != 30*time.Second || cfg.PDFRenderMaxBytes != 8<<20 || cfg.PDFRenderConcurrency != 2 || cfg.RateLimitExportPDFPerMin != 6 {
+		t.Fatalf("unexpected PDF export defaults: %#v", cfg)
+	}
+}
+
+func TestLoadConfigPDFExportIsTunableFromTheEnvironment(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", "secret")
+	t.Setenv("PDF_RENDER_URL", "http://gotenberg:3000/")
+	t.Setenv("PDF_RENDER_TIMEOUT", "45s")
+	t.Setenv("PDF_RENDER_MAX_BYTES", "1048576")
+	t.Setenv("PDF_RENDER_CONCURRENCY", "4")
+	t.Setenv("RATE_LIMIT_EXPORT_PDF_PER_MIN", "0")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.PDFRenderURL != "http://gotenberg:3000" || cfg.PDFRenderTimeout != 45*time.Second || cfg.PDFRenderMaxBytes != 1<<20 || cfg.PDFRenderConcurrency != 4 || cfg.RateLimitExportPDFPerMin != 0 {
+		t.Fatalf("unexpected PDF export settings: %#v", cfg)
+	}
+}

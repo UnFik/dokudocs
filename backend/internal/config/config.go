@@ -49,6 +49,15 @@ type Config struct {
 	// CollabServiceURL is where the API reaches the collaboration service to reload a
 	// room; empty skips those calls.
 	CollabServiceURL string
+	// PDFRenderURL is where the API reaches the service that prints a document's page
+	// to PDF (for example http://gotenberg:3000); PDF export is off while it is empty.
+	// The service must sit on a network only the API can reach.
+	PDFRenderURL string
+	// PDFRenderTimeout is how long one print may take, PDFRenderMaxBytes the largest
+	// request body accepted, and PDFRenderConcurrency how many prints run at once.
+	PDFRenderTimeout     time.Duration
+	PDFRenderMaxBytes    int64
+	PDFRenderConcurrency int
 	// AssetDir is where uploaded files are kept; MaxUploadBytes is the most one may hold.
 	AssetDir       string
 	MaxUploadBytes int64
@@ -59,6 +68,7 @@ type Config struct {
 	RateLimitGoogleCallbackPerMin int
 	RateLimitInviteSendPerMin     int
 	RateLimitInviteLookupPerMin   int
+	RateLimitExportPDFPerMin      int
 	// TrustProxyHeaders reads the client address from X-Real-IP; set it only
 	// when a proxy that overwrites the header is the sole way to reach the API.
 	TrustProxyHeaders bool
@@ -125,6 +135,10 @@ func LoadConfig() (Config, error) {
 		JWTSecret:               env.GetString("JWT_SECRET", ""),
 		CollabServiceSecret:     env.GetString("COLLAB_SERVICE_SECRET", ""),
 		CollabServiceURL:        env.GetString("COLLAB_SERVICE_URL", ""),
+		PDFRenderURL:            strings.TrimRight(strings.TrimSpace(env.GetString("PDF_RENDER_URL", "")), "/"),
+		PDFRenderTimeout:        env.GetDuration("PDF_RENDER_TIMEOUT", 30*time.Second),
+		PDFRenderMaxBytes:       int64(env.GetInt("PDF_RENDER_MAX_BYTES", 8<<20)),
+		PDFRenderConcurrency:    env.GetInt("PDF_RENDER_CONCURRENCY", 2),
 		AssetDir:                env.GetString("ASSET_DIR", "./data/assets"),
 		MaxUploadBytes:          int64(env.GetInt("MAX_UPLOAD_BYTES", 25<<20)),
 		AccessTokenTTL:          env.GetDuration("ACCESS_TOKEN_TTL", 24*time.Hour),
@@ -134,6 +148,7 @@ func LoadConfig() (Config, error) {
 		RateLimitGoogleCallbackPerMin: env.GetInt("RATE_LIMIT_GOOGLE_CALLBACK_PER_MIN", 30),
 		RateLimitInviteSendPerMin:     env.GetInt("RATE_LIMIT_INVITE_SEND_PER_MIN", 10),
 		RateLimitInviteLookupPerMin:   env.GetInt("RATE_LIMIT_INVITE_LOOKUP_PER_MIN", 30),
+		RateLimitExportPDFPerMin:      env.GetInt("RATE_LIMIT_EXPORT_PDF_PER_MIN", 6),
 		TrustProxyHeaders:             env.GetBool("TRUST_PROXY_HEADERS", false),
 		RequireEmailVerification:      env.GetBool("REQUIRE_EMAIL_VERIFICATION", false),
 		SMTPHost:                      strings.TrimSpace(env.GetString("SMTP_HOST", "")),

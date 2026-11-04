@@ -99,6 +99,14 @@ function renderer(): Marked {
 
 const marked = renderer()
 
+/**
+ * The tokens `renderMarkdown` draws from: the same notices, toggles and math, for a
+ * consumer that builds something other than HTML from them (a Word file).
+ */
+export function markdownTokens(markdown: string) {
+  return marked.lexer(markdown)
+}
+
 /** Markdown as safe HTML, with notices, toggles, math and diagram placeholders. */
 export function renderMarkdown(markdown: string): string {
   return DOMPurify.sanitize(marked.parse(markdown) as string, {
@@ -109,16 +117,26 @@ export function renderMarkdown(markdown: string): string {
 
 let sequence = 0
 
-/** Draws the diagrams a rendered page asks for; call it after the HTML is in the page. */
-export async function drawDiagrams(root: HTMLElement) {
+/**
+ * Draws the diagrams a rendered page asks for; call it after the HTML is in the page.
+ * They follow the app's theme unless `dark` says otherwise. `htmlLabels: false` writes
+ * the labels as SVG text, for a page drawn later with other fonts than the ones the
+ * labels were measured in.
+ */
+export async function drawDiagrams(
+  root: HTMLElement,
+  { dark = isAppDark(), htmlLabels = true } = {}
+) {
   const blocks = [
     ...root.querySelectorAll<HTMLElement>('[data-mermaid-source]'),
   ]
   if (!blocks.length) return
   const { default: mermaid } = await import('mermaid')
   mermaid.initialize({
-    ...getAppMermaidConfig(isAppDark()),
+    ...getAppMermaidConfig(dark),
     securityLevel: 'strict',
+    htmlLabels,
+    flowchart: { htmlLabels },
   })
   for (const block of blocks) {
     try {
@@ -126,7 +144,13 @@ export async function drawDiagrams(root: HTMLElement) {
         `dd-preview-diagram-${++sequence}`,
         decodeURIComponent(block.dataset.mermaidSource ?? '')
       )
-      block.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } })
+      // Mermaid writes its labels as HTML inside <foreignObject>; without it a diagram
+      // has shapes and no words. The HTML in there is still sanitized.
+      block.innerHTML = DOMPurify.sanitize(svg, {
+        USE_PROFILES: { svg: true, html: true },
+        ADD_TAGS: ['foreignObject'],
+        HTML_INTEGRATION_POINTS: { foreignobject: true },
+      })
     } catch {
       document.getElementById(`dd-preview-diagram-${sequence}`)?.remove()
       block.textContent = decodeURIComponent(block.dataset.mermaidSource ?? '')

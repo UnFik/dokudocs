@@ -287,8 +287,29 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
   await expect(secondEditor.locator("ul ul li")).toHaveText("inner tail");
 
   // Client two edits the first paragraph; client one's undo must keep that edit.
-  await secondEditor.getByText("slanted", { exact: true }).click();
-  await secondPage.keyboard.press("End");
+  // As for client one above, the click lands mid-word and End must have moved the
+  // caret to the end of the paragraph before typing, or " by B" lands inside "slanted"
+  // ("slan by Bted"). The caret's place is read as the paragraph's text up to it, which
+  // does not depend on which text node the browser put it in.
+  await expect(async () => {
+    await secondEditor.getByText("slanted", { exact: true }).click();
+    await settleSelection(secondPage, { collapsed: true });
+    await secondPage.keyboard.press("End");
+    expect(
+      await secondPage.evaluate(() => {
+        const selection = window.getSelection();
+        const anchor = selection?.anchorNode;
+        const element = anchor?.nodeType === 1 ? (anchor as Element) : anchor?.parentElement;
+        const paragraph = element?.closest("p");
+        if (!selection || !paragraph) return null;
+        const before = document.createRange();
+        before.selectNodeContents(paragraph);
+        before.setEnd(selection.anchorNode!, selection.anchorOffset);
+        return before.toString();
+      }),
+    ).toBe("Start bold slanted");
+  }).toPass({ timeout: 15_000 });
+  await settleSelection(secondPage, { collapsed: true });
   await secondPage.keyboard.type(" by B");
   await expect(editor.locator("p").first()).toContainText("by B");
 
@@ -355,10 +376,10 @@ test("@live @smoke: bold, italic, nested list and undo converge across two clien
       nestedInsideItem: true,
     });
 
-  // Export copies the Markdown rendered from that body.
+  // The source panel's copy button copies the Markdown rendered from that body.
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.getByRole("button", { name: "Export" }).click();
-  await page.getByRole("menuitem", { name: "Copy Raw Code" }).click();
+  await page.getByRole("button", { name: "Markdown", exact: true }).click();
+  await page.getByRole("button", { name: "Copy Markdown" }).click();
   const exported = await page.evaluate(() => navigator.clipboard.readText());
   const lines = exported.split("\n").filter((line) => line.trim() !== "");
   expect(lines).toEqual([

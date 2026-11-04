@@ -3,12 +3,16 @@ import { testSession } from '@/test-utils/auth'
 import type { DocumentItem } from '@/types/dokudocs'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render } from 'vitest-browser-react'
+import { page, userEvent } from 'vitest/browser'
 import { useAuthStore } from '@/stores/auth-store'
 import type { CollabStatus } from '../lib/collab-session'
 import { RemoteMarkdownDocEditor } from './remote-markdown-doc-editor'
 
 const body = vi.hoisted(() => ({
   onStatus: undefined as ((status: CollabStatus) => void) | undefined,
+  onAccess: undefined as
+    | ((access: { canEdit: boolean; canSuggest: boolean }) => void)
+    | undefined,
   host: undefined as HTMLElement | undefined,
   mount: undefined as (() => Promise<unknown>) | undefined,
 }))
@@ -37,10 +41,14 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 vi.mock('../lib/collaborative-document-body', () => ({
   mountCollaborativeDocumentBody: (
     mount: HTMLElement,
-    input: { onStatus: (status: CollabStatus) => void }
+    input: {
+      onStatus: (status: CollabStatus) => void
+      onAccess: (access: { canEdit: boolean; canSuggest: boolean }) => void
+    }
   ) => {
     body.host = mount
     body.onStatus = input.onStatus
+    body.onAccess = input.onAccess
     return body.mount!()
   },
 }))
@@ -100,6 +108,7 @@ beforeEach(() => {
     vi.fn(() => new Promise<Response>(() => {}))
   )
   body.onStatus = undefined
+  body.onAccess = undefined
   body.host = undefined
   body.mount = async () => fakeSession()
 })
@@ -201,4 +210,70 @@ it('leaves the comments rail out when offline, where there is no panel', async (
   expect(
     screen.container.querySelector('button[aria-controls="suggestion-panel"]')
   ).toBeNull()
+})
+
+it('opens the export dialog from Export, with no raw copy in a menu; the source panel copies it', async () => {
+  const screen = await renderEditor()
+
+  await screen.getByRole('button', { name: /^Export$/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Export document' })
+  await expect.element(dialog).toBeInTheDocument()
+  await expect
+    .element(dialog.getByRole('radiogroup', { name: 'Format' }))
+    .toBeInTheDocument()
+  expect(screen.baseElement.textContent).not.toContain('Copy Raw Code')
+  await userEvent.keyboard('{Escape}')
+
+  await screen.getByRole('button', { name: 'Markdown' }).click()
+  await expect
+    .element(screen.getByRole('button', { name: 'Copy Markdown' }))
+    .toBeInTheDocument()
+})
+
+it('offers no Export once read access is gone', async () => {
+  const screen = await renderEditor()
+  await vi.waitFor(() => expect(body.onStatus).toBeDefined())
+  await expect
+    .element(screen.getByRole('button', { name: /^Export$/ }))
+    .toBeInTheDocument()
+
+  body.onStatus!('forbidden')
+
+  await expect
+    .poll(
+      () => screen.getByRole('button', { name: /^Export$/ }).elements().length
+    )
+    .toBe(0)
+})
+
+it('lets someone who can only read open the export dialog', async () => {
+  const screen = await renderEditor()
+  await vi.waitFor(() => expect(body.onAccess).toBeDefined())
+  body.onAccess!({ canEdit: false, canSuggest: false })
+
+  await screen.getByRole('button', { name: /^Export$/ }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Export document' })
+  await expect.element(dialog).toBeInTheDocument()
+  await expect.element(dialog.getByRole('radio', { name: /PDF/ })).toBeEnabled()
+  await expect
+    .element(dialog.getByRole('radio', { name: /Word/ }))
+    .toBeEnabled()
+})
+
+it('offline, the dialog keeps Markdown and Word and says PDF needs a connection', async () => {
+  const screen = await renderEditor(true)
+
+  await screen.getByRole('button', { name: /^Export$/ }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Export document' })
+  const pdf = dialog.getByRole('radio', { name: /PDF/ })
+  await expect.element(pdf).toBeDisabled()
+  await expect.element(pdf).toHaveAccessibleDescription(/needs a connection/)
+  await expect
+    .element(dialog.getByRole('radio', { name: /Markdown/ }))
+    .toBeChecked()
+  await expect
+    .element(dialog.getByRole('radio', { name: /Word/ }))
+    .toBeEnabled()
 })

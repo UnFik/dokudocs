@@ -85,7 +85,7 @@ interface EditorHeaderProps {
   lastSaved: Date | null
   onTitleChange: (newTitle: string) => void
   titleReadOnly?: boolean
-  onExportDiagram?: () => void
+  onOpenExport?: () => void
   onExportCode?: () => void
   onExportCopySvg?: () => void
   onExportSvg?: () => void
@@ -117,7 +117,7 @@ export function EditorHeader({
   lastSaved,
   onTitleChange,
   titleReadOnly = false,
-  onExportDiagram,
+  onOpenExport,
   onExportCode,
   onExportCopySvg,
   onExportSvg,
@@ -385,16 +385,16 @@ export function EditorHeader({
           <span className='hidden sm:inline'>Share</span>
         </Button>
 
-        {onExportDiagram ? (
+        {onOpenExport ? (
           <Button
             size='sm'
-            onClick={onExportDiagram}
+            onClick={onOpenExport}
             className='h-8 gap-1.5 text-xs'
           >
             <Download className='size-3.5' />
             <span>Export</span>
           </Button>
-        ) : (
+        ) : onExportCode || onExportCopySvg || onExportSvg || onExportPng ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size='sm' className='h-8 gap-1.5 text-xs'>
@@ -441,7 +441,7 @@ export function EditorHeader({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
+        ) : null}
       </div>
     </header>
   )

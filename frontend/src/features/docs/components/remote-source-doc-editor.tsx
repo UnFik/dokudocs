@@ -404,7 +404,7 @@ function SourceEditor({
             ? () => setIsShareOpen(true)
             : undefined
         }
-        onExportDiagram={
+        onOpenExport={
           doc.type === 'mermaid'
             ? () => setIsMermaidExportOpen(true)
             : undefined
